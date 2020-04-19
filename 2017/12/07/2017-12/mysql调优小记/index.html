@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>mysql调优小记 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="摘要 mysql表出现慢查询,单表数据量500W700W条. 每天23W条.措施:   优化查询语句;  更改存储引擎. 优化索引.     详情同事去塞班岛玩前留了个大坑,导致网站报表卡死刷不开. STEP 1进入后台: 1show processlist 发现Query很多,show full processlist找出查询语句,发现多表join的时候没有利用到索引.查询语句模式如下: 1e">
+<meta property="og:type" content="article">
+<meta property="og:title" content="mysql调优小记">
+<meta property="og:url" content="http://xiaoyue26.github.io/2017/12/07/2017-12/mysql%E8%B0%83%E4%BC%98%E5%B0%8F%E8%AE%B0/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="摘要 mysql表出现慢查询,单表数据量500W700W条. 每天23W条.措施:   优化查询语句;  更改存储引擎. 优化索引.     详情同事去塞班岛玩前留了个大坑,导致网站报表卡死刷不开. STEP 1进入后台: 1show processlist 发现Query很多,show full processlist找出查询语句,发现多表join的时候没有利用到索引.查询语句模式如下: 1e">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2017-12-07T10:49:56.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.266Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="mysql">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2017-12/mysql调优小记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2017/12/07/2017-12/mysql%E8%B0%83%E4%BC%98%E5%B0%8F%E8%AE%B0/" class="article-date">
+  <time datetime="2017-12-07T10:49:56.000Z" itemprop="datePublished">2017-12-07</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      mysql调优小记
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <ul>
+<li>摘要<blockquote>
+<p>mysql表出现慢查询,单表数据量500W<del>700W条. 每天2</del>3W条.<br>措施: </p>
+<ol>
+<li>优化查询语句; </li>
+<li>更改存储引擎.</li>
+<li>优化索引.</li>
+</ol>
+</blockquote>
+</li>
+</ul>
+<h3 id="详情"><a href="#详情" class="headerlink" title="详情"></a>详情</h3><p>同事去塞班岛玩前留了个大坑,导致网站报表卡死刷不开.</p>
+<h3 id="STEP-1"><a href="#STEP-1" class="headerlink" title="STEP 1"></a>STEP 1</h3><p>进入后台:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">processlist</span></span><br></pre></td></tr></table></figure>
+<p>发现Query很多,<code>show full processlist</code>找出查询语句,发现多表join的时候没有利用到索引.<br>查询语句模式如下:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">explain</span> <span class="keyword">select</span> ...</span><br></pre></td></tr></table></figure>
+<p>发现没有用上索引,更改查询语句。</p>
+<ul>
+<li><p><code>explain</code>查询计划中的<code>type</code>:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">const(system): 根据PRI或Unique key,只取出确定的(一行)数据,常量优化. </span><br><span class="line"></span><br><span class="line">eq_ref: JOIN条件包括了所有索引,并且索引是Unique key. </span><br><span class="line">ref: JOIN条件包括部分索引或不是Unique key.</span><br><span class="line">ref_or_null: WHERE col=exp or col is null</span><br><span class="line"></span><br><span class="line">index_merge: Where id=xx or userid=xxx. 索引合并优化.</span><br><span class="line"></span><br><span class="line">unique_subquery: where col in( <span class="keyword">select</span> <span class="keyword">id</span> <span class="keyword">from</span> xxx). 这里<span class="keyword">id</span>唯一.</span><br><span class="line">index_subquery: 同上,只是<span class="keyword">id</span>不唯一.</span><br><span class="line"></span><br><span class="line"><span class="keyword">range</span>: 索引在某个范围内.</span><br><span class="line"><span class="keyword">all</span>: 扫全表</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>TODO:<br>研究除了子查询以外的方式使用索引.</p>
+</li>
+</ul>
+<p>此外, 索引对于数据类型敏感, 查询中存在字符串和date类型相等的时候, 无法利用索引,<br>需要将date类型转成字符串.</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">dt = date_format(date_sub(current_date, interval 1 day), '%Y-%m-%d')</span><br></pre></td></tr></table></figure>
+
+<h3 id="STEP-2"><a href="#STEP-2" class="headerlink" title="STEP 2"></a>STEP 2</h3><p>检查后台,发现许多连接状态都是:<br><code>waiting for table level lock</code>.<br>进一步发现这几张表的存储引擎是<code>MYISAM</code>,而不是默认的<code>innodb</code>.<br>由于<code>myisam</code>引擎只有表级锁,不符合我们的使用要求.于是我把涉及到的几张表引擎都改为<code>innodb</code>.</p>
+<h3 id="STEP-3"><a href="#STEP-3" class="headerlink" title="STEP 3"></a>STEP 3</h3><p>修改后,查询不会卡死(毕竟不扫全表了ORZ),降低到40s,但还是太慢了.<br>进一步检查explain结果,发现<code>key_len</code>太长了.<br>于是重新设计索引, 把筛选度高的放前面(利用最左前缀), 并且根据具体业务\语义,尽量缩短索引字段的长度,<br>实在无法缩短的则取其中一部分. 最后查询缩短到0.04sec,几个报表都是秒出.  </p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2017/12/07/2017-12/mysql%E8%B0%83%E4%BC%98%E5%B0%8F%E8%AE%B0/" data-id="ck96cch1s0097bham1c1vgka5" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2017/12/20/2017-12/hive%E4%B9%8Bbug%E6%B1%87%E6%80%BB/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          hive之bug汇总
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2017/12/01/2017-12/sqoop%E7%9A%84SQL%E6%B3%A8%E5%85%A5%E6%BC%8F%E6%B4%9E/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">sqoop的SQL注入漏洞</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#详情"><span class="toc-number">1.</span> <span class="toc-text">详情</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#STEP-1"><span class="toc-number">2.</span> <span class="toc-text">STEP 1</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#STEP-2"><span class="toc-number">3.</span> <span class="toc-text">STEP 2</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#STEP-3"><span class="toc-number">4.</span> <span class="toc-text">STEP 3</span></a></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

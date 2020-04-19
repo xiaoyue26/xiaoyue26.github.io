@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>高性能Mysql笔记-第5章 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="第五章 创建高性能的索引索引，key，index。mysql中，key相当于index。索引的存储&#x3D;&gt;存储引擎层。 5.1.1 索引的类型B-Tree索引实际上大多使用的是B+树。相关区别：https:&#x2F;&#x2F;www.cnblogs.com&#x2F;oldhorse&#x2F;archive&#x2F;2009&#x2F;11&#x2F;16&#x2F;1604009.htmlB树：二叉树B-树：多叉树，数据存所有的各个节点上；B+树：数据存叶节点上，">
+<meta property="og:type" content="article">
+<meta property="og:title" content="高性能Mysql笔记-第5章">
+<meta property="og:url" content="http://xiaoyue26.github.io/2018/02/11/2018-02/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC5%E7%AB%A0/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="第五章 创建高性能的索引索引，key，index。mysql中，key相当于index。索引的存储&#x3D;&gt;存储引擎层。 5.1.1 索引的类型B-Tree索引实际上大多使用的是B+树。相关区别：https:&#x2F;&#x2F;www.cnblogs.com&#x2F;oldhorse&#x2F;archive&#x2F;2009&#x2F;11&#x2F;16&#x2F;1604009.htmlB树：二叉树B-树：多叉树，数据存所有的各个节点上；B+树：数据存叶节点上，">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2018-02-11T14:25:22.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.270Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="mysql">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2018-02/高性能Mysql笔记-第5章" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/02/11/2018-02/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC5%E7%AB%A0/" class="article-date">
+  <time datetime="2018-02-11T14:25:22.000Z" itemprop="datePublished">2018-02-11</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      高性能Mysql笔记-第5章
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="第五章-创建高性能的索引"><a href="#第五章-创建高性能的索引" class="headerlink" title="第五章 创建高性能的索引"></a>第五章 创建高性能的索引</h1><p>索引，key，index。<br>mysql中，<code>key</code>相当于<code>index</code>。<br>索引的存储=&gt;存储引擎层。</p>
+<h2 id="5-1-1-索引的类型"><a href="#5-1-1-索引的类型" class="headerlink" title="5.1.1 索引的类型"></a>5.1.1 索引的类型</h2><h3 id="B-Tree索引"><a href="#B-Tree索引" class="headerlink" title="B-Tree索引"></a>B-Tree索引</h3><p>实际上大多使用的是B+树。<br>相关区别：<a href="https://www.cnblogs.com/oldhorse/archive/2009/11/16/1604009.html" target="_blank" rel="noopener">https://www.cnblogs.com/oldhorse/archive/2009/11/16/1604009.html</a><br>B树：二叉树<br>B-树：多叉树，数据存所有的各个节点上；<br>B+树：数据存叶节点上，叶节点连在一起。<br>B*树：比B+树多一个非叶节点之间的指针。(类似跳表)</p>
+<p>虽然不同存储引擎的具体索引实现不同，但Mysql中对于这一类索引使用的关键字是<code>B-Tree</code>索引。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">NDB引擎： T-Tree结构</span><br><span class="line">InnoDB: B+Tree</span><br><span class="line">MyIsam: 前缀压缩，索引更小</span><br></pre></td></tr></table></figure>
+
+<p><code>B-Tree索引</code>(B+Tree)的适用查询：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. 全键值： Key中所有列是某个值；</span><br><span class="line">2. 键值范围： Key中所有列落在某个范围；</span><br><span class="line">3. 键前缀（最左前缀）：Key中前几列或前缀是某个值或某个范围。</span><br><span class="line">4. 上述条件的order by。</span><br></pre></td></tr></table></figure>
+
+<h3 id="哈希索引"><a href="#哈希索引" class="headerlink" title="哈希索引"></a>哈希索引</h3><p>哈希索引基于哈希表实现：<br>每一个Key计算一个哈希值，哈希表里的value存数据行的指针。<code>Memory</code>引擎对于相同哈希值的行用拉链存储。（非唯一哈希索引）</p>
+<p>支持哈希索引的引擎： 只有<code>Memory</code>引擎。</p>
+<p><code>Memory</code>引擎： 默认哈希索引，也支持B-Tree索引。</p>
+<p><strong>哈希索引的适用查询</strong>：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">1. 全键值。</span><br></pre></td></tr></table></figure>
+
+<p><strong>哈希索引的局限性</strong>：</p>
+<ol>
+<li>只存了哈希值，因此无法进行范围查询；</li>
+<li>无法用于排序；</li>
+<li>整个Key做哈希，因此无法部分匹配查询；</li>
+<li>不支持前缀匹配；</li>
+<li>要求哈希函数冲突少。</li>
+</ol>
+<p><strong>哈希索引的适用场景</strong>：</p>
+<ul>
+<li>数据仓库的查找表。（精确匹配O(1)复杂度，星形,多表连接）</li>
+</ul>
+<p>个人理解: 哈希索引既然是Memory引擎里用的,可能实现上就是在内存里load表数据,做了一张HashMap.(TODO)</p>
+<p><strong>自适应哈希索引</strong><br><code>Innodb</code>引擎的<code>自适应哈希索引</code>：<br>当注意到某些索引值被使用得非常频繁时，会在内存中基于B-Tree索引再创建一个哈希索引。<br>（可以选择开启）</p>
+<p><strong>创建自定义哈希索引</strong><br>假如有一个列url特别长，使用B-Tree索引的话存储内容就很大。如果查询时大多是精确匹配某个url，就可以考虑使用哈希索引。<br>方法：</p>
+<ol>
+<li>新增一列url_crc,专门存储url的哈希值；</li>
+<li>用触发器维护这一列。（增改）</li>
+</ol>
+<p>哈希函数选择：</p>
+<ol>
+<li>不使用MD5或SHA1，开销太大，结果太长；</li>
+<li>使用CRC32或自定义。</li>
+</ol>
+<p>难点： 平衡长度和冲突。</p>
+<h3 id="空间数据索引（R-Tree）（不推荐）"><a href="#空间数据索引（R-Tree）（不推荐）" class="headerlink" title="空间数据索引（R-Tree）（不推荐）"></a>空间数据索引（R-Tree）（不推荐）</h3><p>多维度索引数据（不只是前缀索引）。<br>需要使用Mysql的GIS相关函数<code>MBRContains()</code>。<br>推荐使用PostgreSql的<code>PostGIS</code>,Mysql还没做好。</p>
+<h3 id="全文索引"><a href="#全文索引" class="headerlink" title="全文索引"></a>全文索引</h3><p>见另一篇文章中的讨论。<br><a href="http://xiaoyue26.github.io/2018/01/14/2018-01/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E5%85%A8%E6%96%87%E7%B4%A2%E5%BC%95/">http://xiaoyue26.github.io/2018/01/14/2018-01/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E5%85%A8%E6%96%87%E7%B4%A2%E5%BC%95/</a></p>
+<h3 id="其他索引类型"><a href="#其他索引类型" class="headerlink" title="其他索引类型"></a>其他索引类型</h3><p>第三方存储引擎中的索引类型：<br>TokuDB: 分形树索引。<br>ScaleDB: Patricia tries<br>等等。</p>
+<h2 id="5-2-索引的优点"><a href="#5-2-索引的优点" class="headerlink" title="5.2 索引的优点"></a>5.2 索引的优点</h2><ol>
+<li>减少扫描数据量；</li>
+<li>避免排序和临时表；</li>
+<li>将随机IO转化为顺序IO.</li>
+</ol>
+<p>索引与查询匹配程度的评价：三星系统：</p>
+<ol>
+<li>一星： 将查询相关记录放在了一起；（顺序IO,范围查询能利用到索引） </li>
+<li>二星： 数据顺序与查找顺序一致；（避免排序,让排序也能利用到索引）</li>
+<li>三星： 索引列包含查询的所有列。(避免二次访问磁盘)</li>
+</ol>
+<p>上述评价的对象是(索引,某种查询). 因此并没有一个索引能够完美适应所有查询.只能说尽量适应当前场景下的高频查询.</p>
+<p>索引适用场景：</p>
+<ol>
+<li>小表： 直接扫全表即可；</li>
+<li>中表： 索引；</li>
+<li>大表： 分区。索引开销太大。</li>
+</ol>
+<h2 id="5-3-高性能的索引策略"><a href="#5-3-高性能的索引策略" class="headerlink" title="5.3 高性能的索引策略"></a>5.3 高性能的索引策略</h2><p>索引策略分为两个方面：</p>
+<ol>
+<li>建立索引的策略；</li>
+<li>使用索引的策略。</li>
+</ol>
+<h3 id="5-3-1-独立列（使用索引的策略）"><a href="#5-3-1-独立列（使用索引的策略）" class="headerlink" title="5.3.1 独立列（使用索引的策略）"></a>5.3.1 独立列（使用索引的策略）</h3><p>独立列： 索引列不能是表达式的一部分，也不能是函数的参数。<br>此外，如果数据类型不匹配，相当于隐式调用了类型转换函数，也是无法使用到索引的。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">错误示例：（表达式）</span><br><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> xxx <span class="keyword">where</span> <span class="keyword">id</span>+<span class="number">1</span>=<span class="number">5</span>;</span><br><span class="line">正确示例：(移到等号另一边)</span><br><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> xxx <span class="keyword">where</span> <span class="keyword">id</span>=<span class="number">5</span><span class="number">-1</span>;</span><br><span class="line"></span><br><span class="line">错误示例：（类型不匹配）</span><br><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> xxx </span><br><span class="line"><span class="keyword">where</span> dt=<span class="keyword">date_sub</span>(<span class="keyword">current_date</span>, <span class="built_in">interval</span> <span class="number">1</span> <span class="keyword">day</span>)；</span><br><span class="line"></span><br><span class="line">正确示例：</span><br><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> xxx</span><br><span class="line"><span class="keyword">where</span> dt = <span class="keyword">date_format</span>(<span class="keyword">date_sub</span>(<span class="keyword">current_date</span>, <span class="built_in">interval</span> <span class="number">1</span> <span class="keyword">day</span>), <span class="string">'%Y-%m-%d'</span>)</span><br></pre></td></tr></table></figure>
+<p>可以使用<code>explain</code>语句检查查询是否能够利用索引。（<code>type</code>不是<code>ALL</code>）</p>
+<h3 id="5-3-2-前缀索引和索引选择性（建立索引策略）"><a href="#5-3-2-前缀索引和索引选择性（建立索引策略）" class="headerlink" title="5.3.2 前缀索引和索引选择性（建立索引策略）"></a>5.3.2 前缀索引和索引选择性（建立索引策略）</h3><p>索引的选择性= count(distinct key)/count(1)<br>因此Unique key的选择性是1.</p>
+<p>可用： 选择性达到0.031以上。<br>当提升前缀的长度已经无法显著提高选择性，就可以停下来考虑这个长度了。</p>
+<p>前缀索引的优点：</p>
+<ol>
+<li>性能好；</li>
+<li>空间小。</li>
+</ol>
+<p>前缀索引的缺点：</p>
+<ol>
+<li>Order By和Group By无法使用；</li>
+<li>覆盖扫描无法使用。</li>
+</ol>
+<p><strong>后缀索引：</strong><br>可以存储反转以后的列来达到这个目的。</p>
+<h3 id="5-3-3-多列索引"><a href="#5-3-3-多列索引" class="headerlink" title="5.3.3 多列索引"></a>5.3.3 多列索引</h3><p><strong>index merge(索引合并)</strong><br>利用两个单列索引来优化总查询。<br>explain计划里的索引type是<code>index_merge</code>.<br>三个变种：</p>
+<ol>
+<li>OR=转化=&gt;分治以后Union；</li>
+<li>And=转化=&gt;分治以后取交集；</li>
+<li>上述两种情况的组合。</li>
+</ol>
+<p><strong>OR</strong></p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> xxx <span class="keyword">where</span> actorid=<span class="number">1</span> <span class="keyword">or</span> filmid=<span class="number">2</span></span><br><span class="line">转化为：</span><br><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> xxx <span class="keyword">where</span> actorid=<span class="number">1</span></span><br><span class="line"><span class="keyword">UNION</span></span><br><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> xxx <span class="keyword">where</span> filmid=<span class="number">2</span></span><br></pre></td></tr></table></figure>
+<p>索引合并并不一定比扫全表快，可以考虑用参数<code>optimizer_switch</code>来关闭，或者<code>IGNORE index</code>。<br>另一种思路就是直接建立多列索引，而不是单列索引。</p>
+<h3 id="5-3-4-索引顺序"><a href="#5-3-4-索引顺序" class="headerlink" title="5.3.4 索引顺序"></a>5.3.4 索引顺序</h3><p>本节针对B-Tree索引。</p>
+<p>索引的顺序设置得好的话，可以受益的查询：</p>
+<ol>
+<li>order by与group by</li>
+<li>where条件部分匹配，范围匹配</li>
+<li>distinct</li>
+</ol>
+<ul>
+<li>经验法则：<br>选择性高的列放前面=&gt;优化Where<br>（不一定能优化order by和group by）</li>
+</ul>
+<h3 id="5-3-5-聚簇索引"><a href="#5-3-5-聚簇索引" class="headerlink" title="5.3.5 聚簇索引"></a>5.3.5 聚簇索引</h3><p>形容的是Innodb存储B-tree索引的数据存储方式。<br>聚簇索引： 数据行存储在叶子节点。<br>聚簇： 数据行与相邻的键值紧凑存储。</p>
+<p>InnoDB的主键列是聚簇索引；其他key列则不是（叶子节点存的不是数据行，而是主键值）。</p>
+<p>Innodb没有主键时：</p>
+<ol>
+<li>找Not Null的Unique key，建立聚簇索引；</li>
+<li>没有的话，隐式定义一个主键。</li>
+</ol>
+<p>聚簇索引优点：</p>
+<ol>
+<li>符合查询的话，磁盘IO次数少；</li>
+<li>顺序IO多；</li>
+<li>覆盖索引扫描可以使用页节点中的主键值。</li>
+</ol>
+<p>缺点：</p>
+<ol>
+<li>数据不在磁盘（例如在内存），顺序IO就没优势了；</li>
+<li>插入速度依赖于插入顺序；</li>
+<li>更新聚簇索引列代价高（大量移动）；</li>
+<li>扫全表稍微慢（页分裂导致数据存储不连续）；</li>
+<li>页分裂导致存储空间大于实际数据大小；</li>
+<li>二级索引需要两次索引查找（第一次只找到主键）。（可以使用自适应哈希索引，优化重复的查询）</li>
+</ol>
+<p><strong>Innodb和Myisam的数据分布对比</strong><br>MyIsam: 主键索引和非主键索引都是非聚簇索引，存储上没有差异，叶子节点都指向物理地址。<br>Innodb: 主键索引是聚簇索引，叶子节点指向物理地址；非主键索引是二级索引，非聚簇索引，叶子节点指向主键值（需要二次查找）。</p>
+<p>Innodb二级索引：<br>存储主键值，所以主键里的页分裂或移动的时候，不需要更新二级索引。</p>
+<h3 id="Innodb中按主键顺序插入行"><a href="#Innodb中按主键顺序插入行" class="headerlink" title="Innodb中按主键顺序插入行"></a>Innodb中按主键顺序插入行</h3><p>使用自增id可以让主键顺序，保证插入效率，也保证聚簇索引的存储效率。</p>
+<p>不适用场景：</p>
+<ol>
+<li>id随机；</li>
+<li>不连续id，id分布范围过大。</li>
+</ol>
+<p>（避免使用uuid作为innodb的主键）</p>
+<p>顺序主键的缺点：</p>
+<ol>
+<li>并发插入时间隙锁成为热点；</li>
+<li>自增锁成为热点,可以通过更改Innodb_autoinc _lock_mode尽量避免这一点,但又会引进自增id存在空洞的问题.</li>
+</ol>
+<p>Innodb_autoinc _lock_mode有三个取值:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">0: 传统模式. 每个sesson都会竞争自增锁;(默认)</span><br><span class="line">1: 连续模式. 只有bulk insert使用自增锁.</span><br><span class="line">2: 交叉模式. 不用自增锁.性能最好.空洞最多.</span><br></pre></td></tr></table></figure>
+
+<p>自增id空洞产生的原因:</p>
+<ol>
+<li>事务回滚,导致原先分配的id浪费了;</li>
+<li>使用连续模式时有并发插入;</li>
+<li>使用交叉模式.</li>
+</ol>
+<p>详见<a href="https://www.jianshu.com/p/cca59b515e20" target="_blank" rel="noopener">https://www.jianshu.com/p/cca59b515e20</a>.</p>
+<h3 id="5-3-6-覆盖索引"><a href="#5-3-6-覆盖索引" class="headerlink" title="5.3.6 覆盖索引"></a>5.3.6 覆盖索引</h3><p>覆盖索引： 索引已经覆盖到了需要查询的所有数据。（叶子节点）<br>(这种情况下Select *性能会低于Select xxx)</p>
+<p>覆盖索引的优点：</p>
+<ol>
+<li>减少IO次数；</li>
+<li>减少IO数量，提高缓存效率；</li>
+<li>对于Innodb，如果二级索引覆盖了数据，就可以避免二次查询（二次查询主键索引）。</li>
+</ol>
+<p>由于覆盖索引需要存储列的值，因此哈希索引、空间索引、全文索引都不能成为覆盖索引。<br>只有B-Tree索引才能成为覆盖索引。</p>
+<p>explain时，如果<code>Extra</code>列的值为<code>Using index</code>，说明利用了覆盖索引。</p>
+<p>回顾一下三星评价系统:<br>1星: 常用查询的范围查询能利用到索引(顺序IO);<br>2星: 常用查询的Order BY能利用到索引;<br>3星: 常用查询的输出只包含索引. (避免二次查找,减少磁盘IO, 覆盖索引)<br>因此如果一个覆盖索引,同时又能满足1星和2星,那就是3星级的索引了.</p>
+<p><strong>覆盖索引相关优化:</strong></p>
+<ol>
+<li>索引为: (actor,title)<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> products</span><br><span class="line"><span class="keyword">where</span> actor=<span class="string">'SEAN CARREY'</span> </span><br><span class="line"> <span class="keyword">AND</span> title <span class="keyword">like</span> <span class="string">'%APOLO%'</span></span><br></pre></td></tr></table></figure>
+上述查询explain以后,<code>Extra</code>列为<code>Using Where</code>,说明没有用到覆盖索引.<br>原因是,<code>select *</code>包含的是所有列,而索引只有两列,不符合覆盖索引的定义.<br>用到的索引是actor前缀索引,title无法应用到,因为用的Like模糊查询.</li>
+</ol>
+<p>查询流程大致为:<br>(1) 使用actor前缀索引,取出表中符合条件的主键地址;// 第1次磁盘IO<br>(2) 使用(1)中的主键地址,回表(读磁盘)取出相应的数据行. // 第2次磁盘IO</p>
+<ol start="2">
+<li>索引为: (actor,title,pro_id)<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> *</span><br><span class="line"><span class="keyword">FROM</span> product</span><br><span class="line"><span class="keyword">JOIN</span> (</span><br><span class="line">    <span class="keyword">select</span> prod_id</span><br><span class="line">    <span class="keyword">FROM</span> product</span><br><span class="line">    <span class="keyword">WHERE</span> actor=<span class="string">'SEAN CARREY'</span> <span class="keyword">AND</span> title <span class="keyword">like</span> <span class="string">'%APOLO%'</span></span><br><span class="line">    )<span class="keyword">AS</span> t1 </span><br><span class="line">  <span class="keyword">ON</span> t1.prod_id=t2.prod_id</span><br></pre></td></tr></table></figure>
+上述查询explain以后,<code>Extra</code>列为<code>Using where;Using index</code>.说明用到了覆盖索引.<br>原因是,子查询中输出的列是prod_id,包含在索引中,因此省去了此处的二次查询.<br>随后进行了延迟关联,找出product表中的其他列.<br>查询流程大致为:<br>(1)使用actor前缀索引,取出表中符合条件的索引与主键地址;//第1次磁盘IO<br>(2)使用(1)中的进行join,取出表中其他数据列.//第2次磁盘IO</li>
+</ol>
+<p>由于都要使用两次磁盘IO,<br>1和2查询的效率取决于where条件中匹配返回的行数,假设这个product表有100W行:<br><strong>(1) 返回行数很多:</strong><br>actor过滤后剩下3W行,title过滤后剩下2W行;<br>1和2查询效率相同:<br>大部分时间在发送和读取数据上;<br><strong>(2) 返回行数很少:</strong><br>actor过滤后剩下3W行,title过滤后剩下40行;<br>2的查询效率高很多:<br>2读取3W个id,40个整行;1读取3w个整行.<br><strong>(3) 总数据量少,返回行数也少:</strong><br>actor过滤后剩下50行,title过滤后剩下40行;<br>1和2查询效率相近:<br>2读取50个id,40个整行;1读取50个整行.</p>
+<p>上述查询的执行框架:</p>
+<ol>
+<li>使用索引actor从存储引擎获取数据行;</li>
+<li>将数据行读入服务器层,用title进行过滤.</li>
+</ol>
+<p>因此上述优化针对的是减少存储引擎读取到服务器层的数据行.<br>上述优化只针对Mysql5.6版本之前. 5.6之后,有Index condition pushdown (索引条件推送), 把查询条件推送到存储引擎, 减少读取的数据量.</p>
+<p>– TO BE CONTINUE…</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/02/11/2018-02/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC5%E7%AB%A0/" data-id="ck96cch2800b5bham0cwaco6z" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2018/03/03/2018-03/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC%E4%BA%94%E7%AB%A0-2/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          高性能Mysql笔记-第五章(2)
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2018/02/08/2018-02/case-class%E6%B5%85%E6%9E%90/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">case class浅析</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#第五章-创建高性能的索引"><span class="toc-number">1.</span> <span class="toc-text">第五章 创建高性能的索引</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#5-1-1-索引的类型"><span class="toc-number">1.1.</span> <span class="toc-text">5.1.1 索引的类型</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#B-Tree索引"><span class="toc-number">1.1.1.</span> <span class="toc-text">B-Tree索引</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#哈希索引"><span class="toc-number">1.1.2.</span> <span class="toc-text">哈希索引</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#空间数据索引（R-Tree）（不推荐）"><span class="toc-number">1.1.3.</span> <span class="toc-text">空间数据索引（R-Tree）（不推荐）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#全文索引"><span class="toc-number">1.1.4.</span> <span class="toc-text">全文索引</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#其他索引类型"><span class="toc-number">1.1.5.</span> <span class="toc-text">其他索引类型</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-2-索引的优点"><span class="toc-number">1.2.</span> <span class="toc-text">5.2 索引的优点</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-3-高性能的索引策略"><span class="toc-number">1.3.</span> <span class="toc-text">5.3 高性能的索引策略</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#5-3-1-独立列（使用索引的策略）"><span class="toc-number">1.3.1.</span> <span class="toc-text">5.3.1 独立列（使用索引的策略）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-3-2-前缀索引和索引选择性（建立索引策略）"><span class="toc-number">1.3.2.</span> <span class="toc-text">5.3.2 前缀索引和索引选择性（建立索引策略）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-3-3-多列索引"><span class="toc-number">1.3.3.</span> <span class="toc-text">5.3.3 多列索引</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-3-4-索引顺序"><span class="toc-number">1.3.4.</span> <span class="toc-text">5.3.4 索引顺序</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-3-5-聚簇索引"><span class="toc-number">1.3.5.</span> <span class="toc-text">5.3.5 聚簇索引</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Innodb中按主键顺序插入行"><span class="toc-number">1.3.6.</span> <span class="toc-text">Innodb中按主键顺序插入行</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-3-6-覆盖索引"><span class="toc-number">1.3.7.</span> <span class="toc-text">5.3.6 覆盖索引</span></a></li></ol></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

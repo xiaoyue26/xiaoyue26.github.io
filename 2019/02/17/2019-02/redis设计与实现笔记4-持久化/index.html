@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>redis设计与实现笔记4-持久化 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="RDB: 定期(比如五分钟)做一次快照。 (Redis DataBase)压缩的二进制文件; AOF: 类似于WAL，存每条操作指令日志。(Append only file)  题外:mmkv: 内存映射文件(MMF)，场景是频繁刷盘，对丢失敏感前提下的尽量高性能。 相关命令 SAVE: 直接停服保存； BGSAVE: 开一个子进程在后台保存。检测到RDB或AOF文件后,redis进程会自动载入">
+<meta property="og:type" content="article">
+<meta property="og:title" content="redis设计与实现笔记4-持久化">
+<meta property="og:url" content="http://xiaoyue26.github.io/2019/02/17/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B04-%E6%8C%81%E4%B9%85%E5%8C%96/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="RDB: 定期(比如五分钟)做一次快照。 (Redis DataBase)压缩的二进制文件; AOF: 类似于WAL，存每条操作指令日志。(Append only file)  题外:mmkv: 内存映射文件(MMF)，场景是频繁刷盘，对丢失敏感前提下的尽量高性能。 相关命令 SAVE: 直接停服保存； BGSAVE: 开一个子进程在后台保存。检测到RDB或AOF文件后,redis进程会自动载入">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-02/load_aof.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-02/rdb_struct.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-02/rdb_database.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-02/read_aof.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-02/bg_rewrite.png">
+<meta property="article:published_time" content="2019-02-17T13:31:49.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.281Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="redis">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://xiaoyue26.github.io/images/2019-02/load_aof.png">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2019-02/redis设计与实现笔记4-持久化" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/17/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B04-%E6%8C%81%E4%B9%85%E5%8C%96/" class="article-date">
+  <time datetime="2019-02-17T13:31:49.000Z" itemprop="datePublished">2019-02-17</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      redis设计与实现笔记4-持久化
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <ol>
+<li>RDB: 定期(比如五分钟)做一次快照。 (<code>Redis DataBase</code>)压缩的二进制文件;</li>
+<li>AOF: 类似于WAL，存每条操作指令日志。(<code>Append only file</code>)</li>
+</ol>
+<p>题外:<br><code>mmkv</code>: 内存映射文件(<code>MMF</code>)，场景是频繁刷盘，对丢失敏感前提下的尽量高性能。</p>
+<h2 id="相关命令"><a href="#相关命令" class="headerlink" title="相关命令"></a>相关命令</h2><ol>
+<li><code>SAVE</code>: 直接停服保存；</li>
+<li><code>BGSAVE</code>: 开一个子进程在后台保存。<br>检测到<code>RDB</code>或<code>AOF</code>文件后,redis进程会自动载入文件。(优先<code>AOF</code>,因为<code>AOF</code>一般更新更频繁)<img src="/images/2019-02/load_aof.png" class="" width="800" height="1200" title="load_aof">
+
+</li>
+</ol>
+<p><code>BGSAVE</code>执行期间，不接受类似指令如<code>SAVE</code>,<code>BGSAVE</code>,<code>BGWRITEAOF</code>。<br>载入文件期间，服务器阻塞不接受任何指令。</p>
+<h3 id="自动BGSAVE"><a href="#自动BGSAVE" class="headerlink" title="自动BGSAVE"></a>自动BGSAVE</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">save 900 1 # 900秒内至少1次修改</span><br><span class="line">save 300 10 # 300秒内至少10次修改</span><br><span class="line">save 60 10000 # 60秒内至少10000次修改</span><br></pre></td></tr></table></figure>
+
+<h2 id="实现"><a href="#实现" class="headerlink" title="实现"></a>实现</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">redisServer</span>&#123;</span></span><br><span class="line">    <span class="comment">// 记录自动bgsave的条件</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">saveparam</span> *<span class="title">saveparams</span>;</span></span><br><span class="line">    <span class="comment">// 修改计数器:</span></span><br><span class="line">    <span class="keyword">long</span> <span class="keyword">long</span> dirty;</span><br><span class="line">    <span class="comment">// 上一次执行保存的时间(unixtimestamp):</span></span><br><span class="line">    <span class="keyword">time_t</span> lastsave;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>有了上述3个变量，可以保存需要的状态；<br>再加上每100ms执行的<code>serverCron</code>函数，就能完成自动保存的工作了。</p>
+<h1 id="RDB持久化"><a href="#RDB持久化" class="headerlink" title="RDB持久化"></a>RDB持久化</h1><h2 id="RDB文件结构-第6版RDB格式"><a href="#RDB文件结构-第6版RDB格式" class="headerlink" title="RDB文件结构(第6版RDB格式)"></a>RDB文件结构(第6版RDB格式)</h2><img src="/images/2019-02/rdb_struct.png" class="" width="800" height="1200" title="rdb_struct">
+<ol>
+<li><code>&quot;REDIS&quot;</code>: 常量字符;</li>
+<li><code>db_version</code>:  4B,版本号；</li>
+<li><code>database</code>:所有保存的数据库（kv数据）,长度不定;</li>
+<li><code>EOF</code>: 1B，表示数据结束；(<code>377</code>)</li>
+<li><code>check_suim</code>: 8B，前4个部分校验和。</li>
+</ol>
+<h3 id="database部分结构"><a href="#database部分结构" class="headerlink" title="database部分结构"></a>database部分结构</h3><img src="/images/2019-02/rdb_database.png" class="" width="800" height="1200" title="rdb_database">
+<ol>
+<li><code>SELECTDB</code>: 1B,常量，区别于EOF；</li>
+<li><code>db_number</code>: 1B,2B,5B不等，具体的数据库号；</li>
+<li><code>key_value_pairs</code>: kv数据、过期时间，长度不等。</li>
+</ol>
+<h3 id="key-value-pairs部分结构"><a href="#key-value-pairs部分结构" class="headerlink" title="key_value_pairs部分结构"></a>key_value_pairs部分结构</h3><ol>
+<li>EXPIRETIME_MS(可选)：1B,过期时间标记，常量;</li>
+<li><code>ms</code>(可选): 8B,具体过期时间(毫秒);</li>
+<li><code>TYPE</code>: 1B,类型，标记value的具体类型;</li>
+<li><code>key</code>: 总是字符串编码；</li>
+<li><code>value</code>: 值的编码根据<code>TYPE</code>字段判断。</li>
+</ol>
+<p>其中<code>TYPE</code>的取值,一种对象类型或底层编码：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">string,list,set,zset,hash</span><br><span class="line">,list_ziplist,set_intset,zset_ziplist</span><br><span class="line">,hash_ziplist</span><br></pre></td></tr></table></figure>
+<p>服务器根据这个<code>TYPE</code>字段决定如何解析<code>value</code>字段的编码。</p>
+<h3 id="实例"><a href="#实例" class="headerlink" title="实例"></a>实例</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 以ascii码查看:</span></span><br><span class="line">od -c ./home/dump.rdb</span><br><span class="line"></span><br><span class="line">0000000   R   E   D   I   S   0   0   0   6 377 334 263   C 360   Z 334</span><br><span class="line">0000020 362   V</span><br></pre></td></tr></table></figure>
+<p>其中377表示EOF，<code>redis</code>5B,版本4B，<code>EOF</code>1B,校验和8B，总共18B.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"># 以16进制查看:</span><br><span class="line">od -x .&#x2F;home&#x2F;dump.rdb</span><br><span class="line"></span><br><span class="line">0000000 4552 4944 3053 3030 ff36 b3dc f043 dc5a</span><br><span class="line">0000020 56f2</span><br></pre></td></tr></table></figure>
+
+
+<h1 id="第11章AOF持久化"><a href="#第11章AOF持久化" class="headerlink" title="第11章AOF持久化"></a>第11章AOF持久化</h1><p>三个步骤：</p>
+<ol>
+<li>append：命令追加到redis的内存缓冲区;</li>
+<li>文件写入（不刷盘）:从redis的内存缓冲区到操作系统的内存页缓存;</li>
+<li>fsync: 文件同步（实际刷盘）；<h2 id="写入和同步"><a href="#写入和同步" class="headerlink" title="写入和同步"></a>写入和同步</h2>写入文件：实际上操作系统不会立即刷盘，而且处于性能先放内存缓冲区，后续再一起刷盘；<br>同步：调用<code>fsync</code>或<code>fdatasync</code>函数刷盘。</li>
+</ol>
+<h2 id="实现-1"><a href="#实现-1" class="headerlink" title="实现"></a>实现</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">redisServer</span>&#123;</span></span><br><span class="line">    <span class="comment">// AOF缓冲区</span></span><br><span class="line">    sds aof_buf;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<ol>
+<li>执行写命令;</li>
+<li>将写命令追加到aof_buf缓冲区的末尾；</li>
+<li>每次结束一个事件循环前，考虑是否将aof_buf内容写入同步到aof文件；（根据<code>appendfsync</code>选项）</li>
+</ol>
+<h3 id="appendfsync选项"><a href="#appendfsync选项" class="headerlink" title="appendfsync选项"></a>appendfsync选项</h3><table>
+<thead>
+<tr>
+<th align="center">appendfsync选项</th>
+<th align="left">操作</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">always</td>
+<td align="left">将aof_buf内容写入且同步到AOF文件</td>
+</tr>
+<tr>
+<td align="center">everysec(默认值)</td>
+<td align="left">将aof_buf内容写入AOF文件，每秒同步一次</td>
+</tr>
+<tr>
+<td align="center">no</td>
+<td align="left">将aof_buf内容写入AOF文件，同步由操作系统决定</td>
+</tr>
+</tbody></table>
+<h2 id="AOF载入还原"><a href="#AOF载入还原" class="headerlink" title="AOF载入还原"></a>AOF载入还原</h2><img src="/images/2019-02/read_aof.png" class="" width="800" height="1200" title="read_aof">
+<p>用一个伪客户端执行所有aof命令即可。</p>
+<h2 id="AOF重写-AOF文件压缩"><a href="#AOF重写-AOF文件压缩" class="headerlink" title="AOF重写(AOF文件压缩)"></a>AOF重写(AOF文件压缩)</h2><p>由于AOF文件记录的是命令而不是实际数据，可能会非常膨胀。<br>为了减少空间，同时加快载入恢复速度，可以根据实际数据进行压缩，跳过合并多余的命令。<br>方法类似于RDB，通过读取实际的数据库状态，生成AOF命令。</p>
+<h3 id="性能优化"><a href="#性能优化" class="headerlink" title="性能优化"></a>性能优化</h3><p>出于对缓冲区的保护，如果遇到数据库中数据量太多的集合、有序集合、列表、哈希表，会让每条命令插入的数据量&lt;=<code>REDIS_AOF_REWRITE_ITEMS_PER_CMD</code>(默认为64)。</p>
+<h3 id="BGREWRITEAOF细节-尽量不停服"><a href="#BGREWRITEAOF细节-尽量不停服" class="headerlink" title="BGREWRITEAOF细节(尽量不停服)"></a>BGREWRITEAOF细节(尽量不停服)</h3><img src="/images/2019-02/bg_rewrite.png" class="" width="800" height="1200" title="bg_rewrite">
+<p>调用子进程进程AOF重写期间，并不停服，为了保证一致性，会把这期间的命令追加到两个缓冲区：AOF缓冲区、AOF重写缓冲区。</p>
+<p>重写完成后，stop the world:</p>
+<ol>
+<li>AOF重写缓冲区=&gt;AOF重写文件;</li>
+<li>AOF重写文件替换旧AOF文件；(利用文件系统的改名原子性)</li>
+<li>恢复服务。</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/17/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B04-%E6%8C%81%E4%B9%85%E5%8C%96/" data-id="ck96cch3k00gkbham4i0uaplx" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2019/02/21/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B05-%E4%BA%8B%E4%BB%B6/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          redis设计与实现笔记5-事件
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2019/02/13/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B03-%E6%95%B0%E6%8D%AE%E5%BA%93/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">redis设计与实现笔记3-数据库</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#相关命令"><span class="toc-number">1.</span> <span class="toc-text">相关命令</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#自动BGSAVE"><span class="toc-number">1.1.</span> <span class="toc-text">自动BGSAVE</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#实现"><span class="toc-number">2.</span> <span class="toc-text">实现</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#RDB持久化"><span class="toc-number"></span> <span class="toc-text">RDB持久化</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#RDB文件结构-第6版RDB格式"><span class="toc-number">1.</span> <span class="toc-text">RDB文件结构(第6版RDB格式)</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#database部分结构"><span class="toc-number">1.1.</span> <span class="toc-text">database部分结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#key-value-pairs部分结构"><span class="toc-number">1.2.</span> <span class="toc-text">key_value_pairs部分结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#实例"><span class="toc-number">1.3.</span> <span class="toc-text">实例</span></a></li></ol></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#第11章AOF持久化"><span class="toc-number"></span> <span class="toc-text">第11章AOF持久化</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#写入和同步"><span class="toc-number">1.</span> <span class="toc-text">写入和同步</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#实现-1"><span class="toc-number">2.</span> <span class="toc-text">实现</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#appendfsync选项"><span class="toc-number">2.1.</span> <span class="toc-text">appendfsync选项</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#AOF载入还原"><span class="toc-number">3.</span> <span class="toc-text">AOF载入还原</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#AOF重写-AOF文件压缩"><span class="toc-number">4.</span> <span class="toc-text">AOF重写(AOF文件压缩)</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#性能优化"><span class="toc-number">4.1.</span> <span class="toc-text">性能优化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#BGREWRITEAOF细节-尽量不停服"><span class="toc-number">4.2.</span> <span class="toc-text">BGREWRITEAOF细节(尽量不停服)</span></a></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

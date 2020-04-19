@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>高性能Mysql笔记-全文索引 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="MyISAM的全文索引(第七章)有很多限制,比较弱.  作用对象: 1全文集合: 将需要索引的列全部拼接成一个字符串,然后进行索引. 由于是对列进行拼接,因此无法设置哪一列更重要.(没有权重)  实现: 123B-Tree索引,两层.第一层: 所有关键字;第二层: 一组相关的文档指针. 全文索引不会索引文档对象中的所有词语,过滤规则如下:    停用词. 默认按通用英语的使用,可以通过参数ft_s">
+<meta property="og:type" content="article">
+<meta property="og:title" content="高性能Mysql笔记-全文索引">
+<meta property="og:url" content="http://xiaoyue26.github.io/2018/01/14/2018-01/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E5%85%A8%E6%96%87%E7%B4%A2%E5%BC%95/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="MyISAM的全文索引(第七章)有很多限制,比较弱.  作用对象: 1全文集合: 将需要索引的列全部拼接成一个字符串,然后进行索引. 由于是对列进行拼接,因此无法设置哪一列更重要.(没有权重)  实现: 123B-Tree索引,两层.第一层: 所有关键字;第二层: 一组相关的文档指针. 全文索引不会索引文档对象中的所有词语,过滤规则如下:    停用词. 默认按通用英语的使用,可以通过参数ft_s">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2018-01-14T11:33:44.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.269Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="mysql">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2018-01/高性能Mysql笔记-全文索引" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/01/14/2018-01/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E5%85%A8%E6%96%87%E7%B4%A2%E5%BC%95/" class="article-date">
+  <time datetime="2018-01-14T11:33:44.000Z" itemprop="datePublished">2018-01-14</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      高性能Mysql笔记-全文索引
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="MyISAM的全文索引-第七章"><a href="#MyISAM的全文索引-第七章" class="headerlink" title="MyISAM的全文索引(第七章)"></a>MyISAM的全文索引(第七章)</h1><p>有很多限制,比较弱.</p>
+<ul>
+<li><p>作用对象:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">全文集合: 将需要索引的列全部拼接成一个字符串,然后进行索引.</span><br></pre></td></tr></table></figure>
+<p>由于是对列进行拼接,因此无法设置哪一列更重要.(没有权重)</p>
+</li>
+<li><p>实现:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">B-Tree索引,两层.</span><br><span class="line">第一层: 所有关键字;</span><br><span class="line">第二层: 一组相关的文档指针.</span><br></pre></td></tr></table></figure>
+<p>全文索引不会索引文档对象中的所有词语,过滤规则如下:</p>
+</li>
+</ul>
+<ol>
+<li>停用词. 默认按通用英语的使用,可以通过参数ft_stopword_file指定;</li>
+<li>长度条件. ft_min_word_len &lt;=len &lt;= ft_max_word_len. </li>
+</ol>
+<h2 id="7-10-1-自然语言的全文索引"><a href="#7-10-1-自然语言的全文索引" class="headerlink" title="7.10.1 自然语言的全文索引"></a>7.10.1 自然语言的全文索引</h2><p>文档对象和查询的相关度.<br>相关度= f(匹配的关键词个数,关键词在文档中出现的次数)</p>
+<p>原理:<br>索引中出现次数越少=&gt;相关度越高<br>常见单词=&gt;相关度低.</p>
+<p>创建全文索引语法:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ALTER TABLE film_text ADD FULLTEXT INDEX fulltext_article(title,description);</span><br></pre></td></tr></table></figure>
+
+
+<p>自然语言搜索的查询语法:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">select film_id,title,Right(description,25)</span><br><span class="line">,Match(title,description) against (&#39;factor casualties&#39;) as relevance -- 相关度</span><br><span class="line">FROM film_text</span><br><span class="line">WHERE  Match(title,description) against (&#39;factor casualties&#39;)</span><br></pre></td></tr></table></figure>
+<p>执行计划:<br>Mysql将搜索词语分为两个独立的关键词进行搜索. (<code>factory</code>和<code>casualties</code>)<br>搜索对象: <code>title</code>和<code>description</code>组成的列的全文索引.</p>
+<h2 id="7-10-2-布尔全文索引"><a href="#7-10-2-布尔全文索引" class="headerlink" title="7.10.2 布尔全文索引"></a>7.10.2 布尔全文索引</h2><p>编写布尔搜索查询时,可以通过一些前缀修饰符来定制搜索.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">dino: 包含dino的行rank更高;</span><br><span class="line">~dino: 包含dino的行rank更低;</span><br><span class="line">+dino: 行记录必须包含dino;</span><br><span class="line">-dino: 行记录不能包含dino;</span><br><span class="line">dino*: 以dino开头的行rank更高.</span><br><span class="line">本例中dino作为搜索词可能太短,其实太短的词并不会被全文索引,查询优化器也可能要求搜索词&gt;&#x3D;ft_min_word_len.</span><br></pre></td></tr></table></figure>
+
+<p>查询语法:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">select film_id,title,right(description,25)</span><br><span class="line">FROM film_text</span><br><span class="line">where match(title,description)</span><br><span class="line">Against(&#39;+factory +casualties&#39; In Boolean Mode);</span><br><span class="line">-- title拼接description后必须同时包含factory和casualties</span><br></pre></td></tr></table></figure>
+
+<h2 id="7-10-3-插件和限制"><a href="#7-10-3-插件和限制" class="headerlink" title="7.10.3 插件和限制"></a>7.10.3 插件和限制</h2><p>可以加入插件改变:</p>
+<ol>
+<li>分词方式(如C++);</li>
+<li>预处理(如PDF).</li>
+</ol>
+<p>Mysql全文索引判断相关性的方法: 词频;<br>限制: </p>
+<ol>
+<li>全文索引能全部load到内存时,才能快.</li>
+<li>判断相关性只有词频,没有顺序;</li>
+<li>优化器会优先使用全文索引,而不管是否有其他更优索引, 并且全文索引会在其他索引之前使用. </li>
+<li>碎片多.</li>
+</ol>
+<h1 id="Sphinx-Mysql-SphinxSE-附录F"><a href="#Sphinx-Mysql-SphinxSE-附录F" class="headerlink" title="Sphinx + Mysql + SphinxSE (附录F)"></a>Sphinx + Mysql + SphinxSE (附录F)</h1><p>Sphinx: 开源全文搜索引擎. 可将数据源配置为Mysql查询的结果. 可水平扩展.<br>SphinxSE: Mysql的Sphinx插件,以便支持将Sphinx的搜索结果和Mysql的表进行join. </p>
+<p>Sphinx性能:</p>
+<ol>
+<li>查询1GB时间:  10~100ms;</li>
+<li>单CPU处理能力:10~100GB. </li>
+</ol>
+<p>分布式搜索工作流程:</p>
+<ol>
+<li>向所有服务器发送远程查询;</li>
+<li>执行本地索引搜索;</li>
+<li>从每个服务器读取部分搜索结果;</li>
+<li>合并结果返回客户端.</li>
+</ol>
+<h2 id="架构"><a href="#架构" class="headerlink" title="架构"></a>架构</h2><ul>
+<li>Indexed<br>从不同数据源创建全文索引.作为后台任务,一般定时运行;</li>
+<li>Searchd<br>运行时服务于客户端,查询创建好的索引.</li>
+</ul>
+<h2 id="SphinxSE可插拔存储引擎"><a href="#SphinxSE可插拔存储引擎" class="headerlink" title="SphinxSE可插拔存储引擎"></a>SphinxSE可插拔存储引擎</h2><p>建表语法:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">create table search_table</span><br><span class="line">(id int not null</span><br><span class="line">,weight int not null</span><br><span class="line">,query varchar(3070) not null</span><br><span class="line">,group_id int</span><br><span class="line">,INDEX(query)</span><br><span class="line">) engine&#x3D;Spinx conncet&#x3D;&quot;sphinx:&#x2F;&#x2F;localhost:3312&#x2F;test&quot;</span><br></pre></td></tr></table></figure>
+<p>查询语法:(把查询藏在query里,传递给sphinx)</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">select * from search_table where query&#x3D;&#39;test;mode&#x3D;all&#39;;</span><br></pre></td></tr></table></figure>
+<p><code>Searchd</code>服务返回查询结果,存储引擎把数据转换成mysql表.</p>
+<p>与<code>ElasticSearch</code>比较:<br><a href="https://zhuanlan.zhihu.com/p/21334385" target="_blank" rel="noopener">https://zhuanlan.zhihu.com/p/21334385</a></p>
+<p>决定倒向<code>ElasticSearch</code>社区.XD</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/01/14/2018-01/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E5%85%A8%E6%96%87%E7%B4%A2%E5%BC%95/" data-id="ck96cch2300agbham69ut001f" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2018/01/20/2018-01/hive%E6%8A%BD%E6%A0%B7/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          hive抽样
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2018/01/14/2018-01/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC1%E7%AB%A0/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">高性能Mysql笔记-第1章</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#MyISAM的全文索引-第七章"><span class="toc-number">1.</span> <span class="toc-text">MyISAM的全文索引(第七章)</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#7-10-1-自然语言的全文索引"><span class="toc-number">1.1.</span> <span class="toc-text">7.10.1 自然语言的全文索引</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#7-10-2-布尔全文索引"><span class="toc-number">1.2.</span> <span class="toc-text">7.10.2 布尔全文索引</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#7-10-3-插件和限制"><span class="toc-number">1.3.</span> <span class="toc-text">7.10.3 插件和限制</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#Sphinx-Mysql-SphinxSE-附录F"><span class="toc-number">2.</span> <span class="toc-text">Sphinx + Mysql + SphinxSE (附录F)</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#架构"><span class="toc-number">2.1.</span> <span class="toc-text">架构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SphinxSE可插拔存储引擎"><span class="toc-number">2.2.</span> <span class="toc-text">SphinxSE可插拔存储引擎</span></a></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

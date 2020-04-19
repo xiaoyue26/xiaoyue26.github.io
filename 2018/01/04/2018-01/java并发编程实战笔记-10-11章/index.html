@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>java并发编程实战笔记-10-11章 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="第十章主要介绍活跃性危险,也就是安全性和活跃性的权衡.锁不多不少.安全性: 就是正确性.锁要够多,不然数据并发访问就错了.活跃性: 就是性能.  锁不能太多,死锁了,或者太卡了.   10.1 死锁哲学家问题: 循环等待死锁.数据库服务器如何解决事务死锁:   检测到等待关系有向图有环; 选一个牺牲者kill了.  应用程序自己重试被kill的事务.   10.1.1 锁顺序死锁避免死锁的手段1:">
+<meta property="og:type" content="article">
+<meta property="og:title" content="java并发编程实战笔记-10-11章">
+<meta property="og:url" content="http://xiaoyue26.github.io/2018/01/04/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-10-11%E7%AB%A0/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="第十章主要介绍活跃性危险,也就是安全性和活跃性的权衡.锁不多不少.安全性: 就是正确性.锁要够多,不然数据并发访问就错了.活跃性: 就是性能.  锁不能太多,死锁了,或者太卡了.   10.1 死锁哲学家问题: 循环等待死锁.数据库服务器如何解决事务死锁:   检测到等待关系有向图有环; 选一个牺牲者kill了.  应用程序自己重试被kill的事务.   10.1.1 锁顺序死锁避免死锁的手段1:">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2018-01-04T14:28:55.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.267Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="java">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2018-01/java并发编程实战笔记-10-11章" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/01/04/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-10-11%E7%AB%A0/" class="article-date">
+  <time datetime="2018-01-04T14:28:55.000Z" itemprop="datePublished">2018-01-04</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      java并发编程实战笔记-10-11章
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>第十章主要介绍活跃性危险,也就是安全性和活跃性的权衡.锁不多不少.<br>安全性: 就是正确性.锁要够多,不然数据并发访问就错了.<br>活跃性: 就是性能.  锁不能太多,死锁了,或者太卡了.  </p>
+<h1 id="10-1-死锁"><a href="#10-1-死锁" class="headerlink" title="10.1 死锁"></a>10.1 死锁</h1><p>哲学家问题: 循环等待死锁.<br>数据库服务器如何解决事务死锁:</p>
+<blockquote>
+<ol>
+<li>检测到等待关系有向图有环;</li>
+<li>选一个牺牲者kill了. </li>
+<li>应用程序自己重试被kill的事务.</li>
+</ol>
+</blockquote>
+<h2 id="10-1-1-锁顺序死锁"><a href="#10-1-1-锁顺序死锁" class="headerlink" title="10.1.1 锁顺序死锁"></a>10.1.1 锁顺序死锁</h2><p>避免死锁的手段1:</p>
+<blockquote>
+<p>控制获取锁的顺序.</p>
+</blockquote>
+<p>如果所有线程获取锁(资源)的顺序一样,就不会死锁. </p>
+<h2 id="10-1-2-动态的锁顺序死锁"><a href="#10-1-2-动态的锁顺序死锁" class="headerlink" title="10.1.2 动态的锁顺序死锁"></a>10.1.2 动态的锁顺序死锁</h2><p>锁顺序很难处理. 比如两个账户转账.<br>一种方法是使用俩账户的hash码,比较顺序.<br>当遇到hash码冲突的时候,使用加时赛:</p>
+<blockquote>
+<ol>
+<li>定义一个新的锁;</li>
+<li>冲突的线程轮流申请这个锁,然后再申请账户锁.</li>
+</ol>
+</blockquote>
+<p>相当于冲突的线程串行执行.</p>
+<p>(其实我觉得对于这个问题,账户肯定有唯一id,用id排序就好了.)</p>
+<h2 id="10-1-3-协作对象之间的死锁"><a href="#10-1-3-协作对象之间的死锁" class="headerlink" title="10.1.3 协作对象之间的死锁"></a>10.1.3 协作对象之间的死锁</h2><p>如果获取多个锁的操作不在唯一的同一个方法里, 问题变得麻烦.<br>成因:<br>方法1: 持有锁时调用外部方法,而外部方法请求了另一个锁.<br>方法2: 同上.</p>
+<p>方法1,方法2获取锁的顺序相反时,可能死锁.</p>
+<p>解决方法:<br>收缩<code>synchronized</code>的范围从方法级缩小到块级.</p>
+<h2 id="10-1-4-开放调用"><a href="#10-1-4-开放调用" class="headerlink" title="10.1.4 开放调用"></a>10.1.4 开放调用</h2><p>开放调用: 调用方法时不需要持有锁.<br>也就是方法上没有加<code>synchronized</code>,而是在里头某一个块里用了.</p>
+<h2 id="10-1-5-资源死锁"><a href="#10-1-5-资源死锁" class="headerlink" title="10.1.5 资源死锁"></a>10.1.5 资源死锁</h2><p>资源不够死锁. 如线程资源\数据库连接资源.</p>
+<ul>
+<li>解决方案:<br>书里没写, 我觉得可以考虑前文说的”选取牺牲者”方法.</li>
+</ul>
+<h1 id="10-2-死锁的避免与诊断"><a href="#10-2-死锁的避免与诊断" class="headerlink" title="10.2 死锁的避免与诊断"></a>10.2 死锁的避免与诊断</h1><ol>
+<li>每个线程只获取一个锁. //比较不现实,涉及原子性的实现.</li>
+<li>顺序获取.</li>
+<li>支持定时的锁. // 代替内置锁</li>
+</ol>
+<h2 id="10-2-2-死锁的诊断"><a href="#10-2-2-死锁的诊断" class="headerlink" title="10.2.2 死锁的诊断"></a>10.2.2 死锁的诊断</h2><p>通过Thread Dump信息.<br>方法: 向JVM发送SIGQUIT信号.<br>命令行:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kill -3 [id]</span><br></pre></td></tr></table></figure>
+<p>jdk1.5: 有内置锁信息, 无显式锁信息;<br>jdk1.6: 有内置锁信息, 少量显式锁信息.<br>(?那岂不是意味着尽量不要使用显式锁?)</p>
+<h1 id="10-3-其他活跃性危险"><a href="#10-3-其他活跃性危险" class="headerlink" title="10.3 其他活跃性危险"></a>10.3 其他活跃性危险</h1><p>活跃性危险: 太卡<br>包括: 死锁,饥饿,丢失信号,活锁.</p>
+<h2 id="10-3-1-饥饿"><a href="#10-3-1-饥饿" class="headerlink" title="10.3.1 饥饿"></a>10.3.1 饥饿</h2><p>如短作业优先调度的时候,长作业就会饥饿.</p>
+<h2 id="10-3-2-糟糕的响应性"><a href="#10-3-2-糟糕的响应性" class="headerlink" title="10.3.2 糟糕的响应性"></a>10.3.2 糟糕的响应性</h2><p>GUI线程优先级太低, 响应性就会差.</p>
+<h2 id="10-3-3-活锁"><a href="#10-3-3-活锁" class="headerlink" title="10.3.3 活锁"></a>10.3.3 活锁</h2><p>重复的失败.<br>如线程不停得获取锁,释放锁,似乎能完成,但其实总也完成不了,无间地狱,死循环.</p>
+<ul>
+<li>案例1: 华龙道<br>发数据包碰撞. 重试算法一样,总是在相同的路口再碰撞.<br>解决方法:<br>增加随机性. 重试时间加一个随机参数.</li>
+</ul>
+<ul>
+<li>案例2:<br>过度的错误恢复.<br>解决方法:<br>不过度.</li>
+</ul>
+<h1 id="第十一章-性能与可伸缩性"><a href="#第十一章-性能与可伸缩性" class="headerlink" title="第十一章 性能与可伸缩性"></a>第十一章 性能与可伸缩性</h1><p>线程的使用<br>目的: 提高性能.<br>缺陷: 提高复杂性.<br>场景: 多cpu系统,任务不是cpu密集的.<br>衡量手段: 看cpu使用情况图.</p>
+<h2 id="11-1-1-可伸缩性"><a href="#11-1-1-可伸缩性" class="headerlink" title="11.1.1 可伸缩性"></a>11.1.1 可伸缩性</h2><p>可伸缩性: 当增加资源时(cpu,内存等等),程序吞吐量/处理能力增加比例适中.</p>
+<p>可伸缩性与性能往往矛盾.<br>单线程的性能优化方法 往往导致=&gt; 可伸缩性下降. </p>
+<h2 id="11-2-Amdahl定律"><a href="#11-2-Amdahl定律" class="headerlink" title="11.2 Amdahl定律"></a>11.2 Amdahl定律</h2><p>增加计算资源时,程序理论上能实现的最高加速比.</p>
+<p>Speedup &lt;= 1/ ( F + (1-F)/N )<br>N: N个处理器<br>F: 必须串行的任务比例. </p>
+<p>N趋近于无穷大时,加速比为 1/F.<br>(F为50%时,加速比最大为2.)</p>
+<p>提高可伸缩性方法总结:</p>
+<ol>
+<li>缩小锁的粒度;</li>
+<li>减少锁的持有时间(好像和上一条差不多);</li>
+<li>尽量使用非独占锁. </li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/01/04/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-10-11%E7%AB%A0/" data-id="ck96cch2100a6bham3u6jefaj" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2018/01/07/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-15-16%E7%AB%A0/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          java并发编程实战-15-16章
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2018/01/01/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-8%E7%AB%A0/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">java并发编程实战笔记-8章</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#10-1-死锁"><span class="toc-number">1.</span> <span class="toc-text">10.1 死锁</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#10-1-1-锁顺序死锁"><span class="toc-number">1.1.</span> <span class="toc-text">10.1.1 锁顺序死锁</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#10-1-2-动态的锁顺序死锁"><span class="toc-number">1.2.</span> <span class="toc-text">10.1.2 动态的锁顺序死锁</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#10-1-3-协作对象之间的死锁"><span class="toc-number">1.3.</span> <span class="toc-text">10.1.3 协作对象之间的死锁</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#10-1-4-开放调用"><span class="toc-number">1.4.</span> <span class="toc-text">10.1.4 开放调用</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#10-1-5-资源死锁"><span class="toc-number">1.5.</span> <span class="toc-text">10.1.5 资源死锁</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#10-2-死锁的避免与诊断"><span class="toc-number">2.</span> <span class="toc-text">10.2 死锁的避免与诊断</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#10-2-2-死锁的诊断"><span class="toc-number">2.1.</span> <span class="toc-text">10.2.2 死锁的诊断</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#10-3-其他活跃性危险"><span class="toc-number">3.</span> <span class="toc-text">10.3 其他活跃性危险</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#10-3-1-饥饿"><span class="toc-number">3.1.</span> <span class="toc-text">10.3.1 饥饿</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#10-3-2-糟糕的响应性"><span class="toc-number">3.2.</span> <span class="toc-text">10.3.2 糟糕的响应性</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#10-3-3-活锁"><span class="toc-number">3.3.</span> <span class="toc-text">10.3.3 活锁</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#第十一章-性能与可伸缩性"><span class="toc-number">4.</span> <span class="toc-text">第十一章 性能与可伸缩性</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#11-1-1-可伸缩性"><span class="toc-number">4.1.</span> <span class="toc-text">11.1.1 可伸缩性</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#11-2-Amdahl定律"><span class="toc-number">4.2.</span> <span class="toc-text">11.2 Amdahl定律</span></a></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

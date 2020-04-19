@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>hll算法原理 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="What: HLL&#x2F;HyperLogLog是啥近似计算uv的算法,每一千万错误率0.5%.谷歌改进后的算法为HLL++&#x2F;HyperLogLog plus算法，改进了一些边界和精度问题（分类处理了稀疏和稠密的数据集情况，稀疏转化成稠密）。HLL++在边界条件下从1.5%优化到0.5%。而且不会出现突变高的错误率情况。   论文:http:&#x2F;&#x2F;static.googleusercontent.com&#x2F;">
+<meta property="og:type" content="article">
+<meta property="og:title" content="hll算法原理">
+<meta property="og:url" content="http://xiaoyue26.github.io/2019/07/06/2019-07/hll%E7%AE%97%E6%B3%95%E5%8E%9F%E7%90%86/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="What: HLL&#x2F;HyperLogLog是啥近似计算uv的算法,每一千万错误率0.5%.谷歌改进后的算法为HLL++&#x2F;HyperLogLog plus算法，改进了一些边界和精度问题（分类处理了稀疏和稠密的数据集情况，稀疏转化成稠密）。HLL++在边界条件下从1.5%优化到0.5%。而且不会出现突变高的错误率情况。   论文:http:&#x2F;&#x2F;static.googleusercontent.com&#x2F;">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-07/hll_plus.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-07/hll.png">
+<meta property="article:published_time" content="2019-07-06T09:19:23.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.285Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="算法">
+<meta property="article:tag" content="hll">
+<meta property="article:tag" content="hyperloglog">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://xiaoyue26.github.io/images/2019-07/hll_plus.png">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2019-07/hll算法原理" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/07/06/2019-07/hll%E7%AE%97%E6%B3%95%E5%8E%9F%E7%90%86/" class="article-date">
+  <time datetime="2019-07-06T09:19:23.000Z" itemprop="datePublished">2019-07-06</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/">数据结构与算法</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      hll算法原理
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="What-HLL-HyperLogLog是啥"><a href="#What-HLL-HyperLogLog是啥" class="headerlink" title="What: HLL/HyperLogLog是啥"></a>What: HLL/HyperLogLog是啥</h1><p>近似计算uv的算法,每一千万错误率0.5%.<br>谷歌改进后的算法为HLL++/HyperLogLog plus算法，改进了一些边界和精度问题（分类处理了稀疏和稠密的数据集情况，稀疏转化成稠密）。HLL++在边界条件下从1.5%优化到0.5%。而且不会出现突变高的错误率情况。</p>
+<img src="/images/2019-07/hll_plus.png" class="" width="800" height="1200" title="hll_plus">
+
+<p>论文:<br><a href="http://static.googleusercontent.com/media/research.google.com/en/us/pubs/archive/40671.pdf" target="_blank" rel="noopener">http://static.googleusercontent.com/media/research.google.com/en/us/pubs/archive/40671.pdf</a></p>
+<h1 id="How-HLL原理"><a href="#How-HLL原理" class="headerlink" title="How: HLL原理"></a>How: HLL原理</h1><h2 id="n次伯努利"><a href="#n次伯努利" class="headerlink" title="n次伯努利"></a>n次伯努利</h2><p>进行了n次进行抛硬币实验，每次分别记录下第一次抛到正面的抛掷次数K1~Kn，那么可以用n次实验中最大的抛掷次数Kmax;<br>则可以预估实验组数量为n的预估值=2^Kmax.<br>参考:<br><a href="http://www.rainybowe.com/blog/2017/07/13/%E7%A5%9E%E5%A5%87%E7%9A%84HyperLogLog%E7%AE%97%E6%B3%95/index.html" target="_blank" rel="noopener">http://www.rainybowe.com/blog/2017/07/13/%E7%A5%9E%E5%A5%87%E7%9A%84HyperLogLog%E7%AE%97%E6%B3%95/index.html</a></p>
+<h2 id="LC算法"><a href="#LC算法" class="headerlink" title="LC算法"></a>LC算法</h2><p>所有数据hash以后，从低位开始第一个1的位置K。<br>预估值为2^K.</p>
+<h2 id="HLL算法"><a href="#HLL算法" class="headerlink" title="HLL算法"></a>HLL算法</h2><p>分桶后求调和平均，概率上减少异常。</p>
+<h2 id="redis中的实现"><a href="#redis中的实现" class="headerlink" title="redis中的实现"></a>redis中的实现</h2><p>代码：<a href="https://github.com/antirez/redis/blob/unstable/src/hyperloglog.c" target="_blank" rel="noopener">https://github.com/antirez/redis/blob/unstable/src/hyperloglog.c</a><br>内存: 2^14个桶,每个桶6bit。(实际作为一个大数组12KB。)</p>
+<ol>
+<li>每个输入通过hash算法得出64bit哈希值x；</li>
+<li>x的低14位,用来选择桶号(0-2^14-1号)Mi;</li>
+<li>x的高50位,用来找K(也就是第一次出现1的位置，或者说0后缀的长度)，把K存入Mi。</li>
+</ol>
+<p>这样处理完所有用户输入后，用公式算出n的估计值:</p>
+<img src="/images/2019-07/hll.png" class="" width="800" height="1200" title="hll">
+
+<blockquote>
+<p>对于第三点中的K,(也就是n次伯努利里的Kmax) (对于每个用户id的Kmax值存入桶的6位中)<br>高位剩下50位,第一个1的位置最大是50,而2^6=64，所以能够存下50这个数字(以及其他所有Kmax)。</p>
+</blockquote>
+<p>HLL++的话还要加入更多的边界调整。</p>
+<h2 id="可视化模拟"><a href="#可视化模拟" class="headerlink" title="可视化模拟"></a>可视化模拟</h2><p><a href="http://content.research.neustar.biz/blog/hll.html" target="_blank" rel="noopener">http://content.research.neustar.biz/blog/hll.html</a><br>上述链接中是m=64个桶(4*16的方阵)，每个格子中存放一个十进制数，实际最大是2^6也就是64，如果新来了K值，则会和原来的K值做逻辑交运算。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/07/06/2019-07/hll%E7%AE%97%E6%B3%95%E5%8E%9F%E7%90%86/" data-id="ck96cch4600j3bhamdt0y3fa6" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/hll/" rel="tag">hll</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/hyperloglog/" rel="tag">hyperloglog</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E7%AE%97%E6%B3%95/" rel="tag">算法</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2019/07/22/2019-07/%E9%A2%86%E5%9F%9F%E9%A9%B1%E5%8A%A8%E8%AE%BE%E8%AE%A1-%E7%AC%AC7-17%E7%AB%A0%E7%AC%94%E8%AE%B0/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          领域驱动设计-第7~17章笔记
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2019/07/06/2019-07/%E7%B2%97%E4%BF%97%E7%90%86%E8%A7%A3clickhouse/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">粗俗理解clickhouse</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#What-HLL-HyperLogLog是啥"><span class="toc-number">1.</span> <span class="toc-text">What: HLL&#x2F;HyperLogLog是啥</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#How-HLL原理"><span class="toc-number">2.</span> <span class="toc-text">How: HLL原理</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#n次伯努利"><span class="toc-number">2.1.</span> <span class="toc-text">n次伯努利</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#LC算法"><span class="toc-number">2.2.</span> <span class="toc-text">LC算法</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#HLL算法"><span class="toc-number">2.3.</span> <span class="toc-text">HLL算法</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#redis中的实现"><span class="toc-number">2.4.</span> <span class="toc-text">redis中的实现</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#可视化模拟"><span class="toc-number">2.5.</span> <span class="toc-text">可视化模拟</span></a></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

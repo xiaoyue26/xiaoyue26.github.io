@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>redis的embstr为什么是39B | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="回顾字符串的三种实现:  int: long能存下的数会用数字编码; embstr: &lt;&#x3D;39B的字符串，或者浮点数，会用embstr编码; raw: &gt;39B的字符串，会用raw编码,也就是简单动态字符串(SDS)。     embstr顾名思义就是嵌入式字符串，把元数据和实际数据存放在一起，好处是这样可以对缓存友好，可以减少一次寻址。坏处是只能支持短字符串。这里为啥是39B作为切换">
+<meta property="og:type" content="article">
+<meta property="og:title" content="redis的embstr为什么是39B">
+<meta property="og:url" content="http://xiaoyue26.github.io/2019/01/19/2019-01/redis%E7%9A%84embstr%E4%B8%BA%E4%BB%80%E4%B9%88%E6%98%AF39B/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="回顾字符串的三种实现:  int: long能存下的数会用数字编码; embstr: &lt;&#x3D;39B的字符串，或者浮点数，会用embstr编码; raw: &gt;39B的字符串，会用raw编码,也就是简单动态字符串(SDS)。     embstr顾名思义就是嵌入式字符串，把元数据和实际数据存放在一起，好处是这样可以对缓存友好，可以减少一次寻址。坏处是只能支持短字符串。这里为啥是39B作为切换">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-01/raw.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-01/embstr.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-01/sizeof0.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-01/sizeof1.png">
+<meta property="article:published_time" content="2019-01-19T02:47:50.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.280Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="redis">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://xiaoyue26.github.io/images/2019-01/raw.png">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2019-01/redis的embstr为什么是39B" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/01/19/2019-01/redis%E7%9A%84embstr%E4%B8%BA%E4%BB%80%E4%B9%88%E6%98%AF39B/" class="article-date">
+  <time datetime="2019-01-19T02:47:50.000Z" itemprop="datePublished">2019-01-19</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      redis的embstr为什么是39B
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>回顾字符串的三种实现:</p>
+<ul>
+<li><code>int</code>: long能存下的数会用数字编码;</li>
+<li><code>embstr</code>: &lt;=39B的字符串，或者浮点数，会用<code>embstr</code>编码;</li>
+<li><code>raw</code>: &gt;39B的字符串，会用<code>raw</code>编码,也就是简单动态字符串(<code>SDS</code>)。<img src="/images/2019-01/raw.png" class="" width="800" height="1200" title="raw">
+<img src="/images/2019-01/embstr.png" class="" width="800" height="1200" title="embstr">
+
+</li>
+</ul>
+<p><code>embstr</code>顾名思义就是嵌入式字符串，把元数据和实际数据存放在一起，好处是这样可以对缓存友好，可以减少一次寻址。坏处是只能支持短字符串。<br>这里为啥是39B作为切换条件呢?(而且没有看到参数进行调节)，这其实是存储结构决定的。</p>
+<blockquote>
+<p>embstr本质上是利用了元数据存储空间里的剩余空间存储字符串。</p>
+</blockquote>
+<p>所以当元数据剩了40B，<code>embstr</code>就最多只能存39B了(还要留1B存<code>\0</code>)。<br>回顾元数据结构：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> LRU_BITS 24</span></span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">redisObject</span> &#123;</span>    <span class="comment">// redis对象</span></span><br><span class="line">    <span class="keyword">unsigned</span> type:<span class="number">4</span>;    <span class="comment">// 类型,4bit</span></span><br><span class="line">    <span class="keyword">unsigned</span> encoding:<span class="number">4</span>;    <span class="comment">// 编码,4bit</span></span><br><span class="line">    <span class="keyword">unsigned</span> lru:LRU_BITS; <span class="comment">/* lru time (relative to server.lruclock) */</span> <span class="comment">// 24bit</span></span><br><span class="line">    <span class="keyword">int</span> refcount;   <span class="comment">// 引用计数</span></span><br><span class="line">    <span class="keyword">void</span> *ptr;  <span class="comment">// 指向各种基础类型的指针</span></span><br><span class="line">&#125; robj;</span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">sdshdr</span> &#123;</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> len;</span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> <span class="built_in">free</span>;</span><br><span class="line">    <span class="keyword">char</span> buf[];</span><br><span class="line">&#125;sds;</span><br></pre></td></tr></table></figure>
+<img src="/images/2019-01/sizeof0.png" class="" width="800" height="1200" title="sizeof0">
+<img src="/images/2019-01/sizeof1.png" class="" width="800" height="1200" title="sizeof0">
+
+<h2 id="redisObject占16B"><a href="#redisObject占16B" class="headerlink" title="redisObject占16B"></a>redisObject占16B</h2><p><code>16B=(4bit+4bit+24bit)+4B+8B= (32/8)B+12B</code></p>
+<h2 id="sdshdr占8B"><a href="#sdshdr占8B" class="headerlink" title="sdshdr占8B"></a>sdshdr占8B</h2><p><code>8=4+4+0</code><br>注意这里的<code>char buf[]</code>不占空间，当里面存放字符串的时候才占空间，而且末尾需要1B存放<code>\0</code>。</p>
+<p>按最小分配64B来算，剩余空间就是64B-16B-8B-1B=39B。</p>
+<p>但是，如果仔细看看这里<code>sdshdr</code>里的，两个4B的长度：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">unsigned</span> <span class="keyword">int</span> len;</span><br><span class="line"><span class="keyword">unsigned</span> <span class="keyword">int</span> <span class="built_in">free</span>;</span><br></pre></td></tr></table></figure>
+<p>想一下，这里最大长度也才39,根本不需要这么大的数据结构来存长度，因此其实还是有压榨空间的。</p>
+<h1 id="从39B到44B"><a href="#从39B到44B" class="headerlink" title="从39B到44B"></a>从39B到44B</h1><p>新版本的<code>embstr</code>已经不是39B了，改成了44B。本质上是元数据的剩余空间再次发生了变化。<br>新版本的元数据(从<code>SDS_TYPE_5</code>到<code>SDS_TYPE_64</code>5个)：<br>(<a href="https://github.com/antirez/redis/blob/unstable/src/sds.h" target="_blank" rel="noopener">https://github.com/antirez/redis/blob/unstable/src/sds.h</a>)</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* Note: sdshdr5 is never used, we just access the flags byte directly.</span></span><br><span class="line"><span class="comment"> * However is here to document the layout of type 5 SDS strings. */</span></span><br><span class="line"><span class="class"><span class="keyword">struct</span> __<span class="title">attribute__</span> ((__<span class="title">packed__</span>)) <span class="title">sdshdr5</span> &#123;</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> flags; <span class="comment">/* 3 lsb of type, and 5 msb of string length */</span></span><br><span class="line">    <span class="keyword">char</span> buf[];</span><br><span class="line">&#125;;</span><br><span class="line"><span class="class"><span class="keyword">struct</span> __<span class="title">attribute__</span> ((__<span class="title">packed__</span>)) <span class="title">sdshdr8</span> &#123;</span></span><br><span class="line">    <span class="keyword">uint8_t</span> len; <span class="comment">/* used */</span></span><br><span class="line">    <span class="keyword">uint8_t</span> alloc; <span class="comment">/* excluding the header and null terminator */</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> flags; <span class="comment">/* 3 lsb of type, 5 unused bits */</span></span><br><span class="line">    <span class="keyword">char</span> buf[];</span><br><span class="line">&#125;;</span><br><span class="line"><span class="class"><span class="keyword">struct</span> __<span class="title">attribute__</span> ((__<span class="title">packed__</span>)) <span class="title">sdshdr16</span> &#123;</span></span><br><span class="line">    <span class="keyword">uint16_t</span> len; <span class="comment">/* used */</span></span><br><span class="line">    <span class="keyword">uint16_t</span> alloc; <span class="comment">/* excluding the header and null terminator */</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> flags; <span class="comment">/* 3 lsb of type, 5 unused bits */</span></span><br><span class="line">    <span class="keyword">char</span> buf[];</span><br><span class="line">&#125;;</span><br><span class="line"><span class="class"><span class="keyword">struct</span> __<span class="title">attribute__</span> ((__<span class="title">packed__</span>)) <span class="title">sdshdr32</span> &#123;</span></span><br><span class="line">    <span class="keyword">uint32_t</span> len; <span class="comment">/* used */</span></span><br><span class="line">    <span class="keyword">uint32_t</span> alloc; <span class="comment">/* excluding the header and null terminator */</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> flags; <span class="comment">/* 3 lsb of type, 5 unused bits */</span></span><br><span class="line">    <span class="keyword">char</span> buf[];</span><br><span class="line">&#125;;</span><br><span class="line"><span class="class"><span class="keyword">struct</span> __<span class="title">attribute__</span> ((__<span class="title">packed__</span>)) <span class="title">sdshdr64</span> &#123;</span></span><br><span class="line">    <span class="keyword">uint64_t</span> len; <span class="comment">/* used */</span></span><br><span class="line">    <span class="keyword">uint64_t</span> alloc; <span class="comment">/* excluding the header and null terminator */</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> flags; <span class="comment">/* 3 lsb of type, 5 unused bits */</span></span><br><span class="line">    <span class="keyword">char</span> buf[];</span><br><span class="line">&#125;;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>其中<code>sdshdr5</code>其实没有用，用的是<code>sdshdr8</code>，因此这里的元数据结构从8B下降到3B，<code>embstr</code>可用空间也就从39B上升到44B了。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/01/19/2019-01/redis%E7%9A%84embstr%E4%B8%BA%E4%BB%80%E4%B9%88%E6%98%AF39B/" data-id="ck96cch3h00g8bhama0ixeukg" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2019/01/19/2019-01/redis%E7%9A%84quicklist/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          redis的quicklist
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2019/01/12/2019-01/redis4%E7%9A%84LFU/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">redis4的LFU</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#redisObject占16B"><span class="toc-number">1.</span> <span class="toc-text">redisObject占16B</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#sdshdr占8B"><span class="toc-number">2.</span> <span class="toc-text">sdshdr占8B</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#从39B到44B"><span class="toc-number"></span> <span class="toc-text">从39B到44B</span></a>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

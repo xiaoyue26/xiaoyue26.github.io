@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>神秘的monad——函数式编程 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="monad确实比较难理解，我认真翻了一个星期资料才理解。 讲得比较好的参考资料：http:&#x2F;&#x2F;josephguan.github.io&#x2F;2016&#x2F;06&#x2F;25&#x2F;monad-in-scala&#x2F;比较形象的、有图的：http:&#x2F;&#x2F;blog.forec.cn&#x2F;2017&#x2F;03&#x2F;02&#x2F;translation-adit-faamip&#x2F;数学上讲得比较多的：(scala版代码可用)https:&#x2F;&#x2F;segmentfau">
+<meta property="og:type" content="article">
+<meta property="og:title" content="神秘的monad——函数式编程">
+<meta property="og:url" content="http://xiaoyue26.github.io/2019/08/23/2019-08/%E7%A5%9E%E7%A7%98%E7%9A%84monad%E2%80%94%E2%80%94%E5%87%BD%E6%95%B0%E5%BC%8F%E7%BC%96%E7%A8%8B/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="monad确实比较难理解，我认真翻了一个星期资料才理解。 讲得比较好的参考资料：http:&#x2F;&#x2F;josephguan.github.io&#x2F;2016&#x2F;06&#x2F;25&#x2F;monad-in-scala&#x2F;比较形象的、有图的：http:&#x2F;&#x2F;blog.forec.cn&#x2F;2017&#x2F;03&#x2F;02&#x2F;translation-adit-faamip&#x2F;数学上讲得比较多的：(scala版代码可用)https:&#x2F;&#x2F;segmentfau">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2019-08-23T01:20:21.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.286Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="scala">
+<meta property="article:tag" content="函数式">
+<meta property="article:tag" content="monad">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2019-08/神秘的monad——函数式编程" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/08/23/2019-08/%E7%A5%9E%E7%A7%98%E7%9A%84monad%E2%80%94%E2%80%94%E5%87%BD%E6%95%B0%E5%BC%8F%E7%BC%96%E7%A8%8B/" class="article-date">
+  <time datetime="2019-08-23T01:20:21.000Z" itemprop="datePublished">2019-08-23</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/">设计模式</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      神秘的monad——函数式编程
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>monad确实比较难理解，我认真翻了一个星期资料才理解。</p>
+<p>讲得比较好的参考资料：<br><a href="http://josephguan.github.io/2016/06/25/monad-in-scala/" target="_blank" rel="noopener">http://josephguan.github.io/2016/06/25/monad-in-scala/</a><br>比较形象的、有图的：<br><a href="http://blog.forec.cn/2017/03/02/translation-adit-faamip/" target="_blank" rel="noopener">http://blog.forec.cn/2017/03/02/translation-adit-faamip/</a><br>数学上讲得比较多的：(scala版代码可用)<br><a href="https://segmentfault.com/a/1190000008000905" target="_blank" rel="noopener">https://segmentfault.com/a/1190000008000905</a></p>
+<p>参考资料3中的scala版代码:</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 1. 半群:</span></span><br><span class="line"><span class="class"><span class="keyword">trait</span> <span class="title">SemiGroup</span>[<span class="type">A</span>] </span>&#123;</span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">op</span></span>(a1: <span class="type">A</span>, a2: <span class="type">A</span>): <span class="type">A</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 2. monoid: (还不是monad) 比半群多一个零元</span></span><br><span class="line"><span class="class"><span class="keyword">trait</span> <span class="title">Monoid</span>[<span class="type">A</span>] <span class="keyword">extends</span> <span class="title">SemiGroup</span>[<span class="type">A</span>] </span>&#123;</span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">zero</span></span>: <span class="type">A</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 函子: (有map函数就是Functor)</span></span><br><span class="line"><span class="class"><span class="keyword">trait</span> <span class="title">Functor</span>[<span class="type">F</span>[_]] </span>&#123;</span><br><span class="line">  <span class="comment">// 输入一个A的容器F[A],输入一个A类型=&gt;B类型的变化</span></span><br><span class="line">  <span class="comment">// 输出B类型的容器F[B]</span></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">map</span></span>[<span class="type">A</span>, <span class="type">B</span>](a: <span class="type">F</span>[<span class="type">A</span>])(f: <span class="type">A</span> =&gt; <span class="type">B</span>): <span class="type">F</span>[<span class="type">B</span>]</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">object</span> <span class="title">MonadTest</span> </span>&#123;</span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">main</span></span>(args: <span class="type">Array</span>[<span class="type">String</span>]): <span class="type">Unit</span> = &#123;</span><br><span class="line">    <span class="keyword">val</span> stringMonoid = <span class="keyword">new</span> <span class="type">Monoid</span>[<span class="type">String</span>] &#123;</span><br><span class="line">      <span class="function"><span class="keyword">def</span> <span class="title">op</span></span>(a1: <span class="type">String</span>, a2: <span class="type">String</span>) = a1 + a2</span><br><span class="line"></span><br><span class="line">      <span class="function"><span class="keyword">def</span> <span class="title">zero</span> </span>= <span class="string">""</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">listMonoid</span></span>[<span class="type">A</span>] = <span class="keyword">new</span> <span class="type">Monoid</span>[<span class="type">List</span>[<span class="type">A</span>]] &#123;</span><br><span class="line">      <span class="function"><span class="keyword">def</span> <span class="title">op</span></span>(a1: <span class="type">List</span>[<span class="type">A</span>], a2: <span class="type">List</span>[<span class="type">A</span>]) = a1 ++ a2</span><br><span class="line"></span><br><span class="line">      <span class="function"><span class="keyword">def</span> <span class="title">zero</span> </span>= <span class="type">Nil</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">optionMonoid</span></span>[<span class="type">A</span>] = <span class="keyword">new</span> <span class="type">Monoid</span>[<span class="type">Option</span>[<span class="type">A</span>]] &#123;</span><br><span class="line">      <span class="function"><span class="keyword">def</span> <span class="title">op</span></span>(a1: <span class="type">Option</span>[<span class="type">A</span>], a2: <span class="type">Option</span>[<span class="type">A</span>]) = a1 orElse a2</span><br><span class="line"></span><br><span class="line">      <span class="function"><span class="keyword">def</span> <span class="title">zero</span> </span>= <span class="type">None</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">listFunctor</span> </span>= <span class="keyword">new</span> <span class="type">Functor</span>[<span class="type">List</span>] &#123;</span><br><span class="line">      <span class="function"><span class="keyword">def</span> <span class="title">map</span></span>[<span class="type">A</span>, <span class="type">B</span>](a: <span class="type">List</span>[<span class="type">A</span>])(f: (<span class="type">A</span>) =&gt; <span class="type">B</span>) = a.map(f)</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment">/*trait Monad[M[_]] &#123;</span></span><br><span class="line"><span class="comment">  def unit[A](a: A): M[A]   //identity</span></span><br><span class="line"><span class="comment">  def join[A](mma: M[M[A]]): M[A]</span></span><br><span class="line"><span class="comment">&#125;*/</span></span><br><span class="line"><span class="comment">// Monad: (有unit和flatmap就是monad)</span></span><br><span class="line"><span class="class"><span class="keyword">trait</span> <span class="title">Monad</span>[<span class="type">M</span>[_]] </span>&#123;</span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">unit</span></span>[<span class="type">A</span>](a: <span class="type">A</span>): <span class="type">M</span>[<span class="type">A</span>]</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">flatMap</span></span>[<span class="type">A</span>, <span class="type">B</span>](fa: <span class="type">M</span>[<span class="type">A</span>])(f: <span class="type">A</span> =&gt; <span class="type">M</span>[<span class="type">B</span>]): <span class="type">M</span>[<span class="type">B</span>]</span><br><span class="line"></span><br><span class="line">  <span class="comment">// def join[A](mma: M[M[A]]): M[A] = flatMap(mma)(ma =&gt; ma)</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<p>附抄scala版的monad(参考资料1):</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">trait</span> <span class="title">Monad</span>[+<span class="type">T</span>] </span>&#123;</span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">flatMap</span></span>[<span class="type">U</span>]( f : (<span class="type">T</span>) =&gt; <span class="type">Monad</span>[<span class="type">U</span>] ) : <span class="type">Monad</span>[<span class="type">U</span>]</span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">unit</span></span>(value : <span class="type">B</span>) : <span class="type">Monad</span>[<span class="type">B</span>]</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// map可以理解为flatmap的特化:</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">map</span></span>[<span class="type">U</span>](f : (<span class="type">T</span>) =&gt; <span class="type">U</span>) : <span class="type">Monad</span>[<span class="type">U</span>] = flatMap(v =&gt; unit(f(v)))</span><br><span class="line"></span><br><span class="line"><span class="comment">// Try类型monad:</span></span><br><span class="line"><span class="keyword">val</span> result:<span class="type">Try</span>[<span class="type">Int</span>] = <span class="type">Try</span>(<span class="string">"5"</span>.toInt).flatMap&#123;a =&gt;</span><br><span class="line">                      <span class="type">Try</span>(<span class="string">"6a"</span>.toInt).flatMap&#123;b =&gt;</span><br><span class="line">                      <span class="type">Try</span>(<span class="string">"9"</span>.toInt).flatMap&#123;c =&gt; <span class="type">Try</span>(a + b +c )&#125;&#125;&#125;</span><br><span class="line"><span class="comment">// for是flatmap的语法糖:</span></span><br><span class="line"><span class="keyword">val</span> result: <span class="type">Try</span>[<span class="type">Int</span>] = <span class="keyword">for</span> (</span><br><span class="line">    a &lt;- <span class="type">Try</span>(<span class="string">"5"</span>.toInt);</span><br><span class="line">    b &lt;- <span class="type">Try</span>(<span class="string">"6a"</span>.toInt);</span><br><span class="line">    c &lt;- <span class="type">Try</span>(<span class="string">"9"</span>.toInt)</span><br><span class="line">  ) <span class="keyword">yield</span>( a + b + c)</span><br><span class="line"></span><br><span class="line"><span class="comment">// 1.1含幺半群G: </span></span><br><span class="line"><span class="class"><span class="keyword">trait</span> <span class="title">Monad</span>[+<span class="type">T</span>]</span></span><br><span class="line"><span class="class"><span class="title">//</span> 1.2<span class="title">二元封闭、结合运算</span></span>:</span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">flatMap</span></span>[<span class="type">U</span>]( f : (<span class="type">T</span>) =&gt; <span class="type">Monad</span>[<span class="type">U</span>] ) : <span class="type">Monad</span>[<span class="type">U</span>]</span><br><span class="line"><span class="comment">// 1.3幺元:</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">unit</span></span>(value : <span class="type">B</span>) : <span class="type">Monad</span>[<span class="type">B</span>] </span><br><span class="line"><span class="comment">// 2.1结合律/封闭:</span></span><br><span class="line">monad.flatMap(f).flatMap(g) == monad.flatMap(v =&gt; f(v).flatMap(g)) <span class="comment">// associativity</span></span><br><span class="line"><span class="comment">// 案例:</span></span><br><span class="line"><span class="keyword">val</span> multiplier : <span class="type">Int</span> =&gt; <span class="type">Option</span>[<span class="type">Int</span>] = v =&gt; <span class="type">Some</span>(v * v)</span><br><span class="line"><span class="keyword">val</span> divider : <span class="type">Int</span> =&gt; <span class="type">Option</span>[<span class="type">Int</span>] = v =&gt; <span class="type">Some</span>(v/<span class="number">2</span>)</span><br><span class="line"><span class="keyword">val</span> original = <span class="type">Some</span>(<span class="number">10</span>)</span><br><span class="line"></span><br><span class="line">original.flatMap(multiplier).flatMap(divider) ===</span><br><span class="line">original.flatMap(v =&gt; multiplier(v).flatMap(divider))</span><br><span class="line">    </span><br><span class="line"><span class="comment">// 2.2 左幺元</span></span><br><span class="line">unit(x).flatMap(f) == f(x)</span><br><span class="line"><span class="comment">// 案例:</span></span><br><span class="line"><span class="keyword">val</span> multiplier : <span class="type">Int</span> =&gt; <span class="type">Option</span>[<span class="type">Int</span>] = v =&gt; <span class="type">Some</span>(v * v)</span><br><span class="line"><span class="keyword">val</span> item = <span class="type">Some</span>(<span class="number">10</span>).flatMap(multiplier)</span><br><span class="line">item === multiplier(<span class="number">10</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment">// 2.3 右幺元</span></span><br><span class="line">monad.flatMap(unit) == monad</span><br><span class="line"><span class="comment">// 案例:</span></span><br><span class="line"><span class="keyword">val</span> value = <span class="type">Some</span>(<span class="number">50</span>).flatMap(v =&gt; <span class="type">Some</span>(v))</span><br><span class="line">value === <span class="type">Some</span>(<span class="number">50</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment">// 3. 范畴</span></span><br><span class="line">高阶类型（如<span class="type">List</span>[<span class="type">T</span>+]）</span><br><span class="line"></span><br><span class="line"><span class="comment">// 4. 函子(Functor)</span></span><br><span class="line"><span class="comment">// 函数， Int =&gt; String</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">foo</span></span>(i:<span class="type">Int</span>): <span class="type">String</span> = i.toString</span><br><span class="line"><span class="comment">// 函子， List[T] =&gt; Set[T]</span></span><br><span class="line">scala&gt; <span class="function"><span class="keyword">def</span> <span class="title">baz</span></span>[<span class="type">T</span>](l:<span class="type">List</span>[<span class="type">T</span>]): <span class="type">Set</span>[<span class="type">T</span>] = l.toSet</span><br><span class="line"></span><br><span class="line"><span class="comment">// 5. 自函子(Endofunctor)：</span></span><br><span class="line">把一个类型映射到自身类型，比如<span class="type">Int</span>=&gt;<span class="type">Int</span>, <span class="type">String</span>=&gt;<span class="type">String</span> </span><br><span class="line">例如flatmap:</span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">flatMap</span></span>[<span class="type">U</span>]( f : (<span class="type">T</span>) =&gt; <span class="type">Monad</span>[<span class="type">U</span>] ) : <span class="type">Monad</span>[<span class="type">U</span>]</span><br></pre></td></tr></table></figure>
+
+
+
+<blockquote>
+<p>下面开始是我个人的理解</p>
+</blockquote>
+<h2 id="函数式语言"><a href="#函数式语言" class="headerlink" title="函数式语言"></a>函数式语言</h2><blockquote>
+<p>函数是一等公民。<br>无函数副作用。</p>
+</blockquote>
+<p>（学校里教的）<br>函数可以像普通变量一样使用。（比c里的函数指针更进一步）</p>
+<h3 id="更函数式一点"><a href="#更函数式一点" class="headerlink" title="更函数式一点"></a>更函数式一点</h3><p>尽量无状态，最好都像lambda演算一样，有很深的递归。<br>用递归代替循环。</p>
+<p>Monad就是这个思想的一个具体实现。</p>
+<h2 id="代码层面理解"><a href="#代码层面理解" class="headerlink" title="代码层面理解"></a>代码层面理解</h2><p>Monad在scala中就是一个有flatmap的容器，可以把函数fmap的输出收集起来打平回原来的Monad类型。<br>比较好理解的Monad类型是容器类型：List,Option. </p>
+<h2 id="形象上理解"><a href="#形象上理解" class="headerlink" title="形象上理解"></a>形象上理解</h2><p>Monad形象上理解类似于有管道操作的容器，可以把函数fmap的输出适配回Monad类型，方便投入下一个函数中。</p>
+<h2 id="比较严密的定义上理解："><a href="#比较严密的定义上理解：" class="headerlink" title="比较严密的定义上理解："></a>比较严密的定义上理解：</h2><p>（去掉范畴学的数学术语，简化理解）<br>Monad是一个我们定义的集合，它上面有零元（如Option中的None\List中的nil），它上面还有一种二元操作op，op(A,B)的结果依然属于Monad(封闭性)，并且运算满足结合律(可以随意加括号)。<br>所以如果有unit函数(生成零元)，flatmap函数（把二元操作打平回集合元素类型，满足封闭性），就可以成为一个Monad了。至于结合律，由于函数都满足结合律，因此可以忽略。</p>
+<p>总结:<br>有map函数: Functor、函子<br>有ap函数（参数为函数的map）: Applicative、应用<br>有flatmap函数: Monad</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/08/23/2019-08/%E7%A5%9E%E7%A7%98%E7%9A%84monad%E2%80%94%E2%80%94%E5%87%BD%E6%95%B0%E5%BC%8F%E7%BC%96%E7%A8%8B/" data-id="ck96cch4900jjbham4cm86ifp" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/monad/" rel="tag">monad</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/scala/" rel="tag">scala</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%87%BD%E6%95%B0%E5%BC%8F/" rel="tag">函数式</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2019/08/25/2019-08/clickhouse%E5%AE%9E%E6%88%98%E4%B9%8Bjdbc%E6%8E%A5%E5%85%A5/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          clickhouse实战之jdbc接入
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2019/07/27/2019-07/disruptor%E7%AC%94%E8%AE%B0/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">disruptor笔记——代替blockingQueue和java9flowAPI</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#函数式语言"><span class="toc-number">1.</span> <span class="toc-text">函数式语言</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#更函数式一点"><span class="toc-number">1.1.</span> <span class="toc-text">更函数式一点</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#代码层面理解"><span class="toc-number">2.</span> <span class="toc-text">代码层面理解</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#形象上理解"><span class="toc-number">3.</span> <span class="toc-text">形象上理解</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#比较严密的定义上理解："><span class="toc-number">4.</span> <span class="toc-text">比较严密的定义上理解：</span></a></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

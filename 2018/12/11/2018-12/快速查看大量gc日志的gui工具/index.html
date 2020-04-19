@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>快速查看大量gc日志的gui工具 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="之前学习了GC日志的格式，能理解每行日志的大致含义。然而对于实际生产项目，日志量庞大，逐行看很低效，这个时候借助一下gui工具就很nice了。 经过海淘了谷歌，比较后留下这2个比较好用的工具：  GCViewer, http:&#x2F;&#x2F;gceasy.io  被抛弃的工具:  GCHisto: 界面好看,功能有点弱; visualgc(jvisualvm的插件): jvisualvm已经1.8,visua">
+<meta property="og:type" content="article">
+<meta property="og:title" content="快速查看大量gc日志的gui工具">
+<meta property="og:url" content="http://xiaoyue26.github.io/2018/12/11/2018-12/%E5%BF%AB%E9%80%9F%E6%9F%A5%E7%9C%8B%E5%A4%A7%E9%87%8Fgc%E6%97%A5%E5%BF%97%E7%9A%84gui%E5%B7%A5%E5%85%B7/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="之前学习了GC日志的格式，能理解每行日志的大致含义。然而对于实际生产项目，日志量庞大，逐行看很低效，这个时候借助一下gui工具就很nice了。 经过海淘了谷歌，比较后留下这2个比较好用的工具：  GCViewer, http:&#x2F;&#x2F;gceasy.io  被抛弃的工具:  GCHisto: 界面好看,功能有点弱; visualgc(jvisualvm的插件): jvisualvm已经1.8,visua">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-12/gcviewer1.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-12/danger.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-12/gcviewer4.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-12/gcviewer.jpg">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-12/detect.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-12/gceasy6.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-12/fullgc.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-12/tips.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-12/gceasy0.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-12/gceasy1.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-12/gceasy2.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-12/gceasy4.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-12/gceasy5.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-12/gceasy7.png">
+<meta property="article:published_time" content="2018-12-11T01:33:53.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.279Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="java">
+<meta property="article:tag" content="jvm">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://xiaoyue26.github.io/images/2018-12/gcviewer1.png">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2018-12/快速查看大量gc日志的gui工具" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/12/11/2018-12/%E5%BF%AB%E9%80%9F%E6%9F%A5%E7%9C%8B%E5%A4%A7%E9%87%8Fgc%E6%97%A5%E5%BF%97%E7%9A%84gui%E5%B7%A5%E5%85%B7/" class="article-date">
+  <time datetime="2018-12-11T01:33:53.000Z" itemprop="datePublished">2018-12-11</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/jvm/">jvm</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      快速查看大量gc日志的gui工具
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>之前学习了GC日志的格式，能理解每行日志的大致含义。<br>然而对于实际生产项目，日志量庞大，逐行看很低效，这个时候借助一下gui工具就很nice了。</p>
+<p>经过海淘了谷歌，比较后留下这2个比较好用的工具：</p>
+<ol>
+<li>GCViewer,</li>
+<li><a href="http://gceasy.io" target="_blank" rel="noopener">http://gceasy.io</a></li>
+</ol>
+<p>被抛弃的工具:</p>
+<ol>
+<li>GCHisto: 界面好看,功能有点弱;</li>
+<li>visualgc(jvisualvm的插件): jvisualvm已经1.8,visualgc版本才1.4,完全安装不上，应该已经不维护了。</li>
+</ol>
+<h1 id="GCViewer"><a href="#GCViewer" class="headerlink" title="GCViewer"></a>GCViewer</h1><p><a href="https://sourceforge.net/projects/gcviewer/" target="_blank" rel="noopener">https://sourceforge.net/projects/gcviewer/</a><br>缺点: 字超小<br>优点: 功能全</p>
+<h2 id="查看堆空间的变化"><a href="#查看堆空间的变化" class="headerlink" title="查看堆空间的变化"></a>查看堆空间的变化</h2><img src="/images/2018-12/gcviewer1.png" class="" width="800" height="1200" title="gcviewer1">
+<p>view菜单栏可以看到各种颜色的线的含义，例如蓝色线是堆空间的使用。如果全打开的话眼睛会花的，可以逐步打开几个关心的。</p>
+<p>像下面这种情况图中黑色柱状较多的时候,可以看出堆空间不足了,gc时间占用较多:</p>
+<img src="/images/2018-12/danger.png" class="" width="800" height="1200" title="danger">
+
+
+<h2 id="gc回收的各项统计数据"><a href="#gc回收的各项统计数据" class="headerlink" title="gc回收的各项统计数据"></a>gc回收的各项统计数据</h2><img src="/images/2018-12/gcviewer4.png" class="" width="800" height="1200" title="gcviewer4">
+
+
+<p>如果搭配一个放大镜，<code>GCViewer</code>就是一个非常好的gc日志查看工具了。</p>
+<img src="/images/2018-12/gcviewer.jpg" class="" width="800" height="1200" title="gcviewer">
+
+
+<h1 id="http-gceasy-io"><a href="#http-gceasy-io" class="headerlink" title="http://gceasy.io"></a><a href="http://gceasy.io" target="_blank" rel="noopener">http://gceasy.io</a></h1><p>上传日志到网站。<br>优点：</p>
+<ol>
+<li>有诊断功能,自动检测问题;</li>
+<li>界面很美观。</li>
+</ol>
+<h2 id="诊断功能"><a href="#诊断功能" class="headerlink" title="诊断功能"></a>诊断功能</h2><p>它能帮忙检测gc日志中反映出的问题:</p>
+<img src="/images/2018-12/detect.png" class="" width="800" height="1200" title="detect">
+<img src="/images/2018-12/gceasy6.png" class="" width="800" height="1200" title="gceasy6">
+
+<p>比如能检测到fullgc:</p>
+<img src="/images/2018-12/fullgc.png" class="" width="800" height="1200" title="fullgc">
+<p>有些还能针对性地给出建议:</p>
+<img src="/images/2018-12/tips.png" class="" width="800" height="1200" title="tips">
+
+<h2 id="统计信息"><a href="#统计信息" class="headerlink" title="统计信息"></a>统计信息</h2><p>它提供了各个角度的统计信息。<br>新生代、老生代的峰值使用大小:</p>
+<img src="/images/2018-12/gceasy0.png" class="" width="800" height="1200" title="gceasy0">
+<p>各种统计图表:</p>
+<img src="/images/2018-12/gceasy1.png" class="" width="800" height="1200" title="gceasy1">
+<img src="/images/2018-12/gceasy2.png" class="" width="800" height="1200" title="gceasy2">
+<img src="/images/2018-12/gceasy4.png" class="" width="800" height="1200" title="gceasy4">
+<img src="/images/2018-12/gceasy5.png" class="" width="800" height="1200" title="gceasy5">
+<img src="/images/2018-12/gceasy7.png" class="" width="800" height="1200" title="gceasy7">
+
+
+
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/12/11/2018-12/%E5%BF%AB%E9%80%9F%E6%9F%A5%E7%9C%8B%E5%A4%A7%E9%87%8Fgc%E6%97%A5%E5%BF%97%E7%9A%84gui%E5%B7%A5%E5%85%B7/" data-id="ck96cch3900f9bham5ycp4ezr" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/jvm/" rel="tag">jvm</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2018/12/13/2018-12/%E5%A6%82%E4%BD%95%E9%98%85%E8%AF%BBheap-dump%E6%96%87%E4%BB%B6/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          如何阅读heap dump文件
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2018/12/06/2018-12/%E5%A6%82%E4%BD%95%E9%98%85%E8%AF%BBthread-dump/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">如何阅读thread dump</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#GCViewer"><span class="toc-number">1.</span> <span class="toc-text">GCViewer</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#查看堆空间的变化"><span class="toc-number">1.1.</span> <span class="toc-text">查看堆空间的变化</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#gc回收的各项统计数据"><span class="toc-number">1.2.</span> <span class="toc-text">gc回收的各项统计数据</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#http-gceasy-io"><span class="toc-number">2.</span> <span class="toc-text">http:&#x2F;&#x2F;gceasy.io</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#诊断功能"><span class="toc-number">2.1.</span> <span class="toc-text">诊断功能</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#统计信息"><span class="toc-number">2.2.</span> <span class="toc-text">统计信息</span></a></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>消息队列小结 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="为啥要使用消息队列，主要是两个目的：（场景：生产者消费者模型）  生产者与消费者速度不匹配；（生产者太快了） 解耦生产者与消费者。（可以异构，不同语言，不同节点）  JMS(Java MessageService)Sun公司早期提出的消息标准。api规范(旧).支持点对点和发布订阅.     概念 解释    producer&#x2F;publisher 生产者   consumer&#x2F;subscriber">
+<meta property="og:type" content="article">
+<meta property="og:title" content="消息队列小结">
+<meta property="og:url" content="http://xiaoyue26.github.io/2018/07/22/2018-07/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97%E5%B0%8F%E7%BB%93/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="为啥要使用消息队列，主要是两个目的：（场景：生产者消费者模型）  生产者与消费者速度不匹配；（生产者太快了） 解耦生产者与消费者。（可以异构，不同语言，不同节点）  JMS(Java MessageService)Sun公司早期提出的消息标准。api规范(旧).支持点对点和发布订阅.     概念 解释    producer&#x2F;publisher 生产者   consumer&#x2F;subscriber">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-07/pic1.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-07/pic2.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-07/pic3.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-07/pic4.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-07/pic5.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-07/pic6.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-07/pic7.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-07/pic8.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-07/pic9.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-07/pic10.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-07/pic11.png">
+<meta property="article:published_time" content="2018-07-22T13:13:39.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.273Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="kafka">
+<meta property="article:tag" content="消息队列">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://xiaoyue26.github.io/images/2018-07/pic1.png">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2018-07/消息队列小结" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/07/22/2018-07/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97%E5%B0%8F%E7%BB%93/" class="article-date">
+  <time datetime="2018-07-22T13:13:39.000Z" itemprop="datePublished">2018-07-22</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/">消息队列</a>►<a class="article-category-link" href="/categories/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/kafka/">kafka</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      消息队列小结
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>为啥要使用消息队列，主要是两个目的：<br>（场景：生产者消费者模型）</p>
+<ol>
+<li>生产者与消费者速度不匹配；（生产者太快了）</li>
+<li>解耦生产者与消费者。（可以异构，不同语言，不同节点）</li>
+</ol>
+<h2 id="JMS-Java-MessageService"><a href="#JMS-Java-MessageService" class="headerlink" title="JMS(Java MessageService)"></a>JMS(Java MessageService)</h2><p>Sun公司早期提出的消息标准。<br>api规范(旧).支持点对点和发布订阅. </p>
+<table>
+<thead>
+<tr>
+<th align="center">概念</th>
+<th align="center">解释</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">producer/publisher</td>
+<td align="center">生产者</td>
+</tr>
+<tr>
+<td align="center">consumer/subscriber</td>
+<td align="center">消费者</td>
+</tr>
+<tr>
+<td align="center">message</td>
+<td align="center">消息</td>
+</tr>
+<tr>
+<td align="center">queue</td>
+<td align="center">存放消息的地方</td>
+</tr>
+<tr>
+<td align="center">topic</td>
+<td align="center">提供多个订阅者消费消息的机制</td>
+</tr>
+</tbody></table>
+<p>JMS中的消息模式有两种：</p>
+<ol>
+<li>P2P: 点对点</li>
+<li>publish-subscribe: 发布订阅<img src="/images/2018-07/pic1.png" class="" width="400" height="600" title="消息模式">
+
+</li>
+</ol>
+<h2 id="AMQP-advanced-message-queuing-protocol"><a href="#AMQP-advanced-message-queuing-protocol" class="headerlink" title="AMQP (advanced message queuing protocol)"></a>AMQP (advanced message queuing protocol)</h2><p>高级MQ协议. 不但约束了api,还使不同实现之间可以合作.<br>加入了Exchange,Binding,解耦了队列,<br>可以灵活实现除了点对点\发布订阅以外的模型.<br>消息模型:</p>
+<img src="/images/2018-07/pic2.png" class="" width="400" height="600" title="消息模式">
+
+<h3 id="AMPQ其中一个实现-rabbitmq"><a href="#AMPQ其中一个实现-rabbitmq" class="headerlink" title="AMPQ其中一个实现: rabbitmq"></a>AMPQ其中一个实现: rabbitmq</h3><p>简单理解概念：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Channel : 信道.一个连接多个Channel. 节省开销.(复用tcp连接，每次发送消息算一个信道)</span><br><span class="line">Exchange: 交换器、路由器.</span><br><span class="line">Queue: 队列. 带名字的邮箱.</span><br><span class="line">Binding: 绑定.&#x2F;&#x2F; 路由规则</span><br></pre></td></tr></table></figure>
+
+<p><code>Exchange</code>:<br>根据配置好的路由规则,转发收到的消息到符合的queue.<br>不同类型的exchange:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">direct 直连</span><br><span class="line">fanout 一个消息到多个队列</span><br><span class="line">topic 多个消息到一个队列</span><br><span class="line">header &#x2F;&#x2F; 不实用,即将弃用</span><br></pre></td></tr></table></figure>
+
+<img src="/images/2018-07/pic3.png" class="" width="400" height="600" title="消息模式">
+<img src="/images/2018-07/pic4.png" class="" width="400" height="600" title="消息模式">
+<img src="/images/2018-07/pic5.png" class="" width="400" height="600" title="消息模式">
+
+<h2 id="kafka"><a href="#kafka" class="headerlink" title="kafka"></a>kafka</h2><h3 id="基本概念"><a href="#基本概念" class="headerlink" title="基本概念"></a>基本概念</h3><img src="/images/2018-07/pic6.png" class="" width="400" height="600" title="消息模式">
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">Broker: kafka server的一个单位(brokerid);</span><br><span class="line">Topic: 某个主题;</span><br><span class="line">Partition: 一般对应磁盘个数，加大吞吐率;</span><br><span class="line">Replica: 0.8后新增,高可用;(3&#x2F;5...)</span><br><span class="line">Consumer</span><br><span class="line">Group: 管理多个consumer</span><br><span class="line">Producer</span><br></pre></td></tr></table></figure>
+
+<h3 id="内部组件"><a href="#内部组件" class="headerlink" title="内部组件"></a>内部组件</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">SocketServer: 接受消息,返回消息(客户端、内部通信)，</span><br><span class="line">RequestHandlerPool: 根据不同request类型,调用不同KafkaApi处理消息</span><br><span class="line">KafkaApi </span><br><span class="line">KafkaController-&gt;ReplicaStateManager+PartitionStateManager+Listener</span><br><span class="line">ReplicaManager: 底层存储结构，每个broker上都有。接受读写操作。</span><br><span class="line">Zookeeper：1. 发现服务，状态转移；2. 存储offeset。（1.0后转入topic）</span><br></pre></td></tr></table></figure>
+
+<h4 id="KafkaController"><a href="#KafkaController" class="headerlink" title="KafkaController"></a>KafkaController</h4><p>Broker通过ZK抢注Controller。<br>Controller负责管理broker。它会注册很多Listener，监听zk上节点变化，来维护状态自动机变化。</p>
+<ul>
+<li>防止脑裂:<br>旧controller epoch&lt;新controller epoch<img src="/images/2018-07/pic7.png" class="" width="400" height="600" title="消息模式">
+<h4 id="Follower与Leader"><a href="#Follower与Leader" class="headerlink" title="Follower与Leader"></a>Follower与Leader</h4>Follower与Leader均是针对某一个partition而言：</li>
+</ul>
+<ol>
+<li>Slave(Follower，对于某一个topic的partition是follower)：同步数据。 </li>
+<li>Slave(Leader,对于某一个topic的partition是leader): 接受kafkaApi(consumer和producer)的请求。</li>
+</ol>
+<p>读写partition：<br>随机找一个机器-&gt;metadata(zk)-&gt;发送请求给这个partition的具体leader。</p>
+<h3 id="SocketServer"><a href="#SocketServer" class="headerlink" title="SocketServer"></a>SocketServer</h3><img src="/images/2018-07/pic8.png" class="" width="400" height="600" title="消息模式">
+
+
+<h3 id="状态机"><a href="#状态机" class="headerlink" title="状态机"></a>状态机</h3><img src="/images/2018-07/pic9.png" class="" width="400" height="600" title="消息模式">
+
+<h3 id="KafkaHA"><a href="#KafkaHA" class="headerlink" title="KafkaHA"></a>KafkaHA</h3><p><code>ISR</code>: in-sync Replica<br><code>leader</code>: 最新offset;<br><code>follower</code>: 最新offset就是ISR;（轮询offset）<br><code>zk</code>: 都有谁是ISR,同步了。</p>
+<p>leader挂了，选一个ISR；<br>如果没有ISR,则随机选一个最先起来的。（不一定选offset最高的,不确定后头还会不会起来follower）。</p>
+<p><code>ACK</code>（均到内存，均不保证落盘）<br>1: leader收到就收到;<br>2: 有一个follower收到就收到;<br>3: 所有follower收到才收到。</p>
+<h3 id="错误恢复"><a href="#错误恢复" class="headerlink" title="错误恢复"></a>错误恢复</h3><ul>
+<li><p>leader选举<br>直接从ISR中选第一个(近似于随机)。 </p>
+</li>
+<li><p>Controller选举:(某台机器)<br>所有Broker抢注ZK。</p>
+</li>
+</ul>
+<p>Controller挂的时候: 所有replica和partition的状态不能改变。也不能reBanlance了。<br>如果Controller挂的时候,leader也挂，所在partition就不能读不能写了。</p>
+<ul>
+<li>倾斜(热点):<br>一台最稳定的机器上，可能集中了所有leader.<br>(可以手动reAssign)</li>
+</ul>
+<h2 id="实际案例"><a href="#实际案例" class="headerlink" title="实际案例"></a>实际案例</h2><img src="/images/2018-07/pic10.png" class="" width="400" height="600" title="消息模式">
+<img src="/images/2018-07/pic11.png" class="" width="400" height="600" title="消息模式">
+
+<h2 id="其他类kafka的消息队列改进："><a href="#其他类kafka的消息队列改进：" class="headerlink" title="其他类kafka的消息队列改进："></a>其他类kafka的消息队列改进：</h2><ol>
+<li>Consumer之间消费的分区互不重叠(防止kafka的重复消费);(tube)</li>
+<li>严格有序：数据落地到单队列上，每次ACK。(hippo)</li>
+<li>controller改成双master热备，降低对zk依赖，引入nameserver.(rocketmq)</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/07/22/2018-07/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97%E5%B0%8F%E7%BB%93/" data-id="ck96cch2l00cqbhamf5q7f81w" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/kafka/" rel="tag">kafka</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/" rel="tag">消息队列</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2018/08/05/2018-08/Future-FutureTask%E7%AC%94%E8%AE%B0/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          Future/FutureTask笔记
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2018/07/22/2018-07/sparkstreaming%E8%B0%83%E4%BC%98%E5%B0%8F%E7%BB%93/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">sparkstreaming调优小结</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#JMS-Java-MessageService"><span class="toc-number">1.</span> <span class="toc-text">JMS(Java MessageService)</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#AMQP-advanced-message-queuing-protocol"><span class="toc-number">2.</span> <span class="toc-text">AMQP (advanced message queuing protocol)</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#AMPQ其中一个实现-rabbitmq"><span class="toc-number">2.1.</span> <span class="toc-text">AMPQ其中一个实现: rabbitmq</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#kafka"><span class="toc-number">3.</span> <span class="toc-text">kafka</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#基本概念"><span class="toc-number">3.1.</span> <span class="toc-text">基本概念</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#内部组件"><span class="toc-number">3.2.</span> <span class="toc-text">内部组件</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#KafkaController"><span class="toc-number">3.2.1.</span> <span class="toc-text">KafkaController</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Follower与Leader"><span class="toc-number">3.2.2.</span> <span class="toc-text">Follower与Leader</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#SocketServer"><span class="toc-number">3.3.</span> <span class="toc-text">SocketServer</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#状态机"><span class="toc-number">3.4.</span> <span class="toc-text">状态机</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#KafkaHA"><span class="toc-number">3.5.</span> <span class="toc-text">KafkaHA</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#错误恢复"><span class="toc-number">3.6.</span> <span class="toc-text">错误恢复</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#实际案例"><span class="toc-number">4.</span> <span class="toc-text">实际案例</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#其他类kafka的消息队列改进："><span class="toc-number">5.</span> <span class="toc-text">其他类kafka的消息队列改进：</span></a></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

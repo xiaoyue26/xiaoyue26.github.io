@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>堆外内存DirectByteBuffer | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="堆外内存: 不进行GC，防止JNI访问错位。 使用方式使用堆外内存的两种方式：1.隐式：比如读写文件时：   读文件: 文件(disk)&#x3D;&gt;堆外内存&#x3D;&gt;堆内内存;(过程中JVM保证不GC)写文件: 堆内内存&#x3D;&gt;堆外内存&#x3D;&gt;文件(disk)。 2.显式：使用DirectByteBuffer，直接在堆外分配空间，节省1倍空间，减去一倍拷贝操作。 12&#x2F;&#x2F; 底层源码:unsafe">
+<meta property="og:type" content="article">
+<meta property="og:title" content="堆外内存DirectByteBuffer">
+<meta property="og:url" content="http://xiaoyue26.github.io/2018/08/18/2018-08/%E5%A0%86%E5%A4%96%E5%86%85%E5%AD%98DirectByteBuffer/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="堆外内存: 不进行GC，防止JNI访问错位。 使用方式使用堆外内存的两种方式：1.隐式：比如读写文件时：   读文件: 文件(disk)&#x3D;&gt;堆外内存&#x3D;&gt;堆内内存;(过程中JVM保证不GC)写文件: 堆内内存&#x3D;&gt;堆外内存&#x3D;&gt;文件(disk)。 2.显式：使用DirectByteBuffer，直接在堆外分配空间，节省1倍空间，减去一倍拷贝操作。 12&#x2F;&#x2F; 底层源码:unsafe">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-08/collect.png">
+<meta property="article:published_time" content="2018-08-18T12:52:15.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.274Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="java">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://xiaoyue26.github.io/images/2018-08/collect.png">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2018-08/堆外内存DirectByteBuffer" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/08/18/2018-08/%E5%A0%86%E5%A4%96%E5%86%85%E5%AD%98DirectByteBuffer/" class="article-date">
+  <time datetime="2018-08-18T12:52:15.000Z" itemprop="datePublished">2018-08-18</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      堆外内存DirectByteBuffer
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>堆外内存: 不进行GC，防止JNI访问错位。</p>
+<h2 id="使用方式"><a href="#使用方式" class="headerlink" title="使用方式"></a>使用方式</h2><p>使用堆外内存的两种方式：<br>1.隐式：比如读写文件时：</p>
+<blockquote>
+</blockquote>
+<p>读文件: 文件(disk)=&gt;堆外内存=&gt;堆内内存;(过程中JVM保证不GC)<br>写文件: 堆内内存=&gt;堆外内存=&gt;文件(disk)。</p>
+<p>2.显式：使用<code>DirectByteBuffer</code>，直接在堆外分配空间，节省1倍空间，减去一倍拷贝操作。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 底层源码:</span></span><br><span class="line">unsafe.allocateMemory(size)</span><br></pre></td></tr></table></figure>
+
+<h2 id="Unsafe"><a href="#Unsafe" class="headerlink" title="Unsafe"></a>Unsafe</h2><p>java直接管理内存用的类,之所以叫<code>Unsafe</code>,意思是这些原来设计是给sun公司的人专用的，不是开放给外面的人用的，希望普通用户不要依赖它的接口，随时随着jdk版本升级而更改接口。// 如果不升级jdk，就不用care了。<br>并不是说这个类不安全。</p>
+<h2 id="使用场景"><a href="#使用场景" class="headerlink" title="使用场景"></a>使用场景</h2><p>(因为不gc)<br>生命期较长的大对象;<br>创建次数不会太多。<br>// 如直接的文件拷贝操作。</p>
+<h2 id="优点"><a href="#优点" class="headerlink" title="优点"></a>优点</h2><p>1.对于大内存有良好的伸缩性<br>2.对垃圾回收停顿的改善可以明显感觉到<br>3.在进程间可以共享，减少虚拟机间的复制</p>
+<h2 id="配置"><a href="#配置" class="headerlink" title="配置"></a>配置</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">-XX:MaxDirectMemorySize</span><br><span class="line">-Dsun.nio.MaxDirectMemorySize</span><br><span class="line">directMemory = Runtime.getRuntime().maxMemory()</span><br></pre></td></tr></table></figure>
+
+<h2 id="堆外内存回收"><a href="#堆外内存回收" class="headerlink" title="堆外内存回收"></a>堆外内存回收</h2><p>三种方法:<br>1.达到限制触发自动回收;(<code>system.gc()</code>) // 可能被配置<code>-XX:+DisableExplicitGC</code>关闭。</p>
+<p>2.手动调用<code>Unsafe</code>的<code>freeMemory</code>接口。</p>
+<p>3.使用<code>DirectByteBuffer</code>，它在初始化的时候会创建<code>Cleaner</code>这个Cleaner对象会在合适的时候执行<code>unsafe.freeMemory(address)</code>，从而回收这块堆外内存。</p>
+<img src="/images/2018-08/collect.png" class="" width="400" height="600" title="堆外内存回收">
+
+<p>4.手动调用<code>((DirectBuffer)bb).cleaner().clean();</code>.<br>// 内部还是调用<code>System.gc()</code>,所以一定不要<code>-XX:+DisableExplicitGC</code>。</p>
+<p>相关代码:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">Deallocator</span> <span class="keyword">implements</span> <span class="title">Runnable</span>  </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> Unsafe unsafe = Unsafe.getUnsafe();</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">long</span> address;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">long</span> size;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">int</span> capacity;</span><br><span class="line">    <span class="function"><span class="keyword">private</span> <span class="title">Deallocator</span><span class="params">(<span class="keyword">long</span> address, <span class="keyword">long</span> size, <span class="keyword">int</span> capacity)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">assert</span> (address != <span class="number">0</span>);</span><br><span class="line">        <span class="keyword">this</span>.address = address;</span><br><span class="line">        <span class="keyword">this</span>.size = size;</span><br><span class="line">        <span class="keyword">this</span>.capacity = capacity;</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (address == <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="comment">// Paranoia</span></span><br><span class="line">            <span class="keyword">return</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        unsafe.freeMemory(address);</span><br><span class="line">        address = <span class="number">0</span>;</span><br><span class="line">        Bits.unreserveMemory(size, capacity);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/08/18/2018-08/%E5%A0%86%E5%A4%96%E5%86%85%E5%AD%98DirectByteBuffer/" data-id="ck96cch2p00d6bhamhol392g2" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2018/08/18/2018-08/%E5%BC%95%E7%94%A8%E7%B1%BB%E5%9E%8B/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          引用类型
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2018/08/05/2018-08/Forkjoin%E7%AC%94%E8%AE%B0/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">Forkjoin笔记</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#使用方式"><span class="toc-number">1.</span> <span class="toc-text">使用方式</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Unsafe"><span class="toc-number">2.</span> <span class="toc-text">Unsafe</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#使用场景"><span class="toc-number">3.</span> <span class="toc-text">使用场景</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#优点"><span class="toc-number">4.</span> <span class="toc-text">优点</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#配置"><span class="toc-number">5.</span> <span class="toc-text">配置</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#堆外内存回收"><span class="toc-number">6.</span> <span class="toc-text">堆外内存回收</span></a></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

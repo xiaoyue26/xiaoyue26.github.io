@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>利用UTF-8编码的特性进行优化 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="引子做性能优化的时候，画出火焰图（async-profiler）来看，发现耗时很多花在了utf-8的编码解码上了,所以需要思考一下如何优化这部分。(采样30秒:.&#x2F;profiler.sh -d 30 -f profile.svg [pid])    What: 什么是UTF-8编码UTF-8编码就是对于字节流(一串二进制)的解释，解释成字符串。类似的还有: ASCII编码，就是把1B字节解释成12">
+<meta property="og:type" content="article">
+<meta property="og:title" content="利用UTF-8编码的特性进行优化">
+<meta property="og:url" content="http://xiaoyue26.github.io/2020/03/26/2020-03/%E5%88%A9%E7%94%A8UTF-8%E7%BC%96%E7%A0%81%E7%9A%84%E7%89%B9%E6%80%A7%E8%BF%9B%E8%A1%8C%E4%BC%98%E5%8C%96/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="引子做性能优化的时候，画出火焰图（async-profiler）来看，发现耗时很多花在了utf-8的编码解码上了,所以需要思考一下如何优化这部分。(采样30秒:.&#x2F;profiler.sh -d 30 -f profile.svg [pid])    What: 什么是UTF-8编码UTF-8编码就是对于字节流(一串二进制)的解释，解释成字符串。类似的还有: ASCII编码，就是把1B字节解释成12">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2020-03/fire1.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2020-03/fire2.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2020-03/res.png">
+<meta property="article:published_time" content="2020-03-26T08:29:11.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.290Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="java">
+<meta property="article:tag" content="utf8">
+<meta property="article:tag" content="编码">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://xiaoyue26.github.io/images/2020-03/fire1.png">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2020-03/利用UTF-8编码的特性进行优化" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/03/26/2020-03/%E5%88%A9%E7%94%A8UTF-8%E7%BC%96%E7%A0%81%E7%9A%84%E7%89%B9%E6%80%A7%E8%BF%9B%E8%A1%8C%E4%BC%98%E5%8C%96/" class="article-date">
+  <time datetime="2020-03-26T08:29:11.000Z" itemprop="datePublished">2020-03-26</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      利用UTF-8编码的特性进行优化
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="引子"><a href="#引子" class="headerlink" title="引子"></a>引子</h1><p>做性能优化的时候，画出火焰图（<code>async-profiler</code>）来看，发现耗时很多花在了<code>utf-8</code>的编码解码上了,所以需要思考一下如何优化这部分。<br>(采样30秒:<code>./profiler.sh -d 30 -f profile.svg [pid]</code>)</p>
+<img src="/images/2020-03/fire1.png" class="" width="800" height="1200" title="fire1">
+<img src="/images/2020-03/fire2.png" class="" width="800" height="1200" title="fire2">
+
+<h1 id="What-什么是UTF-8编码"><a href="#What-什么是UTF-8编码" class="headerlink" title="What: 什么是UTF-8编码"></a>What: 什么是UTF-8编码</h1><p>UTF-8编码就是对于字节流(一串二进制)的解释，解释成字符串。<br>类似的还有: ASCII编码，就是把1B字节解释成128种字符。(范围是0-127,包括英文字母、数字)</p>
+<p>UTF-8编码下，一个字符可以由1B~4B二进制组成。</p>
+<h2 id="UTF-8格式"><a href="#UTF-8格式" class="headerlink" title="UTF-8格式"></a>UTF-8格式</h2><p>合法的格式包括4种:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">0xxxxxxx 				                0-127 (ASCII)</span><br><span class="line">110xxxxx 10xxxxxx 			            128-2047</span><br><span class="line">1110xxxx 10xxxxxx 10xxxxxx              2048-65535</span><br><span class="line">11110xxx 10xxxxxx 10xxxxxx 10xxxxxx 	65536-0x10ffff</span><br></pre></td></tr></table></figure>
+<p>它的首字节的前缀码会指出这个字符会占用多少字节。<br>合法的前缀码有4种:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">0X:    占1B;</span><br><span class="line">110X:  占2B;</span><br><span class="line">1110:  占3B;</span><br><span class="line">11110: 占4B;</span><br></pre></td></tr></table></figure>
+<p>显然还有一种<code>10X</code>不在其中。这是因为<code>10X</code>不属于合法的首字节的前缀码，只能在第2、3、4个字节中出现。如果我们随机选择<code>utf-8</code>二进制流中的一个字节来看的话，可能的情况有5种:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">0X:     首字节,这个字符总长1B</span><br><span class="line">10X:    非首字节.</span><br><span class="line">110X:   首字节,这个字符总长2B</span><br><span class="line">1110X:  首字节,这个字符总长3B</span><br><span class="line">11110X: 首字节,这个字符总长4B</span><br></pre></td></tr></table></figure>
+
+<h3 id="utf-8特性"><a href="#utf-8特性" class="headerlink" title="utf-8特性"></a>utf-8特性</h3><ol>
+<li>兼容性:  0-127和<code>ascii</code>码是一样的,而且在其他字节不可能出现,因此和<code>ascii</code>完全兼容;</li>
+<li>自同步性: 基于上面讨论的前缀码特性,从任意位置开始读,可以定位到合法位置开始解码。</li>
+</ol>
+<h3 id="优化方案"><a href="#优化方案" class="headerlink" title="优化方案"></a>优化方案</h3><p>基于上述两点洞察，再考虑到我此次工作只需要解析字母数字部分，再直接分发二进制流即可。因此可以做两点优化:</p>
+<ol>
+<li>读取时: 不解码,直接理解二进制的每个字节;</li>
+<li>利用自同步性: 并发解析; 原先只能顺序解码,并发解析可以从任意位置开始;</li>
+<li>输出时: 不编码,直接输出二进制;</li>
+</ol>
+<h3 id="结果"><a href="#结果" class="headerlink" title="结果"></a>结果</h3><p>取消编码、解码后这部分耗时下降了12%;<br>并发处理则大幅提速,提速了一倍以上。</p>
+<img src="/images/2020-03/res.png" class="" width="800" height="1200" title="res">
+
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2020/03/26/2020-03/%E5%88%A9%E7%94%A8UTF-8%E7%BC%96%E7%A0%81%E7%9A%84%E7%89%B9%E6%80%A7%E8%BF%9B%E8%A1%8C%E4%BC%98%E5%8C%96/" data-id="ck96cch4r00lmbham4qy10i97" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/utf8/" rel="tag">utf8</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E7%BC%96%E7%A0%81/" rel="tag">编码</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2020/04/19/2020-04/spring%E6%8B%BE%E9%81%97/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          spring拾遗
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2020/03/24/2020-03/linux%E8%87%AA%E8%BF%9E%E6%8E%A5/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">linux自连接</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#引子"><span class="toc-number">1.</span> <span class="toc-text">引子</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#What-什么是UTF-8编码"><span class="toc-number">2.</span> <span class="toc-text">What: 什么是UTF-8编码</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#UTF-8格式"><span class="toc-number">2.1.</span> <span class="toc-text">UTF-8格式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#utf-8特性"><span class="toc-number">2.1.1.</span> <span class="toc-text">utf-8特性</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#优化方案"><span class="toc-number">2.1.2.</span> <span class="toc-text">优化方案</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#结果"><span class="toc-number">2.1.3.</span> <span class="toc-text">结果</span></a></li></ol></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

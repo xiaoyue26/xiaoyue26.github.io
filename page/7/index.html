@@ -1,0 +1,1227 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta property="og:type" content="website">
+<meta property="og:title" content="笔记本">
+<meta property="og:url" content="http://xiaoyue26.github.io/page/7/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:author" content="风梦七">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main">
+  
+    <article id="post-2019-01/Redis设计与实现笔记1-数据结构" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/01/12/2019-01/Redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B01-%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/" class="article-date">
+  <time datetime="2019-01-12T11:55:22.000Z" itemprop="datePublished">2019-01-12</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/01/12/2019-01/Redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B01-%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/">Redis设计与实现笔记1-数据结构</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>参考\搬运资料: <a href="http://redisbook.com/index.html" target="_blank" rel="noopener">http://redisbook.com/index.html</a></p>
+<h1 id="设计哲学"><a href="#设计哲学" class="headerlink" title="设计哲学"></a>设计哲学</h1><p>设计简单优于巧妙实现:</p>
+<table>
+<thead>
+<tr>
+<th align="center">表现</th>
+<th align="left">原因</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">不处理循环引用</td>
+<td align="left">不产生循环引用。数据结构足够简单，最多2层。</td>
+</tr>
+<tr>
+<td align="center">不处理事务回滚</td>
+<td align="left">程序员自己处理代码错误</td>
+</tr>
+<tr>
+<td align="center">换个角度就是，没把握做好的事情就干脆不做了。</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="center">解决问题的方法就是不产生问题。不写错代码，很科学，很彻底XD。</td>
+<td align="left"></td>
+</tr>
+</tbody></table>
+<h2 id="简单动态字符串-simple-dynamic-string，SDS"><a href="#简单动态字符串-simple-dynamic-string，SDS" class="headerlink" title="简单动态字符串(simple dynamic string，SDS)"></a>简单动态字符串(simple dynamic string，SDS)</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">sdshdr</span> &#123;</span></span><br><span class="line">    <span class="comment">// 记录 buf 数组中已使用字节的数量</span></span><br><span class="line">    <span class="comment">// 等于 SDS 所保存字符串的长度</span></span><br><span class="line">    <span class="keyword">int</span> len;</span><br><span class="line">    <span class="comment">// 记录 buf 数组中未使用字节的数量</span></span><br><span class="line">    <span class="keyword">int</span> <span class="built_in">free</span>;</span><br><span class="line">    <span class="comment">// 字节数组，用于保存字符串</span></span><br><span class="line">    <span class="keyword">char</span> buf[];<span class="comment">//\0结尾，不计入len</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>类似<code>head-body</code>结构的消息。比<code>\0</code>分割的C字符串简单易用多了，性能更高，代价是付出了更多的内存。<br>之所以最后用上了<code>\0</code>结尾,是为了重用一部分c库里的字符串库，进一步降低了使用成本。</p>
+<h3 id="性能优势点"><a href="#性能优势点" class="headerlink" title="性能优势点:"></a>性能优势点:</h3><ol>
+<li>获取字符串长度: O(1)</li>
+<li>空间预分配，减少系统调用。</li>
+<li>惰性空间释放，减少系统调用。</li>
+</ol>
+<h3 id="安全性优势点"><a href="#安全性优势点" class="headerlink" title="安全性优势点:"></a>安全性优势点:</h3><ol>
+<li>有效防止缓冲区溢出</li>
+<li>二进制安全，可以保存\0。</li>
+</ol>
+<h3 id="缺点："><a href="#缺点：" class="headerlink" title="缺点："></a>缺点：</h3><ol>
+<li>如果有大量字符串缩短，内存泄露严重。</li>
+</ol>
+<h3 id="sdscat"><a href="#sdscat" class="headerlink" title="sdscat"></a>sdscat</h3><p>字符串拼接：</p>
+<img src="/images/2019-01/sds.png" class="" width="800" height="1200" title="sds">
+<p>计算拼接后总长度len，扩展空间为2*len，拼入字符串。最后一定会有一半free空间。</p>
+<h4 id="空间预分配"><a href="#空间预分配" class="headerlink" title="空间预分配"></a>空间预分配</h4><p>假如现有空间不足以存放字符串：</p>
+<ul>
+<li>总长度len&lt;1MB: 总空间为<code>2*len+1</code>;</li>
+<li>总长度len&gt;=1MB: 总空间为<code>len+1MB+1</code>。<br>换句话说，预分配的空间上限是1MB，尽量为len。<br>这么做的目的是减少空间申请、回收的系统调用性能开销。</li>
+</ul>
+<h3 id="惰性空间释放"><a href="#惰性空间释放" class="headerlink" title="惰性空间释放"></a>惰性空间释放</h3><p> 字符串缩短的时候，默认不进行内存回收（可能内存泄露）。<br> 需要手动调API回收。</p>
+<h1 id="链表-RPush"><a href="#链表-RPush" class="headerlink" title="链表(RPush)"></a>链表(RPush)</h1><p>单个节点：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">listNode</span> &#123;</span></span><br><span class="line">    <span class="comment">// 前置节点</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">listNode</span> *<span class="title">prev</span>;</span></span><br><span class="line">    <span class="comment">// 后置节点</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">listNode</span> *<span class="title">next</span>;</span></span><br><span class="line">    <span class="comment">// 节点的值</span></span><br><span class="line">    <span class="keyword">void</span> *value;</span><br><span class="line">&#125; listNode;</span><br></pre></td></tr></table></figure>
+<p>可以看出是一个简单的双向链表。</p>
+<img src="/images/2019-01/double_linked_list.png" class="" width="800" height="1200" title="double_linked_list">
+<p>整个列表容器：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">list</span> &#123;</span></span><br><span class="line">    <span class="comment">// 表头节点</span></span><br><span class="line">    listNode *head;</span><br><span class="line">    <span class="comment">// 表尾节点</span></span><br><span class="line">    listNode *tail;</span><br><span class="line">    <span class="comment">// 链表所包含的节点数量</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> len;</span><br><span class="line">    <span class="comment">// 节点值复制函数</span></span><br><span class="line">    <span class="keyword">void</span> *(*dup)(<span class="keyword">void</span> *ptr);</span><br><span class="line">    <span class="comment">// 节点值释放函数</span></span><br><span class="line">    <span class="keyword">void</span> (*<span class="built_in">free</span>)(<span class="keyword">void</span> *ptr);</span><br><span class="line">    <span class="comment">// 节点值对比函数</span></span><br><span class="line">    <span class="keyword">int</span> (*match)(<span class="keyword">void</span> *ptr, <span class="keyword">void</span> *key);</span><br><span class="line">&#125; <span class="built_in">list</span>;</span><br></pre></td></tr></table></figure>
+
+<h1 id="哈希表（HSet）"><a href="#哈希表（HSet）" class="headerlink" title="哈希表（HSet）"></a>哈希表（HSet）</h1><img src="/images/2019-01/hash_table.png" class="" width="800" height="1200" title="hash_table">
+<p>单个节点:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">dictEntry</span> &#123;</span></span><br><span class="line">    <span class="comment">// 键</span></span><br><span class="line">    <span class="keyword">void</span> *key;</span><br><span class="line">    <span class="comment">// 值</span></span><br><span class="line">    <span class="keyword">union</span> &#123;  <span class="comment">// 三者取其1</span></span><br><span class="line">        <span class="keyword">void</span> *val;</span><br><span class="line">        <span class="keyword">uint64_t</span> u64;</span><br><span class="line">        <span class="keyword">int64_t</span> s64;</span><br><span class="line">    &#125; v;</span><br><span class="line">    <span class="comment">// 指向下个哈希表节点，形成链表</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">dictEntry</span> *<span class="title">next</span>;</span></span><br><span class="line">&#125; dictEntry;</span><br></pre></td></tr></table></figure>
+<p>整个表:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">dictht</span> &#123;</span></span><br><span class="line">    <span class="comment">// 哈希表数组</span></span><br><span class="line">    dictEntry **table;</span><br><span class="line">    <span class="comment">// 哈希表大小</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> <span class="built_in">size</span>;</span><br><span class="line">    <span class="comment">// 哈希表大小掩码，用于计算索引值</span></span><br><span class="line">    <span class="comment">// 总是等于 size - 1</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> sizemask;</span><br><span class="line">    <span class="comment">// 该哈希表已有节点的数量</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> used;</span><br><span class="line">&#125; dictht;</span><br></pre></td></tr></table></figure>
+<p>对外接口:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">dict</span> &#123;</span></span><br><span class="line">    <span class="comment">// 类型特定函数</span></span><br><span class="line">    dictType *type;</span><br><span class="line">    <span class="comment">// 私有数据</span></span><br><span class="line">    <span class="keyword">void</span> *privdata;</span><br><span class="line">    <span class="comment">// 哈希表,有两个，第二个扩容时候用</span></span><br><span class="line">    dictht ht[<span class="number">2</span>];</span><br><span class="line">    <span class="comment">// rehash 索引</span></span><br><span class="line">    <span class="comment">// 当 rehash 不在进行时，值为 -1。 扩容时候用。</span></span><br><span class="line">    <span class="keyword">int</span> rehashidx; <span class="comment">/* rehashing not in progress if rehashidx == -1 */</span></span><br><span class="line">&#125; dict;</span><br></pre></td></tr></table></figure>
+<p>dictType:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">dictType</span> &#123;</span></span><br><span class="line">    <span class="comment">// 计算哈希值的函数</span></span><br><span class="line">    <span class="function"><span class="keyword">unsigned</span> <span class="title">int</span> <span class="params">(*hashFunction)</span><span class="params">(<span class="keyword">const</span> <span class="keyword">void</span> *key)</span></span>;</span><br><span class="line">    <span class="comment">// 复制键的函数</span></span><br><span class="line">    <span class="keyword">void</span> *(*keyDup)(<span class="keyword">void</span> *privdata, <span class="keyword">const</span> <span class="keyword">void</span> *key);</span><br><span class="line">    <span class="comment">// 复制值的函数</span></span><br><span class="line">    <span class="keyword">void</span> *(*valDup)(<span class="keyword">void</span> *privdata, <span class="keyword">const</span> <span class="keyword">void</span> *obj);</span><br><span class="line">    <span class="comment">// 对比键的函数</span></span><br><span class="line">    <span class="keyword">int</span> (*keyCompare)(<span class="keyword">void</span> *privdata, <span class="keyword">const</span> <span class="keyword">void</span> *key1, <span class="keyword">const</span> <span class="keyword">void</span> *key2);</span><br><span class="line">    <span class="comment">// 销毁键的函数</span></span><br><span class="line">    <span class="keyword">void</span> (*keyDestructor)(<span class="keyword">void</span> *privdata, <span class="keyword">void</span> *key);</span><br><span class="line">    <span class="comment">// 销毁值的函数</span></span><br><span class="line">    <span class="keyword">void</span> (*valDestructor)(<span class="keyword">void</span> *privdata, <span class="keyword">void</span> *obj);</span><br><span class="line">&#125; dictType;</span><br></pre></td></tr></table></figure>
+
+
+<p>sizemask为3的话，也就是0x11，就是说取最后两位作为哈希序号，也就是0~3，4个数。<br>所以此时hash表长度为4。以此类推，sizemask有n位,哈希表长度就有2^n。</p>
+<h2 id="渐进式hash"><a href="#渐进式hash" class="headerlink" title="渐进式hash"></a>渐进式hash</h2><p>具体还是要参见: <a href="http://redisbook.com/preview/dict/rehashing.html" target="_blank" rel="noopener">http://redisbook.com/preview/dict/rehashing.html</a></p>
+<img src="/images/2019-01/rehash.png" class="" width="800" height="1200" title="rehash">
+
+<p>逐步把ht[0]中的数据迁移到ht[1]中。<code>rehashidx</code>为0的时候，表示0号位置已经全部迁往ht[1],依次类推，直到全部迁完。<br>交换ht[0],ht[1]以后，<code>rehashidx</code>改为-1.<br>在此过程中ht[0]不会有新插入，新请求全部去ht[1]。</p>
+<h3 id="扩容-rehash的触发"><a href="#扩容-rehash的触发" class="headerlink" title="扩容/rehash的触发"></a>扩容/rehash的触发</h3><p>由时间事件serverCron根据负载因子来决定是否进行扩容。<br>扩容的实际执行是由1个专门的单线程来进行; (类似cms一样高响应,一次resh一个桶,尽量不阻塞线上读写请求)<br>相比之下,concurrentHashMap的扩容则由多线程进行,阻塞所有读写,高吞吐低响应。</p>
+<h1 id="跳表"><a href="#跳表" class="headerlink" title="跳表"></a>跳表</h1><img src="/images/2019-01/skiplist.png" class="" width="800" height="1200" title="skiplist">
+
+<p>有序集合使用。(ZSET)<br>节点源码: </p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">zskiplistNode</span> &#123;</span></span><br><span class="line">    <span class="comment">// 后退指针</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">zskiplistNode</span> *<span class="title">backward</span>;</span></span><br><span class="line">    <span class="comment">// 分值</span></span><br><span class="line">    <span class="keyword">double</span> score;</span><br><span class="line">    <span class="comment">// 成员对象</span></span><br><span class="line">    robj *obj;</span><br><span class="line">    <span class="comment">// 层</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">zskiplistLevel</span> &#123;</span></span><br><span class="line">        <span class="comment">// 前进指针</span></span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">zskiplistNode</span> *<span class="title">forward</span>;</span></span><br><span class="line">        <span class="comment">// 跨度</span></span><br><span class="line">        <span class="keyword">unsigned</span> <span class="keyword">int</span> span;</span><br><span class="line">    &#125; level[];</span><br><span class="line">&#125; zskiplistNode;</span><br></pre></td></tr></table></figure>
+<p>跳表容器:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">zskiplist</span> &#123;</span></span><br><span class="line">    <span class="comment">// 表头节点和表尾节点</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">zskiplistNode</span> *<span class="title">header</span>, *<span class="title">tail</span>;</span></span><br><span class="line">    <span class="comment">// 表中节点的数量</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> length;</span><br><span class="line">    <span class="comment">// 表中层数最大的节点的层数</span></span><br><span class="line">    <span class="keyword">int</span> level;</span><br><span class="line">&#125; zskiplist;</span><br></pre></td></tr></table></figure>
+
+<p>从高层向低层找:</p>
+<ol>
+<li>在找的过程中用update[]数组记录每一层插入位置的上一个节点，</li>
+<li>用rank[]数组记录每一层插入位置的上一个节点在跳跃表中的排名。</li>
+<li>根据update[]插入新节点，插入完成后再根据rank[]更新跨度信息。</li>
+</ol>
+<h1 id="整数集合"><a href="#整数集合" class="headerlink" title="整数集合"></a>整数集合</h1><p>整数集合（intset）是集合键的底层实现之一： 当一个集合只包含整数值元素， 并且这个集合的元素数量不多时， Redis 就会使用整数集合作为集合键的底层实现。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">SADD numbers 1 3 5 7 9</span><br><span class="line">OBJECT ENCODING numbers # 查看底层实现 &quot;intset&quot;</span><br></pre></td></tr></table></figure>
+<h2 id="升级"><a href="#升级" class="headerlink" title="升级"></a>升级</h2><p>默认用最小数据类型，新数据太大的话，会对整个集合数据类型升级，并且移动全部元素。<br>因此最坏时间复杂度为O(n)。</p>
+<p>升级后不会降级。</p>
+<h1 id="压缩列表（ziplist）"><a href="#压缩列表（ziplist）" class="headerlink" title="压缩列表（ziplist）"></a>压缩列表（ziplist）</h1><p>压缩列表（ziplist）是列表键和哈希键的底层实现之一。<br>适用条件: 整数、小字符串。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">RPUSH lst 1 3 5 10086 &quot;hello&quot; &quot;world&quot;</span><br><span class="line">OBJECT ENCODING lst # 底层结构: ziplist</span><br></pre></td></tr></table></figure>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/01/12/2019-01/Redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B01-%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/" data-id="ck96cch3b00fjbham00516eu4" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2018-12/mysql意向锁" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/12/24/2018-12/mysql%E6%84%8F%E5%90%91%E9%94%81/" class="article-date">
+  <time datetime="2018-12-24T01:50:47.000Z" itemprop="datePublished">2018-12-24</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/12/24/2018-12/mysql%E6%84%8F%E5%90%91%E9%94%81/">mysql意向锁</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>意向锁: 对表内现有锁的概括，可以看作一种状态信息，很有用但并不必要，用于优化性能。</p>
+<p>意向锁特点: 均为表级(因为是信息概括)，意向锁分为读意向锁和写意向锁，但意向锁之间不互斥。</p>
+<h2 id="场景1：（如果没有意向锁）"><a href="#场景1：（如果没有意向锁）" class="headerlink" title="场景1：（如果没有意向锁）"></a>场景1：（如果没有意向锁）</h2><p>事务A: 对表的某一行加了行锁（互斥锁）;<br>事务B: 希望对整表加锁，需要知道是否已经有表锁，并且需要知道表中任意一样是否有行锁（因为锁定范围有重合，而且是互斥锁），这个时候如果没有意向锁，事务B就只能扫全表了。</p>
+<h2 id="场景2：（引入意向锁后）"><a href="#场景2：（引入意向锁后）" class="headerlink" title="场景2：（引入意向锁后）"></a>场景2：（引入意向锁后）</h2><p>事务A: 先申请表的意向锁，然后申请行锁；<br>事务B：先申请表的意向锁（成功），然后申请表锁，这个时候由于上一步，立即能知道表中存在别的行锁，因此阻塞。</p>
+<p>意向锁的兼容互斥关系：</p>
+<img src="/images/2018-12/ix.jpg" class="" width="800" height="1200" title="ix">
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/12/24/2018-12/mysql%E6%84%8F%E5%90%91%E9%94%81/" data-id="ck96cch3600f1bhamact27671" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2018-12/神仙与树獭的等价性-普通程序员如何理解神话世界观" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/12/23/2018-12/%E7%A5%9E%E4%BB%99%E4%B8%8E%E6%A0%91%E7%8D%AD%E7%9A%84%E7%AD%89%E4%BB%B7%E6%80%A7-%E6%99%AE%E9%80%9A%E7%A8%8B%E5%BA%8F%E5%91%98%E5%A6%82%E4%BD%95%E7%90%86%E8%A7%A3%E7%A5%9E%E8%AF%9D%E4%B8%96%E7%95%8C%E8%A7%82/" class="article-date">
+  <time datetime="2018-12-23T11:19:05.000Z" itemprop="datePublished">2018-12-23</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E6%97%A5%E5%BF%97/">日志</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/12/23/2018-12/%E7%A5%9E%E4%BB%99%E4%B8%8E%E6%A0%91%E7%8D%AD%E7%9A%84%E7%AD%89%E4%BB%B7%E6%80%A7-%E6%99%AE%E9%80%9A%E7%A8%8B%E5%BA%8F%E5%91%98%E5%A6%82%E4%BD%95%E7%90%86%E8%A7%A3%E7%A5%9E%E8%AF%9D%E4%B8%96%E7%95%8C%E8%A7%82/">神仙与树獭的等价性</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h2 id="普通程序员如何理解神话世界观"><a href="#普通程序员如何理解神话世界观" class="headerlink" title="普通程序员如何理解神话世界观"></a>普通程序员如何理解神话世界观</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">太白金星：“大圣须知天上一日，地上一年。”</span><br></pre></td></tr></table></figure>
+<p>&emsp;&emsp;  根据太白金星的说法易得——<code>时间流速(天上):时间流速(地上)=1:365.25</code>。<br>也就是说神仙在天上看1分钟电视的时候,地上的人已经看了365.25分钟的电视了,如果不考虑双方寿命的话明显是地上的人赚了。</p>
+<p>&emsp;&emsp;  由于孙悟空经常在天上和人间之间来回穿梭，可以看出天上的慢时空和地上的快时空是互通的，为了便于换算，不妨以地上的时间作为基准参照系，此时观测天上的神仙（假设用大圣爷的千里眼能够看到），由于天上的时间流速很慢，可以看到神仙都是以极慢的速度在运动的，从这个角度来说他们与树懒具有一定的等价性。</p>
+<p>&emsp;&emsp;  如果再加入寿命的考虑，可以用繁殖速度来进行类比，以天上的时间为基准参照系的话，此时观测人间，看个几十天人类就繁殖一代了，然后很快就死了。而从人类的角度看细菌的话，可能二十分钟就完成了一代的繁殖，细菌的寿命往往也不会很长。人体构成比细菌复杂得多，完成一次全部复制的时间成本也高得多，可以类比得想象，神仙可能具有极高的组成，复制的时间成本极高，运动的代价也极大，可能是以巨人的形态存在着的。</p>
+<p>&emsp;&emsp;  从个人的角度来说，假设寿命是定长的，时间的流速其实反映在生命的质量上。假设地上有一只与人类寿命一致的蚂蚁，人类3秒钟能完成的思考，假设蚂蚁需要花一天的时间，换句话说蚂蚁要花一天的时间才能获得人类3秒钟的生命体验，这样生命的质量就很差了，即使这只蚂蚁与人类一样活了100年，但它实际体验到的人生只有人类的1.26天。</p>
+<p>&emsp;&emsp;  从cpu时钟的角度来说，刚才例子这只思考速度很慢的蚂蚁就像一台cpu时钟频率极低的计算机。而天上的神仙掐指一算，就能尽知天下事，同时又是以极慢的速度运作，可以看作是一台元件极其复杂的巨型计算机，需要365.25倍的时间才能完成一次脉冲信号，每次运算数据量极大。</p>
+<p>&emsp;&emsp;  延长自己的寿命是很难达到的，但是好好锻炼大脑，提高自己的cpu时钟频率，提高自己的反应速度，提高生命质量是可行的，从这个角度来说也算是延长了生命的长度。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/12/23/2018-12/%E7%A5%9E%E4%BB%99%E4%B8%8E%E6%A0%91%E7%8D%AD%E7%9A%84%E7%AD%89%E4%BB%B7%E6%80%A7-%E6%99%AE%E9%80%9A%E7%A8%8B%E5%BA%8F%E5%91%98%E5%A6%82%E4%BD%95%E7%90%86%E8%A7%A3%E7%A5%9E%E8%AF%9D%E4%B8%96%E7%95%8C%E8%A7%82/" data-id="ck96cch3a00fgbhamg0yy0pe8" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E6%97%A5%E5%BF%97/" rel="tag">日志</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2018-12/如何阅读heap-dump文件" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/12/13/2018-12/%E5%A6%82%E4%BD%95%E9%98%85%E8%AF%BBheap-dump%E6%96%87%E4%BB%B6/" class="article-date">
+  <time datetime="2018-12-13T13:44:55.000Z" itemprop="datePublished">2018-12-13</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/jvm/">jvm</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/12/13/2018-12/%E5%A6%82%E4%BD%95%E9%98%85%E8%AF%BBheap-dump%E6%96%87%E4%BB%B6/">如何阅读heap dump文件</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>参考资料: <a href="http://www.importnew.com/24393.html" target="_blank" rel="noopener">http://www.importnew.com/24393.html</a></p>
+<p>首先可以尝试用google-perftools查看统计结果,然后用MAT查看heap dump的详细内容。</p>
+<h1 id="谷歌的性能分析工具google-perftools"><a href="#谷歌的性能分析工具google-perftools" class="headerlink" title="谷歌的性能分析工具google-perftools"></a>谷歌的性能分析工具google-perftools</h1><p><code>/usr/local/gperftools/bin/pprof --text $JAVA_HOME/bin/java /data/gperf/ worker.0001.heap</code><br>查看统计结果。</p>
+<h1 id="下载MAT"><a href="#下载MAT" class="headerlink" title="下载MAT"></a>下载MAT</h1><p><a href="https://eclipse.org/mat/downloads.php" target="_blank" rel="noopener">https://eclipse.org/mat/downloads.php</a><br>注意打开的时候要选打开heap dump，而不是open file，不然会打开失败。</p>
+<h2 id="术语"><a href="#术语" class="headerlink" title="术语"></a>术语</h2><h3 id="Retained-Heap"><a href="#Retained-Heap" class="headerlink" title="Retained Heap"></a>Retained Heap</h3><p><code>Retained: 持有,阻拦</code><br>对象以及它所持有的其它引用（包括直接和间接）所占的总内存。</p>
+<p><code>tips</code></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">如果A,B都持有C对象引用，则C的内存不计入A或B。</span><br></pre></td></tr></table></figure>
+
+<h3 id="Shallow-heap"><a href="#Shallow-heap" class="headerlink" title="Shallow heap"></a>Shallow heap</h3><p><code>Shallow: 浅</code><br>对象本身占用内存的大小，不包含其引用的对象。</p>
+<ul>
+<li>常规对象（非数组）的shallow size有其成员变量的数量和类型决定。</li>
+<li>数组的shallow size有数组元素的类型（对象类型、基本类型）和数组长度决定<h4 id="Shallow-size最大一般是byte-char-int"><a href="#Shallow-size最大一般是byte-char-int" class="headerlink" title="Shallow size最大一般是byte[], char[], int[]"></a><code>Shallow size</code>最大一般是<code>byte[], char[], int[]</code></h4></li>
+</ul>
+<h2 id="Action面板的功能"><a href="#Action面板的功能" class="headerlink" title="Action面板的功能"></a>Action面板的功能</h2><h3 id="Histogram"><a href="#Histogram" class="headerlink" title="Histogram"></a>Histogram</h3><p><code>默认Shallow size排序</code><br>列出每个class的实例数量、大小(内存中的对象统计),可以查看某些对象的具体值:</p>
+<img src="/images/2018-12/stringvalue.png" class="" width="800" height="1200" title="stringvalue">
+
+<p>进一步操作: <code>group by package</code>:</p>
+<img src="/images/2018-12/hist_groupby.png" class="" width="800" height="1200" title="hist_groupby">
+
+<h3 id="Dominator-Tree"><a href="#Dominator-Tree" class="headerlink" title="Dominator Tree"></a>Dominator Tree</h3><p><code>默认Retained Heap排序</code><br>列出最大的对象以及其依赖存活的Object。<br><code>TIPS</code>: 这里有黄点的是GC Root。</p>
+<h3 id="Top-Consumers"><a href="#Top-Consumers" class="headerlink" title="Top Consumers"></a>Top Consumers</h3><img src="/images/2018-12/top_consumer.png" class="" width="800" height="1200" title="top_consumer">
+<p>从3个角度列出最占用内存的对象，展现形式有表格和图。<br>三个角度: class,class loader,包。</p>
+<h3 id="Duplicate-Class"><a href="#Duplicate-Class" class="headerlink" title="Duplicate Class"></a>Duplicate Class</h3><p>列出由多个class loader加载的class。</p>
+<h2 id="图例"><a href="#图例" class="headerlink" title="图例"></a>图例</h2><p>带有黄点的对象: GCRoot（如果是<code>System class</code>可以不用管）</p>
+<h2 id="常用操作"><a href="#常用操作" class="headerlink" title="常用操作"></a>常用操作</h2><p><code>Path to GC Roots</code> -&gt; <code>exclude weak references</code>: 看看为啥没有回收。</p>
+<p><code>List Object</code>-&gt;<code>With incoming reference</code>: 看看都有谁用了这个对象;</p>
+<img src="/images/2018-12/with_in.png" class="" width="800" height="1200" title="with_in">
+
+<p><code>List Object</code>-&gt;<code>With outcoming reference</code>: 看看里面都有啥。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/12/13/2018-12/%E5%A6%82%E4%BD%95%E9%98%85%E8%AF%BBheap-dump%E6%96%87%E4%BB%B6/" data-id="ck96cch3700f4bham9hx0fypz" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/jvm/" rel="tag">jvm</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2018-12/快速查看大量gc日志的gui工具" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/12/11/2018-12/%E5%BF%AB%E9%80%9F%E6%9F%A5%E7%9C%8B%E5%A4%A7%E9%87%8Fgc%E6%97%A5%E5%BF%97%E7%9A%84gui%E5%B7%A5%E5%85%B7/" class="article-date">
+  <time datetime="2018-12-11T01:33:53.000Z" itemprop="datePublished">2018-12-11</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/jvm/">jvm</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/12/11/2018-12/%E5%BF%AB%E9%80%9F%E6%9F%A5%E7%9C%8B%E5%A4%A7%E9%87%8Fgc%E6%97%A5%E5%BF%97%E7%9A%84gui%E5%B7%A5%E5%85%B7/">快速查看大量gc日志的gui工具</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>之前学习了GC日志的格式，能理解每行日志的大致含义。<br>然而对于实际生产项目，日志量庞大，逐行看很低效，这个时候借助一下gui工具就很nice了。</p>
+<p>经过海淘了谷歌，比较后留下这2个比较好用的工具：</p>
+<ol>
+<li>GCViewer,</li>
+<li><a href="http://gceasy.io" target="_blank" rel="noopener">http://gceasy.io</a></li>
+</ol>
+<p>被抛弃的工具:</p>
+<ol>
+<li>GCHisto: 界面好看,功能有点弱;</li>
+<li>visualgc(jvisualvm的插件): jvisualvm已经1.8,visualgc版本才1.4,完全安装不上，应该已经不维护了。</li>
+</ol>
+<h1 id="GCViewer"><a href="#GCViewer" class="headerlink" title="GCViewer"></a>GCViewer</h1><p><a href="https://sourceforge.net/projects/gcviewer/" target="_blank" rel="noopener">https://sourceforge.net/projects/gcviewer/</a><br>缺点: 字超小<br>优点: 功能全</p>
+<h2 id="查看堆空间的变化"><a href="#查看堆空间的变化" class="headerlink" title="查看堆空间的变化"></a>查看堆空间的变化</h2><img src="/images/2018-12/gcviewer1.png" class="" width="800" height="1200" title="gcviewer1">
+<p>view菜单栏可以看到各种颜色的线的含义，例如蓝色线是堆空间的使用。如果全打开的话眼睛会花的，可以逐步打开几个关心的。</p>
+<p>像下面这种情况图中黑色柱状较多的时候,可以看出堆空间不足了,gc时间占用较多:</p>
+<img src="/images/2018-12/danger.png" class="" width="800" height="1200" title="danger">
+
+
+<h2 id="gc回收的各项统计数据"><a href="#gc回收的各项统计数据" class="headerlink" title="gc回收的各项统计数据"></a>gc回收的各项统计数据</h2><img src="/images/2018-12/gcviewer4.png" class="" width="800" height="1200" title="gcviewer4">
+
+
+<p>如果搭配一个放大镜，<code>GCViewer</code>就是一个非常好的gc日志查看工具了。</p>
+<img src="/images/2018-12/gcviewer.jpg" class="" width="800" height="1200" title="gcviewer">
+
+
+<h1 id="http-gceasy-io"><a href="#http-gceasy-io" class="headerlink" title="http://gceasy.io"></a><a href="http://gceasy.io" target="_blank" rel="noopener">http://gceasy.io</a></h1><p>上传日志到网站。<br>优点：</p>
+<ol>
+<li>有诊断功能,自动检测问题;</li>
+<li>界面很美观。</li>
+</ol>
+<h2 id="诊断功能"><a href="#诊断功能" class="headerlink" title="诊断功能"></a>诊断功能</h2><p>它能帮忙检测gc日志中反映出的问题:</p>
+<img src="/images/2018-12/detect.png" class="" width="800" height="1200" title="detect">
+<img src="/images/2018-12/gceasy6.png" class="" width="800" height="1200" title="gceasy6">
+
+<p>比如能检测到fullgc:</p>
+<img src="/images/2018-12/fullgc.png" class="" width="800" height="1200" title="fullgc">
+<p>有些还能针对性地给出建议:</p>
+<img src="/images/2018-12/tips.png" class="" width="800" height="1200" title="tips">
+
+<h2 id="统计信息"><a href="#统计信息" class="headerlink" title="统计信息"></a>统计信息</h2><p>它提供了各个角度的统计信息。<br>新生代、老生代的峰值使用大小:</p>
+<img src="/images/2018-12/gceasy0.png" class="" width="800" height="1200" title="gceasy0">
+<p>各种统计图表:</p>
+<img src="/images/2018-12/gceasy1.png" class="" width="800" height="1200" title="gceasy1">
+<img src="/images/2018-12/gceasy2.png" class="" width="800" height="1200" title="gceasy2">
+<img src="/images/2018-12/gceasy4.png" class="" width="800" height="1200" title="gceasy4">
+<img src="/images/2018-12/gceasy5.png" class="" width="800" height="1200" title="gceasy5">
+<img src="/images/2018-12/gceasy7.png" class="" width="800" height="1200" title="gceasy7">
+
+
+
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/12/11/2018-12/%E5%BF%AB%E9%80%9F%E6%9F%A5%E7%9C%8B%E5%A4%A7%E9%87%8Fgc%E6%97%A5%E5%BF%97%E7%9A%84gui%E5%B7%A5%E5%85%B7/" data-id="ck96cch3900f9bham5ycp4ezr" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/jvm/" rel="tag">jvm</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2018-12/如何阅读thread-dump" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/12/06/2018-12/%E5%A6%82%E4%BD%95%E9%98%85%E8%AF%BBthread-dump/" class="article-date">
+  <time datetime="2018-12-06T01:24:17.000Z" itemprop="datePublished">2018-12-06</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/jvm/">jvm</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/12/06/2018-12/%E5%A6%82%E4%BD%95%E9%98%85%E8%AF%BBthread-dump/">如何阅读thread dump</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="生成thread-dump"><a href="#生成thread-dump" class="headerlink" title="生成thread dump"></a>生成thread dump</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">jstack &lt;PID&gt;</span><br></pre></td></tr></table></figure>
+
+<h1 id="查看thread-dump文件"><a href="#查看thread-dump文件" class="headerlink" title="查看thread dump文件"></a>查看thread dump文件</h1><ol>
+<li>保存成<code>xxx.tdump</code>文件,用<code>jvisualvm</code>打开;</li>
+<li>✔ 用网站打开: <a href="http://spotify.github.io/threaddump-analyzer/" target="_blank" rel="noopener">http://spotify.github.io/threaddump-analyzer/</a></li>
+<li>用文本编辑器打开.</li>
+</ol>
+<p>其中第二个方法，用网站查看最好用。<br>此外还可以用另一个网站: <a href="http://fastthread.io/" target="_blank" rel="noopener">http://fastthread.io/</a><br>这个网站还能看core dump和hs_err_pid142043.log</p>
+<h2 id="jvisualvm查看thread-dump"><a href="#jvisualvm查看thread-dump" class="headerlink" title="jvisualvm查看thread dump"></a>jvisualvm查看thread dump</h2><p>和用文本编辑器的区别只有一个，就是多了语法高亮(字体颜色有区分)。<br>某个日志如下:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">&quot;Attach Listener&quot; #16866 daemon prio&#x3D;9 os_prio&#x3D;0 tid&#x3D;0x00007f6574001000 nid&#x3D;0x2edea waiting on condition [0x0000000000000000]</span><br><span class="line">   java.lang.Thread.State: RUNNABLE</span><br></pre></td></tr></table></figure>
+
+<p>各部分含义:</p>
+<ul>
+<li>线程名称：<code>Attach Listener</code></li>
+<li>线程类型: <code>daemon</code></li>
+<li>tid: jvm内部线程id;</li>
+<li>nid: 线程id(系统真实)16进制;</li>
+<li>线程状态: RUNNABLE</li>
+<li>[0x0000000000000000]： 起始栈地址。</li>
+</ul>
+<h3 id="案例-遇到cpu100-的情况"><a href="#案例-遇到cpu100-的情况" class="headerlink" title="案例: 遇到cpu100%的情况"></a>案例: 遇到cpu100%的情况</h3><ol>
+<li>查看某进程下占用高的线程id:<br><code>top –H –p &lt;进程id&gt;</code><br>这里从结果里得到比如 16143 线程id;</li>
+<li>查看thread dump:<br><code>jstack -l &lt;进程id&gt;</code><br>上一步的线程id(16143)转换为16进制为<code>0x3f0f</code>,因此在thread dump中看看<code>0x3f0f</code>相关信息即可。（也就是上文中的nid）<br>（可以定位到具体是啥线程了）</li>
+</ol>
+<h2 id="网站查看thread-dump"><a href="#网站查看thread-dump" class="headerlink" title="网站查看thread dump"></a>网站查看thread dump</h2><p><a href="http://spotify.github.io/threaddump-analyzer" target="_blank" rel="noopener">http://spotify.github.io/threaddump-analyzer</a><br>几个改进:</p>
+<ol>
+<li>会合并相同栈的线程; (类似一个group by);</li>
+<li>会列出锁占用情况(<code>Synchronizers</code>面板);</li>
+<li>Top Methods From 50 Running Threads。<img src="/images/2018-12/groupbythread.png" class="" width="800" height="1200" title="groupbythread">
+<img src="/images/2018-12/spotify.png" class="" width="800" height="1200" title="spotify">
+<img src="/images/2018-12/topmethod.png" class="" width="800" height="1200" title="topmethod">
+
+</li>
+</ol>
+<h3 id="tip-10进制转16进制"><a href="#tip-10进制转16进制" class="headerlink" title="tip 10进制转16进制"></a>tip 10进制转16进制</h3><p>用<code>top -H -p pid</code>找到cpu占用高的线程id(10进制)以后，要去thread dump里找具体是哪个nid(16进制),因此需要用这个linux命令:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"># 把10进制的26转成16进制:</span><br><span class="line">echo &#39;obase&#x3D;16;ibase&#x3D;10;26&#39; | bc</span><br></pre></td></tr></table></figure>
+<p>或者用printf:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">printf %x&#39;\n&#39; 26</span><br><span class="line"># 结果是1a</span><br></pre></td></tr></table></figure>
+
+<h3 id="线程状态"><a href="#线程状态" class="headerlink" title="线程状态"></a>线程状态</h3><ul>
+<li>java中的线程状态:<br>线程状态转化大致如下:</li>
+</ul>
+<ol>
+<li><code>New</code>=&gt;<code>Runnable</code>=&gt;<code>Terminated</code> // 理想状态</li>
+<li><code>Runnable</code> =&gt; <code>Blocked</code>/<code>Waiting</code>/<code>Time_Waited</code>=&gt;<code>Runnable</code> // 可能误入的歧途</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>状态</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>New</td>
+<td>创建线程后,调用<code>start()</code>前.</td>
+</tr>
+<tr>
+<td>Runnable</td>
+<td>就绪和运行中.</td>
+</tr>
+<tr>
+<td>Terminated</td>
+<td>终止. 执行完毕</td>
+</tr>
+<tr>
+<td>Blocked</td>
+<td>阻塞.  阻塞于锁. (<code>synchronized</code>)</td>
+</tr>
+<tr>
+<td>Waiting</td>
+<td>等待.  等待其他线程的中断或者通知.(<code>Lock</code>类)</td>
+</tr>
+<tr>
+<td>Time_Waiting</td>
+<td>超时等待. 比Waiting多一个超时返回功能.(<code>Lock</code>类)</td>
+</tr>
+</tbody></table>
+<p><a href="http://xiaoyue26.github.io/2018/02/03/2018-02/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC%E5%9B%9B%E7%AB%A0/">http://xiaoyue26.github.io/2018/02/03/2018-02/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC%E5%9B%9B%E7%AB%A0/</a></p>
+<ul>
+<li><code>thread dump</code>中的线程状态:<br>示例状态与相应线程名:<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;&#x2F; java.lang.Thread.State: RUNNABLE</span><br><span class="line">RUNNABLE: Attach Listener</span><br><span class="line">TIMED_WAITING (parking): HikariPool-1 housekeeper</span><br><span class="line">TIMED_WAITING (on object monitor): Abandoned connection cleanup thread</span><br><span class="line">TIMED_WAITING (sleeping): Hashed wheel timer</span><br><span class="line">WAITING (on object monitor): Finalizer</span><br></pre></td></tr></table></figure>
+<img src="/images/2018-12/thread_dump.png" class="" width="800" height="1200" title="thread_dump">
+
+</li>
+</ul>
+<p>状态对应含义详解:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Runnable: 就绪或运行中</span><br><span class="line">Wait on condition: sleeping或者等待事件</span><br><span class="line">Waiting for Monitor Entry and in Object.wait(): 在synchronized,等待对象锁</span><br></pre></td></tr></table></figure>
+<p>其中<code>synchronized</code>与<code>obj.wait()</code>这对好基友:<br>对象锁: 每个对象的临界区<code>Monitor</code></p>
+<h3 id="线程栈示例"><a href="#线程栈示例" class="headerlink" title="线程栈示例"></a>线程栈示例</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">&quot;Abandoned connection cleanup thread&quot; #81 daemon prio&#x3D;5 os_prio&#x3D;0 tid&#x3D;0x00007f66acbbc000 nid&#x3D;0x279b in Object.wait() [0x00007f6646a8b000]</span><br><span class="line">   java.lang.Thread.State: TIMED_WAITING (on object monitor)</span><br><span class="line">	at java.lang.Object.wait(Native Method)</span><br><span class="line">	at java.lang.ref.ReferenceQueue.remove(ReferenceQueue.java:143)</span><br><span class="line">	- locked &lt;0x0000000080210720&gt; (a java.lang.ref.ReferenceQueue$Lock)</span><br><span class="line">	at com.mysql.jdbc.AbandonedConnectionCleanupThread.run(AbandonedConnectionCleanupThread.java:43)</span><br></pre></td></tr></table></figure>
+<p>先lock<code>0x0000000080210720</code>,然后wait.<br>可以想象代码可能是形如:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">synchronized(obj) &#123;  </span><br><span class="line">       obj.wait();  </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="Monitor、Entry-Set、Waiting-Set"><a href="#Monitor、Entry-Set、Waiting-Set" class="headerlink" title="Monitor、Entry Set、Waiting Set"></a>Monitor、Entry Set、Waiting Set</h3><p><code>Monitor</code>的两个set: <code>Entry Set</code>, <code>Waiting Set</code>.<br>首先得进入<code>Entry Set</code>,才能通往<code>Waiting Set</code>，因此要先<code>Synchronized</code>才行。<br><code>Entry Set</code>: <code>synchronized</code><br><code>Waiting Set</code>: <code>obj.wait()</code>// syn后。// 会释放对象锁。<br>唤醒<code>Waiting Set</code>： 在<code>synchronized</code>后调用<code>notify</code></p>
+<h3 id="问题定位"><a href="#问题定位" class="headerlink" title="问题定位"></a>问题定位</h3><h4 id="Cpu很忙：检查runnable的线程"><a href="#Cpu很忙：检查runnable的线程" class="headerlink" title="Cpu很忙：检查runnable的线程;"></a>Cpu很忙：检查runnable的线程;</h4><ol>
+<li>隔一段时间，收集几次thread dump;</li>
+<li>比较其中runnable的代码变化。</li>
+</ol>
+<p>没变化=&gt;可能在死循环;<br>有变化=&gt;正常。</p>
+<h3 id="Cpu很闲：检查waiting-for-monitor-entry的线程。"><a href="#Cpu很闲：检查waiting-for-monitor-entry的线程。" class="headerlink" title="Cpu很闲：检查waiting for monitor entry的线程。"></a>Cpu很闲：检查waiting for monitor entry的线程。</h3><ol>
+<li>隔一段时间，收集几次thread dump;</li>
+<li>比较其中waiting for monitor entry的代码变化。</li>
+</ol>
+<p>没变化=&gt;可能在死等(死锁); =&gt;可以<br>有变化=&gt;正常。</p>
+<h3 id="Thin-Lock-Fat-Lock-Spin-Lock"><a href="#Thin-Lock-Fat-Lock-Spin-Lock" class="headerlink" title="Thin Lock, Fat Lock, Spin Lock:"></a>Thin Lock, Fat Lock, Spin Lock:</h3><p><code>Thin Lock</code>: 某线程通过<code>CAS</code>获得<code>thin lock</code>,其他线程进入<code>spin lock</code>;<br><code>fat lock</code>:  <code>monitor_enter</code>/<code>monitor_exit</code>，其他线程进入<code>wait()</code>,不消耗cpu;<br>// 第二个获得锁的人把锁升级成<code>fat lock</code>。// 不能回退/降级</p>
+<p><code>Tasuki</code>锁：（Oracle的BEA JRockit与IBM的JVM）</p>
+<ol>
+<li><code>thin lock</code>取消忙等待；</li>
+<li><code>fat lock</code>可以回退/降级，通过采样数据分析决定。</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/12/06/2018-12/%E5%A6%82%E4%BD%95%E9%98%85%E8%AF%BBthread-dump/" data-id="ck96cch3a00fcbhamaruhhx74" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/jvm/" rel="tag">jvm</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2018-11/jvisualvm-运行时java程序监控" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/11/27/2018-11/jvisualvm-%E8%BF%90%E8%A1%8C%E6%97%B6java%E7%A8%8B%E5%BA%8F%E7%9B%91%E6%8E%A7/" class="article-date">
+  <time datetime="2018-11-27T04:01:57.000Z" itemprop="datePublished">2018-11-27</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/jvm/">jvm</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/11/27/2018-11/jvisualvm-%E8%BF%90%E8%A1%8C%E6%97%B6java%E7%A8%8B%E5%BA%8F%E7%9B%91%E6%8E%A7/">jvisualvm-运行时java程序监控</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="查看进程id"><a href="#查看进程id" class="headerlink" title="查看进程id"></a>查看进程id</h1><p>首先需要知道我们关心的java程序的进程id，才能方便后续的操作。<br><code>jps -lvm</code><br>如果不是java程序,则可以用命令<code>ps aux | grep [name]</code>。</p>
+<h1 id="查看进程运行参数"><a href="#查看进程运行参数" class="headerlink" title="查看进程运行参数"></a>查看进程运行参数</h1><p><code>jinfo -flags &lt;PID&gt;</code></p>
+<h1 id="查看进程各项统计信息"><a href="#查看进程各项统计信息" class="headerlink" title="查看进程各项统计信息"></a>查看进程各项统计信息</h1><p>类加载统计:<br><code>jstat -class &lt;PID&gt;</code><br>此外还有:   编译统计、垃圾回收统计、堆内存统计、新生代垃圾回收统计、新生代内存统计等等统计信息。<br>参考: <a href="https://www.cnblogs.com/yjd_hycf_space/p/7755633.html" target="_blank" rel="noopener">https://www.cnblogs.com/yjd_hycf_space/p/7755633.html</a><br><a href="https://blog.csdn.net/zhaozheng7758/article/details/8623549" target="_blank" rel="noopener">https://blog.csdn.net/zhaozheng7758/article/details/8623549</a></p>
+<p>缺点: 都是文本、英文,不一定马上看得懂。</p>
+<h1 id="生成3种dump文件"><a href="#生成3种dump文件" class="headerlink" title="生成3种dump文件"></a>生成3种dump文件</h1><p>为了了解更详细进程信息,可以生成3种dump文件:(然后用各种(图形)工具辅助查看)</p>
+<ol>
+<li>Thread Dump: 线程运行状态;</li>
+<li>Heap Dump: 堆内存状态;</li>
+<li>Core Dump: 进程地址空间的内容以及有关进程状态的其他信息写出的一个磁盘文件。</li>
+</ol>
+<h2 id="Thread-Dump"><a href="#Thread-Dump" class="headerlink" title="Thread Dump"></a>Thread Dump</h2><p>拿到进程id以后,我们可以用<code>jstack</code>命令生成<code>Thread Dump</code>文件。</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">jstack &lt;PID&gt;</span><br></pre></td></tr></table></figure>
+<p>然后可以:</p>
+<ol>
+<li>把Thread dump文件装载入<code>jvisualvm</code>查看。</li>
+<li>直接文本编辑器打开看;</li>
+<li>粘贴到网站,辅助查看: <a href="http://spotify.github.io/threaddump-analyzer/" target="_blank" rel="noopener">http://spotify.github.io/threaddump-analyzer/</a></li>
+</ol>
+<blockquote>
+<p><code>jstack</code>是jvm原生支持的,底层实现原理:</p>
+</blockquote>
+<ol>
+<li><code>tool.jar</code>中提供的一个<code>Attach Listener</code>,监听相关socket连接。</li>
+<li><code>sa-jdi.jar</code>中的监听。</li>
+</ol>
+<h2 id="Heap-Dump"><a href="#Heap-Dump" class="headerlink" title="Heap Dump"></a>Heap Dump</h2><p>还可以通过<code>jmap</code>命令+进程id，输出<code>Heap Dump</code>。</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">jmap -histo:live &lt;PID&gt;</span><br></pre></td></tr></table></figure>
+<p>输出到文件:</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">jmap -dump:live,format=b,file=heap.dump &lt;PID&gt;</span><br></pre></td></tr></table></figure>
+<p>需要注意这些指令都可能导致进程挂起,不能频繁在线上环境执行。</p>
+<p>得到<code>heap dump</code>文件以后,可以:</p>
+<ol>
+<li>用jhat命令: <code>jhat -port 443 [filename]</code>,然后访问<code>http://localhost:443</code>查看;</li>
+<li>装入到<code>jvisualvm</code>中查看.</li>
+</ol>
+<p>参考: <a href="http://www.importnew.com/27804.html" target="_blank" rel="noopener">http://www.importnew.com/27804.html</a></p>
+<h2 id="Core-Dump"><a href="#Core-Dump" class="headerlink" title="Core Dump"></a>Core Dump</h2><p>还可以输出进程的核心转储文件,方法是对进程发送一些会产生<code>core dump</code>的信号,例如:<br><code>kill -3 [PID]</code><br>用了上述命令以后<code>core dump</code>数据会输出到进程的标准输出中。（可以事先重定向stdout）</p>
+<p>详细的信号包括:</p>
+<table>
+<thead>
+<tr>
+<th>Signal</th>
+<th align="right">Value</th>
+<th align="center">Action</th>
+<th align="center">Comment</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>SIGHUP</td>
+<td align="right">1</td>
+<td align="center">Term</td>
+<td align="center">Hangup detected on controlling terminal or death of controlling process</td>
+</tr>
+<tr>
+<td>SIGINT</td>
+<td align="right">2</td>
+<td align="center">Term</td>
+<td align="center">Interrupt from keyboard</td>
+</tr>
+<tr>
+<td>SIGQUIT</td>
+<td align="right">3</td>
+<td align="center">Core</td>
+<td align="center">Quit from keyboard</td>
+</tr>
+<tr>
+<td>SIGILL</td>
+<td align="right">4</td>
+<td align="center">Core</td>
+<td align="center">Illegal Instruction</td>
+</tr>
+<tr>
+<td>SIGABRT</td>
+<td align="right">6</td>
+<td align="center">Core</td>
+<td align="center">Abort signal from abort(3)</td>
+</tr>
+<tr>
+<td>SIGFPE</td>
+<td align="right">8</td>
+<td align="center">Core</td>
+<td align="center">Floating point exception</td>
+</tr>
+<tr>
+<td>SIGKILL</td>
+<td align="right">9</td>
+<td align="center">Term</td>
+<td align="center">Kill signal</td>
+</tr>
+<tr>
+<td>SIGSEGV</td>
+<td align="right">11</td>
+<td align="center">Core</td>
+<td align="center">Invalid memory reference</td>
+</tr>
+<tr>
+<td>SIGPIPE</td>
+<td align="right">13</td>
+<td align="center">Term</td>
+<td align="center">Broken pipe: write to pipe with no readers</td>
+</tr>
+<tr>
+<td>SIGALRM</td>
+<td align="right">14</td>
+<td align="center">Term</td>
+<td align="center">Timer signal from alarm(2)</td>
+</tr>
+<tr>
+<td>SIGTERM</td>
+<td align="right">15</td>
+<td align="center">Term</td>
+<td align="center">Termination signal</td>
+</tr>
+<tr>
+<td>SIGUSR1</td>
+<td align="right">30,10,16</td>
+<td align="center">Term</td>
+<td align="center">User-defined signal 1</td>
+</tr>
+<tr>
+<td>SIGUSR2</td>
+<td align="right">31,12,17</td>
+<td align="center">Term</td>
+<td align="center">User-defined signal 2</td>
+</tr>
+<tr>
+<td>SIGCHLD</td>
+<td align="right">20,17,18</td>
+<td align="center">Ign</td>
+<td align="center">Child stopped or terminated</td>
+</tr>
+<tr>
+<td>SIGCONT</td>
+<td align="right">19,18,25</td>
+<td align="center">Cont</td>
+<td align="center">Continue if stopped</td>
+</tr>
+<tr>
+<td>SIGSTOP</td>
+<td align="right">17,19,23</td>
+<td align="center">Stop</td>
+<td align="center">Stop process</td>
+</tr>
+<tr>
+<td>SIGTSTP</td>
+<td align="right">18,20,24</td>
+<td align="center">Stop</td>
+<td align="center">Stop typed at tty</td>
+</tr>
+<tr>
+<td>SIGTTIN</td>
+<td align="right">21,21,26</td>
+<td align="center">Stop</td>
+<td align="center">tty input for background process</td>
+</tr>
+<tr>
+<td>SIGTTOU</td>
+<td align="right">22,22,27</td>
+<td align="center">Stop</td>
+<td align="center">tty output for background process</td>
+</tr>
+</tbody></table>
+<h1 id="jvisualvm"><a href="#jvisualvm" class="headerlink" title="jvisualvm"></a>jvisualvm</h1><p>上述几个工具比较零散,而且大部分是文本,不能直观迅速感知内存是上升还是下降.<br>可以直接用<code>jvisualvm</code>命令启动图形界面，直接监控本地的java进程(包括堆、thread dump信息等，还能进行操作)。</p>
+<img src="/images/2018-11/jvi1.png" class="" width="800" height="1200" title="jvi1">
+<img src="/images/2018-11/jvi2.png" class="" width="800" height="1200" title="jvi2">
+<img src="/images/2018-11/jvi3.png" class="" width="800" height="1200" title="jvi3">
+<img src="/images/2018-11/jvi4.png" class="" width="800" height="1200" title="jvi4">
+<p>用法:</p>
+<ol>
+<li>监控本地java进程;</li>
+<li>装载heap dump,thread dump文件查看;</li>
+<li>远端启动<code>jstatd</code>/<code>jmx</code>,打开端口权限,远程监控java程序。</li>
+</ol>
+<h2 id="jstatd"><a href="#jstatd" class="headerlink" title="jstatd"></a>jstatd</h2><p>准备配置文件:</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">vi jstatd.all.policy</span><br></pre></td></tr></table></figure>
+<p>内容如下:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">grant codebase &quot;file:&#x2F;usr&#x2F;java&#x2F;default&#x2F;lib&#x2F;tools.jar&quot; &#123;   </span><br><span class="line">    permission java.security.AllPermission;   </span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>启动:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">jstatd -J-Djava.security.policy&#x3D;.&#x2F;jstatd.all.policy</span><br></pre></td></tr></table></figure>
+<p>默认会启动在1099端口。<br>启动以后<code>jvisualvm</code>就能创建远程主机，并监控它所有的java程序了。</p>
+<h2 id="jmx"><a href="#jmx" class="headerlink" title="jmx"></a>jmx</h2><p><code>jstatd</code>和<code>jmx</code>似乎不能同时用，不然<code>jvisualvm</code>会卡死.<br>需要在启动java的时候就指定相应的端口等信息:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">nohup java \</span><br><span class="line">-Dcom.sun.management.jmxremote&#x3D;true \</span><br><span class="line">-Dcom.sun.management.jmxremote.port&#x3D;8080 \</span><br><span class="line">-Dcom.sun.management.jmxremote.ssl&#x3D;false \</span><br><span class="line">-Dcom.sun.management.jmxremote.authenticate&#x3D;false \</span><br><span class="line">-Djava.rmi.server.hostname&#x3D;10.65.89.102 \</span><br><span class="line">-XX:+HeapDumpOnOutOfMemoryError \</span><br><span class="line">-XX:HeapDumpPath&#x3D;&#x2F;data&#x2F;mengqifeng&#x2F;test \</span><br><span class="line">-classpath pipe-realtime-client-0.0.1-jar-with-dependencies.jar \</span><br><span class="line">com.tencent.kandian.HippoConsumer &gt;&gt; con.log &amp; echo $! &gt; con.pid</span><br></pre></td></tr></table></figure>
+<p>然后在<code>jvisualvm</code>中创建远程<code>JMX</code>连接。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/11/27/2018-11/jvisualvm-%E8%BF%90%E8%A1%8C%E6%97%B6java%E7%A8%8B%E5%BA%8F%E7%9B%91%E6%8E%A7/" data-id="ck96cch3300etbham26zt7w0c" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/jvm/" rel="tag">jvm</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2018-11/jvm启动的几个线程作用" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/11/27/2018-11/jvm%E5%90%AF%E5%8A%A8%E7%9A%84%E5%87%A0%E4%B8%AA%E7%BA%BF%E7%A8%8B%E4%BD%9C%E7%94%A8/" class="article-date">
+  <time datetime="2018-11-27T04:01:16.000Z" itemprop="datePublished">2018-11-27</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/jvm/">jvm</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/11/27/2018-11/jvm%E5%90%AF%E5%8A%A8%E7%9A%84%E5%87%A0%E4%B8%AA%E7%BA%BF%E7%A8%8B%E4%BD%9C%E7%94%A8/">jvm启动的几个线程作用</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="jvm启动的几个线程作用"><a href="#jvm启动的几个线程作用" class="headerlink" title="jvm启动的几个线程作用:"></a>jvm启动的几个线程作用:</h1><ol>
+<li><code>Signal Dispatcher</code>: 接受各种信号;</li>
+<li><code>Attach Listener</code>: 监听各种请求的socket连接,把执行的操作扔给<code>VM Thread</code>。<br>这里的请求包括:<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">static</span> AttachOperationFunctionInfo funcs[] = &#123;</span><br><span class="line">  &#123; <span class="string">"agentProperties"</span>,  get_agent_properties &#125;,</span><br><span class="line">  &#123; <span class="string">"datadump"</span>,         data_dump &#125;,</span><br><span class="line">  &#123; <span class="string">"dumpheap"</span>,         dump_heap &#125;,</span><br><span class="line">  &#123; <span class="string">"load"</span>,             JvmtiExport::load_agent_library &#125;,</span><br><span class="line">  &#123; <span class="string">"properties"</span>,       get_system_properties &#125;,</span><br><span class="line">  &#123; <span class="string">"threaddump"</span>,       thread_dump &#125;,</span><br><span class="line">  &#123; <span class="string">"inspectheap"</span>,      heap_inspection &#125;,</span><br><span class="line">  &#123; <span class="string">"setflag"</span>,          set_flag &#125;,</span><br><span class="line">  &#123; <span class="string">"printflag"</span>,        print_flag &#125;,</span><br><span class="line">  &#123; <span class="string">"jcmd"</span>,             jcmd &#125;,</span><br><span class="line">  &#123; NULL,               NULL &#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure></li>
+<li><code>VM Thread</code>: 线程母体,最原始的线程,单例,里面有个队列，存放上面的操作,它负责loop处理队列中的操作.（包括对其他线程的创建，分配和对象的清理，cms-mark等工作）</li>
+<li><code>CompilerThread0</code>: JIT动态编译线程;</li>
+<li><code>ConcurrentMark-SweepGCThread</code>: CMS垃圾收集线程;</li>
+<li><code>DestroyJavaVM</code>: 负责卸载JVM的线程;</li>
+<li><code>ContainerBackground Processor</code>: JBoss守护线程;</li>
+<li><code>Dispatcher-Thread-3</code>: Log4j异步日志守护线程;</li>
+<li><code>Finalizer</code>: 垃圾回收守护线程;</li>
+<li><code>Gang worker#0</code>: 新生代回收线程;</li>
+<li><code>GC Daemon</code>: RMI远程GC线程(调用<code>system.gc()</code>);</li>
+<li><code>Low MemoryDetector</code>: 发现可用内存低，则分配新的内存空间;</li>
+<li><code>process reaper</code>: 执行os命令;</li>
+<li><code>Reference Handler</code>: 处理引用对象本身（软、弱、虚引用）的垃圾回收问题;</li>
+<li><code>SurrogateLockerThread</code>: CMS垃圾回收;</li>
+<li><code>VM Periodic Task Thread</code>: 定期的内存监控、JVM运行状况监控。</li>
+</ol>
+<p>参考: <a href="http://ifeve.com/jvm-thread/" target="_blank" rel="noopener">http://ifeve.com/jvm-thread/</a></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/11/27/2018-11/jvm%E5%90%AF%E5%8A%A8%E7%9A%84%E5%87%A0%E4%B8%AA%E7%BA%BF%E7%A8%8B%E4%BD%9C%E7%94%A8/" data-id="ck96cch3400exbham6rfw73im" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/jvm/" rel="tag">jvm</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2018-11/jvm运行参数配置含义" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/11/25/2018-11/jvm%E8%BF%90%E8%A1%8C%E5%8F%82%E6%95%B0%E9%85%8D%E7%BD%AE%E5%90%AB%E4%B9%89/" class="article-date">
+  <time datetime="2018-11-25T12:33:33.000Z" itemprop="datePublished">2018-11-25</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/jvm/">jvm</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/11/25/2018-11/jvm%E8%BF%90%E8%A1%8C%E5%8F%82%E6%95%B0%E9%85%8D%E7%BD%AE%E5%90%AB%E4%B9%89/">jvm运行参数配置含义</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="示例1-sparkstreaming的driver配置"><a href="#示例1-sparkstreaming的driver配置" class="headerlink" title="示例1:sparkstreaming的driver配置"></a>示例1:sparkstreaming的driver配置</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">-Djava.library.path&#x3D;$JAVA_LIBRARY_PATH:&#x2F;data&#x2F;gaiaadmin&#x2F;gaiaenv&#x2F;tdwgaia&#x2F;lib&#x2F;native</span><br><span class="line">-verbose:gc</span><br><span class="line">-XX:-PrintGCDetails </span><br><span class="line">-XX:+PrintGCDateStamps</span><br><span class="line">-Xloggc:&lt;LOG_DIR&gt;&#x2F;gc.log</span><br><span class="line">-XX:MaxPermSize&#x3D;256m </span><br><span class="line">-XX:SurvivorRatio&#x3D;4 </span><br><span class="line">-XX:+UseMembar </span><br><span class="line">-XX:+UseConcMarkSweepGC</span><br><span class="line">-XX:+CMSParallelRemarkEnabled </span><br><span class="line">-XX:+CMSScavengeBeforeRemark </span><br><span class="line">-XX:ParallelCMSThreads&#x3D;4 </span><br><span class="line">-XX:+UseCMSCompactAtFullCollection </span><br><span class="line">-XX:+CMSClassUnloadingEnabled </span><br><span class="line">-XX:CMSInitiatingOccupancyFraction&#x3D;50 </span><br><span class="line">-XX:+UseCompressedOops</span><br></pre></td></tr></table></figure>
+<p>含义:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">-verbose:gc是官方推荐配置,等效于-XX:+PrintGC,表示打印gc日志;</span><br><span class="line">-XX:-PrintGCDetails 减号,关闭详细gc日志;</span><br><span class="line">-XX:+PrintGCDateStamps  加号,打开gc日志日期;</span><br><span class="line">-Xloggc:&lt;LOG_DIR&gt;&#x2F;gc.log 指定gc日志路径;</span><br><span class="line">-XX:MaxPermSize&#x3D;256m  最大永生代大小;</span><br><span class="line">-XX:SurvivorRatio&#x3D;4  两个survivor:新生代的比例;</span><br><span class="line">8的话: 2:8,每个survivor占1&#x2F;10;</span><br><span class="line">4的话: 2:4,每个survivor占1&#x2F;6;</span><br><span class="line">-XX:+UseMembar 使用真内存屏障</span><br><span class="line">-XX:+UseConcMarkSweepGC 使用ParNew &amp; CMS（serial old为替补）搜集器</span><br><span class="line">-XX:+CMSParallelRemarkEnabled CMS第二次标记,使用并发标记</span><br><span class="line">-XX:+CMSScavengeBeforeRemark 第二次标记前进行一次minorGC</span><br><span class="line">-XX:ParallelCMSThreads&#x3D;4 回收线程数</span><br><span class="line">-XX:+UseCMSCompactAtFullCollection 防止堆碎片引起full gc,开启CMS阶段进行合并碎片选项</span><br><span class="line">-XX:+CMSClassUnloadingEnabled 开启回收Perm永生代</span><br><span class="line">-XX:CMSInitiatingOccupancyFraction&#x3D;50 在老生代占满50%的时候开始回收</span><br><span class="line">-XX:+UseCompressedOops 压缩指针(64位有效)</span><br></pre></td></tr></table></figure>
+
+<h1 id="示例2-某spring-boot进程jvm非默认配置"><a href="#示例2-某spring-boot进程jvm非默认配置" class="headerlink" title="示例2:某spring boot进程jvm非默认配置"></a>示例2:某spring boot进程jvm非默认配置</h1><p><code>jinfo -flags PID</code>结果:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">Non-default VM flags: </span><br><span class="line">-XX:CICompilerCount&#x3D;15 </span><br><span class="line">-XX:InitialHeapSize&#x3D;2107637760 </span><br><span class="line">-XX:MaxHeapSize&#x3D;32210157568 </span><br><span class="line">-XX:MaxNewSize&#x3D;10736369664 </span><br><span class="line">-XX:MinHeapDeltaBytes&#x3D;524288 </span><br><span class="line">-XX:NewSize&#x3D;702545920 </span><br><span class="line">-XX:OldSize&#x3D;1405091840 </span><br><span class="line">-XX:+UseCompressedClassPointers </span><br><span class="line">-XX:+UseCompressedOops </span><br><span class="line">-XX:+UseParallelGC</span><br></pre></td></tr></table></figure>
+<p>含义:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">-XX:CICompilerCount&#x3D;15 JIT的编译线程数</span><br><span class="line">-XX:InitialHeapSize&#x3D;2107637760  初始堆大小</span><br><span class="line">-XX:MaxHeapSize&#x3D;32210157568     最大堆大小</span><br><span class="line">-XX:NewSize&#x3D;702545920        新生代初始大小</span><br><span class="line">-XX:MaxNewSize&#x3D;10736369664   新生代最大大小</span><br><span class="line">-XX:MinHeapDeltaBytes&#x3D;524288 每次扩展堆的时候最小增长</span><br><span class="line">-XX:OldSize&#x3D;1405091840       老生代初始大小</span><br><span class="line">-XX:+UseCompressedClassPointers 压缩指针</span><br><span class="line">-XX:+UseCompressedOops          压缩优化</span><br><span class="line">-XX:+UseParallelGC           Parallel Scavenge + Serial Old 吞吐率优先</span><br></pre></td></tr></table></figure>
+
+<h1 id="jvm配置"><a href="#jvm配置" class="headerlink" title="jvm配置"></a>jvm配置</h1><p>参考<a href="https://www.cnblogs.com/z-sm/p/6253335.html" target="_blank" rel="noopener">https://www.cnblogs.com/z-sm/p/6253335.html</a></p>
+<h2 id="分类"><a href="#分类" class="headerlink" title="分类"></a>分类</h2><p><code>-X</code>: 稳定选项;<br><code>-XX</code>: 非标准选项;</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/11/25/2018-11/jvm%E8%BF%90%E8%A1%8C%E5%8F%82%E6%95%B0%E9%85%8D%E7%BD%AE%E5%90%AB%E4%B9%89/" data-id="ck96cch3200epbham74s04xi6" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/jvm/" rel="tag">jvm</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2018-11/jinfo-运行时查看JVM配置及更改" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/11/25/2018-11/jinfo-%E8%BF%90%E8%A1%8C%E6%97%B6%E6%9F%A5%E7%9C%8BJVM%E9%85%8D%E7%BD%AE%E5%8F%8A%E6%9B%B4%E6%94%B9/" class="article-date">
+  <time datetime="2018-11-25T12:12:57.000Z" itemprop="datePublished">2018-11-25</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/jvm/">jvm</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/11/25/2018-11/jinfo-%E8%BF%90%E8%A1%8C%E6%97%B6%E6%9F%A5%E7%9C%8BJVM%E9%85%8D%E7%BD%AE%E5%8F%8A%E6%9B%B4%E6%94%B9/">jinfo-运行时查看JVM配置及更改</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="查看运行的java程序的启动命令"><a href="#查看运行的java程序的启动命令" class="headerlink" title="查看运行的java程序的启动命令"></a>查看运行的java程序的启动命令</h1><p><code>jps -lvm</code></p>
+<h1 id="运行时查看JVM配置"><a href="#运行时查看JVM配置" class="headerlink" title="运行时查看JVM配置"></a>运行时查看JVM配置</h1><p>语法如下:<br><code>jinfo -flag &lt;name&gt; PID</code><br>如:<br><code>jinfo -flag CMSAbortablePrecleanWaitMillis 11715</code></p>
+<p>查看全部非默认配置:<br><code>jinfo -flags PID</code><br>或者:<br><code>jcmd PID VM.flags</code></p>
+<h1 id="运行时修改JVM配置"><a href="#运行时修改JVM配置" class="headerlink" title="运行时修改JVM配置"></a>运行时修改JVM配置</h1><p>首先并不是所有JVM配置都能在运行时动态修改的,需要查看哪些配置是可以运行时动态修改的:</p>
+<h2 id="列出可运行时调整的JVM配置-linux"><a href="#列出可运行时调整的JVM配置-linux" class="headerlink" title="列出可运行时调整的JVM配置(linux)"></a>列出可运行时调整的JVM配置(linux)</h2><p><code>java -XX:+PrintFlagsInitial | grep manageable</code><br>结果如下:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line">intx CMSAbortablePrecleanWaitMillis &#x3D; 100 &#123;manageable&#125;</span><br><span class="line">intx CMSTriggerInterval  &#x3D; -1 &#123;manageable&#125;</span><br><span class="line">intx CMSWaitDuration &#x3D; 2000 &#123;manageable&#125;</span><br><span class="line">bool HeapDumpAfterFullGC &#x3D; false &#123;manageable&#125;</span><br><span class="line">bool HeapDumpBeforeFullGC   &#x3D; false &#123;manageable&#125;</span><br><span class="line">bool HeapDumpOnOutOfMemoryError  &#x3D; false &#123;manageable&#125;</span><br><span class="line">ccstr HeapDumpPath &#x3D; &#123;manageable&#125;</span><br><span class="line">uintx MaxHeapFreeRatio &#x3D; 70 &#123;manageable&#125;</span><br><span class="line">uintx MinHeapFreeRatio &#x3D; 40 &#123;manageable&#125;</span><br><span class="line">bool PrintClassHistogram &#x3D; false &#123;manageable&#125;</span><br><span class="line">bool PrintClassHistogramAfterFullGC &#x3D; false &#123;manageable&#125;</span><br><span class="line">bool PrintClassHistogramBeforeFullGC  &#x3D; false &#123;manageable&#125;</span><br><span class="line">bool PrintConcurrentLocks   &#x3D; false &#123;manageable&#125;</span><br><span class="line">bool PrintGC  &#x3D; false &#123;manageable&#125;</span><br><span class="line">bool PrintGCDateStamps   &#x3D; false &#123;manageable&#125;</span><br><span class="line">bool PrintGCDetails   &#x3D; false &#123;manageable&#125;</span><br><span class="line">bool PrintGCID &#x3D; false &#123;manageable&#125;</span><br><span class="line">bool PrintGCTimeStamps   &#x3D; false &#123;manageable&#125;</span><br></pre></td></tr></table></figure>
+
+<p>可以看到参数的类型主要分为<code>bool</code>和非<code>bool</code>(<code>intx</code>,<code>uintx</code>,<code>ccstr</code>)。</p>
+<h2 id="运行时修改bool型配置"><a href="#运行时修改bool型配置" class="headerlink" title="运行时修改bool型配置"></a>运行时修改bool型配置</h2><p>用加减(+/-)表示开关:<br><code>jinfo -flag [+|-]&lt;name&gt; PID</code></p>
+<h2 id="运行时修改intx-ccstr-uintx型配置"><a href="#运行时修改intx-ccstr-uintx型配置" class="headerlink" title="运行时修改intx/ccstr/uintx型配置"></a>运行时修改intx/ccstr/uintx型配置</h2><p><code>jinfo -flag &lt;name&gt;=&lt;value&gt; PID</code></p>
+<h1 id="示例"><a href="#示例" class="headerlink" title="示例"></a>示例</h1><p>比如我们有一个java进程11715,我们突然想查看它的gc情况,但是之前又没有打开gc日志,只重定向了控制台日志,这个时候可以动态打开:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">jinfo -flag +PrintGC 11715</span><br><span class="line">jinfo -flag +PrintGCDateStamps 11715</span><br><span class="line">jinfo -flag +PrintGCDetails 11715</span><br></pre></td></tr></table></figure>
+<p>拿到日志:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">2018-11-25T20:21:41.772+0800: [GC (Allocation Failure) [PSYoungGen: 45952K-&gt;1856K(48128K)] 248269K-&gt;204197K(309248K), 0.0423007 secs] [Times: user&#x3D;0.88 sys&#x3D;0.02, real&#x3D;0.06 secs]</span><br></pre></td></tr></table></figure>
+
+<p>调试完后再关掉即可:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">jinfo -flag -PrintGC 11715</span><br><span class="line">jinfo -flag -PrintGCDateStamps 11715</span><br><span class="line">jinfo -flag -PrintGCDetails 11715</span><br></pre></td></tr></table></figure>
+
+
+
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/11/25/2018-11/jinfo-%E8%BF%90%E8%A1%8C%E6%97%B6%E6%9F%A5%E7%9C%8BJVM%E9%85%8D%E7%BD%AE%E5%8F%8A%E6%9B%B4%E6%94%B9/" data-id="ck96cch3100elbham3ua28ee8" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/jvm/" rel="tag">jvm</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+
+
+  <nav id="page-nav">
+    <a class="extend prev" rel="prev" href="/page/6/">&amp;laquo; 上一页</a><a class="page-number" href="/">1</a><span class="space">&hellip;</span><a class="page-number" href="/page/5/">5</a><a class="page-number" href="/page/6/">6</a><span class="page-number current">7</span><a class="page-number" href="/page/8/">8</a><a class="page-number" href="/page/9/">9</a><span class="space">&hellip;</span><a class="page-number" href="/page/20/">20</a><a class="extend next" rel="next" href="/page/8/">下一页&amp;raquo;</a>
+  </nav>
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+  
+    
+
+  
+    
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title recent-posts">最新文章</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2020/04/19/2020-04/spring%E6%8B%BE%E9%81%97/">spring拾遗</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/26/2020-03/%E5%88%A9%E7%94%A8UTF-8%E7%BC%96%E7%A0%81%E7%9A%84%E7%89%B9%E6%80%A7%E8%BF%9B%E8%A1%8C%E4%BC%98%E5%8C%96/">利用UTF-8编码的特性进行优化</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/24/2020-03/linux%E8%87%AA%E8%BF%9E%E6%8E%A5/">linux自连接</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/23/2020-03/redis%E5%A4%A7key%E9%97%AE%E9%A2%98/">redis大key问题</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/23/2020-03/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/">分布式事务</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

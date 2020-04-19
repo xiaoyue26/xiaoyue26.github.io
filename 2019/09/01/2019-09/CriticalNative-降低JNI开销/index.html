@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>CriticalNative:降低JNI开销 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="引子Android中有@CriticalNative注解:https:&#x2F;&#x2F;source.android.google.cn&#x2F;devices&#x2F;tech&#x2F;dalvik&#x2F;improvements里面说到:  @FastNative 可以使原生方法的性能提升高达 2 倍，@CriticalNative 则可以提升高达4倍。   那么这是怎么做到的呢？ native方法调用native方法时,JVM的工作步">
+<meta property="og:type" content="article">
+<meta property="og:title" content="CriticalNative:降低JNI开销">
+<meta property="og:url" content="http://xiaoyue26.github.io/2019/09/01/2019-09/CriticalNative-%E9%99%8D%E4%BD%8EJNI%E5%BC%80%E9%94%80/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="引子Android中有@CriticalNative注解:https:&#x2F;&#x2F;source.android.google.cn&#x2F;devices&#x2F;tech&#x2F;dalvik&#x2F;improvements里面说到:  @FastNative 可以使原生方法的性能提升高达 2 倍，@CriticalNative 则可以提升高达4倍。   那么这是怎么做到的呢？ native方法调用native方法时,JVM的工作步">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2019-09-01T08:41:03.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.287Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="java">
+<meta property="article:tag" content="JNI">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2019-09/CriticalNative-降低JNI开销" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/09/01/2019-09/CriticalNative-%E9%99%8D%E4%BD%8EJNI%E5%BC%80%E9%94%80/" class="article-date">
+  <time datetime="2019-09-01T08:41:03.000Z" itemprop="datePublished">2019-09-01</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E6%80%A7%E8%83%BD/">性能</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      CriticalNative:降低JNI开销
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="引子"><a href="#引子" class="headerlink" title="引子"></a>引子</h1><p><code>Android</code>中有<code>@CriticalNative</code>注解:<br><a href="https://source.android.google.cn/devices/tech/dalvik/improvements" target="_blank" rel="noopener">https://source.android.google.cn/devices/tech/dalvik/improvements</a><br>里面说到:</p>
+<blockquote>
+<p>@FastNative 可以使原生方法的性能提升高达 2 倍，@CriticalNative 则可以提升高达4倍。 </p>
+</blockquote>
+<p>那么这是怎么做到的呢？</p>
+<h1 id="native方法"><a href="#native方法" class="headerlink" title="native方法"></a>native方法</h1><p>调用native方法时,JVM的工作步骤:<br>(源码: <a href="http://hg.openjdk.java.net/jdk8u/jdk8u/hotspot/file/4d9931ebf861/src/cpu/x86/vm/sharedRuntime_x86_64.cpp#l1723" target="_blank" rel="noopener">http://hg.openjdk.java.net/jdk8u/jdk8u/hotspot/file/4d9931ebf861/src/cpu/x86/vm/sharedRuntime_x86_64.cpp#l1723</a>)</p>
+<blockquote>
+<ol>
+<li>创建栈帧;</li>
+<li>根据ABI移动参数到寄存器或者栈;(ABI: 应用二进制接口)</li>
+<li>封装对象引用到JNI handlers;</li>
+<li>获取静态方法的<code>JNIEnv*</code>和<code>jclass</code>,把他们作为额外参数传递;</li>
+<li>检查是否调用<code>method_entry</code>的trace函数; </li>
+<li>检查是否调用对象锁;（<code>synchronized</code>）(optinal)</li>
+<li>检查native方法是否已经链接;(懒加载函数检查、链接)</li>
+<li>线程状态从<code>in_java</code>转变为<code>in_native</code>;</li>
+<li>调用native方法;</li>
+<li>检查是否需要safepoint;</li>
+<li>线程状态转回<code>in_java</code>;</li>
+<li>解锁对象锁;(optional)</li>
+<li>notify <code>method_exit</code>;(optional)</li>
+<li>将对象结果解出，重置JNI handlers;</li>
+<li>处理JNI异常;</li>
+<li>移除栈帧。</li>
+</ol>
+</blockquote>
+<p>开销比较大,主要是用于各种参数拷贝,尤其是遇到数组，需要来回拷贝、检查。</p>
+<p>此时，如果是足够简单的native方法,可以用<code>Critical Natives</code>来降低开销。</p>
+<h1 id="Critical-Native方法"><a href="#Critical-Native方法" class="headerlink" title="Critical Native方法"></a>Critical Native方法</h1><p><code>Critical Natives</code>方法是需要满足下列约束的<code>native</code>方法:</p>
+<blockquote>
+<ol>
+<li>必须是static且没有synchronized; (省掉上一节的6、12步)</li>
+<li>参数类型必须是基本类型或基本类型的数组;(省掉上一节中的对象相关3、14)</li>
+<li>具体实现不能调用JNI函数(也就是不使用<code>JNIEnv* env</code>和<code>jclass cls</code>,既然不使用就不用传给它了),不能分配java对象或者抛出异常;(省掉上一节中的4、15)</li>
+<li>不能运行太长时间.(因为它会阻塞gc)</li>
+</ol>
+</blockquote>
+<p>基于这个原理的话, <code>critical native</code>方法比普通<code>native</code>方法快的原因其实是节省了一些调用开始和结束的开销，因此如果被调用的方法如果是时间占用的大头的话，其实这个优化幅度就很小了。<br>反之如果是频繁调用的方法，而且每次调用的数据量很小，此时调用开销和执行开销是同量级，那么累计的优化幅度就会很大。<br>（比如只是长度为16的数组计算的话，计算力提升可以达到2～3倍。）</p>
+<p>满足上述约束以后,<code>Critical Natives</code>方法还需要进行下列声明:</p>
+<blockquote>
+<ol>
+<li>方法名以<code>JavaCritical_</code>开头;</li>
+<li>没有额外的<code>JNIEnv*</code>和<code>jclass</code>参数;(因为是static方法,自然也就没有jobject参数了)</li>
+<li>java数组传递的时候用两个参数: 数组长度、数组引用(基本类型)。<br>// 这样不再需要调用<code>GetArrayLength</code>、<code>GetByteArrayElements</code>等函数。</li>
+</ol>
+</blockquote>
+<p>此外critical natives方法变成临界区。<br><code>native</code>方法示例:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">JNIEXPORT jint JNICALL</span><br><span class="line">Java_com_package_MyClass_nativeMethod(JNIEnv* env, jclass klass, jbyteArray <span class="built_in">array</span>) &#123;</span><br><span class="line">    jboolean isCopy;</span><br><span class="line">    jint length = (*env)-&gt;GetArrayLength(env, <span class="built_in">array</span>);</span><br><span class="line">    jbyte* buf = (*env)-&gt;GetByteArrayElements(env, <span class="built_in">array</span>, &amp;isCopy);</span><br><span class="line">    jint result = <span class="built_in">process</span>(buf, length);</span><br><span class="line">    (*env)-&gt;ReleaseByteArrayElements(env, <span class="built_in">array</span>, buf, JNI_ABORT);</span><br><span class="line">    <span class="keyword">return</span> result;    </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>Critical Natives</code>方法示例:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">JNIEXPORT jint JNICALL</span><br><span class="line">JavaCritical_com_package_MyClass_nativeMethod(jint length, jbyte* buf) &#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">process</span>(buf, length);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>critical</code>版本的方法是JIT需要的(默认是调用超过1500次,可以调JIT参数<code>-XX:CompileThreshold=invocations</code>);<br>普通<code>native</code>版本的方法是解释器需要的;</p>
+<p>因此实际用的时候，这俩版本的代码都要写上。比如是这样的:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">&lt;jni.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">int</span> <span class="title">sum</span><span class="params">(jbyte* <span class="built_in">array</span>, <span class="keyword">int</span> length)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">int</span> result = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">int</span> i;</span><br><span class="line">    <span class="keyword">for</span> (i = <span class="number">0</span>; i &lt; length; i++) &#123;</span><br><span class="line">        result += <span class="built_in">array</span>[i];</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> result;</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment"> * Class:     com_tencent_xxx_test_Natives</span></span><br><span class="line"><span class="comment"> * Method:    javaCriticalImpl</span></span><br><span class="line"><span class="comment"> * Signature: ([B)I</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line">JNIEXPORT jint JNICALL Java_com_tencent_xxx_test_Natives_javaCriticalImpl</span><br><span class="line">  (JNIEnv* env, jclass cls, jbyteArray <span class="built_in">array</span>)&#123;</span><br><span class="line">  jboolean isCopy;</span><br><span class="line">  jint length = (*env)-&gt;GetArrayLength(env, <span class="built_in">array</span>);</span><br><span class="line">  jbyte* buf = (jbyte*) (*env)-&gt;GetPrimitiveArrayCritical(env, <span class="built_in">array</span>, &amp;isCopy);</span><br><span class="line">  jint result = sum(buf, length);</span><br><span class="line">  (*env)-&gt;ReleasePrimitiveArrayCritical(env, <span class="built_in">array</span>, buf, JNI_ABORT);</span><br><span class="line">  <span class="comment">// 有副作用的c函数用0; 无副作用的c函数直接用JNI_ABORT.</span></span><br><span class="line">  <span class="keyword">return</span> result;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">JNIEXPORT jint JNICALL</span><br><span class="line">JavaCritical_com_tencent_xxx_test_Natives_javaCriticalImpl(jint length, jbyte* buf) &#123;</span><br><span class="line">    <span class="keyword">return</span> sum(buf, length);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>(之所以这么繁琐的原因是这个特性和Unsafe一样是jdk内部使用的,没有公开发布给普通程序员,正式发布估计要到jdk10了)</p>
+<p>参考:<br><a href="http://cr.openjdk.java.net/~jrose/panama/native-call-primitive.html" target="_blank" rel="noopener">http://cr.openjdk.java.net/~jrose/panama/native-call-primitive.html</a><br><a href="http://mail.openjdk.java.net/pipermail/panama-dev/2015-December/000225.html" target="_blank" rel="noopener">http://mail.openjdk.java.net/pipermail/panama-dev/2015-December/000225.html</a><br><a href="https://stackoverflow.com/questions/36298111/is-it-possible-to-use-sun-misc-unsafe-to-call-c-functions-without-jni/36309652#36309652" target="_blank" rel="noopener">https://stackoverflow.com/questions/36298111/is-it-possible-to-use-sun-misc-unsafe-to-call-c-functions-without-jni/36309652#36309652</a></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/09/01/2019-09/CriticalNative-%E9%99%8D%E4%BD%8EJNI%E5%BC%80%E9%94%80/" data-id="ck96cch4a00jmbhambsgt1uwq" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/JNI/" rel="tag">JNI</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2019/09/04/2019-09/%E9%9D%99%E6%80%81%E9%93%BE%E6%8E%A5%E5%BA%93%E5%92%8C%E5%8A%A8%E6%80%81%E9%93%BE%E6%8E%A5%E5%BA%93/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          静态链接库和动态链接库
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2019/09/01/2019-09/%E7%A8%8B%E5%BA%8F%E8%AE%A1%E7%AE%97%E5%8A%A0%E9%80%9F%E4%B9%8BSIMD%E7%9B%B8%E5%85%B3%E6%A6%82%E5%BF%B5/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">程序计算加速之SIMD相关概念</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#引子"><span class="toc-number">1.</span> <span class="toc-text">引子</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#native方法"><span class="toc-number">2.</span> <span class="toc-text">native方法</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#Critical-Native方法"><span class="toc-number">3.</span> <span class="toc-text">Critical Native方法</span></a></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

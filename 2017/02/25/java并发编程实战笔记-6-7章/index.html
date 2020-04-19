@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>java并发编程实战笔记-6-7章 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="6.1节 背景(为了引出Executor框架)任务执行方式:  串行; 单线程,太慢; 完全并行; 每个任务一个线程,开销太大. 使用Executor框架. OK   6.2 Executor框架java.util.concurrent提供的线程池.可以通过实现Executor接口,自定义执行策略:  谁来执行; 执行顺序;(FIFO,LIFO,优先级) 并发度; 线程池容量(包括等待的); 什么">
+<meta property="og:type" content="article">
+<meta property="og:title" content="java并发编程实战笔记-6-7章">
+<meta property="og:url" content="http://xiaoyue26.github.io/2017/02/25/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-6-7%E7%AB%A0/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="6.1节 背景(为了引出Executor框架)任务执行方式:  串行; 单线程,太慢; 完全并行; 每个任务一个线程,开销太大. 使用Executor框架. OK   6.2 Executor框架java.util.concurrent提供的线程池.可以通过实现Executor接口,自定义执行策略:  谁来执行; 执行顺序;(FIFO,LIFO,优先级) 并发度; 线程池容量(包括等待的); 什么">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2017-02-25T11:45:43.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.294Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="java">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-java并发编程实战笔记-6-7章" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2017/02/25/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-6-7%E7%AB%A0/" class="article-date">
+  <time datetime="2017-02-25T11:45:43.000Z" itemprop="datePublished">2017-02-25</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      java并发编程实战笔记-6-7章
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="6-1节-背景"><a href="#6-1节-背景" class="headerlink" title="6.1节 背景"></a>6.1节 背景</h1><p>(为了引出Executor框架)<br>任务执行方式:</p>
+<ol>
+<li>串行; 单线程,太慢;</li>
+<li>完全并行; 每个任务一个线程,开销太大.</li>
+<li>使用Executor框架. OK </li>
+</ol>
+<h1 id="6-2-Executor框架"><a href="#6-2-Executor框架" class="headerlink" title="6.2 Executor框架"></a>6.2 Executor框架</h1><p><code>java.util.concurrent</code>提供的线程池.<br>可以通过实现Executor接口,自定义执行策略:</p>
+<ol>
+<li>谁来执行;</li>
+<li>执行顺序;(FIFO,LIFO,优先级)</li>
+<li>并发度;</li>
+<li>线程池容量(包括等待的);</li>
+<li>什么时候拒绝任务,拒绝哪一个;</li>
+<li>执行任务前后的操作.</li>
+</ol>
+<p>或者直接使用<code>Executors</code>中编写好的线程池/执行策略:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">newFixedThreadPool &#x2F;&#x2F; 定长</span><br><span class="line">newCachedThreadPool &#x2F;&#x2F; 无限增长,但会复用原来的</span><br><span class="line">newSingleThreadExecutor &#x2F;&#x2F; 单线程</span><br><span class="line">newScheduledThreadPool &#x2F;&#x2F; 定长,但可以定时\延迟执行.</span><br><span class="line">newWorkStealingPool &#x2F;&#x2F; 用fork-join的,工作觅取的 &#x2F;&#x2F; 1.8新增.</span><br></pre></td></tr></table></figure>
+
+<h2 id="Executor的生命周期"><a href="#Executor的生命周期" class="headerlink" title="Executor的生命周期"></a>Executor的生命周期</h2><p>为了以各种方式关掉<code>Executor</code>,库中写了<code>ExecutorService</code>:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">public interface ExecutorService extends Executor &#123;</span><br><span class="line">        void shutdown();&#x2F;&#x2F;平缓得关闭,不再接收新任务,执行剩余的;</span><br><span class="line">        List&lt;Runnable&gt; shutdownNow();&#x2F;&#x2F;取消运行中的和未执行的;</span><br><span class="line">        boolean isShutdown();&#x2F;&#x2F;是否已经下达shutdown命令</span><br><span class="line">        boolean isTerminated();&#x2F;&#x2F;是否完成了shutdown命令</span><br><span class="line">        boolean awaitTermination(long timeout, TimeUnit unit)</span><br><span class="line">                throws InterruptedException;</span><br><span class="line">        &#x2F;&#x2F; ... 还有一些invoke和submit        </span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+<p>ExecutorService生命周期有3种状态:<br>运行,关闭,已终止. </p>
+<p>ExecutorService中的任务的生命周期:<br>创建,提交,开始,完成.</p>
+<p>上述生命周期都是单向不可逆的.</p>
+<h1 id="线程池的局限"><a href="#线程池的局限" class="headerlink" title="线程池的局限"></a>线程池的局限</h1><ol>
+<li>适用于同构任务,异构任务分解粒度不够细,提升不够大;</li>
+</ol>
+<h1 id="第七章-取消与关闭"><a href="#第七章-取消与关闭" class="headerlink" title="第七章 取消与关闭"></a>第七章 取消与关闭</h1><h2 id="背景"><a href="#背景" class="headerlink" title="背景:"></a>背景:</h2><blockquote>
+<p>java中无法简单\安全得停止取消某个线程;<br>需要使用中断(一种协作机制),从一个线程发出取消请求,中断另一个线程.因此其实需要被中断的线程预先提供安全停止\取消的方法,其中包括清理资源等操作.</p>
+</blockquote>
+<h2 id="取消策略"><a href="#取消策略" class="headerlink" title="取消策略:"></a>取消策略:</h2><ol>
+<li>HOW: 其他线程如何请求取消;</li>
+<li>WHEN: 本线程何时受理取消请求;</li>
+<li>WHAT: 取消时具体要干什么.</li>
+</ol>
+<p>Thread中的中断方法:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">public class Thread&#123;</span><br><span class="line">public void interrupt()&#123;&#125;&#x2F;&#x2F; 中断此线程</span><br><span class="line">public boolean isInterrupted()&#123;&#125;&#x2F;&#x2F;查询中断状态</span><br><span class="line">public static boolean interrupted()&#123;&#125;&#x2F;&#x2F; 查询中断状态,且清除中断.</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="中断策略"><a href="#中断策略" class="headerlink" title="中断策略"></a>中断策略</h2><p>有些线程不支持取消,但可以支持中断. </p>
+<p>中断的方法:</p>
+<ol>
+<li><p>直接中断:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Thread.currentThread().interrupt();</span><br></pre></td></tr></table></figure></li>
+<li><p>限时任务:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Future&lt;?&gt;task&#x3D;exec.submit(r);</span><br><span class="line">task.get(timeout,unit);</span><br><span class="line">task.cancel();</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>处理不可中断的阻塞:</p>
+</li>
+</ol>
+<p>(1)java.io包中的同步Socket I/O:<br><code>InputStream</code>和<code>OutputStream</code>的read,write方法都不会响应中断.<br>中断方法: 关闭底层套接字,让read,write抛出SocketException. </p>
+<p>(2)java.io包中的同步I/O:<br>中断方法:<br>中断<code>InterruptibleChannel</code>.抛出<code>ClosedByInterruptExeception</code>.<br>关闭<code>InterruptibleChannel</code>.抛出<code>AsynchronousCloseException</code>.</p>
+<p>(3)Selector的异步I/O:(java.nio.channels)<br>中断方法:<br>close或wakeup方法. 抛出<code>ClosedSelectorException</code>.</p>
+<p>(4)等待内置锁.<br>使用Lock类中的<code>lockInterruptible</code>方法.</p>
+<h1 id="取消策略的设计"><a href="#取消策略的设计" class="headerlink" title="取消策略的设计"></a>取消策略的设计</h1><p>1.设置取消信号量.</p>
+<blockquote>
+<p>太山寨. 缺陷:<br>(1) while循环中不能有阻塞,否则无法取消.<br>因此需要检查while循环中的每一行代码,确保安全比较麻烦.</p>
+</blockquote>
+<p>2.捕获中断异常.自定义存盘操作.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;&#x2F; 用cancel接口封装后调用.</span><br><span class="line">public void cancel()&#123;this.interrupt();&#125;</span><br></pre></td></tr></table></figure>
+
+<p>3.任务交给ExecutorService托管.// 本质上调了interrupt. </p>
+<p>4.使用毒丸对象.</p>
+<blockquote>
+<p>缺陷: 仅当生产者消费者数量已知情况.无界队列场景下使用.</p>
+</blockquote>
+<h2 id="Executors保存进度"><a href="#Executors保存进度" class="headerlink" title="Executors保存进度"></a>Executors保存进度</h2><p>shutdownNow会返回尚未开始的线程列表. 无法获得中途取消的.<br>可以自己封装一遍ExecutorsService. 重写execute方法,捕获异常判断状态,记录取消的线程.<br>详见代码:<br><a href="https://github.com/xiaoyue26/july/blob/master/src/main/java/practice/chapter7/TrackingExecutor.java" target="_blank" rel="noopener">https://github.com/xiaoyue26/july/blob/master/src/main/java/practice/chapter7/TrackingExecutor.java</a></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2017/02/25/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-6-7%E7%AB%A0/" data-id="ck96ccgzh002hbham8la743lf" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2017/03/01/kafka%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          kafka学习笔记
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2017/02/25/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-4-5%E7%AB%A0/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">java并发编程实战笔记-4-5章</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#6-1节-背景"><span class="toc-number">1.</span> <span class="toc-text">6.1节 背景</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#6-2-Executor框架"><span class="toc-number">2.</span> <span class="toc-text">6.2 Executor框架</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#Executor的生命周期"><span class="toc-number">2.1.</span> <span class="toc-text">Executor的生命周期</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#线程池的局限"><span class="toc-number">3.</span> <span class="toc-text">线程池的局限</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#第七章-取消与关闭"><span class="toc-number">4.</span> <span class="toc-text">第七章 取消与关闭</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#背景"><span class="toc-number">4.1.</span> <span class="toc-text">背景:</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#取消策略"><span class="toc-number">4.2.</span> <span class="toc-text">取消策略:</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#中断策略"><span class="toc-number">4.3.</span> <span class="toc-text">中断策略</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#取消策略的设计"><span class="toc-number">5.</span> <span class="toc-text">取消策略的设计</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#Executors保存进度"><span class="toc-number">5.1.</span> <span class="toc-text">Executors保存进度</span></a></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

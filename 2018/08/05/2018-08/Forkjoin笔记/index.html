@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>Forkjoin笔记 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="ForkJoin框架forkjoin类似于一个单机版的mapreduce，只是把多节点多进程换成了多线程。  分治法(dfs): 把大任务划分成多个子任务,然后单线程执行、合并结果；mapreduce: 把大任务划分成多个子任务,然后多节点多进程执行、合并结果；forkjoin:  把大任务划分成多个子任务,然后多线程执行、合并结果。  优化：mapreduce: 可以通过配置开启预测执行，如果有">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Forkjoin笔记">
+<meta property="og:url" content="http://xiaoyue26.github.io/2018/08/05/2018-08/Forkjoin%E7%AC%94%E8%AE%B0/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="ForkJoin框架forkjoin类似于一个单机版的mapreduce，只是把多节点多进程换成了多线程。  分治法(dfs): 把大任务划分成多个子任务,然后单线程执行、合并结果；mapreduce: 把大任务划分成多个子任务,然后多节点多进程执行、合并结果；forkjoin:  把大任务划分成多个子任务,然后多线程执行、合并结果。  优化：mapreduce: 可以通过配置开启预测执行，如果有">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2018-08-05T09:34:38.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.274Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="java">
+<meta property="article:tag" content="并发">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2018-08/Forkjoin笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/08/05/2018-08/Forkjoin%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2018-08-05T09:34:38.000Z" itemprop="datePublished">2018-08-05</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      Forkjoin笔记
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="ForkJoin框架"><a href="#ForkJoin框架" class="headerlink" title="ForkJoin框架"></a>ForkJoin框架</h1><p>forkjoin类似于一个单机版的mapreduce，只是把多节点多进程换成了多线程。</p>
+<blockquote>
+<p>分治法(dfs): 把大任务划分成多个子任务,然后单线程执行、合并结果；<br>mapreduce: 把大任务划分成多个子任务,然后多节点多进程执行、合并结果；<br>forkjoin:  把大任务划分成多个子任务,然后多线程执行、合并结果。</p>
+</blockquote>
+<p>优化：<br><code>mapreduce</code>: 可以通过配置开启预测执行，如果有任务算得慢，会启动新的attempt，取算的快的结果，kill跑得慢的attempt；<br><code>forjoin</code>: 通过双端队列存储每个线程的任务，如果有线程结束得慢，空闲的线程会进行<code>工作窃取</code>,从双端队列的尾部拿任务执行（但是不会重复计算同一个任务，这一点与MR不同）。</p>
+<h2 id="示例使用代码"><a href="#示例使用代码" class="headerlink" title="示例使用代码"></a>示例使用代码</h2><p>范围求和：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">CountTask</span> <span class="keyword">extends</span> <span class="title">RecursiveTask</span>&lt;<span class="title">Integer</span>&gt; </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">static</span> <span class="keyword">int</span> THREDSHOLD = <span class="number">2</span>;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> start;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> end;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">CountTask</span><span class="params">(<span class="keyword">int</span> start, <span class="keyword">int</span> end)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.start = start;</span><br><span class="line">        <span class="keyword">this</span>.end = end;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">protected</span> Integer <span class="title">compute</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">int</span> sum = <span class="number">0</span>;</span><br><span class="line">        <span class="keyword">boolean</span> canCompute = (end - start) &lt;= THREDSHOLD;</span><br><span class="line">        <span class="keyword">if</span> (canCompute) &#123;</span><br><span class="line">            <span class="keyword">for</span> (<span class="keyword">int</span> i = start; i &lt;= end; i++) &#123;</span><br><span class="line">                sum += i;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="comment">// 任务太大, 分治</span></span><br><span class="line">            <span class="keyword">int</span> mid = start + (end - start) / <span class="number">2</span>;</span><br><span class="line">            CountTask left = <span class="keyword">new</span> CountTask(start, mid);</span><br><span class="line">            CountTask right = <span class="keyword">new</span> CountTask(mid + <span class="number">1</span>, end);</span><br><span class="line">            left.fork();</span><br><span class="line">            right.fork();</span><br><span class="line">            <span class="keyword">int</span> leftRes = left.join();</span><br><span class="line">            <span class="keyword">int</span> rightRes = right.join();</span><br><span class="line">            sum = leftRes + rightRes;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> sum;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> <span class="keyword">throws</span> ExecutionException, InterruptedException </span>&#123;</span><br><span class="line">        ForkJoinPool forkJoinPool = <span class="keyword">new</span> ForkJoinPool();<span class="comment">// 可以传入并行度参数, 不传则默认从RunningTime取核数作为并行度</span></span><br><span class="line">        CountTask task = <span class="keyword">new</span> CountTask(<span class="number">1</span>, <span class="number">10</span>);<span class="comment">// RecursiveTask=&gt; ForkJoinTask</span></span><br><span class="line">        Future&lt;Integer&gt; res = forkJoinPool.submit(task);<span class="comment">// ForkJoinTask</span></span><br><span class="line">        System.out.print(res.get());</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="相关类"><a href="#相关类" class="headerlink" title="相关类"></a>相关类</h2><p>可以看到代码里主要是继承<code>RecursiveTask</code>定义一个计算任务类，定义分治和合并计算结果的操作，然后交给<code>ForkJoinPool</code>进行计算即可。（类似于归并排序）</p>
+<p>实际上<code>forkjoin</code>框架中涉及到的类大致如下：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 外部接口：</span></span><br><span class="line"><span class="comment">// 1. 需要返回值：</span></span><br><span class="line">RecursiveTask =&gt; ForkJoinTask implements Future&lt;V&gt;, Serializable</span><br><span class="line"></span><br><span class="line"><span class="comment">// 2. 不需要返回值：</span></span><br><span class="line">RecursiveAction =&gt; ForkJoinTask implements Future&lt;V&gt;, Serializable</span><br><span class="line"></span><br><span class="line"><span class="comment">// 3. 管理线程池和工作任务：</span></span><br><span class="line">ForkJoinPool =&gt; extends AbstractExecutorService =&gt; implements ExecutorService</span><br></pre></td></tr></table></figure>
+
+<p><code>ForkJoinPool</code>中使用的双端队列：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 内部组件 </span></span><br><span class="line"><span class="meta">@sun</span>.misc.Contended</span><br><span class="line">    <span class="keyword">static</span> <span class="keyword">final</span> <span class="class"><span class="keyword">class</span> <span class="title">WorkQueue</span> </span>&#123;</span><br><span class="line">        <span class="comment">// 核心部分: </span></span><br><span class="line">        <span class="keyword">volatile</span> <span class="keyword">int</span> scanState;    <span class="comment">// versioned, &lt;0: inactive; odd:scanning</span></span><br><span class="line">        <span class="keyword">int</span> stackPred;             <span class="comment">// pool stack (ctl) predecessor</span></span><br><span class="line">        <span class="keyword">volatile</span> <span class="keyword">int</span> qlock;        <span class="comment">// 1: locked, &lt; 0: terminate; else 0</span></span><br><span class="line">        <span class="keyword">volatile</span> <span class="keyword">int</span> base;         <span class="comment">// 队尾,poll用,会被窃取线程更改。</span></span><br><span class="line">        <span class="keyword">int</span> top;                   <span class="comment">// 队首,push用,只会被当前线程更改,</span></span><br><span class="line">                                   <span class="comment">// 因此没有volatile</span></span><br><span class="line">        ForkJoinTask&lt;?&gt;[] array;   <span class="comment">// 双端队列</span></span><br><span class="line">        <span class="keyword">volatile</span> Thread parker;    <span class="comment">// == owner during call to park; else null</span></span><br><span class="line">        <span class="keyword">volatile</span> ForkJoinTask&lt;?&gt; currentJoin;  <span class="comment">// task being joined in awaitJoin</span></span><br><span class="line">        <span class="keyword">volatile</span> ForkJoinTask&lt;?&gt; currentSteal; <span class="comment">// mainly used by helpStealer</span></span><br><span class="line">        <span class="comment">// 其他成员省略:</span></span><br><span class="line">        ... </span><br><span class="line">    ... </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/08/05/2018-08/Forkjoin%E7%AC%94%E8%AE%B0/" data-id="ck96cch2k00cnbham022cckgh" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%B9%B6%E5%8F%91/" rel="tag">并发</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2018/08/18/2018-08/%E5%A0%86%E5%A4%96%E5%86%85%E5%AD%98DirectByteBuffer/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          堆外内存DirectByteBuffer
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2018/08/05/2018-08/Future-FutureTask%E7%AC%94%E8%AE%B0/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">Future/FutureTask笔记</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#ForkJoin框架"><span class="toc-number">1.</span> <span class="toc-text">ForkJoin框架</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#示例使用代码"><span class="toc-number">1.1.</span> <span class="toc-text">示例使用代码</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#相关类"><span class="toc-number">1.2.</span> <span class="toc-text">相关类</span></a></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

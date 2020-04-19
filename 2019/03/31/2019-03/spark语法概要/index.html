@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>spark笔记 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="job: action分割task: shuffle分割application: 多个job join\cogroup: 确保Rdd1.partitioner &#x3D; Rdd2.partitioner &#x3D; join.partitioner换句话就是 rdd1的key和rdd2的key，还有join时用的key,三者是相等的。 语法概要官方示例代码库:http:&#x2F;&#x2F;spark.apache.org&#x2F;ex">
+<meta property="og:type" content="article">
+<meta property="og:title" content="spark笔记">
+<meta property="og:url" content="http://xiaoyue26.github.io/2019/03/31/2019-03/spark%E8%AF%AD%E6%B3%95%E6%A6%82%E8%A6%81/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="job: action分割task: shuffle分割application: 多个job join\cogroup: 确保Rdd1.partitioner &#x3D; Rdd2.partitioner &#x3D; join.partitioner换句话就是 rdd1的key和rdd2的key，还有join时用的key,三者是相等的。 语法概要官方示例代码库:http:&#x2F;&#x2F;spark.apache.org&#x2F;ex">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-03/acc.jpg">
+<meta property="article:published_time" content="2019-03-31T11:36:22.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.284Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="spark">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://xiaoyue26.github.io/images/2019-03/acc.jpg">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2019-03/spark语法概要" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/03/31/2019-03/spark%E8%AF%AD%E6%B3%95%E6%A6%82%E8%A6%81/" class="article-date">
+  <time datetime="2019-03-31T11:36:22.000Z" itemprop="datePublished">2019-03-31</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/spark/">spark</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      spark笔记
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>job: action分割<br>task: shuffle分割<br>application: 多个job</p>
+<p>join\cogroup: 确保Rdd1.partitioner = Rdd2.partitioner = join.partitioner<br>换句话就是 rdd1的key和rdd2的key，还有join时用的key,三者是相等的。</p>
+<h1 id="语法概要"><a href="#语法概要" class="headerlink" title="语法概要"></a>语法概要</h1><p>官方示例代码库:<br><a href="http://spark.apache.org/examples.html" target="_blank" rel="noopener">http://spark.apache.org/examples.html</a><br>此外还有安装目录的<code>examples</code>目录。</p>
+<h2 id="生成rdd"><a href="#生成rdd" class="headerlink" title="生成rdd"></a>生成rdd</h2><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// (1) 从数组:</span></span><br><span class="line">data = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>]</span><br><span class="line">distData = sc.parallelize(data)</span><br><span class="line"><span class="comment">// (1)从文件:</span></span><br><span class="line">scala&gt; <span class="keyword">val</span> distFile = sc.textFile(<span class="string">"data.txt"</span>)</span><br><span class="line">distFile: org.apache.spark.rdd.<span class="type">RDD</span>[<span class="type">String</span>]</span><br></pre></td></tr></table></figure>
+
+<h2 id="RDD操作"><a href="#RDD操作" class="headerlink" title="RDD操作"></a>RDD操作</h2><p>RDD分为：</p>
+<ol>
+<li>普通RDD；</li>
+<li>PairRDD。<br>两者能用的函数大不相同，每次操作RDD前需要复核一下到底是普通RDD还是Pair RDD。</li>
+</ol>
+<p>方法分为:</p>
+<ol>
+<li>transform: 变换结构;</li>
+<li>action: 真正有输出，有动作（特例是forEachPartition这种类似遍历，反函数式编程的）。</li>
+</ol>
+<h2 id="普通RDD-transform"><a href="#普通RDD-transform" class="headerlink" title="普通RDD-transform"></a>普通RDD-transform</h2><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// scala用箭头=&gt;:</span></span><br><span class="line"><span class="keyword">val</span> lineLengths = lines.map(s =&gt; s.length)</span><br><span class="line"><span class="keyword">val</span> totalLength = lineLengths.reduce((a, b) =&gt; a + b)</span><br><span class="line"><span class="comment">// python用lambda:</span></span><br><span class="line">lineLengths = lines.map(lambda s: len(s))</span><br><span class="line">totalLength = lineLengths.reduce(lambda a, b: a + b)</span><br></pre></td></tr></table></figure>
+<p>也可以传递函数:</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// scala借用object单例:</span></span><br><span class="line"><span class="class"><span class="keyword">object</span> <span class="title">MyFunctions</span> </span>&#123;</span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">func1</span></span>(s: <span class="type">String</span>): <span class="type">String</span> = &#123; ... &#125;</span><br><span class="line">&#125;</span><br><span class="line">myRdd.map(<span class="type">MyFunctions</span>.func1)</span><br></pre></td></tr></table></figure>
+<p>其他函数汇总:(因为不是pair rdd，因此基本都无shuffle)</p>
+<h3 id="无shuffle-1对1"><a href="#无shuffle-1对1" class="headerlink" title="无shuffle,1对1"></a>无shuffle,1对1</h3><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">map(func)： </span><br><span class="line">filter(func)：无shuffle</span><br></pre></td></tr></table></figure>
+<h3 id="无shuffle-1对多、多对多"><a href="#无shuffle-1对多、多对多" class="headerlink" title="无shuffle,1对多、多对多"></a>无shuffle,1对多、多对多</h3><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">flatMap(func)	:  每个item可以返回一个seq;</span><br><span class="line">mapPartitions(func)	:  输入迭代器，返回迭代器 </span><br><span class="line">mapPartitionsWithIndex(func):  输入迭代器，返回迭代器</span><br></pre></td></tr></table></figure>
+<h3 id="集合运算"><a href="#集合运算" class="headerlink" title="集合运算"></a>集合运算</h3><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">sample(withReplacement, fraction, seed)	</span><br><span class="line">union(otherDataset)	</span><br><span class="line">intersection(otherDataset)	</span><br><span class="line">distinct([numTasks])): 如果是pairRDD，有shuffle，可以定义并行度。</span><br><span class="line">coalesce(numPartitions)	</span><br><span class="line">repartition(numPartitions)	</span><br><span class="line">repartitionAndSortWithinPartitions(partitioner)</span><br></pre></td></tr></table></figure>
+<p>此外还有一个<code>forEachPartition</code>，返回值为空，是个遍历的action。<br>有shuffle的变换一般都可以定义<code>[numTasks]</code>，也就是可以定义并行度。</p>
+<h3 id="闭包"><a href="#闭包" class="headerlink" title="闭包"></a>闭包</h3><p>闭包是指 <code>executor</code> 要在<code>RDD</code>上进行计算时必须对执行节点可见的那些变量和方法。闭包被序列化并被发送到每个 <code>executor</code>。</p>
+<p>闭包的变量副本(序列化后)发给每个 <code>executor</code>.</p>
+<h2 id="Pair-RDD-transform"><a href="#Pair-RDD-transform" class="headerlink" title="Pair RDD-transform"></a>Pair RDD-transform</h2><p>加上了很多shuffle操作的函数(算子)</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> pairs = lines.map(s =&gt; (s, <span class="number">1</span>))</span><br><span class="line"><span class="keyword">val</span> counts = pairs.reduceByKey((a, b) =&gt; a + b)</span><br></pre></td></tr></table></figure>
+<p>其他函数汇总:</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">groupByKey([numTasks])： 返回(<span class="type">K</span>, <span class="type">Iterable</span>&lt;<span class="type">V</span>&gt;)，一般用reduceByKey代替这个算子</span><br><span class="line">reduceByKey(func, [numTasks])	</span><br><span class="line">aggregateByKey(zeroValue)(seqOp, combOp, [numTasks])	</span><br><span class="line">sortByKey([ascending], [numTasks])	</span><br><span class="line">join(otherDataset, [numTasks]): (<span class="type">K</span>, <span class="type">V</span>) 和 (<span class="type">K</span>, <span class="type">W</span>)  =&gt;  (<span class="type">K</span>, (<span class="type">V</span>, <span class="type">W</span>))</span><br><span class="line">cogroup(otherDataset, [numTasks])	</span><br><span class="line">cartesian(otherDataset)	</span><br><span class="line">partitionBy(partitioner): 一般比repartition靠谱，因为下一步能用到key，而不是随机划分</span><br></pre></td></tr></table></figure>
+
+
+<p>Action汇总:<br>可以注意到凡是最终需要输出、反函数式编程的（遍历）就是action，最后汇聚到driver单点处理。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">reduce(func): 注意和map相反,reduce是action。数据最后聚合成单点。</span><br><span class="line">collect()	</span><br><span class="line">count()	</span><br><span class="line">first()	</span><br><span class="line">take(n)</span><br><span class="line">takeSample(withReplacement, num, [seed])	</span><br><span class="line">takeOrdered(n, [ordering])	</span><br><span class="line">saveAsTextFile(path)	</span><br><span class="line">saveAsSequenceFile(path)	</span><br><span class="line">countByKey()	: 因为整合了reduce的功能</span><br><span class="line">foreach(func) 以及foreachPartition等。</span><br></pre></td></tr></table></figure>
+
+<h3 id="自定义UDAF的核心-combineByKey"><a href="#自定义UDAF的核心-combineByKey" class="headerlink" title="自定义UDAF的核心: combineByKey"></a>自定义UDAF的核心: combineByKey</h3><p>大部分shuffle算子都是调用<code>combineByKey</code>实现的，可以说<code>combineByKey</code>就是shuffle的核心。<br>combineByKey定义:</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">combineByKey</span></span>[<span class="type">C</span>](</span><br><span class="line">  createCombiner: <span class="type">V</span> =&gt; <span class="type">C</span>,</span><br><span class="line">  mergeValue: (<span class="type">C</span>, <span class="type">V</span>) =&gt; <span class="type">C</span>,</span><br><span class="line">  mergeCombiners: (<span class="type">C</span>, <span class="type">C</span>) =&gt; <span class="type">C</span>): <span class="type">RDD</span>[(<span class="type">K</span>, <span class="type">C</span>)] = self.withScope &#123;</span><br><span class="line">combineByKeyWithClassTag(createCombiner, mergeValue, mergeCombiners)(<span class="literal">null</span>)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="示例"><a href="#示例" class="headerlink" title="示例"></a>示例</h4><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> pairs = sc.parallelize(<span class="type">List</span>((<span class="string">"prova"</span>, <span class="number">1</span>), (<span class="string">"ciao"</span>, <span class="number">2</span>),</span><br><span class="line">                                (<span class="string">"prova"</span>, <span class="number">2</span>), (<span class="string">"ciao"</span>, <span class="number">4</span>),</span><br><span class="line">                                (<span class="string">"prova"</span>, <span class="number">3</span>), (<span class="string">"ciao"</span>, <span class="number">6</span>)))</span><br><span class="line"><span class="comment">// aggregateByKey:</span></span><br><span class="line">pairs.aggregateByKey(<span class="type">List</span>[<span class="type">Any</span>]())(</span><br><span class="line">  (aggr, value) =&gt; aggr ::: (value :: <span class="type">Nil</span>),</span><br><span class="line">  (aggr1, aggr2) =&gt; aggr1 ::: aggr2</span><br><span class="line">).collect().toMap</span><br><span class="line"><span class="comment">// combineByKey:</span></span><br><span class="line">pairs.combineByKey(</span><br><span class="line">  (value) =&gt; <span class="type">List</span>(value),</span><br><span class="line">  (aggr: <span class="type">List</span>[<span class="type">Any</span>], value) =&gt; aggr ::: (value :: <span class="type">Nil</span>),</span><br><span class="line">  (aggr1: <span class="type">List</span>[<span class="type">Any</span>], aggr2: <span class="type">List</span>[<span class="type">Any</span>]) =&gt; aggr1 ::: aggr2</span><br><span class="line">).collect().toMap</span><br></pre></td></tr></table></figure>
+<p>combineByKey比aggregateByKey更加通用，区别是它的第一个参数创建初始聚合器都是函数，而aggregateByKey第一个参数是一个初始值。</p>
+<h2 id="缓存"><a href="#缓存" class="headerlink" title="缓存"></a>缓存</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">cache()</span><br><span class="line">persist([LEVEL])</span><br></pre></td></tr></table></figure>
+<p>在 shuffle 操作中（例如 reduceByKey），即便是用户没有调用 persist 方法，Spark 也会自动缓存部分中间数据.</p>
+<h2 id="广播变量"><a href="#广播变量" class="headerlink" title="广播变量"></a>广播变量</h2><p><code>immutable</code><br>先用action从sc(driver)上广播出去，然后用<code>.value</code>访问。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">scala&gt; <span class="keyword">val</span> broadcastVar = sc.broadcast(<span class="type">Array</span>(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>))</span><br><span class="line">broadcastVar: org.apache.spark.broadcast.<span class="type">Broadcast</span>[<span class="type">Array</span>[<span class="type">Int</span>]] = <span class="type">Broadcast</span>(<span class="number">0</span>)</span><br><span class="line"></span><br><span class="line">scala&gt; broadcastVar.value</span><br><span class="line">res0: <span class="type">Array</span>[<span class="type">Int</span>] = <span class="type">Array</span>(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>)</span><br></pre></td></tr></table></figure>
+
+
+<h2 id="累加器"><a href="#累加器" class="headerlink" title="累加器"></a>累加器</h2><p>数值型。<br>可变。</p>
+<img src="/images/2019-03/acc.jpg" class="" width="800" height="1200" title="acc">
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">scala&gt; <span class="keyword">val</span> accum = sc.longAccumulator(<span class="string">"My Accumulator"</span>)</span><br><span class="line">accum: org.apache.spark.util.<span class="type">LongAccumulator</span> = <span class="type">LongAccumulator</span>(id: <span class="number">0</span>, name: <span class="type">Some</span>(<span class="type">My</span> <span class="type">Accumulator</span>), value: <span class="number">0</span>)</span><br><span class="line"></span><br><span class="line">scala&gt; sc.parallelize(<span class="type">Array</span>(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>)).foreach(x =&gt; accum.add(x))</span><br><span class="line">...</span><br><span class="line"><span class="number">10</span>/<span class="number">09</span>/<span class="number">29</span> <span class="number">18</span>:<span class="number">41</span>:<span class="number">08</span> <span class="type">INFO</span> <span class="type">SparkContext</span>: <span class="type">Tasks</span> finished in <span class="number">0.317106</span> s</span><br><span class="line"></span><br><span class="line">scala&gt; accum.value</span><br><span class="line">res2: <span class="type">Long</span> = <span class="number">10</span></span><br></pre></td></tr></table></figure>
+<p>自定义累加器需要实现的3个方法:（类似于<code>combineByKey</code>）</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">reset : 清零。防止重算。</span><br><span class="line">add: 累加</span><br><span class="line">merge: 合并累加器。</span><br></pre></td></tr></table></figure>
+<p>示例:</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">VectorAccumulatorV2</span> <span class="keyword">extends</span> <span class="title">AccumulatorV2</span>[<span class="type">MyVector</span>, <span class="type">MyVector</span>] </span>&#123;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">private</span> <span class="keyword">val</span> myVector: <span class="type">MyVector</span> = <span class="type">MyVector</span>.createZeroVector</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">reset</span></span>(): <span class="type">Unit</span> = &#123;</span><br><span class="line">    myVector.reset()</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">add</span></span>(v: <span class="type">MyVector</span>): <span class="type">Unit</span> = &#123;</span><br><span class="line">    myVector.add(v)</span><br><span class="line">  &#125;</span><br><span class="line">  ...</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// Then, create an Accumulator of this type:</span></span><br><span class="line"><span class="keyword">val</span> myVectorAcc = <span class="keyword">new</span> <span class="type">VectorAccumulatorV2</span></span><br><span class="line"><span class="comment">// Then, register it into spark context:</span></span><br><span class="line">sc.register(myVectorAcc, <span class="string">"MyVectorAcc1"</span>) <span class="comment">// 注册一下</span></span><br></pre></td></tr></table></figure>
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/03/31/2019-03/spark%E8%AF%AD%E6%B3%95%E6%A6%82%E8%A6%81/" data-id="ck96cch3w00i5bhamg1kyhw0w" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spark/" rel="tag">spark</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2019/03/31/2019-03/mysql%E7%BB%9F%E8%AE%A1%E4%BF%A1%E6%81%AF%E6%9B%B4%E6%96%B0/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          mysql统计信息更新
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2019/03/18/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B012-%E6%85%A2%E6%9F%A5%E8%AF%A2%E6%97%A5%E5%BF%97/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">redis设计与实现笔记12-慢查询日志与监视器</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#语法概要"><span class="toc-number">1.</span> <span class="toc-text">语法概要</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#生成rdd"><span class="toc-number">1.1.</span> <span class="toc-text">生成rdd</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#RDD操作"><span class="toc-number">1.2.</span> <span class="toc-text">RDD操作</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#普通RDD-transform"><span class="toc-number">1.3.</span> <span class="toc-text">普通RDD-transform</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#无shuffle-1对1"><span class="toc-number">1.3.1.</span> <span class="toc-text">无shuffle,1对1</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#无shuffle-1对多、多对多"><span class="toc-number">1.3.2.</span> <span class="toc-text">无shuffle,1对多、多对多</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#集合运算"><span class="toc-number">1.3.3.</span> <span class="toc-text">集合运算</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#闭包"><span class="toc-number">1.3.4.</span> <span class="toc-text">闭包</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Pair-RDD-transform"><span class="toc-number">1.4.</span> <span class="toc-text">Pair RDD-transform</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#自定义UDAF的核心-combineByKey"><span class="toc-number">1.4.1.</span> <span class="toc-text">自定义UDAF的核心: combineByKey</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#示例"><span class="toc-number">1.4.1.1.</span> <span class="toc-text">示例</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#缓存"><span class="toc-number">1.5.</span> <span class="toc-text">缓存</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#广播变量"><span class="toc-number">1.6.</span> <span class="toc-text">广播变量</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#累加器"><span class="toc-number">1.7.</span> <span class="toc-text">累加器</span></a></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

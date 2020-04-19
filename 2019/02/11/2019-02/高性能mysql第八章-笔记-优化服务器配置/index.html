@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>高性能mysql第八章-笔记-优化服务器配置 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="错误配置不如维持默认配置。  优化服务器配置配置文件服务端读取mysqld分段客户端可能会读取客户端分段。 配置级别全局、连接级、会话级sort_buffer_size: 每个线程都可以设置join_buffer_size: 可以为每个关联都设置一个关联缓冲。 tips用git管理配置文件 最优配置书上也不知道怎么配出最优配置。  用benchmark：穷举配置成本太高； 用比较低的值慢慢试探，">
+<meta property="og:type" content="article">
+<meta property="og:title" content="高性能mysql第八章-笔记-优化服务器配置">
+<meta property="og:url" content="http://xiaoyue26.github.io/2019/02/11/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC%E5%85%AB%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E4%BC%98%E5%8C%96%E6%9C%8D%E5%8A%A1%E5%99%A8%E9%85%8D%E7%BD%AE/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="错误配置不如维持默认配置。  优化服务器配置配置文件服务端读取mysqld分段客户端可能会读取客户端分段。 配置级别全局、连接级、会话级sort_buffer_size: 每个线程都可以设置join_buffer_size: 可以为每个关联都设置一个关联缓冲。 tips用git管理配置文件 最优配置书上也不知道怎么配出最优配置。  用benchmark：穷举配置成本太高； 用比较低的值慢慢试探，">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-02/buffer_pool.png">
+<meta property="article:published_time" content="2019-02-11T14:37:32.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.282Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="mysql">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://xiaoyue26.github.io/images/2019-02/buffer_pool.png">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2019-02/高性能mysql第八章-笔记-优化服务器配置" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/11/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC%E5%85%AB%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E4%BC%98%E5%8C%96%E6%9C%8D%E5%8A%A1%E5%99%A8%E9%85%8D%E7%BD%AE/" class="article-date">
+  <time datetime="2019-02-11T14:37:32.000Z" itemprop="datePublished">2019-02-11</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      高性能mysql第八章-笔记-优化服务器配置
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <blockquote>
+<p>错误配置不如维持默认配置。</p>
+</blockquote>
+<h1 id="优化服务器配置"><a href="#优化服务器配置" class="headerlink" title="优化服务器配置"></a>优化服务器配置</h1><h2 id="配置文件"><a href="#配置文件" class="headerlink" title="配置文件"></a>配置文件</h2><p>服务端读取<code>mysqld</code>分段<br>客户端可能会读取客户端分段。</p>
+<h2 id="配置级别"><a href="#配置级别" class="headerlink" title="配置级别"></a>配置级别</h2><p>全局、连接级、会话级<br><code>sort_buffer_size</code>: 每个线程都可以设置<br><code>join_buffer_size</code>: 可以为每个关联都设置一个关联缓冲。</p>
+<h2 id="tips"><a href="#tips" class="headerlink" title="tips"></a>tips</h2><p>用git管理配置文件</p>
+<h2 id="最优配置"><a href="#最优配置" class="headerlink" title="最优配置"></a>最优配置</h2><p>书上也不知道怎么配出最优配置。</p>
+<ol>
+<li>用benchmark：穷举配置成本太高；</li>
+<li>用比较低的值慢慢试探，较低的内存配置对性能影响不大（百分之几），但较高的内存配置会造成较大的性能抖动，因此尽量以较低的配置。</li>
+</ol>
+<h2 id="Buffer-pool（Innodb）"><a href="#Buffer-pool（Innodb）" class="headerlink" title="Buffer pool（Innodb）"></a>Buffer pool（Innodb）</h2><p>缓存内容:</p>
+<ol>
+<li>缓存索引;</li>
+<li>缓存行数据；</li>
+<li>缓存自适应哈希索引；</li>
+<li>插入缓冲；（延迟合并写入）</li>
+<li>锁。</li>
+</ol>
+<h2 id="Key-caches-MyIsam"><a href="#Key-caches-MyIsam" class="headerlink" title="Key caches(MyIsam)"></a>Key caches(MyIsam)</h2><p>键缓冲(键缓存)。<br>MyIsam只缓存索引，不缓存数据。</p>
+<p>查看MyIsam的索引总大小:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> <span class="keyword">sum</span>(index_length) </span><br><span class="line"><span class="keyword">from</span> information_schema.tables</span><br><span class="line"><span class="keyword">where</span> <span class="keyword">engine</span>=<span class="string">'MYISAM'</span>;</span><br><span class="line"><span class="comment">-- 也可以看看分布:</span></span><br><span class="line"><span class="keyword">select</span> <span class="keyword">engine</span>,<span class="keyword">sum</span>(index_length) </span><br><span class="line"><span class="keyword">from</span> information_schema.tables</span><br><span class="line"><span class="keyword">GROUP</span> <span class="keyword">BY</span> <span class="keyword">engine</span>;</span><br><span class="line"></span><br><span class="line">+<span class="comment">--------------------+-------------------+</span></span><br><span class="line">| engine             | sum(index_length) |</span><br><span class="line">+<span class="comment">--------------------+-------------------+</span></span><br><span class="line">| CSV                |                 0 |</span><br><span class="line">| InnoDB             |       68176035840 |</span><br><span class="line">| MEMORY             |                 0 |</span><br><span class="line">| MyISAM             |            124928 |</span><br><span class="line">| PERFORMANCE_SCHEMA |                 0 |</span><br><span class="line">+<span class="comment">--------------------+-------------------+</span></span><br></pre></td></tr></table></figure>
+<p>key cache的大小不要超过MYISAM索引总大小。</p>
+<h2 id="线程缓存"><a href="#线程缓存" class="headerlink" title="线程缓存"></a>线程缓存</h2><p><code>thread_cache_size</code>:  缓存线程数量。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">variables</span> <span class="keyword">like</span> <span class="string">'%thread_cache_size%'</span>;</span><br><span class="line"><span class="keyword">show</span> <span class="keyword">variables</span> <span class="keyword">like</span> <span class="string">'%thread%'</span>;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">+<span class="comment">-----------------------------------------+---------------------------+</span></span><br><span class="line">| Variable_name                           | Value                     |</span><br><span class="line">+<span class="comment">-----------------------------------------+---------------------------+</span></span><br><span class="line">| innodb_purge_threads                    | 1                         |</span><br><span class="line">| innodb_read_io_threads                  | 12                        |</span><br><span class="line">| innodb_thread_concurrency               | 0                         |</span><br><span class="line">| innodb_thread_sleep_delay               | 10000                     |</span><br><span class="line">| innodb_write_io_threads                 | 12                        |</span><br><span class="line">| max_delayed_threads                     | 20                        |</span><br><span class="line">| max_insert_delayed_threads              | 20                        |</span><br><span class="line">| myisam_repair_threads                   | 1                         |</span><br><span class="line">| performance_schema_max_thread_classes   | 50                        |</span><br><span class="line">| performance_schema_max_thread_instances | -1                        |</span><br><span class="line">| pseudo_thread_id                        | 4804578                   |</span><br><span class="line">| thread_cache_size                       | 512                       |</span><br><span class="line">| thread_concurrency                      | 4                         |</span><br><span class="line">| thread_handling                         | one-thread-per-connection |</span><br><span class="line">| thread_stack                            | 524288                    |</span><br><span class="line">+<span class="comment">-----------------------------------------+---------------------------+</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="表缓存"><a href="#表缓存" class="headerlink" title="表缓存"></a>表缓存</h2><p>对myisam有用，innodb用处不大。<br>算是一个已经过时的配置。</p>
+<h2 id="Buffer-Pool相关架构"><a href="#Buffer-Pool相关架构" class="headerlink" title="Buffer Pool相关架构"></a>Buffer Pool相关架构</h2><img src="/images/2019-02/buffer_pool.png" class="" width="800" height="1200" title="buffer_pool">
+<p>图中的undo日志是方便事务回滚的。<br>(redo日志是类似WAL，防断电的，利用顺序IO优化性能)</p>
+<p>事务日志(redo log)使用类似环形数组的数据结构，可以环形写入到flush过的头部，节省存储空间。</p>
+<h3 id="Log-Buffer（Redo-log-事务日志）"><a href="#Log-Buffer（Redo-log-事务日志）" class="headerlink" title="Log Buffer（Redo log/事务日志）"></a>Log Buffer（Redo log/事务日志）</h3><p>每次变更: 记录到Log Buffer(Buffer Pool =&gt; Log Buffer)</p>
+<p>Log Buffer刷盘到磁盘日志文件的时机(或者说触发事件):</p>
+<ol>
+<li>每一秒钟(定时器tick事件);</li>
+<li>或事务提交事件;</li>
+<li>或缓冲区满。</li>
+</ol>
+<p>以上是默认的三个事件，调节参数为<code>innodb_flush_log_at_trx_commit</code>,3种取值:<br>0: 事务提交:不触发;<br>1: 事务提交:刷盘到磁盘;(默认值，3种事件皆触发刷盘)<br>2: 事务提交:刷新到操作系统缓存。（能扛mysql进程挂掉，不能扛断电，断电的话会丢一秒数据。）</p>
+<p>如果缓冲区满的太频繁(1s满了很多次)，可以考虑增大缓冲区大小来减少IO次数。<br>参数:<br><code>innodb_log_buffer_size</code>: 默认1M，推荐1~8M。</p>
+<p>调节这个参数需要命令:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">engine</span> <span class="keyword">innodb</span> <span class="keyword">status</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="Innodb读写日志、数据文件配置"><a href="#Innodb读写日志、数据文件配置" class="headerlink" title="Innodb读写日志、数据文件配置"></a>Innodb读写日志、数据文件配置</h2><p>这是一个风险很高的选项，认真学习以后有必要再修改。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">global</span> <span class="keyword">variables</span> <span class="keyword">like</span> <span class="string">'%flush_method%'</span>;</span><br><span class="line"></span><br><span class="line">+<span class="comment">---------------------+----------+</span></span><br><span class="line">| Variable_name       | Value    |</span><br><span class="line">+<span class="comment">---------------------+----------+</span></span><br><span class="line">| innodb_flush_method | O_DIRECT |</span><br><span class="line">+<span class="comment">---------------------+----------+</span></span><br></pre></td></tr></table></figure>
+<p>windows用的选项:<br>async_unbuffered,unbuffered,normal.</p>
+<p>linux：</p>
+<ul>
+<li><p><code>fdatasync</code>: 默认值。用<code>fsync()</code>刷新数据和日志文件。<br><code>fdatasync()</code>函数只刷新文件的数据；<br><code>fsync()</code>函数刷新数据和日志文件。<br>配置为<code>fdatasync</code>时其实会调用<code>fsync()</code>函数。默认会合并多个文件的fsync()操作，合并IO操作。可以通过<code>innodb_file_per_table</code>选项为每个文件独立fsync()，但也会增多IO操作。</p>
+</li>
+<li><p><code>O_DIRECT</code>: 数据文件: 用<code>O_DIRECT</code>标记或<code>directio()</code>函数。<br>（不影响日志文件）<br>区别: 使用fsync()函数刷盘，但会通知操作系统不要缓存数据，也不要预读。<br>相当于关闭了操作系统缓存（读写）。<br>特例： 不影响raid卡的预读、写缓存。</p>
+</li>
+<li><p><code>ALL_O_DIRECT</code>: 影响数据和日志文件。</p>
+</li>
+<li><p><code>O_DSYNC</code>: 日志文件: 用<code>O_SYNC</code>标记，写同步（日志写到磁盘才返回）<br>（不影响数据文件）<br>区别：不禁用操作系统的缓存。</p>
+</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th align="center">配置值</th>
+<th align="center">实际调用函数</th>
+<th align="center">概述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">fdatasync</td>
+<td align="center">fsync(含义相反)</td>
+<td align="center">刷新数据和日志，有操作系统缓存</td>
+</tr>
+<tr>
+<td align="center">O_DIRECT</td>
+<td align="center"></td>
+<td align="center">刷新数据，关闭缓存</td>
+</tr>
+<tr>
+<td align="center">ALL_O_DIRECT</td>
+<td align="center"></td>
+<td align="center">刷新数据和日志，关闭缓存</td>
+</tr>
+<tr>
+<td align="center">O_DSYNC</td>
+<td align="center">O_SYNC</td>
+<td align="center">刷新日志，有操作系统缓存</td>
+</tr>
+</tbody></table>
+<p>O_DSYNC和fdatasync的区别:<br>（实际是O_SYNC和fsync的区别）fsync允许写操作累积在缓存，然后一次性刷新。<br>O_SYNC是每次都是同步IO，每次都刷盘。</p>
+<h3 id="tips-1"><a href="#tips-1" class="headerlink" title="tips"></a>tips</h3><p>如果使用raid卡带电: O_DIRECT;<br>否则: O_DIRECT或fdatasync都有可能，看业务需求。</p>
+<h2 id="Innodb表空间"><a href="#Innodb表空间" class="headerlink" title="Innodb表空间"></a>Innodb表空间</h2><p>位于<code>innodb_data_home_dir</code>目录:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">表、索引、回滚日志(undo log)、插入缓冲(Insert Buffer)、双写缓冲(DoubleWrite Buffer)。</span><br></pre></td></tr></table></figure>
+
+<p>目录下可以挂载多个设备，但不会自动做负载均衡，只有写满第一个才会写第二个，因此需要底层用raid自己做负载均衡。<br>挂载多个目录:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">innodb_data_file_path &#x3D; &#x2F;disk1&#x2F;ibdata1:1G;&#x2F;disk2&#x2F;ibdata2:1G;&#x2F;disk3&#x2F;ibdata3:1G:autoextended:max:2G</span><br></pre></td></tr></table></figure>
+
+<p>建议使用<code>innodb_file_per_table</code>选项，每个表的表空间一个文件。<br>缺点：DROP Table慢。<br>原因: </p>
+<ol>
+<li>删除文件慢；</li>
+<li>移除表空间需要Innodb锁定和扫描缓冲区，查找属于这个表空间的页。</li>
+</ol>
+<h4 id="运行时间长的事务"><a href="#运行时间长的事务" class="headerlink" title="运行时间长的事务"></a>运行时间长的事务</h4><p>缺点: undo log增长到打爆表空间、磁盘。</p>
+<h3 id="双写缓冲-Doublewrite-Buffer"><a href="#双写缓冲-Doublewrite-Buffer" class="headerlink" title="双写缓冲(Doublewrite Buffer)"></a>双写缓冲(Doublewrite Buffer)</h3><p>功能: 避免页没写完整导致的数据损坏。<br>buffer pool =&gt; Doublewrite Buffer =&gt; 磁盘</p>
+<p>写两次，但由于有<code>fsync()</code>，而且这个过程时间顺序上比较紧密，可以一次性刷到磁盘，写两次的性能损耗也就多了百分之记。</p>
+<h3 id="binlog-IO配置"><a href="#binlog-IO配置" class="headerlink" title="binlog IO配置"></a>binlog IO配置</h3><p><code>sync_binlog</code>: binlog配置。<br>N=0(默认值): 不干预，让操作系统自己决定。<br>N&gt;0: N次写以后，刷新到磁盘。（一般不会大于1)</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">show global variables like &#39;%log%&#39;;</span><br></pre></td></tr></table></figure>
+
+<p>innodb的6种日志:</p>
+<ol>
+<li>redo log(物理/WAL): 事务开始后写入缓冲区innodb_log_buffer;（存储引擎层）</li>
+<li>undo log(逻辑/版本): 事务开始后为了事务回滚准备的日志，从buffer pool=&gt;表空间;</li>
+<li>bin log(逻辑/SQL): 主从复制。或者基于时间点的还原。(类似于存了sql)。（事务提交前产生，数据库层）</li>
+<li>slow query log: 慢查询;</li>
+<li>general log: 一般日志;</li>
+<li>relay log: 中继日志。</li>
+</ol>
+<p>undo log（在表空间）: 修改前的值/版本号;<br>undo log可以配置从表空间中分离出来。</p>
+<p>redo log（在log buffer）: 类似于WAL，记录buffer pool和disk的不同。</p>
+<h3 id="回滚事务的crash恢复"><a href="#回滚事务的crash恢复" class="headerlink" title="回滚事务的crash恢复"></a>回滚事务的crash恢复</h3><ul>
+<li>redo log: 只追加写，提交到磁盘以后标记为可以被新日志覆盖。</li>
+<li>基于这个特性，即使事务已经回滚了，它的redo log依然是存在的。</li>
+<li>再基于以上这点，db crash以后，可以恢复已经回滚的事务。</li>
+</ul>
+<p>回滚事务的crash恢复,有两种策略:</p>
+<ol>
+<li>读redo log,挑已经提交的事务进行恢复;</li>
+<li>读redo log,恢复所有事务，再用undo log解决回滚的事务。</li>
+</ol>
+<p><code>innodb</code>使用的是策略2，也就是先redo,再undo。</p>
+<p>使用策略2的难点:</p>
+<ul>
+<li><p>需要redo log相应的undo log是健全的，否则就漏回滚了。<br>(1)解决方案1:确保undo log落盘早于redo log；（很麻烦，不用）<br>(2)解决方案2:将undo log也视为数据，记录到redo log中。（innodb采用）</p>
+</li>
+<li><p>总结</p>
+<blockquote>
+<p>crash恢复: 先读取执行redo log，再执行undo log，这样可以恢复未提交事务和回滚事务。<br>undo log和redo log的数据一致性: 把undo log也视为数据，写入redo log。</p>
+</blockquote>
+</li>
+</ul>
+<h3 id="日志与事务提交速度"><a href="#日志与事务提交速度" class="headerlink" title="日志与事务提交速度:"></a>日志与事务提交速度:</h3><p>redo log: 不影响事务提交速度。因为是事务进行中就产生、而且每秒刷盘了；<br>binlog: 影响事务提交速度。因为事务提交前才产生binlog、刷盘，因此如果开启了binlog，长时间的事务提交很慢。</p>
+<p>三种重要日志的写顺序:</p>
+<ol>
+<li>undo log;</li>
+<li>redo log;</li>
+<li>binlog.</li>
+</ol>
+<h2 id="MYISAM的IO配置"><a href="#MYISAM的IO配置" class="headerlink" title="MYISAM的IO配置"></a>MYISAM的IO配置</h2><p><code>delay_key_write</code>:<br>OFF: 不延迟。每次写操作后刷新键缓存;<br>ON: 延迟。对使用该选项创建的表生效;<br>ALL: 延迟。对所有表生效。<br>该选项对性能提升不大,缺点:</p>
+<ol>
+<li>索引可能损坏;</li>
+<li>关闭表时间变长;</li>
+<li>占用空间变大。</li>
+</ol>
+<p><code>myisam_use_mmap</code>: 使用内存映射，减少系统调用开销。</p>
+<h2 id="Innodb并发"><a href="#Innodb并发" class="headerlink" title="Innodb并发"></a>Innodb并发</h2><p><code>innodb_thread_concurrency</code>:<br>N=0: 不限制有多少线程进入内核;<br>N&gt;0: 同时可以有N个线程进入内核。<br>N的推荐值&lt; 2<em>cpu数</em>disk数</p>
+<p><code>innodb_commit_concurrency</code>:<br>同时可以有多少个线程提交。</p>
+<h2 id="Myisam并发"><a href="#Myisam并发" class="headerlink" title="Myisam并发"></a>Myisam并发</h2><p><code>concurrent_insert</code>:<br>0: 不允许并发插入;<br>1: 默认值。只要表中没有空洞，就允许并发插入。<br>2: 强制并发插入到Myisam表末尾，即使有空洞。（碎片会更多）</p>
+<h2 id="基于工作负载的配置"><a href="#基于工作负载的配置" class="headerlink" title="基于工作负载的配置"></a>基于工作负载的配置</h2><ol>
+<li>blob,text的表，临时表都会变成磁盘表。<br>解决方案: 使用substr。</li>
+</ol>
+<p><code>tmp_table_size</code>,<code>max_heap_table_size</code>: 临时表大小上限。<br><code>max_connections</code>: 最大连接数。<br><code>thread_cache_size</code>: 缓存线程数。</p>
+<p> 查看配置和状态:<br> <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">show variables like &#39;%thread%&#39;;</span><br><span class="line">show status like &#39;%thread%&#39;;</span><br></pre></td></tr></table></figure></p>
+<p> <code>innodb_autoinc_lock_mode</code><br> 0: 每次都锁；<br> 1: 确定需要分配多少自增值的话，可以立即释放锁；<br> 2: 每次都不锁，空洞很多。</p>
+<h2 id="两个最重要的配置"><a href="#两个最重要的配置" class="headerlink" title="两个最重要的配置"></a>两个最重要的配置</h2><p> <code>innodb_log_file_size</code>: redo log的缓冲区，如果调大了<code>innodb_buffer_pool_size</code>就要相应调大它。<br>(一种可能的值是512<em>1024</em>1024,512M,搭配2G的<code>innodb_buffer_pool_size</code>)<br>可以通过<code>show engine innodb status\G select sleep(60); show engine innodb status\G</code>,查看<code>Log sequence number</code>差，计算1个小时的redo日志写入量，大致可以设置为这个缓冲区的大小。</p>
+<p><code>innodb_buffer_pool_size</code>的大小设置就比较简单了，按服务器可用内存75%设定即可。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/11/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC%E5%85%AB%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E4%BC%98%E5%8C%96%E6%9C%8D%E5%8A%A1%E5%99%A8%E9%85%8D%E7%BD%AE/" data-id="ck96cch3r00hgbhambu77htdw" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2019/02/11/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC%E4%B9%9D-%E5%8D%81%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E9%80%89%E7%A1%AC%E4%BB%B6-%E4%B8%BB%E5%A4%87%E5%A4%8D%E5%88%B6/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          高性能mysql第九/十章-笔记-选硬件/主备复制
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2019/02/11/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC%E4%B8%83%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E9%AB%98%E7%BA%A7%E7%89%B9%E6%80%A7/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">高性能mysql第七章-笔记-高级特性</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#优化服务器配置"><span class="toc-number">1.</span> <span class="toc-text">优化服务器配置</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#配置文件"><span class="toc-number">1.1.</span> <span class="toc-text">配置文件</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#配置级别"><span class="toc-number">1.2.</span> <span class="toc-text">配置级别</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#tips"><span class="toc-number">1.3.</span> <span class="toc-text">tips</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#最优配置"><span class="toc-number">1.4.</span> <span class="toc-text">最优配置</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Buffer-pool（Innodb）"><span class="toc-number">1.5.</span> <span class="toc-text">Buffer pool（Innodb）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Key-caches-MyIsam"><span class="toc-number">1.6.</span> <span class="toc-text">Key caches(MyIsam)</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#线程缓存"><span class="toc-number">1.7.</span> <span class="toc-text">线程缓存</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#表缓存"><span class="toc-number">1.8.</span> <span class="toc-text">表缓存</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Buffer-Pool相关架构"><span class="toc-number">1.9.</span> <span class="toc-text">Buffer Pool相关架构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Log-Buffer（Redo-log-事务日志）"><span class="toc-number">1.9.1.</span> <span class="toc-text">Log Buffer（Redo log&#x2F;事务日志）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Innodb读写日志、数据文件配置"><span class="toc-number">1.10.</span> <span class="toc-text">Innodb读写日志、数据文件配置</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#tips-1"><span class="toc-number">1.10.1.</span> <span class="toc-text">tips</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Innodb表空间"><span class="toc-number">1.11.</span> <span class="toc-text">Innodb表空间</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#运行时间长的事务"><span class="toc-number">1.11.0.1.</span> <span class="toc-text">运行时间长的事务</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#双写缓冲-Doublewrite-Buffer"><span class="toc-number">1.11.1.</span> <span class="toc-text">双写缓冲(Doublewrite Buffer)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#binlog-IO配置"><span class="toc-number">1.11.2.</span> <span class="toc-text">binlog IO配置</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#回滚事务的crash恢复"><span class="toc-number">1.11.3.</span> <span class="toc-text">回滚事务的crash恢复</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#日志与事务提交速度"><span class="toc-number">1.11.4.</span> <span class="toc-text">日志与事务提交速度:</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#MYISAM的IO配置"><span class="toc-number">1.12.</span> <span class="toc-text">MYISAM的IO配置</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Innodb并发"><span class="toc-number">1.13.</span> <span class="toc-text">Innodb并发</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Myisam并发"><span class="toc-number">1.14.</span> <span class="toc-text">Myisam并发</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#基于工作负载的配置"><span class="toc-number">1.15.</span> <span class="toc-text">基于工作负载的配置</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#两个最重要的配置"><span class="toc-number">1.16.</span> <span class="toc-text">两个最重要的配置</span></a></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

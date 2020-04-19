@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>java并发编程实战笔记-4-5章 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="对象的组合设计线程安全类三个步骤:   找出构成对象状态的所有变量; 找出约束状态变量的不变性条件;&#x2F;&#x2F;收集同步需求,例如哪些操作必须是原子性的. 建立对象状态的并发访问管理策略.   包装类常见容器ArrayList不是线程安全的, 但可以通过Collections.synchronizedList方法转化成一个线程安全的容器.(实现上使用装饰器模式,封装对于底层对象的访问).此时,只要这个包装">
+<meta property="og:type" content="article">
+<meta property="og:title" content="java并发编程实战笔记-4-5章">
+<meta property="og:url" content="http://xiaoyue26.github.io/2017/02/25/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-4-5%E7%AB%A0/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="对象的组合设计线程安全类三个步骤:   找出构成对象状态的所有变量; 找出约束状态变量的不变性条件;&#x2F;&#x2F;收集同步需求,例如哪些操作必须是原子性的. 建立对象状态的并发访问管理策略.   包装类常见容器ArrayList不是线程安全的, 但可以通过Collections.synchronizedList方法转化成一个线程安全的容器.(实现上使用装饰器模式,封装对于底层对象的访问).此时,只要这个包装">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2017-02-25T11:44:30.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.294Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="java">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-java并发编程实战笔记-4-5章" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2017/02/25/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-4-5%E7%AB%A0/" class="article-date">
+  <time datetime="2017-02-25T11:44:30.000Z" itemprop="datePublished">2017-02-25</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      java并发编程实战笔记-4-5章
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="对象的组合"><a href="#对象的组合" class="headerlink" title="对象的组合"></a>对象的组合</h1><h1 id="设计线程安全类"><a href="#设计线程安全类" class="headerlink" title="设计线程安全类"></a>设计线程安全类</h1><p>三个步骤:</p>
+<blockquote>
+<ol>
+<li>找出构成对象状态的所有变量;</li>
+<li>找出约束状态变量的不变性条件;//收集同步需求,例如哪些操作必须是原子性的.</li>
+<li>建立对象状态的并发访问管理策略.</li>
+</ol>
+</blockquote>
+<h1 id="包装类"><a href="#包装类" class="headerlink" title="包装类"></a>包装类</h1><p>常见容器ArrayList不是线程安全的, 但可以通过Collections.synchronizedList方法转化成一个线程安全的容器.(实现上使用装饰器模式,封装对于底层对象的访问).<br>此时,只要这个包装类持有数据对象的唯一引用,则可以保证容器的安全.</p>
+<h1 id="监视器模式"><a href="#监视器模式" class="headerlink" title="监视器模式"></a>监视器模式</h1><p>通过一个私有的锁保护状态:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">PrivateLock</span> </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> Object myLock=<span class="keyword">new</span> Object();</span><br><span class="line">    <span class="meta">@GuardedBy</span>(<span class="string">"myLock"</span>)</span><br><span class="line">    JRSUIConstants.Widget widget;</span><br><span class="line">    <span class="function"><span class="keyword">void</span> <span class="title">someMothode</span><span class="params">()</span></span>&#123;</span><br><span class="line">        <span class="keyword">synchronized</span> (myLock)&#123;</span><br><span class="line">            <span class="comment">// do some thing</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h1 id="对象的组合-1"><a href="#对象的组合-1" class="headerlink" title="对象的组合"></a>对象的组合</h1><ol>
+<li>一个没有成员的对象A,无状态,因此是线程安全的;</li>
+<li>当A中增加一个成员,如:<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">A</span></span>&#123;</span><br><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> AtomicLong aa=<span class="keyword">new</span> AtomicLong(<span class="number">0</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+因为引用不可变,且AtomicLong是线程安全的,因此A依然是安全的.<br>但如果增加多个线程安全成员,当且仅当它们独立的时候是安全的.<br>如果不独立,例如某些aa和bb的取值组合是不合法的,则是不安全的.<br>(例如上界下界都是AtomicLong.但不独立.)</li>
+</ol>
+<h2 id="委托"><a href="#委托" class="headerlink" title="委托:"></a>委托:</h2><blockquote>
+<p>此时A是否线程安全取决于aa,换言之,A的安全性委托aa来保证. </p>
+</blockquote>
+<p>综上可知,尽量委托给一个线程安全的类或容器,避免所托非人.XD</p>
+<h1 id="基础构建模块"><a href="#基础构建模块" class="headerlink" title="基础构建模块"></a>基础构建模块</h1><p>将线程安全委托给一个JDK实现好的同步容器后,如果需要进行复合操作,而且需要这几个操作具有原子性,依然需要自己加锁.这个时候就得知道底层的同步容器原先使用的锁是什么,才好照着写.</p>
+<p>//每当遇到难题,都可以考虑生成一个静态镜像,线程局部变量,避开这个难题.实在不行只好升级手段,增加复杂度.</p>
+<h2 id="迭代器与ConcurrentModificationException"><a href="#迭代器与ConcurrentModificationException" class="headerlink" title="迭代器与ConcurrentModificationException"></a>迭代器与ConcurrentModificationException</h2><blockquote>
+<p>同步容器的迭代器在迭代之前会获取容器的锁,<br>如果迭代过程中,检测到容器有修改,则会抛这个异常.<br>(实现上,是通过计数器实现的,而且没有同步(性能考虑),因此也有可能没有意识到已经修改了,读了失效数据.)</p>
+</blockquote>
+<ul>
+<li>隐藏迭代器<br>容器类的toString方法.直接打印容器的时候,会触发对容器内所有内容的迭代.<br>其他类似的方法有:<br>hashCode,equals,ContainsAll等等.<br>以及容器整体作为一个key,存入另一个容器时.</li>
+</ul>
+<h2 id="同步容器和并发容器"><a href="#同步容器和并发容器" class="headerlink" title="同步容器和并发容器"></a>同步容器和并发容器</h2><h3 id="同步容器"><a href="#同步容器" class="headerlink" title="同步容器:"></a>同步容器:</h3><blockquote>
+<p>HashTable,Vector,Collections.synchronizedXxx包装的.</p>
+</blockquote>
+<ul>
+<li>强一致性.</li>
+<li>迭代时锁容器,不允许修改.</li>
+</ul>
+<h3 id="并发容器"><a href="#并发容器" class="headerlink" title="并发容器:"></a>并发容器:</h3><blockquote>
+<p>ConcurrentMap,CopyOnWriteList,BlockingQueue,ConcurrentLinkedQueue.</p>
+</blockquote>
+<ul>
+<li>弱一致性.(size,isEmpty只返回近似值)</li>
+<li>迭代时一般只锁局部,容忍修改.</li>
+<li>性能高.</li>
+</ul>
+<p>基本上应该使用并发容器代替同步容器. </p>
+<h2 id="两种队列的使用场景"><a href="#两种队列的使用场景" class="headerlink" title="两种队列的使用场景"></a>两种队列的使用场景</h2><ol>
+<li><code>BlockingQueue</code>:<br>生产者消费者,queue.put(xxx),queue.take();</li>
+<li><code>BlockingDeque</code>:(双端队列)<br>工作队列\工作觅取(fork-join);完成了自己的工作队列后,从别人队列的尾巴觅取新的工作,均摊工作量.</li>
+</ol>
+<h2 id="阻塞方法与中断方法"><a href="#阻塞方法与中断方法" class="headerlink" title="阻塞方法与中断方法"></a>阻塞方法与中断方法</h2><p>阻塞状态:</p>
+<blockquote>
+<p>BLOCKED,WAITING,TIMED_WAITING</p>
+</blockquote>
+<p>如果一个方法签名抛出<code>InterruptedException</code>,则说明它是阻塞方法.<br>因为一个阻塞方法一般会被中断打断.</p>
+<p>中断: Interrupt<br>查询线程是否中断: interrupt方法;<br>中断线程:   也是  interrupt方法. </p>
+<p>当你的方法catch到了一个<code>InterruptedException</code>,两种处理方法:</p>
+<ol>
+<li>传递. 接着往外抛;</li>
+<li>恢复中断.<br>当已经是最外层的时候,(在Runnable这一层了)<br>就不能往外抛了,再抛线程就挂了.<br>这个时候保持中断状态就好:(恢复中断)<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">catch</span>(InterruptedException e )&#123;</span><br><span class="line"></span><br><span class="line">Thread.currentThread().interrupt();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+</li>
+</ol>
+<h1 id="同步工具类"><a href="#同步工具类" class="headerlink" title="同步工具类"></a>同步工具类</h1><p>可以用于同步线程的工具类,包括:</p>
+<blockquote>
+<p>BlockingQueue 阻塞队列<br>Semephore 信号量<br>Barrier 栅栏<br>Latch 闭锁</p>
+</blockquote>
+<h2 id="闭锁-Latch"><a href="#闭锁-Latch" class="headerlink" title="闭锁 Latch"></a>闭锁 Latch</h2><p>作用相当于一道门,所有线程得等这扇门打开才能继续运行.<br>Latch是一次性的,打开后就不能再关上. </p>
+<blockquote>
+<ul>
+<li>使用的时候就像主线程设定了好了一扇门挡住起跑线,把所有工作线程挨个释放,一头撞到门上卡住了;等到某个时机放下门,瞬间释放所有线程;</li>
+</ul>
+</blockquote>
+<ul>
+<li>设置一扇门挡住主线程,让主线程等待子线程跑完;</li>
+<li>结束的时候,每一个线程到达终点就把计数器减一,直到大家都结束,再在终点释放主线程.</li>
+</ul>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> CountDownLatch startGate=<span class="keyword">new</span> CountDownLatch(<span class="number">1</span>);</span><br><span class="line"><span class="comment">// 开始的门,只需主线程一人下令countDown,因此计数器为1;</span></span><br><span class="line"><span class="keyword">final</span> CountDownLatch endGate=<span class="keyword">new</span> CountDownLatch(nThreads);</span><br><span class="line"><span class="comment">// 结束的门,需要n个子线程countDown,因此计数器为n.</span></span><br></pre></td></tr></table></figure>
+
+
+<ul>
+<li>完整代码<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">TestLatch</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">long</span> <span class="title">timeTasks</span><span class="params">(<span class="keyword">int</span> nThreads, <span class="keyword">final</span> Runnable task)</span> <span class="keyword">throws</span> InterruptedException </span>&#123;</span><br><span class="line">        <span class="keyword">final</span> CountDownLatch startGate = <span class="keyword">new</span> CountDownLatch(<span class="number">1</span>);<span class="comment">// countDown一次就能打开</span></span><br><span class="line">        <span class="keyword">final</span> CountDownLatch endGate = <span class="keyword">new</span> CountDownLatch(nThreads);<span class="comment">//countDown nThreads次才能打开(所有线程都countDown过)</span></span><br><span class="line"></span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; nThreads; i++) &#123;<span class="comment">// 先全部放出去,然后一头撞在startGate上;</span></span><br><span class="line">            Thread t = <span class="keyword">new</span> Thread(() -&gt; &#123;</span><br><span class="line">                <span class="keyword">try</span> &#123;</span><br><span class="line">                    startGate.await();<span class="comment">// 一头撞在startGate上</span></span><br><span class="line">                    <span class="keyword">try</span> &#123;</span><br><span class="line">                        task.run();</span><br><span class="line">                    &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">                        endGate.countDown();<span class="comment">//每个线程countDown一次</span></span><br><span class="line">                    &#125;</span><br><span class="line">                &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                    e.printStackTrace();<span class="comment">//ignore</span></span><br><span class="line">                &#125;</span><br><span class="line">            &#125;);</span><br><span class="line">            t.start();</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">long</span> start = System.currentTimeMillis();</span><br><span class="line">        System.out.println(<span class="string">"准备开始"</span>);</span><br><span class="line">        startGate.countDown();<span class="comment">// 打开开始的门</span></span><br><span class="line">        endGate.await();<span class="comment">// 主线程等待全部结束. (n次countDown结束)</span></span><br><span class="line">        System.out.println(<span class="string">"结束等待"</span>);</span><br><span class="line">        <span class="keyword">long</span> end = System.currentTimeMillis();</span><br><span class="line">        <span class="keyword">return</span> end - start;</span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> <span class="keyword">throws</span> InterruptedException </span>&#123;</span><br><span class="line">        Runnable task = <span class="keyword">new</span> Runnable() &#123;</span><br><span class="line">            <span class="meta">@Override</span></span><br><span class="line">            <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">                <span class="keyword">try</span> &#123;</span><br><span class="line">                    Thread.sleep(<span class="number">1000</span>);</span><br><span class="line">                &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                    e.printStackTrace();</span><br><span class="line">                &#125;</span><br><span class="line">                System.out.println(<span class="string">"running task"</span>);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;;</span><br><span class="line">        TestLatch testLatch = <span class="keyword">new</span> TestLatch();</span><br><span class="line">        <span class="keyword">long</span> during = testLatch.timeTasks(<span class="number">10</span>, task);</span><br><span class="line">        System.out.println(<span class="string">"Runtime: "</span> + during);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+</li>
+</ul>
+<h1 id="FutureTask-Callable-Runnable"><a href="#FutureTask-Callable-Runnable" class="headerlink" title="FutureTask\Callable\Runnable"></a>FutureTask<V>\Callable<V>\Runnable</h1><blockquote>
+<p>FutureTask三种状态: waiting,running,completed.</p>
+</blockquote>
+<ul>
+<li><p>Runnable</p>
+<blockquote>
+<p>顾名思义,有个run函数,可以run.</p>
+</blockquote>
+</li>
+<li><p>Callable<V></p>
+<blockquote>
+<p>比Run多个返回值V.</p>
+</blockquote>
+</li>
+<li><p>FutureTask<V></p>
+<blockquote>
+<p>声明实现的接口是Runnable和Future<V>.<br>但实际上里头有个适配器,把Runnable转成Callable.<br>而且它可以接收Callable作为构造函数的参数.<br>运行的时候直接ftask.run()即可.<br>取结果则是直接ftask.get()即可.</p>
+</blockquote>
+</li>
+</ul>
+<p>还可以把FutureTask传给Thread的构造函数\加入线程池接受调度.</p>
+<p>感觉<code>FutureTask&lt;V&gt;</code>挺好用的.</p>
+<p>第五章的原则总结:</p>
+<blockquote>
+<ol>
+<li>尽量使用final;</li>
+<li>不可变对象一定线程安全;<br>尽量使用不可变对象(空间换时间);</li>
+<li>尽量封装,把数据封装到对象中,以便以后构造不可变或者同步策略;</li>
+<li>每一个可变对象,都要考虑用锁保护;</li>
+<li>保护同一个不变性条件的所有变量时,使用同一个锁;</li>
+<li>注意在复合操作上加锁;</li>
+<li>不武断得认为不需要同步;</li>
+<li>明确地指出(注解或注释)每个类是否线程安全.</li>
+</ol>
+</blockquote>
+<h1 id="疑问"><a href="#疑问" class="headerlink" title="疑问:"></a>疑问:</h1><ol>
+<li>Collections.unmodifiableMap(xxx)<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> xxx;<span class="comment">//引用是不可变的,如果是基本类型,就是值.</span></span><br><span class="line"><span class="keyword">final</span> xxx = Collections.unmodifiableMap(xxx);</span><br><span class="line"><span class="comment">/**不但引用是不可变的,第一级寻址对象也是不可更改的.</span></span><br><span class="line"><span class="comment">调用map.put(xxx,xxx)会抛unSupported异常.</span></span><br><span class="line"><span class="comment">但显然这不是万能的,用户也可以先用get获取到对象,然后再把对象里的数据给改了.(类似于二级寻址)</span></span><br><span class="line"><span class="comment">因此里面如果存的是不可变对象,是可以的,否则还是可以改.</span></span><br><span class="line"><span class="comment">*/</span></span><br></pre></td></tr></table></figure></li>
+<li>ConcurrentMap: 一个线程安全的容器. 保证多线程都能访问一级寻址对象.</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2017/02/25/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-4-5%E7%AB%A0/" data-id="ck96ccgzg002cbham37zia3ml" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2017/02/25/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-6-7%E7%AB%A0/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          java并发编程实战笔记-6-7章
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2017/02/24/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E8%B7%B5%E7%AC%94%E8%AE%B0-1-3%E7%AB%A0/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">java并发编程实践笔记-1-3章</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#对象的组合"><span class="toc-number">1.</span> <span class="toc-text">对象的组合</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#设计线程安全类"><span class="toc-number">2.</span> <span class="toc-text">设计线程安全类</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#包装类"><span class="toc-number">3.</span> <span class="toc-text">包装类</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#监视器模式"><span class="toc-number">4.</span> <span class="toc-text">监视器模式</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#对象的组合-1"><span class="toc-number">5.</span> <span class="toc-text">对象的组合</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#委托"><span class="toc-number">5.1.</span> <span class="toc-text">委托:</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#基础构建模块"><span class="toc-number">6.</span> <span class="toc-text">基础构建模块</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#迭代器与ConcurrentModificationException"><span class="toc-number">6.1.</span> <span class="toc-text">迭代器与ConcurrentModificationException</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#同步容器和并发容器"><span class="toc-number">6.2.</span> <span class="toc-text">同步容器和并发容器</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#同步容器"><span class="toc-number">6.2.1.</span> <span class="toc-text">同步容器:</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#并发容器"><span class="toc-number">6.2.2.</span> <span class="toc-text">并发容器:</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#两种队列的使用场景"><span class="toc-number">6.3.</span> <span class="toc-text">两种队列的使用场景</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#阻塞方法与中断方法"><span class="toc-number">6.4.</span> <span class="toc-text">阻塞方法与中断方法</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#同步工具类"><span class="toc-number">7.</span> <span class="toc-text">同步工具类</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#闭锁-Latch"><span class="toc-number">7.1.</span> <span class="toc-text">闭锁 Latch</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#FutureTask-Callable-Runnable"><span class="toc-number">8.</span> <span class="toc-text">FutureTask\Callable\Runnable</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#疑问"><span class="toc-number">9.</span> <span class="toc-text">疑问:</span></a></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

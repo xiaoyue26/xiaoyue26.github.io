@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>mybatis处理mysql自增主键的三种写法 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="数据库的自增主键id(int(11)),查看auto_increment,记录的是下一次插入时的主键值。(&#x3D;最大的id+1) 123SHOW TABLE STATUS;#或:SELECT AUTO_INCREMENT FROM  information_schema.tables WHERE table_name&#x3D;&#39;t_account_0&#39; 测试select @@identity命令： 12IN">
+<meta property="og:type" content="article">
+<meta property="og:title" content="mybatis处理mysql自增主键的三种写法">
+<meta property="og:url" content="http://xiaoyue26.github.io/2015/10/04/mybatis%E5%A4%84%E7%90%86mysql%E8%87%AA%E5%A2%9E%E4%B8%BB%E9%94%AE%E7%9A%84%E4%B8%89%E7%A7%8D%E5%86%99%E6%B3%95/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="数据库的自增主键id(int(11)),查看auto_increment,记录的是下一次插入时的主键值。(&#x3D;最大的id+1) 123SHOW TABLE STATUS;#或:SELECT AUTO_INCREMENT FROM  information_schema.tables WHERE table_name&#x3D;&#39;t_account_0&#39; 测试select @@identity命令： 12IN">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2015-10-04T00:18:16.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.296Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="mysql">
+<meta property="article:tag" content="mybatis">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-mybatis处理mysql自增主键的三种写法" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2015/10/04/mybatis%E5%A4%84%E7%90%86mysql%E8%87%AA%E5%A2%9E%E4%B8%BB%E9%94%AE%E7%9A%84%E4%B8%89%E7%A7%8D%E5%86%99%E6%B3%95/" class="article-date">
+  <time datetime="2015-10-04T00:18:16.000Z" itemprop="datePublished">2015-10-04</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/orm/">orm</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      mybatis处理mysql自增主键的三种写法
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <ol>
+<li><p>数据库的自增主键id(int(11)),查看<code>auto_increment</code>,记录的是下一次插入时的主键值。(=最大的id+1)</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SHOW</span> <span class="keyword">TABLE</span> <span class="keyword">STATUS</span>;</span><br><span class="line"><span class="comment">#或:</span></span><br><span class="line"><span class="keyword">SELECT</span> AUTO_INCREMENT <span class="keyword">FROM</span>  information_schema.tables <span class="keyword">WHERE</span> table_name=<span class="string">'t_account_0'</span></span><br></pre></td></tr></table></figure></li>
+<li><p>测试<code>select @@identity</code>命令：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">INSERT into user_info  (uname, unumber) VALUES (&#39;test&#39;,&#39;test&#39;);</span><br><span class="line">select @@identity  as &#39;curMaxId&#39;;</span><br></pre></td></tr></table></figure>
+<p>注意到第一条命令并没有插入<code>id</code>值，以便让数据库插入自增<code>id</code>值。<br>两条命令同一线程中顺序执行后，第二条命令获取到第一条命令插入的<code>id</code>值。<br>例如，若<code>select @@identity</code>结果为<code>106</code>，则<code>auto_increment</code>此时为<code>107</code>，而<code>INSERT</code>的记录<code>id</code>值为<code>106</code>.</p>
+</li>
+<li><p>第一种mybatis支持自增主键的写法，使用<code>useGeneratedKeys</code>和<code>keyProperty</code>属性设置：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">&lt;sql id&#x3D;&quot;UserInfoSet&quot;&gt;</span><br><span class="line">		&lt;set&gt;</span><br><span class="line">			&lt;if test&#x3D;&quot;id !&#x3D; null&quot;&gt;id&#x3D;#&#123;id&#125;,&lt;&#x2F;if&gt;</span><br><span class="line">			&lt;if test&#x3D;&quot;uname!&#x3D; null&quot;&gt;uname&#x3D;#&#123;uname&#125;,&lt;&#x2F;if&gt;</span><br><span class="line">			&lt;if test&#x3D;&quot;unumber !&#x3D; null&quot;&gt;unumber&#x3D;#&#123;unumber&#125;,&lt;&#x2F;if&gt;</span><br><span class="line">		&lt;&#x2F;set&gt;</span><br><span class="line">	&lt;&#x2F;sql&gt;</span><br><span class="line">&lt;insert id&#x3D;&quot;insert&quot; parameterType&#x3D;&quot;UserInfo&quot;</span><br><span class="line">		 useGeneratedKeys&#x3D;&quot;true&quot; keyProperty&#x3D;&quot;id&quot;&gt;</span><br><span class="line">		insert user_info</span><br><span class="line">		&lt;include refid&#x3D;&quot;UserInfoSet&quot; &#x2F;&gt;</span><br><span class="line">&lt;&#x2F;insert&gt;</span><br></pre></td></tr></table></figure>
+<p>如果表中主键已经设定为<code>auto_increment</code>，则插入后会自动把生成的<code>id</code>值返回给插入的对象。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">UserInfo userInfo = <span class="keyword">new</span> UserInfo();</span><br><span class="line">userInfo.setUname(<span class="string">"xiaoming"</span>); </span><br><span class="line">userInfo.setUnumber(<span class="string">"x07"</span>);</span><br><span class="line"><span class="comment">//a.插入前userinfo的id为null</span></span><br><span class="line">result = userService.insert(userInfo);		</span><br><span class="line"><span class="comment">//b.插入后userinfo的id为数据库生成的id值(例如123).</span></span><br></pre></td></tr></table></figure>
+</li>
+<li><p>第二种使用<code>selectKey</code>，限定于<code>mysql</code>数据库的写法,其他数据库如<code>oracle</code>为<code>before</code>,各有不同:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">&lt;insert id&#x3D;&quot;insert&quot; parameterType&#x3D;&quot;UserInfo&quot;&gt;</span><br><span class="line">	&lt;selectKey resultType&#x3D;&quot;java.lang.Integer&quot; keyProperty&#x3D;&quot;id&quot; order&#x3D;&quot;AFTER&quot;&gt;</span><br><span class="line">	SELECT @@IDENTITY</span><br><span class="line">    &lt;&#x2F;selectKey&gt;</span><br><span class="line">insert user_info &lt;include refid&#x3D;&quot;UserInfoSet&quot; &#x2F;&gt;</span><br><span class="line">&lt;&#x2F;insert&gt;</span><br></pre></td></tr></table></figure>
+<p>此时表现和上一种一样;<br>若把<code>SELECT @@IDENTITY</code>改为 <code>select 20 from dual</code> , 则数据库中虽依然插入了正常递增的id值(如<code>123</code>),<br>但<code>b</code>处插入后的对象中id值为<code>20</code>. 可见<code>selectKey</code>标签实际执行是在<code>insert</code>执行后，返回<code>obj</code>对象前,将其中的<code>id</code>值改为<code>20</code>.并不影响<code>insert</code>执行过程。<br>综上所示，这两种方法其实都不影响<code>insert</code>,只是执行后获取一次<code>id</code>值。<code>insert</code>过程中生成<code>id</code>值是由数据库支持的。<br>所以如果数据库中没有设定主键的自增属性，这两种都是无能为力的,此时就要更改SelectKey的用法:</p>
+</li>
+<li><p>第三种，使用<code>select max(id)+1</code>：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">&lt;insert id&#x3D;&quot;insert&quot; parameterType&#x3D;&quot;test.model.UserInfo&quot; &gt;</span><br><span class="line">	&lt;selectKey resultType&#x3D;&quot;java.lang.Integer&quot; keyProperty&#x3D;&quot;id&quot; order&#x3D;&quot;BEFORE&quot;&gt;</span><br><span class="line">	select max(id)+1 from user_info</span><br><span class="line">	&lt;&#x2F;selectKey&gt;</span><br><span class="line">	insert user_info &lt;include refid&#x3D;&quot;UserInfoSet&quot; &#x2F;&gt;</span><br><span class="line">&lt;&#x2F;insert&gt;</span><br></pre></td></tr></table></figure>
+<p>其中<code>select max(id)+1 from user_info</code>语句是选出表中最大id值+1,并赋予传入的参数<code>userInfo</code>对象,然后再执行<code>insert</code>.<br>注意到<code>order</code>此时等于<code>before</code>. 应当警惕的是多用户交替插入时,这种方法的安全性,涉及到事务比较麻烦,所以最好还是直接设计数据库时直接设定主键的递增属性。</p>
+</li>
+</ol>
+<p>其他感想:<br>    <code>mybatis</code>的<code>choose when</code>好比<code>switch case</code>;<br><code>otherwise</code>就是<code>default</code>。<code>foreach</code>就是传入一个<code>list</code>或<code>array</code>给<code>mybatis</code>，然后生成很长的<code>sql</code>。<br>    学到这里大概觉得<code>mybatis</code>生成<code>sql</code>，就跟<code>jsp</code>生成<code>html</code>一样，就是输出，就是翻译，编译原理无处不在，重复造轮子无处不在。<br>暂时不适用<code>trim</code>标签了，太geek了，而且居然只有replace功能，可读性差。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2015/10/04/mybatis%E5%A4%84%E7%90%86mysql%E8%87%AA%E5%A2%9E%E4%B8%BB%E9%94%AE%E7%9A%84%E4%B8%89%E7%A7%8D%E5%86%99%E6%B3%95/" data-id="ck96ccgzs003rbhamanbx9o7d" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mybatis/" rel="tag">mybatis</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2015/10/05/GsonNote/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          Gson与FileUtil/IOUtil笔记
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2015/10/03/ubuntu%E6%9D%BE%E8%80%A6%E5%90%88%E9%85%8D%E7%BD%AEjdk%E5%92%8C%E7%BB%88%E7%AB%AF%E5%BF%AB%E6%8D%B7%E9%94%AE/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">ubuntu松耦合配置jdk和终端快捷键</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+  
+    
+
+  
+    
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title recent-posts">最新文章</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2020/04/19/2020-04/spring%E6%8B%BE%E9%81%97/">spring拾遗</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/26/2020-03/%E5%88%A9%E7%94%A8UTF-8%E7%BC%96%E7%A0%81%E7%9A%84%E7%89%B9%E6%80%A7%E8%BF%9B%E8%A1%8C%E4%BC%98%E5%8C%96/">利用UTF-8编码的特性进行优化</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/24/2020-03/linux%E8%87%AA%E8%BF%9E%E6%8E%A5/">linux自连接</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/23/2020-03/redis%E5%A4%A7key%E9%97%AE%E9%A2%98/">redis大key问题</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/23/2020-03/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/">分布式事务</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

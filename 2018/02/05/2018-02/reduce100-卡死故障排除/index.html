@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>reduce100%卡死故障排除 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="摘要 集群所有MR job&#x2F;Spark job奇慢无比,经过排查发现两个DataNode故障.措施:下线故障的DataNode,所有job运行重新变得飞快顺滑.原因:reduce结束后落盘的时候,pipeline中其中一个DN故障,导致返回太迟.如果pipeline中恰好不包括故障DN,就能顺利完成.    详情早上起来发现集群的任务只完成了平时的约1&#x2F;8. STEP1首先怀疑是调度不合理,jo">
+<meta property="og:type" content="article">
+<meta property="og:title" content="reduce100%卡死故障排除">
+<meta property="og:url" content="http://xiaoyue26.github.io/2018/02/05/2018-02/reduce100-%E5%8D%A1%E6%AD%BB%E6%95%85%E9%9A%9C%E6%8E%92%E9%99%A4/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="摘要 集群所有MR job&#x2F;Spark job奇慢无比,经过排查发现两个DataNode故障.措施:下线故障的DataNode,所有job运行重新变得飞快顺滑.原因:reduce结束后落盘的时候,pipeline中其中一个DN故障,导致返回太迟.如果pipeline中恰好不包括故障DN,就能顺利完成.    详情早上起来发现集群的任务只完成了平时的约1&#x2F;8. STEP1首先怀疑是调度不合理,jo">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2018-02-05T02:28:17.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.270Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="hadoop">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2018-02/reduce100-卡死故障排除" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/02/05/2018-02/reduce100-%E5%8D%A1%E6%AD%BB%E6%95%85%E9%9A%9C%E6%8E%92%E9%99%A4/" class="article-date">
+  <time datetime="2018-02-05T02:28:17.000Z" itemprop="datePublished">2018-02-05</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/hadoop/">hadoop</a>►<a class="article-category-link" href="/categories/hadoop/%E8%BF%90%E7%BB%B4/">运维</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      reduce100%卡死故障排除
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <ul>
+<li>摘要<blockquote>
+<p>集群所有MR job/Spark job奇慢无比,经过排查发现两个DataNode故障.<br>措施:<br>下线故障的DataNode,所有job运行重新变得飞快顺滑.<br>原因:<br>reduce结束后落盘的时候,pipeline中其中一个DN故障,导致返回太迟.<br>如果pipeline中恰好不包括故障DN,就能顺利完成.</p>
+</blockquote>
+</li>
+</ul>
+<h2 id="详情"><a href="#详情" class="headerlink" title="详情"></a>详情</h2><p>早上起来发现集群的任务只完成了平时的约1/8.</p>
+<h3 id="STEP1"><a href="#STEP1" class="headerlink" title="STEP1"></a>STEP1</h3><p>首先怀疑是调度不合理,job之间资源占用卡死.<br>进入管理页:<a href="http://f04:8088/cluster/scheduler" target="_blank" rel="noopener">http://f04:8088/cluster/scheduler</a><br>找到卡死的job,选出资源占用最大的job将其kill. </p>
+<p>表现1:<br>资源空闲情况下,即使是小job,也会在reduce的最终阶段卡死不动.最显著的特征是在reduce100%的状态下,依然卡死不动.<br>查看典型job后发现有如下log:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">WARN [ResponseProcessor for block BP-133847077-ip0-1413174984773:blk_3659724856_2615805444]</span><br><span class="line">org.apache.hadoop.hdfs.DFSClient: Slow ReadProcessor read fields took 54565ms (threshold&#x3D;30000ms);</span><br><span class="line">ack: seqno: 144299 reply: SUCCESS reply: SUCCESS reply: SUCCESS downstreamAckTimeNanos: 61280175650</span><br><span class="line">flag: 0 flag: 0 flag: 0, targets:</span><br><span class="line">[DatanodeInfoWithStorage[ip1:50010,DS-7048c932-5153-4b82-8f6e-e8a920f61947,DISK]</span><br><span class="line">, DatanodeInfoWithStorage[ip2:50010,DS-f11ae138-54eb-4fda-aeda-43e3a9eddeae,DISK]</span><br><span class="line">, DatanodeInfoWithStorage[ip3:50010,DS-82512645-0f03-434f-8693-4f1c8876c437,DISK]]</span><br></pre></td></tr></table></figure>
+<p>虽然只是一个<code>Warning</code>,但其实关键信息是reduce最后落盘的时候落不下来,写数据块的时候<code>pipeline</code>里的三个DN,至少有一个迟迟不接Block.</p>
+<p>进一步登录上述三个DN(ip1,ip2,ip3),查看DN的log,发现大致有如下log:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">INFO datanode.DataNode: Exception for BP-133847077-ip0-1413174984773:blk_3659234296_2615314111</span><br><span class="line">java.io.InterruptedIOException: Interrupted while waiting for IO on channel java.nio.channels.SocketChannel[connected</span><br><span class="line">local&#x3D;&#x2F;ip4:24281 remote&#x3D;&#x2F;ip1:50010]. 485000 millis timeout left.</span><br><span class="line">	at org.apache.hadoop.net.SocketIOWithTimeout$SelectorPool.select(SocketIOWithTimeout.java:342)</span><br><span class="line">	at org.apache.hadoop.net.SocketIOWithTimeout.doIO(SocketIOWithTimeout.java:157)</span><br><span class="line">	at org.apache.hadoop.net.SocketOutputStream.write(SocketOutputStream.java:159)</span><br><span class="line">	at org.apache.hadoop.net.SocketOutputStream.write(SocketOutputStream.java:117)</span><br><span class="line">	at java.io.BufferedOutputStream.write(BufferedOutputStream.java:122)</span><br><span class="line">	at java.io.DataOutputStream.write(DataOutputStream.java:107)</span><br><span class="line">	at org.apache.hadoop.hdfs.protocol.datatransfer.PacketReceiver.mirrorPacketTo(PacketReceiver.java:200)</span><br><span class="line">	at org.apache.hadoop.hdfs.server.datanode.BlockReceiver.receivePacket(BlockReceiver.java:556)</span><br><span class="line">	at org.apache.hadoop.hdfs.server.datanode.BlockReceiver.receiveBlock(BlockReceiver.java:895)</span><br><span class="line">	at org.apache.hadoop.hdfs.server.datanode.DataXceiver.writeBlock(DataXceiver.java:801)</span><br><span class="line">	at org.apache.hadoop.hdfs.protocol.datatransfer.Receiver.opWriteBlock(Receiver.java:137)</span><br><span class="line">	at org.apache.hadoop.hdfs.protocol.datatransfer.Receiver.processOp(Receiver.java:74)</span><br><span class="line">	at org.apache.hadoop.hdfs.server.datanode.DataXceiver.run(DataXceiver.java:253)</span><br><span class="line">	at java.lang.Thread.run(Thread.java:745)</span><br></pre></td></tr></table></figure>
+
+<p>查看DN的连接数,发现异乎寻常得高:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">netstat -n | awk '/^tcp/ &#123;++S[$NF]&#125; END &#123;for(a in S) print a, S[a]&#125;'</span><br></pre></td></tr></table></figure>
+
+<h2 id="STEP2"><a href="#STEP2" class="headerlink" title="STEP2"></a>STEP2</h2><p>经过收集几个卡住的job的log,统计pipeline中出现的DN的ip,可以找出出现频率最高的两个DN.<br>将上述DN kill,卡住的job就能够继续运行了.</p>
+<blockquote>
+<p>pipeline中某个DN挂了的话,会提前返回. 三备份会在以后找机会补上.</p>
+</blockquote>
+<p>下线(退役)DN,其上的Block会自动备份到其他DN.<br>集群故障排除.具体DN故障的原因待查.// TODO</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/02/05/2018-02/reduce100-%E5%8D%A1%E6%AD%BB%E6%95%85%E9%9A%9C%E6%8E%92%E9%99%A4/" data-id="ck96cch2700b2bhamg2qo79hp" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/hadoop/" rel="tag">hadoop</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2018/02/08/2018-02/case-class%E6%B5%85%E6%9E%90/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          case class浅析
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2018/02/03/2018-02/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC%E5%9B%9B%E7%AB%A0/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">java并发编程的艺术-第四章</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#详情"><span class="toc-number">1.</span> <span class="toc-text">详情</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#STEP1"><span class="toc-number">1.1.</span> <span class="toc-text">STEP1</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#STEP2"><span class="toc-number">2.</span> <span class="toc-text">STEP2</span></a></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

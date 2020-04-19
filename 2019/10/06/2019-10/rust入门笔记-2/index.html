@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>rust入门笔记_2 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="解引用强制多态（deref coercions）coercions的意思就是强制多态。解引用强制多态的意思通俗来说就是，编译器根据目标类型，自动调用deref方法解引用，搜索路径来达到目标类型，最终达到节省程序员编写成本，但最后运行时开销维持最小的目标。(语法糖成本为0) 背景知识: 智能指针的解引用自定义的智能指针，实现Deref trait(解引用特性)后，就可以使用*操作符来解引用了。例如:">
+<meta property="og:type" content="article">
+<meta property="og:title" content="rust入门笔记_2">
+<meta property="og:url" content="http://xiaoyue26.github.io/2019/10/06/2019-10/rust%E5%85%A5%E9%97%A8%E7%AC%94%E8%AE%B0-2/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="解引用强制多态（deref coercions）coercions的意思就是强制多态。解引用强制多态的意思通俗来说就是，编译器根据目标类型，自动调用deref方法解引用，搜索路径来达到目标类型，最终达到节省程序员编写成本，但最后运行时开销维持最小的目标。(语法糖成本为0) 背景知识: 智能指针的解引用自定义的智能指针，实现Deref trait(解引用特性)后，就可以使用*操作符来解引用了。例如:">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2019-10-06T10:58:26.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.288Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="rust">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2019-10/rust入门笔记-2" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/10/06/2019-10/rust%E5%85%A5%E9%97%A8%E7%AC%94%E8%AE%B0-2/" class="article-date">
+  <time datetime="2019-10-06T10:58:26.000Z" itemprop="datePublished">2019-10-06</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/rust/">rust</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      rust入门笔记_2
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="解引用强制多态（deref-coercions）"><a href="#解引用强制多态（deref-coercions）" class="headerlink" title="解引用强制多态（deref coercions）"></a>解引用强制多态（<code>deref coercions</code>）</h1><p><code>coercions</code>的意思就是强制多态。<br>解引用强制多态的意思通俗来说就是，编译器根据目标类型，自动调用<code>deref</code>方法解引用，搜索路径来达到目标类型，最终达到节省程序员编写成本，但最后运行时开销维持最小的目标。(语法糖成本为0)</p>
+<h2 id="背景知识-智能指针的解引用"><a href="#背景知识-智能指针的解引用" class="headerlink" title="背景知识: 智能指针的解引用"></a>背景知识: 智能指针的解引用</h2><p>自定义的智能指针，实现<code>Deref trait</code>(解引用特性)后，就可以使用<code>*</code>操作符来解引用了。<br>例如:</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">use</span> std::ops::Deref;</span><br><span class="line"></span><br><span class="line"># <span class="class"><span class="keyword">struct</span> <span class="title">MyBox</span></span>&lt;T&gt;(T);</span><br><span class="line"><span class="keyword">impl</span>&lt;T&gt; Deref <span class="keyword">for</span> MyBox&lt;T&gt; &#123;</span><br><span class="line">    <span class="class"><span class="keyword">type</span> <span class="title">Target</span></span> = T;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">fn</span> <span class="title">deref</span></span>(&amp;<span class="keyword">self</span>) -&gt; &amp;T &#123; <span class="comment">// 注意这里的返回值需要是引用,以便维持所有权</span></span><br><span class="line">        &amp;<span class="keyword">self</span>.<span class="number">0</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>编译器每次遇到<code>*</code>操作符，都会尝试调用复杂类型的<code>deref</code>方法来获得基本类型的引用，以便进行解引用，也就是代码等效于:<code>*(y.deref())</code>。</p>
+<h2 id="实例"><a href="#实例" class="headerlink" title="实例"></a>实例</h2><figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">let</span> m = MyBox::new(<span class="built_in">String</span>::from(<span class="string">"Rust"</span>));</span><br><span class="line">hello(&amp;m); <span class="comment">// 这里hello的形参是&amp;str,实参是&amp;MyBox</span></span><br><span class="line"><span class="comment">// 强制解引用多态后，等效于调用了: hello(&amp;(*m)[..]);</span></span><br><span class="line"><span class="comment">// &amp;MyBox =通过deref=&gt; String =通过slice=&gt; &amp;str</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="更多解引用多态规则"><a href="#更多解引用多态规则" class="headerlink" title="更多解引用多态规则"></a>更多解引用多态规则</h2><figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="number">1</span>. 当 T: Deref&lt;Target=U&gt; 时从 &amp;T 到 &amp;U。 <span class="comment">// 不可变=&gt;不可变</span></span><br><span class="line"><span class="number">2</span>. 当 T: DerefMut&lt;Target=U&gt; 时从 &amp;<span class="keyword">mut</span> T 到 &amp;<span class="keyword">mut</span> U。 <span class="comment">// 可变=&gt;可变</span></span><br><span class="line"><span class="number">3</span>. 当 T: Deref&lt;Target=U&gt; 时从 &amp;<span class="keyword">mut</span> T 到 &amp;U。 <span class="comment">// 可变=&gt;不可变</span></span><br></pre></td></tr></table></figure>
+<p>只会发生安全的转换，而<code>不可变=&gt;可变</code>这种属于不安全，因此不支持自动转换。</p>
+<p>(上面的实例属于第一种。)</p>
+<h1 id="析构函数-std-mem-drop"><a href="#析构函数-std-mem-drop" class="headerlink" title="(析构函数) std::mem::drop"></a>(析构函数) std::mem::drop</h1><p>自定义Drop trait:</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">impl</span> <span class="built_in">Drop</span> <span class="keyword">for</span> CustomSmartPointer &#123;</span><br><span class="line">    <span class="function"><span class="keyword">fn</span> <span class="title">drop</span></span>(&amp;<span class="keyword">mut</span> <span class="keyword">self</span>) &#123;</span><br><span class="line">        <span class="built_in">println!</span>(<span class="string">"Dropping CustomSmartPointer with data `&#123;&#125;`!"</span>, <span class="keyword">self</span>.data);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>定义以后drop函数不能显式调用，也不能禁用。<br>只能在离开作用域的时候自动调用。<br>如果要显式调用，只能使用标准库的函数<code>std::mem::drop</code>.<br>(默认预引入，可以直接调用drop)</p>
+<h1 id="智能指针汇总"><a href="#智能指针汇总" class="headerlink" title="智能指针汇总"></a>智能指针汇总</h1><p>Box: 没有特殊功能,类似于java中的普通引用,让编译器能确定分配空间大小;<br>Rc: 多所有权、单线程、引用计数;<br>RefCell: 单所有权、单线程、引用计数、内部可变性;<br>Arc: 多所有权、多线程、引用计数;<br>Mutex: 单所有权、多线程、引用计数、内部可变性;<br>Week: 弱引用。</p>
+<h1 id="多所有权、单线程、不可变：引用计数-gt-Rc"><a href="#多所有权、单线程、不可变：引用计数-gt-Rc" class="headerlink" title="多所有权、单线程、不可变：引用计数=&gt;Rc"></a>多所有权、单线程、不可变：引用计数=&gt;Rc<T></h1><p>多所有权示例: b,c都拥有a的所有权。</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">enum</span> <span class="title">List</span></span> &#123;</span><br><span class="line">    Cons(<span class="built_in">i32</span>, Rc&lt;List&gt;),</span><br><span class="line">    Nil,</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">use</span> List::&#123;Cons, Nil&#125;;</span><br><span class="line"><span class="keyword">use</span> std::rc::Rc;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">fn</span> <span class="title">main</span></span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> a = Rc::new(Cons(<span class="number">5</span>, Rc::new(Cons(<span class="number">10</span>, Rc::new(Nil)))));</span><br><span class="line">    <span class="keyword">let</span> b = Cons(<span class="number">3</span>, Rc::clone(&amp;a));</span><br><span class="line">    <span class="keyword">let</span> c = Cons(<span class="number">4</span>, Rc::clone(&amp;a));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>每次调用<code>Rc::clone</code>，都将引用计数加1.// 这里是浅拷贝<br>b: 3-&gt;5-&gt;10-&gt;Nil<br>c: 4-&gt;5-&gt;10-&gt;Nil</p>
+<p>打印引用数:</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">fn</span> <span class="title">main</span></span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> a = Rc::new(Cons(<span class="number">5</span>, Rc::new(Cons(<span class="number">10</span>, Rc::new(Nil)))));</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">"count after creating a = &#123;&#125;"</span>, Rc::strong_count(&amp;a));</span><br><span class="line">    <span class="keyword">let</span> b = Cons(<span class="number">3</span>, Rc::clone(&amp;a));</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">"count after creating b = &#123;&#125;"</span>, Rc::strong_count(&amp;a));</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="keyword">let</span> c = Cons(<span class="number">4</span>, Rc::clone(&amp;a));</span><br><span class="line">        <span class="built_in">println!</span>(<span class="string">"count after creating c = &#123;&#125;"</span>, Rc::strong_count(&amp;a));</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">"count after c goes out of scope = &#123;&#125;"</span>, Rc::strong_count(&amp;a));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h1 id="单一所有权、单线程、内部可变：引用计数-gt-RefCell"><a href="#单一所有权、单线程、内部可变：引用计数-gt-RefCell" class="headerlink" title="单一所有权、单线程、内部可变：引用计数=&gt;RefCell"></a>单一所有权、单线程、内部可变：引用计数=&gt;RefCell<T></h1><h2 id="借用规则"><a href="#借用规则" class="headerlink" title="借用规则"></a>借用规则</h2><ol>
+<li>每时每刻，要么有一个可变引用;要么有n个不可变引用；(这两者互斥)</li>
+<li>引用必须总是有效的。</li>
+</ol>
+<p>对于引用和<code>Box&lt;T&gt;</code>: <code>编译时</code>进行借用规则检查；(编译错误)<br>对于<code>RefCell&lt;T&gt;</code>:   <code>运行时</code>进行借用规则检查；(<code>panic</code>)</p>
+<p>引用和<code>Box&lt;T&gt;</code>: 第一级指针不可变，则级联得每一级都不可变。<br><code>RefCell</code>: 第一级指针不可变，第二级可以借用可变引用，然后修改；</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#[cfg(test)]</span></span><br><span class="line"><span class="keyword">mod</span> tests &#123;</span><br><span class="line">    <span class="keyword">use</span> super::*;</span><br><span class="line">    <span class="keyword">use</span> std::cell::RefCell;</span><br><span class="line"></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">MockMessenger</span></span> &#123;</span><br><span class="line">        sent_messages: RefCell&lt;<span class="built_in">Vec</span>&lt;<span class="built_in">String</span>&gt;&gt;,</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">impl</span> MockMessenger &#123;</span><br><span class="line">        <span class="function"><span class="keyword">fn</span> <span class="title">new</span></span>() -&gt; MockMessenger &#123;</span><br><span class="line">            MockMessenger &#123; sent_messages: RefCell::new(<span class="built_in">vec!</span>[]) &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">impl</span> Messenger <span class="keyword">for</span> MockMessenger &#123;</span><br><span class="line">        <span class="function"><span class="keyword">fn</span> <span class="title">send</span></span>(&amp;<span class="keyword">self</span>, message: &amp;<span class="built_in">str</span>) &#123;</span><br><span class="line">        <span class="comment">// 注意这里的borrow_mut，借出可变:</span></span><br><span class="line">            <span class="keyword">self</span>.sent_messages.borrow_mut().push(<span class="built_in">String</span>::from(message));</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">#[test]</span></span><br><span class="line">    <span class="function"><span class="keyword">fn</span> <span class="title">it_sends_an_over_75_percent_warning_message</span></span>() &#123;</span><br><span class="line">        <span class="comment">// --snip--</span></span><br><span class="line">#         <span class="keyword">let</span> mock_messenger = MockMessenger::new();</span><br><span class="line">#         <span class="keyword">let</span> <span class="keyword">mut</span> limit_tracker = LimitTracker::new(&amp;mock_messenger, <span class="number">100</span>);</span><br><span class="line">#         limit_tracker.set_value(<span class="number">75</span>);</span><br><span class="line">        <span class="comment">// 注意这里的borrow，借出不可变:</span></span><br><span class="line">        <span class="built_in">assert_eq!</span>(mock_messenger.sent_messages.borrow().len(), <span class="number">1</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>borrow</code> 方法返回 <code>Ref</code> 类型的智能指针；<br><code>borrow_mut</code> 方法返回 <code>RefMut</code> 类型的智能指针。</p>
+<p>这两个类型都实现了 <code>Deref</code> 所以可以当作常规引用对待。<br>借用规则在运行时检查，例如同时借出两个可变引用将会panic:</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">let</span> <span class="keyword">mut</span> one_borrow = <span class="keyword">self</span>.sent_messages.borrow_mut();</span><br><span class="line"><span class="keyword">let</span> <span class="keyword">mut</span> two_borrow = <span class="keyword">self</span>.sent_messages.borrow_mut();</span><br></pre></td></tr></table></figure>
+<p>底层原理依然是引用计数。</p>
+<h2 id="结合Rc和RefCell"><a href="#结合Rc和RefCell" class="headerlink" title="结合Rc和RefCell"></a>结合Rc和RefCell</h2><p>结合Rc和RefCell的话，就可以结合多所有权和单所有权，不可变和可变:</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#[derive(Debug)]</span></span><br><span class="line"><span class="class"><span class="keyword">enum</span> <span class="title">List</span></span> &#123;</span><br><span class="line">    Cons(Rc&lt;RefCell&lt;<span class="built_in">i32</span>&gt;&gt;, Rc&lt;List&gt;),<span class="comment">// 注意这里</span></span><br><span class="line">    Nil,</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">use</span> List::&#123;Cons, Nil&#125;;</span><br><span class="line"><span class="keyword">use</span> std::rc::Rc;</span><br><span class="line"><span class="keyword">use</span> std::cell::RefCell;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">fn</span> <span class="title">main</span></span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> value = Rc::new(RefCell::new(<span class="number">5</span>));</span><br><span class="line"></span><br><span class="line">    <span class="keyword">let</span> a = Rc::new(Cons(Rc::clone(&amp;value), Rc::new(Nil)));</span><br><span class="line"></span><br><span class="line">    <span class="keyword">let</span> b = Cons(Rc::new(RefCell::new(<span class="number">6</span>)), Rc::clone(&amp;a));</span><br><span class="line">    <span class="keyword">let</span> c = Cons(Rc::new(RefCell::new(<span class="number">10</span>)), Rc::clone(&amp;a));</span><br><span class="line"></span><br><span class="line">    *value.borrow_mut() += <span class="number">10</span>;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">"a after = &#123;:?&#125;"</span>, a);</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">"b after = &#123;:?&#125;"</span>, b);</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">"c after = &#123;:?&#125;"</span>, c);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>混合使用<code>Rc</code>和<code>RefCell</code>可以构造循环引用，造成内存泄露。<br>可以用弱引用来消除这一隐患: 将 <code>Rc&lt;T&gt;</code> 变为 <code>Weak&lt;T&gt;</code>。</p>
+<h1 id="弱引用"><a href="#弱引用" class="headerlink" title="弱引用"></a>弱引用</h1><p><a href="https://rustlang-cn.org/office/rust/book/smart-pointers/ch15-06-reference-cycles.html" target="_blank" rel="noopener">https://rustlang-cn.org/office/rust/book/smart-pointers/ch15-06-reference-cycles.html</a></p>
+<h1 id="并发"><a href="#并发" class="headerlink" title="并发"></a>并发</h1><h2 id="线程模型"><a href="#线程模型" class="headerlink" title="线程模型"></a>线程模型</h2><p>rust标准库提供1:1线程，有其他第三方库提供M:N的。<br>创建线程: <code>thread::spawn</code>+闭包：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">use</span> std::thread;</span><br><span class="line"><span class="keyword">use</span> std::time::Duration;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">fn</span> <span class="title">main</span></span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> handle = thread::spawn(|| &#123;</span><br><span class="line">        <span class="keyword">for</span> i <span class="keyword">in</span> <span class="number">1</span>..<span class="number">10</span> &#123;</span><br><span class="line">            <span class="built_in">println!</span>(<span class="string">"hi number &#123;&#125; from the spawned thread!"</span>, i);</span><br><span class="line">            thread::sleep(Duration::from_millis(<span class="number">1</span>));</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> i <span class="keyword">in</span> <span class="number">1</span>..<span class="number">5</span> &#123;</span><br><span class="line">        <span class="built_in">println!</span>(<span class="string">"hi number &#123;&#125; from the main thread!"</span>, i);</span><br><span class="line">        thread::sleep(Duration::from_millis(<span class="number">1</span>));</span><br><span class="line">    &#125;</span><br><span class="line">    handle.join().unwrap();<span class="comment">// 阻塞等待子线程</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>子线程中可以捕获主线程的变量，获得所有权. 使用<code>move</code>，以免主线程把它drop了：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">use</span> std::thread;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">fn</span> <span class="title">main</span></span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> v = <span class="built_in">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>];</span><br><span class="line"></span><br><span class="line">    <span class="keyword">let</span> handle = thread::spawn(<span class="keyword">move</span> || &#123;</span><br><span class="line">        <span class="built_in">println!</span>(<span class="string">"Here's a vector: &#123;:?&#125;"</span>, v);</span><br><span class="line">    &#125;);</span><br><span class="line"></span><br><span class="line">    handle.join().unwrap();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="消息传递-channel"><a href="#消息传递-channel" class="headerlink" title="消息传递: channel"></a>消息传递: channel</h2><figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">use</span> std::thread;</span><br><span class="line"><span class="keyword">use</span> std::sync::mpsc;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">fn</span> <span class="title">main</span></span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> (tx, rx) = mpsc::channel();</span><br><span class="line">    <span class="comment">// tx: 发送者</span></span><br><span class="line">    <span class="comment">// rx: 接收者</span></span><br><span class="line">    thread::spawn(<span class="keyword">move</span> || &#123;</span><br><span class="line">        <span class="keyword">let</span> val = <span class="built_in">String</span>::from(<span class="string">"hi"</span>);</span><br><span class="line">        tx.send(val).unwrap();<span class="comment">// 单所有权,发送后不能再使用val</span></span><br><span class="line">    &#125;);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">let</span> received = rx.recv().unwrap();</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">"Got: &#123;&#125;"</span>, received);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>mpsc： 多生产者、单消费者<br>recv： 阻塞接收<br>try_recv: 非阻塞接收，立即返回</p>
+<p>这里之所以是多生产者，是因为可以把生产者无限克隆出去，然后发送消息：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">let</span> tx1 = mpsc::Sender::clone(&amp;tx);</span><br></pre></td></tr></table></figure>
+
+<h2 id="共享状态并发"><a href="#共享状态并发" class="headerlink" title="共享状态并发"></a>共享状态并发</h2><h2 id="互斥器-mutex"><a href="#互斥器-mutex" class="headerlink" title="互斥器(mutex)"></a>互斥器(mutex)</h2><p>rust中的锁是一种特殊的智能指针，通过重载drop trait来确保离开作用域的时候释放锁。</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">use</span> std::sync::Mutex;</span><br><span class="line"><span class="function"><span class="keyword">fn</span> <span class="title">main</span></span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> m = Mutex::new(<span class="number">5</span>);</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="keyword">let</span> <span class="keyword">mut</span> num = m.lock().unwrap();</span><br><span class="line">        *num = <span class="number">6</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">"m = &#123;:?&#125;"</span>, m);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>由于多个线程都需要访问同一个锁，因此需要多所有权的智能指针，并且能够并发使用：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Rc&lt;T&gt;: 单线程，多所有权；</span><br><span class="line">Arc&lt;T&gt;: 多线程，多所有权。</span><br></pre></td></tr></table></figure>
+<p>并发访问的例子:</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">use</span> std::sync::&#123;Mutex, Arc&#125;;</span><br><span class="line"><span class="keyword">use</span> std::thread;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">fn</span> <span class="title">main</span></span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> counter = Arc::new(Mutex::new(<span class="number">0</span>));<span class="comment">// 智能指针包装</span></span><br><span class="line">    <span class="keyword">let</span> <span class="keyword">mut</span> handles = <span class="built_in">vec!</span>[];</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> _ <span class="keyword">in</span> <span class="number">0</span>..<span class="number">10</span> &#123;</span><br><span class="line">        <span class="keyword">let</span> counter = Arc::clone(&amp;counter);<span class="comment">// 克隆来增加引用计数</span></span><br><span class="line">        <span class="keyword">let</span> handle = thread::spawn(<span class="keyword">move</span> || &#123; </span><br><span class="line">            <span class="keyword">let</span> <span class="keyword">mut</span> num = counter.lock().unwrap();</span><br><span class="line"></span><br><span class="line">            *num += <span class="number">1</span>; <span class="comment">// move+离开作用域,引用-1</span></span><br><span class="line">        &#125;);</span><br><span class="line">        handles.push(handle);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> handle <span class="keyword">in</span> handles &#123;</span><br><span class="line">        handle.join().unwrap();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">"Result: &#123;&#125;"</span>, *counter.lock().unwrap());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这里可以看出Mutex具有内部可变性。同时可以用Mutex构造死锁(循环依赖)。</p>
+<h2 id="Send与Sync的trait"><a href="#Send与Sync的trait" class="headerlink" title="Send与Sync的trait"></a>Send与Sync的trait</h2><p>rust中用两个trait来标记所有权在线程中的转移以及引用的多线程访问: </p>
+<blockquote>
+<p><code>Send trait</code>:  支持多线程<code>所有权</code>转移,所有权在线程之间转移; 除Rc<T>以外的大部分类型是Send trait;<br><code>Sync trait</code>:  支持多线程访问, 线程之间可以共享值的<code>引用</code>；<br>除Rc<T>以外的大部分类型是Sync trait;</p>
+</blockquote>
+<p><code>unsafe rust</code>中的裸指针也没有实现这两个trait.</p>
+<p>绝大部分情况不需要手动实现send与sync的trait。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/10/06/2019-10/rust%E5%85%A5%E9%97%A8%E7%AC%94%E8%AE%B0-2/" data-id="ck96cch4h00kfbhamhak2h6nf" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/rust/" rel="tag">rust</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2019/11/03/2019-11/java8%E7%AC%94%E8%AE%B0/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          java8笔记
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2019/09/22/2019-09/rust%E5%85%A5%E9%97%A8%E7%AC%94%E8%AE%B0-1/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">rust入门笔记_1</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#解引用强制多态（deref-coercions）"><span class="toc-number">1.</span> <span class="toc-text">解引用强制多态（deref coercions）</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#背景知识-智能指针的解引用"><span class="toc-number">1.1.</span> <span class="toc-text">背景知识: 智能指针的解引用</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#实例"><span class="toc-number">1.2.</span> <span class="toc-text">实例</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#更多解引用多态规则"><span class="toc-number">1.3.</span> <span class="toc-text">更多解引用多态规则</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#析构函数-std-mem-drop"><span class="toc-number">2.</span> <span class="toc-text">(析构函数) std::mem::drop</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#智能指针汇总"><span class="toc-number">3.</span> <span class="toc-text">智能指针汇总</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#多所有权、单线程、不可变：引用计数-gt-Rc"><span class="toc-number">4.</span> <span class="toc-text">多所有权、单线程、不可变：引用计数&#x3D;&gt;Rc</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#单一所有权、单线程、内部可变：引用计数-gt-RefCell"><span class="toc-number">5.</span> <span class="toc-text">单一所有权、单线程、内部可变：引用计数&#x3D;&gt;RefCell</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#借用规则"><span class="toc-number">5.1.</span> <span class="toc-text">借用规则</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#结合Rc和RefCell"><span class="toc-number">5.2.</span> <span class="toc-text">结合Rc和RefCell</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#弱引用"><span class="toc-number">6.</span> <span class="toc-text">弱引用</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#并发"><span class="toc-number">7.</span> <span class="toc-text">并发</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#线程模型"><span class="toc-number">7.1.</span> <span class="toc-text">线程模型</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#消息传递-channel"><span class="toc-number">7.2.</span> <span class="toc-text">消息传递: channel</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#共享状态并发"><span class="toc-number">7.3.</span> <span class="toc-text">共享状态并发</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#互斥器-mutex"><span class="toc-number">7.4.</span> <span class="toc-text">互斥器(mutex)</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Send与Sync的trait"><span class="toc-number">7.5.</span> <span class="toc-text">Send与Sync的trait</span></a></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

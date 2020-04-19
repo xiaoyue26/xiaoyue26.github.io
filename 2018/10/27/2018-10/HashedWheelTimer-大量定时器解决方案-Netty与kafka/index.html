@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>HashedWheelTimer-大量定时器解决方案(Netty与kafka) | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="需求:有大量定时任务需要执行，精度要求不高，可以允许延迟执行。可能的场景: 每个连接的超时事件、每个请求的超时事件。 方案1:每个定时任务设置一个定时器、或一个Scheduled,DelayedQueue和实现Delayed接口的线程。缺点: 开销太大;优点: 少量任务时精度较高。 方案2: 超时集将相同时间间隔的任务组织成一个集合。每个集合分配一个计时器（thread）。缺点: 相同时间间隔难以">
+<meta property="og:type" content="article">
+<meta property="og:title" content="HashedWheelTimer-大量定时器解决方案(Netty与kafka)">
+<meta property="og:url" content="http://xiaoyue26.github.io/2018/10/27/2018-10/HashedWheelTimer-%E5%A4%A7%E9%87%8F%E5%AE%9A%E6%97%B6%E5%99%A8%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88-Netty%E4%B8%8Ekafka/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="需求:有大量定时任务需要执行，精度要求不高，可以允许延迟执行。可能的场景: 每个连接的超时事件、每个请求的超时事件。 方案1:每个定时任务设置一个定时器、或一个Scheduled,DelayedQueue和实现Delayed接口的线程。缺点: 开销太大;优点: 少量任务时精度较高。 方案2: 超时集将相同时间间隔的任务组织成一个集合。每个集合分配一个计时器（thread）。缺点: 相同时间间隔难以">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-10/timewheel.jpg">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-10/timewheel2.jpg">
+<meta property="article:published_time" content="2018-10-27T12:16:33.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.276Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="java">
+<meta property="article:tag" content="kafka">
+<meta property="article:tag" content="Netty">
+<meta property="article:tag" content="定时任务">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://xiaoyue26.github.io/images/2018-10/timewheel.jpg">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2018-10/HashedWheelTimer-大量定时器解决方案-Netty与kafka" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/10/27/2018-10/HashedWheelTimer-%E5%A4%A7%E9%87%8F%E5%AE%9A%E6%97%B6%E5%99%A8%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88-Netty%E4%B8%8Ekafka/" class="article-date">
+  <time datetime="2018-10-27T12:16:33.000Z" itemprop="datePublished">2018-10-27</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/Netty/">Netty</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      HashedWheelTimer-大量定时器解决方案(Netty与kafka)
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="需求"><a href="#需求" class="headerlink" title="需求:"></a>需求:</h1><p>有大量定时任务需要执行，精度要求不高，可以允许延迟执行。<br>可能的场景: 每个连接的超时事件、每个请求的超时事件。</p>
+<h1 id="方案1"><a href="#方案1" class="headerlink" title="方案1:"></a>方案1:</h1><p>每个定时任务设置一个定时器、或一个<code>Scheduled</code>,<code>DelayedQueue</code>和实现<code>Delayed</code>接口的线程。<br>缺点: 开销太大;<br>优点: 少量任务时精度较高。</p>
+<h1 id="方案2-超时集"><a href="#方案2-超时集" class="headerlink" title="方案2: 超时集"></a>方案2: 超时集</h1><p>将相同时间间隔的任务组织成一个集合。每个集合分配一个计时器（thread）。<br>缺点: 相同时间间隔难以满足，性能不够。</p>
+<h1 id="方案3-HashedWheelTimer：-时间轮算法-Netty4工具类"><a href="#方案3-HashedWheelTimer：-时间轮算法-Netty4工具类" class="headerlink" title="方案3: HashedWheelTimer： 时间轮算法(Netty4工具类)"></a>方案3: HashedWheelTimer： 时间轮算法(Netty4工具类)</h1><p>设计一个虚拟的哈希表组织定时任务。<br>优点: 默认只用一个thread,开销小;<br>缺点:</p>
+<ol>
+<li>精度降低到<code>tickDuration</code>粒度;</li>
+<li>定时任务不能太耗时;(解决方案: 可以在定时任务里异步处理)。</li>
+</ol>
+<h2 id="基本架构"><a href="#基本架构" class="headerlink" title="基本架构"></a>基本架构</h2><img src="/images/2018-10/timewheel.jpg" class="" width="400" height="600" title="timewheel">
+<p>如上图所示即为时间轮。<br>引入术语:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">tick: 时间轮里每一格;</span><br><span class="line">tickDuration: 每一格的时长;</span><br><span class="line">ticksPerWheel: 时间轮总共有多少格.</span><br><span class="line">newTimeout: 定时任务分配到时间轮</span><br></pre></td></tr></table></figure>
+
+<h3 id="定时任务分配到时间轮"><a href="#定时任务分配到时间轮" class="headerlink" title="定时任务分配到时间轮"></a>定时任务分配到时间轮</h3><p>分配流程:</p>
+<ol>
+<li>计算定时任务deadline = <code>System.nanoTime() + unit.toNanos(delay) - startTime</code>;</li>
+<li>计算定时任务放入第几格: <figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">long</span> calculated = deadline / tickDuration; <span class="comment">// 需要计算几次</span></span><br><span class="line"><span class="function"><span class="keyword">final</span> <span class="keyword">long</span> <span class="title">ticks</span><span class="params">(还需要走几格)</span> </span>= Math.max(calculated, 当前tick次数); <span class="comment">// 一般就等于calculated，这里只是为了确保不在以前走过的格子里（这样的话这个任务永远不会执行而且移除不掉了）</span></span><br><span class="line">stopIndex = (<span class="keyword">int</span>) (ticks &amp; mask); <span class="comment">// 相当于% wheel.length，因为长度是2的幂。</span></span><br></pre></td></tr></table></figure></li>
+<li>计算定时任务第几轮被调用: <code>remainingRounds = (calculated - tick) / wheel.length;</code></li>
+<li>放入时间轮stopIndex位置中任务链表: (remainingRounds,task)：<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">HashedWheelBucket bucket = wheel[stopIndex];</span><br><span class="line">bucket.addTimeout(timeout); <span class="comment">// 加入链表尾部。</span></span><br></pre></td></tr></table></figure>
+
+</li>
+</ol>
+<p>当这个时间轮开始运行的时候（也就是开始计时，执行定时任务了），每次跳转一个tick,都会检查这个tick里的定时任务,如果定时任务轮次应当执行，则执行对应任务。</p>
+<p>使用的示例代码: </p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * tickDuration: 每 tick 一次的时间间隔, 每 tick 一次就会到达下一个槽位</span></span><br><span class="line"><span class="comment"> * ticksPerWheel: 轮中的 slot 数</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="meta">@Test</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">testHashedWheelTimer</span><span class="params">()</span> <span class="keyword">throws</span> InterruptedException </span>&#123;</span><br><span class="line"><span class="comment">// 1000ms一格,一轮16格（一般是2的N次幂，这样可以把hash转换为&amp;0xFFFF）</span></span><br><span class="line">    HashedWheelTimer hashedWheelTimer = <span class="keyword">new</span> HashedWheelTimer(<span class="number">1000</span>,TimeUnit.MILLISECONDS, <span class="number">16</span> );</span><br><span class="line">    System.out.println(LocalTime.now()+<span class="string">" submitted"</span>);</span><br><span class="line">    Timeout timeout = hashedWheelTimer.newTimeout((t) -&gt; &#123;</span><br><span class="line">        <span class="keyword">new</span> Thread()&#123;</span><br><span class="line">            <span class="meta">@Override</span></span><br><span class="line">            <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">                System.out.println(<span class="keyword">new</span> Date() + <span class="string">" executed"</span>);</span><br><span class="line">                System.out.println(hashedWheelTimer);</span><br><span class="line">                <span class="keyword">try</span> &#123;</span><br><span class="line">                    TimeUnit.SECONDS.sleep(<span class="number">100</span>);</span><br><span class="line">                &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                    e.printStackTrace();</span><br><span class="line">                &#125;</span><br><span class="line">                System.out.println(<span class="keyword">new</span> Date() + <span class="string">" FINISH"</span>);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;.start();</span><br><span class="line">    &#125;, <span class="number">5</span>, TimeUnit.SECONDS);</span><br><span class="line"></span><br><span class="line">    hashedWheelTimer.newTimeout((t) -&gt; &#123;</span><br><span class="line">        <span class="keyword">new</span> Thread()&#123;</span><br><span class="line">            <span class="meta">@Override</span></span><br><span class="line">            <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">                System.out.println(<span class="keyword">new</span> Date() + <span class="string">" TASK2 executed"</span>);</span><br><span class="line">                System.out.println(hashedWheelTimer);</span><br><span class="line">                <span class="keyword">try</span> &#123;</span><br><span class="line">                    TimeUnit.SECONDS.sleep(<span class="number">10</span>);</span><br><span class="line">                &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                    e.printStackTrace();</span><br><span class="line">                &#125;</span><br><span class="line">                System.out.println(<span class="keyword">new</span> Date() + <span class="string">" TASK2 FINISH"</span>);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;.start();</span><br><span class="line">    &#125;, <span class="number">15</span>, TimeUnit.SECONDS);</span><br><span class="line"></span><br><span class="line">    TimeUnit.SECONDS.sleep(<span class="number">500</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<p><code>HashedWheelTimer</code>源码:<br><a href="https://github.com/netty/netty/blob/4.1/common/src/main/java/io/netty/util/HashedWheelTimer.java" target="_blank" rel="noopener">https://github.com/netty/netty/blob/4.1/common/src/main/java/io/netty/util/HashedWheelTimer.java</a></p>
+<p>理论基础:(操作系统内核的定时器)<br><a href="http://www.cs.columbia.edu/~nahum/w6998/papers/sosp87-timing-wheels.pdf" target="_blank" rel="noopener">http://www.cs.columbia.edu/~nahum/w6998/papers/sosp87-timing-wheels.pdf</a></p>
+<h1 id="方案4：-层级时间轮-Kafka使用"><a href="#方案4：-层级时间轮-Kafka使用" class="headerlink" title="方案4： 层级时间轮(Kafka使用)"></a>方案4： 层级时间轮(Kafka使用)</h1><p>上述简单时间轮的算法存在的<strong>缺点</strong>:<br>对于延迟很长时间的任务,该方案存在较多的cpu空转。一种可能的方案是增大<code>tickduration</code>,但是很难兼顾精度和性能。</p>
+<p>一种解决方案: 层级时间轮。<br>思路是模拟现实中的钟表,现实中的钟表有时针、分针、秒针,相当于不同<code>tickDuration</code>的时间轮。<br>架构图如下:</p>
+<img src="/images/2018-10/timewheel2.jpg" class="" width="400" height="600" title="timewheel2">
+
+<p>不同于<code>Netty4</code>中每个任务存放自己应到执行的轮次,层级时间轮把高轮次的定时任务分配到高层的时间轮中:层数越高=&gt;<code>tickDuration</code>越大。</p>
+<p>假如定义最低层的时间轮的层号为0,高一层的为1,依次类推,只有n-1层的定时任务到期后,才会取出n层时间轮的定时任务处理（要么直接执行,要么降级,要么放回时间轮）。</p>
+<p>(如果让层级时间轮每层的<code>tickDuratino</code>相同，则退化为方案3的普通时间轮。)</p>
+<p>同时为了辅助推进时间轮的指针,使用<code>DelayQueue</code>存放最近到期的定时任务</p>
+<h2 id="双向链表"><a href="#双向链表" class="headerlink" title="双向链表"></a>双向链表</h2><p>时间中每一个格中使用的数据结构为双向链表。<br>好处是只要持有其中某个节点，就可以在<code>O(1)</code>时间内进行插入或者删除操作。</p>
+<h2 id="到期操作"><a href="#到期操作" class="headerlink" title="到期操作"></a>到期操作</h2><p>由<code>DelayQueue</code>辅助推进指针: </p>
+<ol>
+<li><code>DelayQueue</code>中优先级队列的队首最近到期的定时任务。处理结束后,由<code>leader</code>线程等待下一个定时任务的时间。因此推进步长由定时任务的间隔决定,没有cpu空转的现象。</li>
+<li>推进所有时间轮的指针,对于遇到的定时任务,要么插入低层时间轮,要么删除(执行)。</li>
+</ol>
+<h2 id="插入操作-删除类似"><a href="#插入操作-删除类似" class="headerlink" title="插入操作(删除类似)"></a>插入操作(删除类似)</h2><p>插入新的定时任务:</p>
+<ol>
+<li>插入时间轮: 根据到期时间,可以算出具体应该放在哪一层时间轮的哪一格,得到对应的双向链表引用。如果这一格还是空的,需要新建一个,然后插入到<code>DelayQueue</code>中(<code>O(logN)</code>时间复杂度)。(参见<code>DelayQueue</code>原理,如果时间低于<code>DelayQueue</code>的最小延时任务,会提前唤醒里面的<code>leader</code>线程)</li>
+<li>插入<code>DelayQueue</code>: 根据上一步中得到的双向链表引用,往里面插入新的定时任务（<code>O(1)</code>）。</li>
+</ol>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>层级时间轮通过不同<code>tickDuration</code>的时间轮,以较小的空间映射到一个很大的时间范围,兼顾了精度和性能。<br><strong>插入删除的时间复杂度:</strong><br>时间复杂度其实取决于有效格子的数量,因为<code>DelayQueue</code>存放的是有任务的格子,也就是双向链表的数量。低层用的是优先级队列(最小堆),假如有效格子的数量是<code>m</code>，则复杂度为<code>O(log(m))</code>。<br>实际中m一般远小于n，因此性能有很大的提高。<br><strong>理想情况</strong>:定时任务的时间间隔分布能尽量让它们位于相同格子中。 (<code>O(1)</code>)<br><strong>最坏情况</strong>:所有双向链表都只有一个任务(均匀地分布在不同格子中)。(<code>O(logN)</code>)</p>
+<p>实际业务中,定时任务一般都服从对数正态分布,因此每次插入删除时间复杂度是接近<code>O(1)</code>的。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/10/27/2018-10/HashedWheelTimer-%E5%A4%A7%E9%87%8F%E5%AE%9A%E6%97%B6%E5%99%A8%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88-Netty%E4%B8%8Ekafka/" data-id="ck96cch2w00dxbham841i0jr0" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Netty/" rel="tag">Netty</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/kafka/" rel="tag">kafka</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%AE%9A%E6%97%B6%E4%BB%BB%E5%8A%A1/" rel="tag">定时任务</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2018/11/24/2018-11/gc%E6%97%A5%E5%BF%97%E7%9A%84%E5%90%AB%E4%B9%89/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          gc日志的含义
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2018/10/27/2018-10/Java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC6%E7%AB%A03-DelayQueue/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">Java并发编程的艺术-第6章3-DelayQueue</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#需求"><span class="toc-number">1.</span> <span class="toc-text">需求:</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#方案1"><span class="toc-number">2.</span> <span class="toc-text">方案1:</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#方案2-超时集"><span class="toc-number">3.</span> <span class="toc-text">方案2: 超时集</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#方案3-HashedWheelTimer：-时间轮算法-Netty4工具类"><span class="toc-number">4.</span> <span class="toc-text">方案3: HashedWheelTimer： 时间轮算法(Netty4工具类)</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#基本架构"><span class="toc-number">4.1.</span> <span class="toc-text">基本架构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#定时任务分配到时间轮"><span class="toc-number">4.1.1.</span> <span class="toc-text">定时任务分配到时间轮</span></a></li></ol></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#方案4：-层级时间轮-Kafka使用"><span class="toc-number">5.</span> <span class="toc-text">方案4： 层级时间轮(Kafka使用)</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#双向链表"><span class="toc-number">5.1.</span> <span class="toc-text">双向链表</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#到期操作"><span class="toc-number">5.2.</span> <span class="toc-text">到期操作</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#插入操作-删除类似"><span class="toc-number">5.3.</span> <span class="toc-text">插入操作(删除类似)</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#总结"><span class="toc-number">5.4.</span> <span class="toc-text">总结</span></a></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

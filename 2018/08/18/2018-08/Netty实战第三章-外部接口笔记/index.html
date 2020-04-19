@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>Netty实战第三章-外部接口笔记 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="外部接口Channel,EventLoop,ChannelFuture Channel接口封装Socket类，预定义的实现类包括: 123456EmbeddedChannelLocalServerChannelNioDatagramChannelNioSctpChannelNioSocketChannel...  EventLoopEventLoop: 只绑定一个专有线程。Channel: 只注册">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Netty实战第三章-外部接口笔记">
+<meta property="og:url" content="http://xiaoyue26.github.io/2018/08/18/2018-08/Netty%E5%AE%9E%E6%88%98%E7%AC%AC%E4%B8%89%E7%AB%A0-%E5%A4%96%E9%83%A8%E6%8E%A5%E5%8F%A3%E7%AC%94%E8%AE%B0/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="外部接口Channel,EventLoop,ChannelFuture Channel接口封装Socket类，预定义的实现类包括: 123456EmbeddedChannelLocalServerChannelNioDatagramChannelNioSctpChannelNioSocketChannel...  EventLoopEventLoop: 只绑定一个专有线程。Channel: 只注册">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-08/pic31.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-08/reactor.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-08/pic33.png">
+<meta property="article:published_time" content="2018-08-18T12:54:06.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.274Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="java">
+<meta property="article:tag" content="Netty">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://xiaoyue26.github.io/images/2018-08/pic31.png">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2018-08/Netty实战第三章-外部接口笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/08/18/2018-08/Netty%E5%AE%9E%E6%88%98%E7%AC%AC%E4%B8%89%E7%AB%A0-%E5%A4%96%E9%83%A8%E6%8E%A5%E5%8F%A3%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2018-08-18T12:54:06.000Z" itemprop="datePublished">2018-08-18</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/Netty/">Netty</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      Netty实战第三章-外部接口笔记
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="外部接口"><a href="#外部接口" class="headerlink" title="外部接口"></a>外部接口</h1><h2 id="Channel-EventLoop-ChannelFuture"><a href="#Channel-EventLoop-ChannelFuture" class="headerlink" title="Channel,EventLoop,ChannelFuture"></a>Channel,EventLoop,ChannelFuture</h2><img src="/images/2018-08/pic31.png" class="" width="400" height="600" title="外部接口">
+<h3 id="Channel接口"><a href="#Channel接口" class="headerlink" title="Channel接口"></a>Channel接口</h3><p>封装<code>Socket</code>类，预定义的实现类包括:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">EmbeddedChannel</span><br><span class="line">LocalServerChannel</span><br><span class="line">NioDatagramChannel</span><br><span class="line">NioSctpChannel</span><br><span class="line">NioSocketChannel</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+
+<h3 id="EventLoop"><a href="#EventLoop" class="headerlink" title="EventLoop"></a>EventLoop</h3><p><code>EventLoop</code>: 只绑定一个专有线程。<br><code>Channel</code>: 只注册于一个<code>EventLoop</code>；</p>
+<p><code>EventLoop</code>与线程: 1对1；<br><code>EventLoop</code>与<code>Channel</code>: 1对多；<br>因此：线程与<code>Channel</code>：1对多。同一个<code>Channel</code>的IO操作一定由同一个线程完成。</p>
+<img src="/images/2018-08/reactor.png" class="" width="400" height="600" title="reactor模式">
+
+<h3 id="ChannelFuture接口"><a href="#ChannelFuture接口" class="headerlink" title="ChannelFuture接口"></a>ChannelFuture接口</h3><p>用于查询<code>Channel</code>的操作结果。</p>
+<h2 id="ChannelHandler和ChannelPipeline"><a href="#ChannelHandler和ChannelPipeline" class="headerlink" title="ChannelHandler和ChannelPipeline"></a>ChannelHandler和ChannelPipeline</h2><h3 id="ChannelHandler接口"><a href="#ChannelHandler接口" class="headerlink" title="ChannelHandler接口"></a>ChannelHandler接口</h3><p>用来处理事件的方法。<br>子接口：<br><code>ChannelInboundHandler</code>:入站事件接口<br><code>ChannelOutboundHandler</code>:出站事件接口</p>
+<h3 id="ChannelPipeline接口"><a href="#ChannelPipeline接口" class="headerlink" title="ChannelPipeline接口"></a>ChannelPipeline接口</h3><p><code>ChannelHandler</code>接口的容器，就像一个<code>List&lt;ChannelHandler&gt;</code>。<br>是一个处理链。<br>在链上定义了入站和出站事件流。</p>
+<img src="/images/2018-08/pic33.png" class="" width="400" height="600" title="入站出站">
+<p><code>ChannelHandler</code>安装过程:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. 一个ChannelInitializer的实现注册到Bootstrap;</span><br><span class="line">2. 调用initChannel,在pipeline中安装一组自定义的ChannelHandler;</span><br><span class="line">    （2.1）ChannelHandler被安装时，分配一个ChannelHandlerContext给它，保存它与pipeline之间的绑定。</span><br><span class="line">3. ChannelInitializer将自己从pipeline中移除。</span><br></pre></td></tr></table></figure>
+
+<h3 id="ChannelHandlerContext"><a href="#ChannelHandlerContext" class="headerlink" title="ChannelHandlerContext"></a><code>ChannelHandlerContext</code></h3><p>可以用于获取底层的<code>Channel</code>。<br>两种写消息方式:</p>
+<ol>
+<li>写到<code>ChannelHandlerContext</code>中： 传递给<code>pipeline</code>中下一个<code>handler</code>;</li>
+<li>直接写<code>channel</code>：跳过后续的<code>handler</code>，直接到达尾端。</li>
+</ol>
+<h3 id="适配器"><a href="#适配器" class="headerlink" title="适配器"></a>适配器</h3><p>实际编写<code>ChannelHandler</code>的时候，一般不会直接用<code>ChannelInboundHandler</code>或者<code>ChannelOutboundHandler</code>接口，而会直接用预定义的实现类，然后进行扩展，也就是直接继承<code>extends</code>下列适配器类：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">ChannelHandlerAdapter</span><br><span class="line">ChannelInboundHandlerAdapter</span><br><span class="line">ChannelOutboundHandlerAdapter</span><br><span class="line">ChannelDuplexHandler</span><br></pre></td></tr></table></figure>
+<p>好处是可以只重写自己关心的事件处理，其他的用默认的。</p>
+<h2 id="ChannelHandler的子类型-编码器-解码器"><a href="#ChannelHandler的子类型-编码器-解码器" class="headerlink" title="ChannelHandler的子类型: 编码器/解码器"></a>ChannelHandler的子类型: 编码器/解码器</h2><p>编码解码： 入站出站时候字节和对象的数据转换。</p>
+<h2 id="抽象类SimpleChannelInboundHandler"><a href="#抽象类SimpleChannelInboundHandler" class="headerlink" title="抽象类SimpleChannelInboundHandler"></a>抽象类SimpleChannelInboundHandler</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">SimpleChannelInboundHandler&lt;I&gt; extends ChannelInboundHandlerAdapter</span><br></pre></td></tr></table></figure>
+<p>要注意处理的数据类型。<br>由于上游可能有其他解码器，导致数据类型发生改变。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/08/18/2018-08/Netty%E5%AE%9E%E6%88%98%E7%AC%AC%E4%B8%89%E7%AB%A0-%E5%A4%96%E9%83%A8%E6%8E%A5%E5%8F%A3%E7%AC%94%E8%AE%B0/" data-id="ck96cch2o00d3bhamc6z1bpno" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Netty/" rel="tag">Netty</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2018/08/19/2018-08/Netty-in-action%E7%AC%AC%E5%9B%9B%E7%AB%A0-%E4%BC%A0%E8%BE%93-%E7%AC%94%E8%AE%B0/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          Netty in action第四章-传输-笔记
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2018/08/18/2018-08/%E5%BC%95%E7%94%A8%E7%B1%BB%E5%9E%8B/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">引用类型</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#外部接口"><span class="toc-number">1.</span> <span class="toc-text">外部接口</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#Channel-EventLoop-ChannelFuture"><span class="toc-number">1.1.</span> <span class="toc-text">Channel,EventLoop,ChannelFuture</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Channel接口"><span class="toc-number">1.1.1.</span> <span class="toc-text">Channel接口</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#EventLoop"><span class="toc-number">1.1.2.</span> <span class="toc-text">EventLoop</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ChannelFuture接口"><span class="toc-number">1.1.3.</span> <span class="toc-text">ChannelFuture接口</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ChannelHandler和ChannelPipeline"><span class="toc-number">1.2.</span> <span class="toc-text">ChannelHandler和ChannelPipeline</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#ChannelHandler接口"><span class="toc-number">1.2.1.</span> <span class="toc-text">ChannelHandler接口</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ChannelPipeline接口"><span class="toc-number">1.2.2.</span> <span class="toc-text">ChannelPipeline接口</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ChannelHandlerContext"><span class="toc-number">1.2.3.</span> <span class="toc-text">ChannelHandlerContext</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#适配器"><span class="toc-number">1.2.4.</span> <span class="toc-text">适配器</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ChannelHandler的子类型-编码器-解码器"><span class="toc-number">1.3.</span> <span class="toc-text">ChannelHandler的子类型: 编码器&#x2F;解码器</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#抽象类SimpleChannelInboundHandler"><span class="toc-number">1.4.</span> <span class="toc-text">抽象类SimpleChannelInboundHandler</span></a></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

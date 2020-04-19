@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>通俗理解SSL/TLS协议区别与原理 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="区别(历史)TLS 1.0又被叫做SSL 3.1。换算关系: 123TLS 1.0 &#x3D; SSL 3.1TLS 1.1 &#x3D; SSL 3.2TLS 1.2 &#x3D; SSL 3.3 综上，简单说，它们的区别只是版本更迭而已。展开说的话，历史:    1994年，NetScape公司设计了SSL协议（Secure Sockets Layer）的1.0版，但是未发布。   1995">
+<meta property="og:type" content="article">
+<meta property="og:title" content="通俗理解SSL&#x2F;TLS协议区别与原理">
+<meta property="og:url" content="http://xiaoyue26.github.io/2018/09/26/2018-09/%E9%80%9A%E4%BF%97%E7%90%86%E8%A7%A3SSL-TLS%E5%8D%8F%E8%AE%AE%E5%8C%BA%E5%88%AB%E4%B8%8E%E5%8E%9F%E7%90%86/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="区别(历史)TLS 1.0又被叫做SSL 3.1。换算关系: 123TLS 1.0 &#x3D; SSL 3.1TLS 1.1 &#x3D; SSL 3.2TLS 1.2 &#x3D; SSL 3.3 综上，简单说，它们的区别只是版本更迭而已。展开说的话，历史:    1994年，NetScape公司设计了SSL协议（Secure Sockets Layer）的1.0版，但是未发布。   1995">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-09/tls1.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-09/tls2.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-09/tls3.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-09/real3.png">
+<meta property="article:published_time" content="2018-09-26T12:07:37.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.276Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="java">
+<meta property="article:tag" content="Netty">
+<meta property="article:tag" content="TLS">
+<meta property="article:tag" content="SSL">
+<meta property="article:tag" content="HTTP">
+<meta property="article:tag" content="RSA">
+<meta property="article:tag" content="AES">
+<meta property="article:tag" content="HMAC">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://xiaoyue26.github.io/images/2018-09/tls1.png">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2018-09/通俗理解SSL-TLS协议区别与原理" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/09/26/2018-09/%E9%80%9A%E4%BF%97%E7%90%86%E8%A7%A3SSL-TLS%E5%8D%8F%E8%AE%AE%E5%8C%BA%E5%88%AB%E4%B8%8E%E5%8E%9F%E7%90%86/" class="article-date">
+  <time datetime="2018-09-26T12:07:37.000Z" itemprop="datePublished">2018-09-26</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/Netty/">Netty</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      通俗理解SSL/TLS协议区别与原理
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="区别-历史"><a href="#区别-历史" class="headerlink" title="区别(历史)"></a>区别(历史)</h1><p><code>TLS 1.0</code>又被叫做<code>SSL 3.1</code>。<br>换算关系:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">TLS 1.0 &#x3D; SSL 3.1</span><br><span class="line">TLS 1.1 &#x3D; SSL 3.2</span><br><span class="line">TLS 1.2 &#x3D; SSL 3.3</span><br></pre></td></tr></table></figure>
+<p>综上，简单说，它们的区别只是版本更迭而已。<br>展开说的话，历史: </p>
+<blockquote>
+</blockquote>
+<p>1994年，NetScape公司设计了SSL协议（Secure Sockets Layer）的1.0版，但是未发布。</p>
+<blockquote>
+</blockquote>
+<p>1995年，NetScape公司发布SSL 2.0版，很快发现有严重漏洞。</p>
+<blockquote>
+</blockquote>
+<p>1996年，SSL 3.0版问世，得到大规模应用。</p>
+<blockquote>
+</blockquote>
+<p>1999年，互联网标准化组织ISOC接替NetScape公司，发布了SSL的升级版TLS 1.0版。</p>
+<blockquote>
+</blockquote>
+<p>2006年和2008年，TLS 1.1版和TLS 1.2版发布。（TLS1.2已经获得主流浏览器支持）</p>
+<blockquote>
+</blockquote>
+<p>2008年8月，TLS 1.3版发布，性能好。移除了很多东西，速度快了很多，少了一次握手。</p>
+<p>综上，可以先用<code>TLS 1.2</code>。</p>
+<h1 id="原理"><a href="#原理" class="headerlink" title="原理"></a>原理</h1><p>和以前莉姐课上说的<code>PGP</code>协议差不多，都是三板斧：摘要、非对称加密、对称加密。</p>
+<h2 id="要解决的问题"><a href="#要解决的问题" class="headerlink" title="要解决的问题"></a>要解决的问题</h2><pre><code>1. 窃听。解决方案：加密
+2. 篡改。解决方案：摘要 （解决数据完整性）
+3. 冒充。解决方案：数字签名 （解决中间人攻击）</code></pre><h2 id="架构"><a href="#架构" class="headerlink" title="架构"></a>架构</h2><p>ISO七层协议:<br><code>TCP</code> :  传输层<br><code>TLS</code> :  会话层<br>    <em>表示层略</em><br><code>HTTP</code>:  应用层<br>（<code>TLS</code>+<code>HTTP</code>=&gt;<code>HTTPS</code>）</p>
+<p>所以是先进行<code>3</code>次握手建立<code>TCP</code>,然后<code>4</code>次握手建立<code>TLS</code>,然后进行<code>HTTP</code>数据传输。</p>
+<p>如果在<code>TCP</code>层抓包的话，里头是<code>TLS</code>加密过的数据。（中间人无法知道内容）<br>如果在<code>HTTP</code>层（应用层）收取数据的话，是已经解密过的明文。(但是中间人不太可能在应用层，除非已经嵌入到业务层代码了。)</p>
+<h2 id="简化版加密通信"><a href="#简化版加密通信" class="headerlink" title="简化版加密通信"></a>简化版加密通信</h2><p>假设用三个算法做一下加密通信，可以怎么实现呢？<br>定义如下：<br><code>RSA</code>: 一种非对称加密算法<br><code>AES</code>: 一种对称加密算法<br><code>SHA1</code>: 一种摘要算法</p>
+<h3 id="方案1：AES-K-data"><a href="#方案1：AES-K-data" class="headerlink" title="方案1：AES(K,data)"></a>方案1：AES(K,data)</h3><p>假如客户端是<code>C</code>，服务端是<code>S</code>，<code>C</code>和<code>S</code>要传输的数据<code>data</code>。<br>直接传明文肯定是不行，可以加密一下。用一个密钥<code>K</code>，加密成<code>AES(K,data)</code>。<br>这里为啥用AES呢，不用RSA呢，因为非对称加密(RSA)太慢了。</p>
+<img src="/images/2018-09/tls1.png" class="" width="400" height="600" title="加密">
+
+<ul>
+<li>问题：<br>虽然别人不知道你俩传输了啥，但是可能悄悄得在中间篡改了数据，双方察觉不到。</li>
+<li>解决方案：<br>加上摘要算法。</li>
+</ul>
+<h3 id="方案2：AES-K-data-SHA1-data"><a href="#方案2：AES-K-data-SHA1-data" class="headerlink" title="方案2：AES(K,data+SHA1(data))"></a>方案2：AES(K,data+SHA1(data))</h3><p>可以在数据后面加上数据的摘要，然后再加密，这样中间人一旦乱改东西马上就会被检测出来，类似于校验位。</p>
+<img src="/images/2018-09/tls2.png" class="" width="400" height="600" title="摘要">
+
+<ul>
+<li>问题：<br>上述方案都有一个前提，就是通信双方使用同一个K进行加解密。<br>那么一开始的时候怎么约定、协商这个密钥K呢？</li>
+<li>解决方案:<br>先用RSA协商出一个对称密钥K。</li>
+</ul>
+<h3 id="协商密钥"><a href="#协商密钥" class="headerlink" title="协商密钥"></a>协商密钥</h3><p>最安全的方法当然是线下见面，约定一个密钥K。但是这个通信效率太低了，并发也不高。<br>为了避免中间人攻击，这个问题的关键点在于确认对方的身份。对于CS架构来说，最关键的是客户端确认服务端的身份。因此一个很自然的思路是让每个服务端有自己的身份证。</p>
+<p>计算机领域的话，身份证就是数字证书，颁发身份证的机构就是CA。<br>具体原理就是非对称加密:<br>服务端通过数字签名向客户端证明自己的身份，客户端定义一个对称密钥K，然后用服务端的公钥加密一下发给服务端，因为只有服务端能用私钥解开，因此协商密钥的过程是安全的。（即使别人截获到也没关系）</p>
+<h4 id="相关原理"><a href="#相关原理" class="headerlink" title="相关原理:"></a>相关原理:</h4><p>对称加密: </p>
+<blockquote>
+<p>加密时候用密钥K，解密时候也用密钥K，是对称的，因此叫对称加密。</p>
+</blockquote>
+<p>非对称加密: </p>
+<blockquote>
+<p>加密时候用公钥K1,解密时候用私钥K2,不是同一个密钥，不对称，因此叫非对称加密。<br>msg = RSA(K1,data);<br>data = RSA(K2,msg)</p>
+</blockquote>
+<p>也就是说，把数据用K1加密一下，可以且仅可以用K2解开；反之用K2加密消息，也可以且仅可以用K1解开，这个特性就很厉害了，正好可以用于身份认证的需求。</p>
+<p>回到刚才的需求，需要有一种数字证书的机制。<br>简单实现就是服务端先去CA申请一对密钥(K1,K2)，他选K1作为公钥，另一个K2作为私钥。<br>当他需要向别人证明自己的身份的时候，他用私钥加密一下消息发给客户端（<code>RSA(K2,data)</code>，数字签名）。客户端可以用公钥K1解开消息，确认他的身份。客户端可以用公钥K1加密一份数据发出去，这份数据也就服务端能解开，因为只有服务端有私钥K2。</p>
+<h4 id="总结"><a href="#总结" class="headerlink" title="总结:"></a>总结:</h4><pre><code>数字签名: RSA(私钥K2,data)
+加密一份只有指定人能解开的数据: RSA(公钥K1,data)。</code></pre><p>这个过程中客户端如何得到公钥K1呢?<br>可以由服务端发给客户端数字证书，证书由CA签名证明服务端的公钥确实是K1。</p>
+<p>客户端是因为信任CA,所以信任CA作保的服务端公钥K1，所以才可以用K1验证服务端的数字签名。（信任传递）<br>也就是说即使是网络世界，也还是需要签发证书的机构的。类似于一种官方机构。如果没有这种信任的基础，匿名的网络世界是很难建立起互信机制的。</p>
+<h2 id="TLS运行流程"><a href="#TLS运行流程" class="headerlink" title="TLS运行流程"></a>TLS运行流程</h2><p>简单地说就是2个步骤：先协商一个密钥，之后的通信就用这个密钥加密数据。<br><code>TLS 1.2</code>:<br>协商: 4次握手，协商出一个对称加密的密钥K；<br>通信：双方用K加密数据以后通信。</p>
+<img src="/images/2018-09/tls3.png" class="" width="400" height="600" title="tls3.png">
+<p>如上图所示，这4次握手就是想要协商出一个对称加密的密钥KEY,以及摘要算法的密钥。<br>图中的变量定义:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">r1: 随机数1;</span><br><span class="line">r2: 随机数2;</span><br><span class="line">r3: 随机数3;</span><br><span class="line">AES(KEY,data): 密钥是KEY，对称加密data；</span><br><span class="line">RSA(K1,data): 密钥是K1, 非对称加密data；</span><br><span class="line">finish: finish信息</span><br><span class="line">HMAC(data): 用HMAC算法对data做摘要（key省略了）。</span><br></pre></td></tr></table></figure>
+<p>其中对称加密的KEY是根据3个随机数r1,r2,r3生成出来的。之所以需要这么多随机数，是为了保证这个KEY的随机性。</p>
+<p>具体展开来说的话4次握手：<br>1.客户端=&gt;服务端: </p>
+<blockquote>
+<p>(1)随机数r1;<br>(2)客户端支持的协议版本、算法版本；</p>
+</blockquote>
+<p>2.服务端=&gt;客户端: </p>
+<blockquote>
+<p>(1)随机数r2;<br>(2)确定用的协议、算法版本;<br>(3)CA签名的证书(里面有服务器公钥K1);<br>(4)服务端数字签名。</p>
+</blockquote>
+<p>3.客户端=&gt;服务端: 先确认服务端的身份、生成r3, 生成对称加密的key，然后发送数据:</p>
+<blockquote>
+<p>(1)用服务器公钥K1非对称加密后的随机数r3;<br>(2)对称加密过的finish信息以及摘要。<br>(此时客户端已经有了r1,r2,r3,可以生成对称加密密钥key)</p>
+</blockquote>
+<p>4.服务端=&gt;客户端: 先解开非对称加密的数据，得到r3,然后生成对称加密的key，然后解开finish信息，发现确实能用，也就是客户端进行的对称加密是符合预期的，然后发送:</p>
+<blockquote>
+<p>(1)对称加密过的server finish信息以及摘要。</p>
+</blockquote>
+<p>如果客户端和服务端都能对Finish信息进行正常加解密且消息正确的被验证，则说明握手通道已经建立成功，接下来，双方可以进行对称加密的数据传输了。</p>
+<h3 id="几个小细节"><a href="#几个小细节" class="headerlink" title="几个小细节"></a>几个小细节</h3><ol>
+<li>上面的HMAC摘要算法也是有key的，而且也是由r1,r2,r3算出来的;</li>
+<li>大部分时候只需要认证服务端身份(http)，有时候也需要认证客户端身份，这个时候就需要客户端也有CA证书。</li>
+<li>实际代码实现中，三个随机数都是有名字的: <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">r1: 随机数1; &#x3D;&gt; random_C(random number)</span><br><span class="line">r2: 随机数2; &#x3D;&gt; random_S(random number)</span><br><span class="line">r3: 随机数3; &#x3D;&gt; pre-master key(random number)</span><br></pre></td></tr></table></figure>
+r3是关键的加密保护的随机数，r1,r2,r3一起生成key。<br>r1,r2的主要用途是为了避免中间人攻击、重放攻击。（用摘要确保r1,r2无篡改，然后又是随机数的话，就不会因为是重复的key被碰撞到相同的r3，从而生成相同的key）<br>此外其他术语也略有不同：<img src="/images/2018-09/real3.png" class="" width="400" height="600" title="实际握手">
+
+</li>
+</ol>
+<h2 id="可能的优化"><a href="#可能的优化" class="headerlink" title="可能的优化"></a>可能的优化</h2><p>TLS1.2的4次握手可以优化成近似3次握手。<br>因此协商过程中唯一不会被中间人破译的是客户端第三次握手发送的随机数r3，只要确保这一性质即可。这个r3之所以不会被破译，是因为是用服务端公钥加密的，只有服务端私钥能解开。<br>因此如果客户端事先知道服务端的公钥，可以在第一次握手的时候，就发送由服务端公钥加密的r3。（对于以前曾经通信过的服务端，这一前提是可行的）</p>
+<p>因此整个流程就是：<br>1.客户端=&gt;服务端:<br>(1)r1; //防重放<br>(2)RSA(K1,r3+hash(r3)); //可以把自己支持的所有协议的随机数都算好，加密好。<br>(3)支持的协议、算法;<br>2.服务端=&gt;客户端:<br>(1)RSA(对r1的回应),顺便签名证明自己的身份,也消除了重放攻击;<br>(2)r2; 明文即可<br>(3)确定的协议、算法;<br>(4)AES(Key,finish信息+HMAC(finish信息)); // 客户端知道上述两个信息，就能算出对称加密的key了。</p>
+<p>3.客户端=&gt;服务端: AES(Key,finish信息+HMAC(finish信息))</p>
+<p>参考链接:<br><a href="https://www.cnblogs.com/lovesong/p/5186200.html" target="_blank" rel="noopener">https://www.cnblogs.com/lovesong/p/5186200.html</a><br><a href="https://blog.soaer.com/1/3eac1f9d9045410fb249dbc81cff6b22.html" target="_blank" rel="noopener">https://blog.soaer.com/1/3eac1f9d9045410fb249dbc81cff6b22.html</a><br><a href="http://www.ruanyifeng.com/blog/2014/02/ssl_tls.html" target="_blank" rel="noopener">http://www.ruanyifeng.com/blog/2014/02/ssl_tls.html</a></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/09/26/2018-09/%E9%80%9A%E4%BF%97%E7%90%86%E8%A7%A3SSL-TLS%E5%8D%8F%E8%AE%AE%E5%8C%BA%E5%88%AB%E4%B8%8E%E5%8E%9F%E7%90%86/" data-id="ck96cch2v00dubhamdv9w14yn" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/AES/" rel="tag">AES</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/HMAC/" rel="tag">HMAC</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/HTTP/" rel="tag">HTTP</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Netty/" rel="tag">Netty</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/RSA/" rel="tag">RSA</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/SSL/" rel="tag">SSL</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/TLS/" rel="tag">TLS</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2018/10/10/2018-10/Netty-in-action-%E7%AC%AC%E5%8D%81%E4%B8%80%E7%AB%A0-SSL%E7%AD%89%E9%A2%84%E7%BD%AE%E5%AE%9E%E7%8E%B0-%E7%AC%94%E8%AE%B0/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          Netty-in-action-第十一章-SSL等预置实现-笔记
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2018/09/22/2018-09/Netty-in-action%E7%AC%AC%E5%8D%81%E7%AB%A0-%E7%BC%96%E8%A7%A3%E7%A0%81%E5%99%A8-%E7%AC%94%E8%AE%B0/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">Netty in action-第十章-编解码器-笔记</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#区别-历史"><span class="toc-number">1.</span> <span class="toc-text">区别(历史)</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#原理"><span class="toc-number">2.</span> <span class="toc-text">原理</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#要解决的问题"><span class="toc-number">2.1.</span> <span class="toc-text">要解决的问题</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#架构"><span class="toc-number">2.2.</span> <span class="toc-text">架构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#简化版加密通信"><span class="toc-number">2.3.</span> <span class="toc-text">简化版加密通信</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#方案1：AES-K-data"><span class="toc-number">2.3.1.</span> <span class="toc-text">方案1：AES(K,data)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#方案2：AES-K-data-SHA1-data"><span class="toc-number">2.3.2.</span> <span class="toc-text">方案2：AES(K,data+SHA1(data))</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#协商密钥"><span class="toc-number">2.3.3.</span> <span class="toc-text">协商密钥</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#相关原理"><span class="toc-number">2.3.3.1.</span> <span class="toc-text">相关原理:</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#总结"><span class="toc-number">2.3.3.2.</span> <span class="toc-text">总结:</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#TLS运行流程"><span class="toc-number">2.4.</span> <span class="toc-text">TLS运行流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#几个小细节"><span class="toc-number">2.4.1.</span> <span class="toc-text">几个小细节</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#可能的优化"><span class="toc-number">2.5.</span> <span class="toc-text">可能的优化</span></a></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

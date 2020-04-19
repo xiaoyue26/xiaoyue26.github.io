@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>高性能Mysql笔记-第六章(3) | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="前情提要:前面讲了一些场景下针对性的优化。  6.7.5 优化Limit分页 场景偏移量非常大，数据量非常的时候。  例如Limit 10000,20.  工作原理：Mysql查询10020条记录，然后返回最后20条。前面1W条都被丢弃。  解决方案：    限制分页的数量；(不让查这么大偏移量) 使用覆盖索引优化性能。(延迟关联) 记录上次分页的id。(利用索引)   方案2（延迟关联）其中方">
+<meta property="og:type" content="article">
+<meta property="og:title" content="高性能Mysql笔记-第六章(3)">
+<meta property="og:url" content="http://xiaoyue26.github.io/2018/03/12/2018-03/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC%E5%85%AD%E7%AB%A0-3/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="前情提要:前面讲了一些场景下针对性的优化。  6.7.5 优化Limit分页 场景偏移量非常大，数据量非常的时候。  例如Limit 10000,20.  工作原理：Mysql查询10020条记录，然后返回最后20条。前面1W条都被丢弃。  解决方案：    限制分页的数量；(不让查这么大偏移量) 使用覆盖索引优化性能。(延迟关联) 记录上次分页的id。(利用索引)   方案2（延迟关联）其中方">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2018-03-12T12:31:17.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.271Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="mysql">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2018-03/高性能Mysql笔记-第六章-3" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/03/12/2018-03/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC%E5%85%AD%E7%AB%A0-3/" class="article-date">
+  <time datetime="2018-03-12T12:31:17.000Z" itemprop="datePublished">2018-03-12</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      高性能Mysql笔记-第六章(3)
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <ul>
+<li>前情提要:<br>前面讲了一些场景下针对性的优化。</li>
+</ul>
+<h2 id="6-7-5-优化Limit分页"><a href="#6-7-5-优化Limit分页" class="headerlink" title="6.7.5 优化Limit分页"></a>6.7.5 优化Limit分页</h2><ul>
+<li>场景<br>偏移量非常大，数据量非常的时候。</li>
+</ul>
+<p>例如Limit 10000,20.</p>
+<ul>
+<li><p>工作原理：<br>Mysql查询10020条记录，然后返回最后20条。前面1W条都被丢弃。</p>
+</li>
+<li><p>解决方案：</p>
+</li>
+</ul>
+<ol>
+<li>限制分页的数量；(不让查这么大偏移量)</li>
+<li>使用覆盖索引优化性能。(延迟关联)</li>
+<li>记录上次分页的id。(利用索引)</li>
+</ol>
+<ul>
+<li>方案2（延迟关联）<br>其中方案2，使用覆盖索引优化的原理：</li>
+</ul>
+<ol>
+<li>使用覆盖索引，返回目标行的id；</li>
+<li>再使用关联查询，返回目标行的所有列。</li>
+</ol>
+<p>方案2在偏移量很大的时候，性能优化明显。</p>
+<ul>
+<li>方案3（记录上次分页id）<br>这个方案在多次顺序分页的时候性能很好。<br>比如上次分页查询到了id为10240的地方，记录这个值（可以在应用层），然后下次的查询就可以是:<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> t</span><br><span class="line"><span class="keyword">where</span> <span class="keyword">id</span>&gt;<span class="number">10240</span></span><br><span class="line"><span class="keyword">limit</span> <span class="number">20</span></span><br></pre></td></tr></table></figure>
+
+</li>
+</ul>
+<h2 id="6-7-6-SQL-CALC-FOUND-ROWS相关"><a href="#6-7-6-SQL-CALC-FOUND-ROWS相关" class="headerlink" title="6.7.6 SQL_CALC_FOUND_ROWS相关"></a>6.7.6 SQL_CALC_FOUND_ROWS相关</h2><p>使用limit的时候，如果加上hint:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">SQL_CALC_FOUND_ROWS</span><br></pre></td></tr></table></figure>
+<p>就可以获得limit之前结果集的行数。</p>
+<ul>
+<li>工作原理：<br>Mysql扫描整个结果集，获得行数。<br>如果不用这个hint，则Mysql只扫描limit的行数返回即可，因此这个hint的代价可能非常大。</li>
+</ul>
+<p>使用这个hint的可能原因及相关优化：</p>
+<ol>
+<li>想知道是否应该显示“下一页”的按钮；<br>解决方案：如果原来是limit 20,则改成limit 21即可，这样就知道需不需要“下一页”了。</li>
+<li>应用层进行缓存；</li>
+<li>使用Explain结果的行数估算。</li>
+</ol>
+<h2 id="6-7-7-优化UNION查询"><a href="#6-7-7-优化UNION查询" class="headerlink" title="6.7.7 优化UNION查询"></a>6.7.7 优化UNION查询</h2><ul>
+<li><p>UNION<br>去重后合并</p>
+</li>
+<li><p>UNION ALL<br>不去重，直接合并</p>
+</li>
+<li><p>Mysql执行UNION的原理：<br>创建临时表，UNION的过程逐步填充行。</p>
+</li>
+</ul>
+<p>优化方法：<br>将WHERE,limit,ORDER BY子句置入内部UNION的子句，以提前过滤。</p>
+<h2 id="6-7-9-用户自定义变量"><a href="#6-7-9-用户自定义变量" class="headerlink" title="6.7.9 用户自定义变量"></a>6.7.9 用户自定义变量</h2><ul>
+<li>示例:<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- 定义：</span></span><br><span class="line"><span class="keyword">set</span> @one :=<span class="number">1</span>;</span><br><span class="line"><span class="keyword">set</span> @min_actor := (<span class="keyword">select</span> <span class="keyword">min</span>(<span class="keyword">id</span>) <span class="keyword">from</span> actor); <span class="comment">-- 赋值运算优先级很低，所以右边一般都要括号。</span></span><br><span class="line"><span class="keyword">set</span> @last_week := <span class="keyword">current_date</span>-<span class="built_in">interval</span> <span class="number">1</span> <span class="keyword">week</span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">-- 使用：</span></span><br><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> t</span><br><span class="line"><span class="keyword">where</span> <span class="keyword">col</span> &lt;= @last_week;</span><br></pre></td></tr></table></figure>
+
+</li>
+</ul>
+<p><strong>缺点：</strong></p>
+<ol>
+<li>使用自定义变量后，无法使用查询缓存；</li>
+<li>表名，列名，Limit中无法使用；</li>
+<li>仅在当前连接中有用；（如果持久化连接、连接池，则会发生数据竞态，出BUG）</li>
+<li>不能定义变量的类型；</li>
+<li>优化器可能将变量优化掉，导致结果不可预期；</li>
+<li>赋值的顺序和时机不固定，导致结果不可预期；</li>
+<li>使用未定义的变量不会产生任何语法错误。（编译期无法判断错误）出错几率很大。</li>
+</ol>
+<ul>
+<li>优点：</li>
+</ul>
+<h3 id="优化排名语句"><a href="#优化排名语句" class="headerlink" title="优化排名语句"></a>优化排名语句</h3><p>实现行号功能:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">set</span> @<span class="keyword">rownum</span>:=<span class="number">0</span>;</span><br><span class="line"><span class="keyword">select</span> <span class="keyword">id</span>,@<span class="keyword">rownum</span> := @<span class="keyword">rownum</span>+<span class="number">1</span> <span class="keyword">as</span> <span class="keyword">rownum</span></span><br><span class="line"><span class="keyword">from</span> actor <span class="keyword">limit</span> <span class="number">3</span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">-- 结果：</span></span><br><span class="line">id： id1 id2 id3</span><br><span class="line">rownum: 1 2 3</span><br></pre></td></tr></table></figure>
+
+<h3 id="查询并且更新数据"><a href="#查询并且更新数据" class="headerlink" title="查询并且更新数据"></a>查询并且更新数据</h3><p>原查询：（2条语句）</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">update</span> t <span class="keyword">set</span> lastUpdated=<span class="keyword">now</span>() </span><br><span class="line"><span class="keyword">where</span> <span class="keyword">id</span>=<span class="number">1</span>;</span><br><span class="line"><span class="keyword">select</span> lastUpdated <span class="keyword">from</span> t <span class="keyword">where</span> <span class="keyword">id</span>=<span class="number">1</span>;</span><br></pre></td></tr></table></figure>
+<p>改写后：(2条语句)</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">update</span> t <span class="keyword">set</span> lastUpdated=<span class="keyword">now</span>() </span><br><span class="line"><span class="keyword">where</span> <span class="keyword">id</span>=<span class="number">1</span> <span class="keyword">and</span> @<span class="keyword">now</span>:= <span class="keyword">now</span>();</span><br><span class="line"></span><br><span class="line"><span class="keyword">select</span> @<span class="keyword">now</span>; <span class="comment">-- 无需访问数据表</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="统计更新和插入的数量"><a href="#统计更新和插入的数量" class="headerlink" title="统计更新和插入的数量"></a>统计更新和插入的数量</h3><ul>
+<li>示例：<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">insert</span> <span class="keyword">into</span> t (c1,c2) <span class="keyword">values</span></span><br><span class="line">(<span class="number">4</span>,<span class="number">4</span>)</span><br><span class="line">,(<span class="number">2</span>,<span class="number">1</span>)</span><br><span class="line">,(<span class="number">3</span>,<span class="number">1</span>)</span><br><span class="line"><span class="keyword">on</span> <span class="keyword">duplicate</span> <span class="keyword">key</span> <span class="keyword">update</span></span><br><span class="line">c1=<span class="keyword">values</span>(c1)</span><br><span class="line">+( <span class="number">0</span>* (@x:= @x+<span class="number">1</span>));</span><br><span class="line"></span><br><span class="line"><span class="keyword">select</span> @x;</span><br></pre></td></tr></table></figure>
+第一句的返回值能知道更改了n1行；<br>第二句通过<code>@x</code>统计到更新了n2行；<br>因此：<br>更新的行数=n2;<br>插入的行数=n1-n2。</li>
+</ul>
+<h1 id="6-8-案例学习"><a href="#6-8-案例学习" class="headerlink" title="6.8 案例学习"></a>6.8 案例学习</h1><h2 id="6-8-1-使用MYSQL构建一个队列表"><a href="#6-8-1-使用MYSQL构建一个队列表" class="headerlink" title="6.8.1 使用MYSQL构建一个队列表"></a>6.8.1 使用MYSQL构建一个队列表</h2><ul>
+<li>tips:<br>无论什么时候，避免<code>Select .. For Update</code>这种用法。<br>原因：会造成事务阻塞。总是有更好的方法替代这个用法。<br>此外，对于索引列，它产生排他行锁；<br>对于非索引列，它产生排他表锁。</li>
+</ul>
+<p>相关函数：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> connection_id();</span><br><span class="line"><span class="comment">-- 返回当前连接的id</span></span><br></pre></td></tr></table></figure>
+
+<p>案例：<br>表unsent_emails:</p>
+<ul>
+<li>id</li>
+<li>status (未发送，已发送，正在发送)</li>
+<li>owner （正在处理的连接id，默认是0）</li>
+<li>ts</li>
+</ul>
+<p>错误示例：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">Begin</span>;</span><br><span class="line"><span class="keyword">select</span> <span class="keyword">id</span> <span class="keyword">from</span> unsent emails</span><br><span class="line"><span class="keyword">where</span> owner=<span class="number">0</span> <span class="keyword">and</span> <span class="keyword">status</span>=<span class="string">'未发送'</span></span><br><span class="line"><span class="keyword">limit</span> <span class="number">10</span> </span><br><span class="line"><span class="keyword">For</span> <span class="keyword">Update</span>;</span><br><span class="line"><span class="comment">-- 结果是1,2,3</span></span><br><span class="line"><span class="keyword">update</span> unset_emails</span><br><span class="line"><span class="keyword">set</span> <span class="keyword">status</span>=<span class="string">'正在发送'</span></span><br><span class="line">,owner=Connection_id()</span><br><span class="line"><span class="keyword">where</span> <span class="keyword">id</span> <span class="keyword">in</span> (<span class="number">1</span>,<span class="number">2</span>,<span class="number">3</span>);</span><br><span class="line"><span class="keyword">Commit</span>;</span><br></pre></td></tr></table></figure>
+<p>select和update之间的间隙时间内，所有相同的查询会阻塞。（所有线程全都在竞争1个排他锁）</p>
+<p>改进后：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">set</span> autocommit=<span class="number">1</span>;</span><br><span class="line"><span class="keyword">commit</span>;</span><br><span class="line"><span class="keyword">update</span> unset_emails</span><br><span class="line"><span class="keyword">set</span> <span class="keyword">status</span>=<span class="string">'正在发送'</span></span><br><span class="line">,owner=connection_id()</span><br><span class="line"><span class="keyword">where</span> owner=<span class="number">0</span> <span class="keyword">and</span> <span class="keyword">status</span>=<span class="string">'unsent'</span></span><br><span class="line"><span class="keyword">limit</span> <span class="number">10</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">set</span> autocommit=<span class="number">0</span>;</span><br><span class="line"><span class="comment">-- 找出自己抢注的部分，进行处理：</span></span><br><span class="line"><span class="keyword">select</span> <span class="keyword">id</span> <span class="keyword">from</span> unsent_emails</span><br><span class="line"><span class="keyword">where</span> owner=connect_id() </span><br><span class="line"><span class="keyword">and</span> <span class="keyword">status</span>=<span class="string">'正在发送'</span>;</span><br><span class="line"><span class="comment">-- 处理....</span></span><br></pre></td></tr></table></figure>
+
+<p>改进后，不必使用<code>select ... for update</code>，避免了事务阻塞。<br>唯一需要注意的时，需要定期检查是否有线程挂了，需要把它原来抢注的任务重置为无人拥有。</p>
+<p>此外，消息队列还是别用Mysql实现了，用MQ,redis之类的吧。XD</p>
+<h2 id="6-8-2-计算两点之间的距离"><a href="#6-8-2-计算两点之间的距离" class="headerlink" title="6.8.2 计算两点之间的距离"></a>6.8.2 计算两点之间的距离</h2><ul>
+<li>Tip:<br>复杂地理信息计算建议使用PostgreSql.</li>
+</ul>
+<p>案例：<br>某个点附近所有可以出租的房子。<br>（一定半径内的所有点）<br>（或社交网站中匹配附近的用户）</p>
+<p>表Locations:</p>
+<ul>
+<li>id</li>
+<li>name</li>
+<li>lat: 经度</li>
+<li>lon：纬度</li>
+</ul>
+<p>A点和B点之间的距离计算公式<code>CAL</code>:</p>
+<figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Acos(</span><br><span class="line">    cos(latA)*cos(latB)*cos(lonA-lonB)</span><br><span class="line">  +sin(latA)*sin(latB)</span><br><span class="line">)* 地球的半径</span><br></pre></td></tr></table></figure>
+
+<p><strong>原查询：</strong></p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> locations</span><br><span class="line"><span class="keyword">where</span> 地球的半径* CAL &lt;= <span class="number">100</span>;</span><br></pre></td></tr></table></figure>
+<p>上述查询无法使用索引，且非常消耗CPU。</p>
+<p>优化方法：降低精度；修改上述的椭圆计算公式，近似成立方体公式。</p>
+<p><strong>- 优化后：</strong></p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> locations</span><br><span class="line"><span class="keyword">where</span> lat <span class="keyword">between</span> <span class="number">38.03</span>-<span class="keyword">degrees</span>(<span class="number">0.0253</span>) <span class="keyword">and</span> <span class="number">38.03</span> + degree(<span class="number">0.0253</span>)</span><br><span class="line"><span class="keyword">and</span> lon <span class="keyword">between</span> <span class="number">-78.48</span> - <span class="keyword">degrees</span>(<span class="number">0.0253</span>) <span class="keyword">and</span> <span class="number">-78.48</span> + <span class="keyword">degrees</span>(<span class="number">0.0253</span>);</span><br></pre></td></tr></table></figure>
+<p>上述查询可以利用索引(lat)或(lon)，但由于都是范围查询，无法利用联合索引。</p>
+<p>为了进一步优化范围查询，可以使用枚举优化（使用IN列表）。<br>由于lat和lon列其实不是离散值，可以手动创建离散列：<br>新增两列存储坐标的近似值Floor()，然后在查询中使用IN将所有点的整数值放在列表中：</p>
+<ul>
+<li>Lat_floor: floor(lat)</li>
+<li>Lon_floor: floor(lon)</li>
+<li>Key(Lon_floor,Lat_floor)</li>
+</ul>
+<p><strong>- 进一步优化：</strong></p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> locations</span><br><span class="line"><span class="keyword">where</span> lat <span class="keyword">between</span> <span class="number">38.03</span>-<span class="keyword">degrees</span>(<span class="number">0.0253</span>) <span class="keyword">and</span> <span class="number">38.03</span> + degree(<span class="number">0.0253</span>)</span><br><span class="line"><span class="keyword">and</span> lon <span class="keyword">between</span> <span class="number">-78.48</span> - <span class="keyword">degrees</span>(<span class="number">0.0253</span>) <span class="keyword">and</span> <span class="number">-78.48</span> + <span class="keyword">degrees</span>(<span class="number">0.0253</span>)</span><br><span class="line"><span class="comment">-- 增加对于索引的利用：</span></span><br><span class="line"><span class="keyword">and</span> lat_floor <span class="keyword">in</span> (<span class="number">36</span>,<span class="number">37</span>,<span class="number">38</span>,<span class="number">39</span>,<span class="number">40</span>)</span><br><span class="line"><span class="keyword">and</span> lon_floor <span class="keyword">in</span> (<span class="number">-80</span>,<span class="number">-79</span>,<span class="number">-78</span>,<span class="number">-77</span>);</span><br></pre></td></tr></table></figure>
+<p>上述优化可以利用索引(lat_floor,lon_floor)，因此比前面更快。</p>
+<ul>
+<li>精度恢复：<br>上述优化只是滤掉不适合的点，可以进一步使用原来的公式进行过滤。由于此时剩下的点不多，因此即使原来的公式很复杂，性能也能够接受。</li>
+</ul>
+<h2 id="6-8-3-用户自定义函数-UDF"><a href="#6-8-3-用户自定义函数-UDF" class="headerlink" title="6.8.3 用户自定义函数(UDF)"></a>6.8.3 用户自定义函数(UDF)</h2><p>书里说的比较含糊，总之是写一个C/C++程序作为后台程序，接受某种网络通信协议。<br>(TODO,进一步搜索别人的实际案例。)</p>
+<h1 id="6-9-总结"><a href="#6-9-总结" class="headerlink" title="6.9 总结"></a>6.9 总结</h1><p>查询优化的思路：</p>
+<ol>
+<li>检查执行的时间消耗；</li>
+<li>检查Schema设计；</li>
+<li>检查索引设计；(三星系统)</li>
+<li>检查Explain计划（是否利用到索引，范围索引转化为枚举）</li>
+<li>其他的各种优化：<br>(1) limit优化；<br>(2) 覆盖索引+延迟关联；<br>(3) 复杂查询分解；<br>(4) 执行计划搜索提前终止；<br>(5) 排序优化（1次传输，2次传输），Order By的列提取到第一张表；<br>(6) UNION优化：手动下推谓词；<br>(7) Count优化：反向过滤， 利用MyISam的统计信息；<br>(8) Delayed优化：日志系统异步写入；<br>(9) 排他锁优化：避免使用<code>Select ... for update</code>，尽早释放锁（先抢注，释放锁，后处理）。</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/03/12/2018-03/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC%E5%85%AD%E7%AB%A0-3/" data-id="ck96cch2d00bobham9rzjare7" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2018/03/17/2018-03/Mysql%E8%B0%83%E4%BC%98%E6%89%8B%E6%AE%B5%E6%80%BB%E7%BB%93-%E6%8C%81%E7%BB%AD%E6%9B%B4%E6%96%B0/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          Mysql调优手段总结(持续更新)
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2018/03/11/2018-03/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC%E5%85%AD%E7%AB%A0-2/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">高性能Mysql笔记-第六章(2)</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#6-7-5-优化Limit分页"><span class="toc-number">1.</span> <span class="toc-text">6.7.5 优化Limit分页</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#6-7-6-SQL-CALC-FOUND-ROWS相关"><span class="toc-number">2.</span> <span class="toc-text">6.7.6 SQL_CALC_FOUND_ROWS相关</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#6-7-7-优化UNION查询"><span class="toc-number">3.</span> <span class="toc-text">6.7.7 优化UNION查询</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#6-7-9-用户自定义变量"><span class="toc-number">4.</span> <span class="toc-text">6.7.9 用户自定义变量</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#优化排名语句"><span class="toc-number">4.1.</span> <span class="toc-text">优化排名语句</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#查询并且更新数据"><span class="toc-number">4.2.</span> <span class="toc-text">查询并且更新数据</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#统计更新和插入的数量"><span class="toc-number">4.3.</span> <span class="toc-text">统计更新和插入的数量</span></a></li></ol></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#6-8-案例学习"><span class="toc-number"></span> <span class="toc-text">6.8 案例学习</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#6-8-1-使用MYSQL构建一个队列表"><span class="toc-number">1.</span> <span class="toc-text">6.8.1 使用MYSQL构建一个队列表</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#6-8-2-计算两点之间的距离"><span class="toc-number">2.</span> <span class="toc-text">6.8.2 计算两点之间的距离</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#6-8-3-用户自定义函数-UDF"><span class="toc-number">3.</span> <span class="toc-text">6.8.3 用户自定义函数(UDF)</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#6-9-总结"><span class="toc-number"></span> <span class="toc-text">6.9 总结</span></a>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

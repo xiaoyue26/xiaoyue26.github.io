@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>mybatis批量插入和更新 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="批量插入:mysql下批量插入的sql语句: 123insert into user_info (uname,unumber) values (&#39;xiaoyue1&#39;,&#39;1&#39;),(&#39;xiaoyue2&#39;,&#39;2&#39;); 似乎很简单,然而,经过复杂的条件判断和动态构造就变成了这样: 1234567891011121314151617&lt;insert id&#x3D;&quot;insertMass&quot; useGenerat">
+<meta property="og:type" content="article">
+<meta property="og:title" content="mybatis批量插入和更新">
+<meta property="og:url" content="http://xiaoyue26.github.io/2015/10/19/mybatis%E6%89%B9%E9%87%8F%E6%8F%92%E5%85%A5%E5%92%8C%E6%9B%B4%E6%96%B0/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="批量插入:mysql下批量插入的sql语句: 123insert into user_info (uname,unumber) values (&#39;xiaoyue1&#39;,&#39;1&#39;),(&#39;xiaoyue2&#39;,&#39;2&#39;); 似乎很简单,然而,经过复杂的条件判断和动态构造就变成了这样: 1234567891011121314151617&lt;insert id&#x3D;&quot;insertMass&quot; useGenerat">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2015-10-19T12:47:36.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.296Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="mybatis">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-mybatis批量插入和更新" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2015/10/19/mybatis%E6%89%B9%E9%87%8F%E6%8F%92%E5%85%A5%E5%92%8C%E6%9B%B4%E6%96%B0/" class="article-date">
+  <time datetime="2015-10-19T12:47:36.000Z" itemprop="datePublished">2015-10-19</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/orm/">orm</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      mybatis批量插入和更新
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <ol>
+<li><p>批量插入:<br><code>mysql</code>下批量插入的sql语句:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">insert</span> <span class="keyword">into</span> user_info (uname,unumber) <span class="keyword">values</span> </span><br><span class="line">(<span class="string">'xiaoyue1'</span>,<span class="string">'1'</span>),</span><br><span class="line">(<span class="string">'xiaoyue2'</span>,<span class="string">'2'</span>);</span><br></pre></td></tr></table></figure>
+<p>似乎很简单,<br>然而,经过复杂的条件判断和动态构造就变成了这样:</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">insert</span> <span class="attr">id</span>=<span class="string">"insertMass"</span> <span class="attr">useGeneratedKeys</span>=<span class="string">"true"</span> <span class="attr">keyProperty</span>=<span class="string">"id"</span>&gt;</span></span><br><span class="line">		insert into user_info</span><br><span class="line">		<span class="tag">&lt;<span class="name">trim</span> <span class="attr">prefix</span>=<span class="string">"("</span> <span class="attr">suffixOverrides</span>=<span class="string">","</span> <span class="attr">suffix</span>=<span class="string">")"</span>&gt;</span></span><br><span class="line">			<span class="tag">&lt;<span class="name">if</span> <span class="attr">test</span>=<span class="string">"list[0].id != null"</span>&gt;</span>id,<span class="tag">&lt;/<span class="name">if</span>&gt;</span></span><br><span class="line">			<span class="tag">&lt;<span class="name">if</span> <span class="attr">test</span>=<span class="string">"list[0].uname!= null"</span>&gt;</span>uname,<span class="tag">&lt;/<span class="name">if</span>&gt;</span></span><br><span class="line">			<span class="tag">&lt;<span class="name">if</span> <span class="attr">test</span>=<span class="string">"list[0].unumber!= null"</span>&gt;</span>unumber,<span class="tag">&lt;/<span class="name">if</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;/<span class="name">trim</span>&gt;</span></span><br><span class="line">		values</span><br><span class="line">		<span class="tag">&lt;<span class="name">foreach</span> <span class="attr">collection</span>=<span class="string">"list"</span> <span class="attr">item</span>=<span class="string">"item"</span> <span class="attr">index</span>=<span class="string">"index"</span></span></span><br><span class="line"><span class="tag">			<span class="attr">separator</span>=<span class="string">","</span>&gt;</span></span><br><span class="line">			<span class="tag">&lt;<span class="name">trim</span> <span class="attr">prefix</span>=<span class="string">"("</span> <span class="attr">suffixOverrides</span>=<span class="string">","</span> <span class="attr">suffix</span>=<span class="string">")"</span>&gt;</span></span><br><span class="line">				<span class="tag">&lt;<span class="name">if</span> <span class="attr">test</span>=<span class="string">"item.id != null"</span>&gt;</span>#&#123;item.id&#125;,<span class="tag">&lt;/<span class="name">if</span>&gt;</span></span><br><span class="line">				<span class="tag">&lt;<span class="name">if</span> <span class="attr">test</span>=<span class="string">"item.uname!= null"</span>&gt;</span>#&#123;item.uname&#125;,<span class="tag">&lt;/<span class="name">if</span>&gt;</span></span><br><span class="line">				<span class="tag">&lt;<span class="name">if</span> <span class="attr">test</span>=<span class="string">"item.unumber!= null"</span>&gt;</span>#&#123;item.unumber&#125;,<span class="tag">&lt;/<span class="name">if</span>&gt;</span></span><br><span class="line">			<span class="tag">&lt;/<span class="name">trim</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;/<span class="name">foreach</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">insert</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>用<code>useGeneratedKeys</code>和<code>keyProperty</code>接收自增主键返回的id,而且此处返回的是第一个插入的记录的id,而不是最后一条记录的id。注意调用代码传入的<code>map</code>中必须有<code>id</code>这一项以接收返回值。</li>
+<li>用<code>trim</code>标签消除末尾的逗号，同时在首尾加上括号。</li>
+<li>用<code>foreach</code>标签遍历传入的<code>list</code>, 传入的<code>map</code>中<code>key</code>为<code>list</code>的对象即为<code>userInfo</code>数组。</li>
+<li><code>list[0]</code>表示对象数组的第一项。</li>
+</ul>
+</li>
+</ol>
+<ol start="2">
+<li>对应的调用代码:<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">insertMass</span><span class="params">(List&lt;UserInfo&gt; users)</span> </span>&#123;</span><br><span class="line">		Map&lt;String, Object&gt; paraMap = <span class="keyword">new</span> HashMap&lt;&gt;();</span><br><span class="line">		paraMap.put(<span class="string">"list"</span>, users);</span><br><span class="line">		paraMap.put(<span class="string">"id"</span>, <span class="number">0</span>);<span class="comment">//note</span></span><br><span class="line">		userInfoMapper.insertMass(paraMap);</span><br><span class="line">		<span class="keyword">int</span> beginId = (<span class="keyword">int</span>) paraMap.get(<span class="string">"id"</span>);</span><br><span class="line">		<span class="keyword">for</span> (UserInfo userInfo : users) &#123;</span><br><span class="line">			userInfo.setId(beginId);</span><br><span class="line">			++beginId;</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br></pre></td></tr></table></figure>
+
+</li>
+</ol>
+<hr>
+<ol start="3">
+<li>批量更新:<br>本来是打算用<code>case when</code>语句写的,然而太过复杂没能写出来,可能得用<code>java</code>拼接好<code>sql</code>语句再传给<code>mybatis</code>；<code>replace into</code>虽然简练但可能改变其他不想改变的字段；最后折中写了<code>insert into..on duplicate key UPDATE...</code>。</li>
+</ol>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">insert</span> <span class="attr">id</span>=<span class="string">"updateMass"</span>&gt;</span> <span class="comment">&lt;!--on duplicate key, mysql特有语法 --&gt;</span></span><br><span class="line">		insert into user_info</span><br><span class="line">		(</span><br><span class="line">		<span class="tag">&lt;<span class="name">if</span> <span class="attr">test</span>=<span class="string">"list[0].unumber != null"</span>&gt;</span> unumber,<span class="tag">&lt;/<span class="name">if</span>&gt;</span></span><br><span class="line">		uname,</span><br><span class="line">		id<span class="comment">&lt;!-- id is necessary --&gt;</span></span><br><span class="line">		)</span><br><span class="line">		values</span><br><span class="line">		<span class="tag">&lt;<span class="name">foreach</span> <span class="attr">collection</span>=<span class="string">"list"</span> <span class="attr">item</span>=<span class="string">"item"</span> <span class="attr">index</span>=<span class="string">"index"</span></span></span><br><span class="line"><span class="tag">			<span class="attr">separator</span>=<span class="string">","</span>&gt;</span></span><br><span class="line">			(</span><br><span class="line">			<span class="tag">&lt;<span class="name">if</span> <span class="attr">test</span>=<span class="string">"item.unumber!= null"</span>&gt;</span> #&#123;item.unumber&#125;,<span class="tag">&lt;/<span class="name">if</span>&gt;</span></span><br><span class="line">			<span class="tag">&lt;<span class="name">if</span> <span class="attr">test</span>=<span class="string">"item.uname!= null"</span>&gt;</span>#&#123;item.uname&#125;,<span class="tag">&lt;/<span class="name">if</span>&gt;</span></span><br><span class="line">			#&#123;item.id&#125;</span><br><span class="line">			)</span><br><span class="line">		<span class="tag">&lt;/<span class="name">foreach</span>&gt;</span></span><br><span class="line">		on duplicate key UPDATE</span><br><span class="line">		<span class="tag">&lt;<span class="name">if</span> <span class="attr">test</span>=<span class="string">"list[0].unumber != null"</span>&gt;</span>unumber=values(unumber),<span class="tag">&lt;/<span class="name">if</span>&gt;</span></span><br><span class="line">		uname=values(uname) <span class="comment">&lt;!-- 至少更新一项 --&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">insert</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<ul>
+<li>这次没使用<code>trim</code>标签，可读性好了一点点,可以和上面对比一下;</li>
+<li>传入参数没设置类型,因为<code>mybatis</code>自己会判断, 其实类型是<code>map</code>。<code>map</code>中<code>list</code>项中存着要更新的对象数组。</li>
+</ul>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2015/10/19/mybatis%E6%89%B9%E9%87%8F%E6%8F%92%E5%85%A5%E5%92%8C%E6%9B%B4%E6%96%B0/" data-id="ck96ccgzy004cbham185l96f7" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mybatis/" rel="tag">mybatis</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2015/10/30/%E4%BD%BF%E7%94%A8JMX%E8%BD%AE%E8%AF%A2%E5%8F%91%E7%8E%B0%E6%AD%BB%E9%94%81/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          使用JMX轮询发现死锁
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2015/10/18/RTTI%E4%B8%8E%E5%8F%8D%E5%B0%84/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">RTTI与反射</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+  
+    
+
+  
+    
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title recent-posts">最新文章</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2020/04/19/2020-04/spring%E6%8B%BE%E9%81%97/">spring拾遗</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/26/2020-03/%E5%88%A9%E7%94%A8UTF-8%E7%BC%96%E7%A0%81%E7%9A%84%E7%89%B9%E6%80%A7%E8%BF%9B%E8%A1%8C%E4%BC%98%E5%8C%96/">利用UTF-8编码的特性进行优化</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/24/2020-03/linux%E8%87%AA%E8%BF%9E%E6%8E%A5/">linux自连接</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/23/2020-03/redis%E5%A4%A7key%E9%97%AE%E9%A2%98/">redis大key问题</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/23/2020-03/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/">分布式事务</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

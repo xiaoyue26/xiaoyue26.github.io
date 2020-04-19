@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>apache配置笔记 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="cat &#x2F;etc&#x2F;httpd&#x2F;conf&#x2F;httpd.conf 整个日志分为三部分：(1)全局环境(2)主配置：虚拟主机没有处理的请求该如何处理；同时也是虚拟主机配置的缺省值；(3)虚拟主机的设置，接收发往不同IP或不同域名的请求，用同一个apache2服务器进程进行处理。没有框在&lt;VirtualHost&gt;标签里的设置会覆盖默认设置，所以尽量把自定义设置放在标签里。  HostnameL">
+<meta property="og:type" content="article">
+<meta property="og:title" content="apache配置笔记">
+<meta property="og:url" content="http://xiaoyue26.github.io/2014/11/11/apache%E9%85%8D%E7%BD%AE%E7%AC%94%E8%AE%B0/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="cat &#x2F;etc&#x2F;httpd&#x2F;conf&#x2F;httpd.conf 整个日志分为三部分：(1)全局环境(2)主配置：虚拟主机没有处理的请求该如何处理；同时也是虚拟主机配置的缺省值；(3)虚拟主机的设置，接收发往不同IP或不同域名的请求，用同一个apache2服务器进程进行处理。没有框在&lt;VirtualHost&gt;标签里的设置会覆盖默认设置，所以尽量把自定义设置放在标签里。  HostnameL">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2014-11-11T03:31:44.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.291Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="配置">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-apache配置笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2014/11/11/apache%E9%85%8D%E7%BD%AE%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2014-11-11T03:31:44.000Z" itemprop="datePublished">2014-11-11</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E9%85%8D%E7%BD%AE/">配置</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      apache配置笔记
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p><code>cat /etc/httpd/conf/httpd.conf</code></p>
+<p>整个日志分为三部分：<br>(1)全局环境<br>(2)主配置：<br>虚拟主机没有处理的请求该如何处理；同时也是虚拟主机配置的缺省值；<br>(3)虚拟主机的设置，接收发往不同IP或不同域名的请求，用同一个apache2服务器进程进行处理。<br>没有框在<code>&lt;VirtualHost&gt;</code>标签里的设置会覆盖默认设置，所以尽量把自定义设置放在标签里。</p>
+<ol>
+<li><p><code>HostnameLookups Off</code><br>这个选项表示：日志记录来访者时，只记录IP。<br>如果<code>Off</code>改成<code>On</code>，那就每次要先去DNS查该IP对应的域名，太麻烦了。</p>
+</li>
+<li><p><code>DirectoryIndex index.html index.html.var index.php</code><br>当请求的地址对应的是一个目录时，apache就会在改目录下找index.html..等等。</p>
+</li>
+<li><p><code>ServerRoot /etc/httpd</code><br>此时，<code>logs/foo.log</code>(相对路径)被解释为<code>/etc/httpd/logs/foo.log</code><br>绝对路径<code>/logs/foo.log</code>依然还是<code>/logs/foo.log</code>。<br>若NFS下运行apache,则此配置比较复杂，需要参考：(或再百度下研究下)<br><a href="http://httpd.apache.org/docs/2.2/mod/mpm_common.html#lockfile" target="_blank" rel="noopener">http://httpd.apache.org/docs/2.2/mod/mpm_common.html#lockfile</a></p>
+</li>
+<li><p>MPM：多道处理模块，没研究。</p>
+</li>
+<li><p><code>User apache</code><br><code>Group apache</code></p>
+</li>
+</ol>
+<p>设置apache运行的用户。我猜测改成root，访问权限就全开了,但是也危险了。</p>
+<ol start="6">
+<li><code>DocumentRoot &quot;/var/www/html&quot;</code><br>放置服务文档的目录, 默认状态下,所有的请求都以这个目录为基础, 但是直接符号连接和别名可用于指向其他位置.</li>
+</ol>
+<ol start="7">
+<li><p><code>ServerAdmin  xxx@qq.com</code><br>这个指令用来设置服务器返回给客户端的错误信息中包含的管理员邮件地址。便于用户在收到错误信息后能及时与管理员取得联系。</p>
+</li>
+<li><p><code>ServerSignature On</code><br>方便调试，显示服务器信息；<br>安全的话，关掉，改成<code>Off</code>。</p>
+</li>
+<li><p>对于<code>Order deny,allow</code><br><code>Allow from all</code>的解释：<a href="http://zhanshenny.iteye.com/blog/1654332" target="_blank" rel="noopener">http://zhanshenny.iteye.com/blog/1654332</a></p>
+</li>
+<li><p><code>Options</code>这个子句用来说明一些主要的设置，目前可以使用的设置有<code>Indexes</code>，<code>Includes</code>，<code>FollowSymLinks</code>，<code>ExecCGI</code>，<code>MultiView</code>，当然还有两个最简单的选择就是<code>None</code>和<code>All</code>。<br>　　<code>None</code>是禁止所有选择，而<code>All</code> 允许上面的所有<code>Options</code>。一般我们主要关心的是<code>Indexes</code> 和<code>FollowSymLinks</code>。<code>Indexes</code> 是设定是否允许在目录下面没有<code>index.html</code> 的时候显示目录，而<code>FollowSymLinks</code> 决定是否可以通过符号连接跨越<code>DocumentRoot</code>。例如，尽管<code>/ftp</code> 不在<code>/home/httpd/html</code> 下面，但是我们仍然可以使用符号连接建立一个<code>/home/httpd/html/ftp</code>使得可以直接输入<code>http://mydomain.com/ftp</code> 来访问这个目录。<br>　　使用<code>FollowSymLinks</code> 的办法很简单，就是首先在合适的目录段落里面<code>Options Follow SymLinks</code>，（符号连接的上层就可以）然后建立一个别名：<br>　　<code>Alias /ftp/ &quot;home/httpd/html/ftp/&quot;</code><br>　　后面的是你建立的到<code>/ftp</code> 的符号连接。注意这一行应该位于所有目录段落之外。</p>
+</li>
+<li><p>虚拟主机配置：<br><a href="http://man.chinaunix.net/newsoft/ApacheManual/vhosts/name-based.html" target="_blank" rel="noopener">http://man.chinaunix.net/newsoft/ApacheManual/vhosts/name-based.html</a><br><a href="http://man.chinaunix.net/newsoft/ApacheManual/vhosts/examples.html" target="_blank" rel="noopener">http://man.chinaunix.net/newsoft/ApacheManual/vhosts/examples.html</a><br><a href="http://man.chinaunix.net/newsoft/ApacheManual/vhosts/mass.html" target="_blank" rel="noopener">http://man.chinaunix.net/newsoft/ApacheManual/vhosts/mass.html</a><br><a href="http://httpd.apache.org/docs/2.2/" target="_blank" rel="noopener">http://httpd.apache.org/docs/2.2/</a><br><code>Listen</code>指令并不实现虚拟主机，它只是告诉主服务器去监听哪些地址和端口。 如果没有<code>&lt;VirtualHost&gt;</code>指令，服务器对所有请求一视同仁； 但是如果有<code>&lt;VirtualHost&gt;</code>，则服务器会作出不同的响应。 要实现虚拟主机，首先必须告诉服务器需要监听的地址和端口， 然后为特定的地址和端口建立一个<code>&lt;VirtualHost&gt;</code>段。 注意，如果<code>&lt;VirtualHost&gt;</code>段设置为服务器没有监听的地址和端口， 则此段无效。</p>
+</li>
+<li><p>暂无需求，待续.</p>
+</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2014/11/11/apache%E9%85%8D%E7%BD%AE%E7%AC%94%E8%AE%B0/" data-id="ck96ccgyu000gbhamax25dzwx" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E9%85%8D%E7%BD%AE/" rel="tag">配置</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2014/12/23/pyqt%E7%BB%98%E5%9B%BE%E5%BA%93/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          pyqt绘图库
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2014/10/29/centos%E4%B8%8Bnginx%E9%85%8D%E7%BD%AE%E7%AC%94%E8%AE%B0/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">centos下nginx配置笔记</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+  
+    
+
+  
+    
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title recent-posts">最新文章</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2020/04/19/2020-04/spring%E6%8B%BE%E9%81%97/">spring拾遗</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/26/2020-03/%E5%88%A9%E7%94%A8UTF-8%E7%BC%96%E7%A0%81%E7%9A%84%E7%89%B9%E6%80%A7%E8%BF%9B%E8%A1%8C%E4%BC%98%E5%8C%96/">利用UTF-8编码的特性进行优化</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/24/2020-03/linux%E8%87%AA%E8%BF%9E%E6%8E%A5/">linux自连接</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/23/2020-03/redis%E5%A4%A7key%E9%97%AE%E9%A2%98/">redis大key问题</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/23/2020-03/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/">分布式事务</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

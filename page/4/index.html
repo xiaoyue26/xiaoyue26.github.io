@@ -1,0 +1,1154 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta property="og:type" content="website">
+<meta property="og:title" content="笔记本">
+<meta property="og:url" content="http://xiaoyue26.github.io/page/4/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:author" content="风梦七">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main">
+  
+    <article id="post-2019-05/将pyspark中的UDF加速50" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/05/08/2019-05/%E5%B0%86pyspark%E4%B8%AD%E7%9A%84UDF%E5%8A%A0%E9%80%9F50/" class="article-date">
+  <time datetime="2019-05-08T14:39:03.000Z" itemprop="datePublished">2019-05-08</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/spark/">spark</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/05/08/2019-05/%E5%B0%86pyspark%E4%B8%AD%E7%9A%84UDF%E5%8A%A0%E9%80%9F50/">将pyspark中的UDF加速50%</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="摘要"><a href="#摘要" class="headerlink" title="摘要"></a>摘要</h1><blockquote>
+<p>调用jar中的UDF，减少python与JVM的交互，简单banchmark下对于50G数据集纯map处理可以减少一半处理时间。<br>牺牲UDF部分的开发时间，尽量提高性能。<br>以接近纯python的开发成本，获得逼近纯scala的性能。兼顾性能和开发效率。</p>
+</blockquote>
+<h1 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h1><p>  当遇到sql无法直接处理的数据时(比如加密解密、thrift解析操作二进制)，我们需要自定义函数(UDF)来进行处理。出于开发效率的考虑，我们一般会选择tesla平台，使用pyspark脚本。</p>
+<h1 id="Before-最简单的UDF"><a href="#Before-最简单的UDF" class="headerlink" title="Before: 最简单的UDF"></a>Before: 最简单的UDF</h1><p>一个最简单的UDF处理大致如下:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">str2idfa</span><span class="params">(txt)</span>:</span></span><br><span class="line">    <span class="keyword">try</span>:</span><br><span class="line">        txtDecoded = base64.b64decode(txt)</span><br><span class="line">        bytesWithSalt = bytes(txtDecoded)</span><br><span class="line">        <span class="comment"># 省略实际处理代码</span></span><br><span class="line">        <span class="keyword">return</span> <span class="string">'dump_data'</span></span><br><span class="line">    <span class="keyword">except</span>:</span><br><span class="line">        print(<span class="string">'error here'</span>)</span><br><span class="line">        <span class="keyword">return</span> <span class="string">'-1#-1'</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">'__main__'</span>:</span><br><span class="line">    spark = SparkSession.builder.appName(app_name).getOrCreate()</span><br><span class="line">    in_provider = TDWSQLProvider(spark, user=user, passwd=passwd, db=db_name)</span><br><span class="line"></span><br><span class="line">    in_df = in_provider.table(<span class="string">'t_dw_dc0xxxx'</span>, [<span class="string">'p_2019042100'</span>])  <span class="comment"># 分区数组</span></span><br><span class="line">    print(in_df.columns)</span><br><span class="line">    in_df.createOrReplaceTempView(<span class="string">"t1"</span>)</span><br><span class="line">    <span class="comment"># 1. 注册udf:</span></span><br><span class="line">    spark.udf.register(<span class="string">"str2idfa"</span>, str2idfa, StringType())</span><br><span class="line">    <span class="comment"># 2. 在sql中使用:</span></span><br><span class="line">    out_t1 = spark.sql(<span class="string">'''select uin</span></span><br><span class="line"><span class="string">        ,str2idfa(value) as idfa_idfv</span></span><br><span class="line"><span class="string">        from t1</span></span><br><span class="line"><span class="string">        '''</span>)</span><br><span class="line">    print(out_t1.columns)</span><br><span class="line">    print(out_t1.take(<span class="number">10</span>))</span><br></pre></td></tr></table></figure>
+
+<h2 id="底层实现原理"><a href="#底层实现原理" class="headerlink" title="底层实现原理"></a>底层实现原理</h2><img src="/images/2019-05/pyspark_call.png" class="" width="800" height="1200" title="pyspark_call">
+<p>  如上图所示，pyspark并没有像dpark一样用python重新实现一个计算引擎，依旧是复用了scala的jvm计算底层，只是用py4j架设了一条python进程和jvm互相调用的桥梁。<br>  <code>driver</code>:  pyspark脚本和sparkContext的jvm使用py4j相互调用;<br>  <code>executor</code>: 由于driver帮忙把spark算子封装好了，执行计划也生成了字节码，一般情况下不需要python进程参与，仅当需要运行UDF(含lambda表达式形式)时，将它委托给python进程处理(DAG图中的<code>BatchEvalPython</code>步骤)，此时JVM和python进程使用socket通信。</p>
+<p>   上述使用简单UDF时的pyspark由于需要使用UDF，因此DAG图中有<code>BatchEvalPython</code>步骤:<br>   <img src="/images/2019-05/py_udf.png" class="" width="400" height="400" title="py_udf"></p>
+<h2 id="BatchEvalPython过程"><a href="#BatchEvalPython过程" class="headerlink" title="BatchEvalPython过程"></a>BatchEvalPython过程</h2><p>参考源码：<a href="https://github.com/apache/spark/blob/master/sql/core/src/main/scala/org/apache/spark/sql/execution/python/BatchEvalPythonExec.scala" target="_blank" rel="noopener">https://github.com/apache/spark/blob/master/sql/core/src/main/scala/org/apache/spark/sql/execution/python/BatchEvalPythonExec.scala</a><br>可以看到和这个名字一样直白，它就是每次取100条数据让python进程帮忙处理一下:</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 第58行:</span></span><br><span class="line"><span class="comment">// Input iterator to Python: input rows are grouped so we send them in batches to Python.</span></span><br><span class="line">    <span class="comment">// For each row, add it to the queue.</span></span><br><span class="line">    <span class="keyword">val</span> inputIterator = iter.map &#123; row =&gt;</span><br><span class="line">      <span class="keyword">if</span> (needConversion) &#123;</span><br><span class="line">        <span class="type">EvaluatePython</span>.toJava(row, schema)</span><br><span class="line">      &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="comment">// fast path for these types that does not need conversion in Python</span></span><br><span class="line">        <span class="keyword">val</span> fields = <span class="keyword">new</span> <span class="type">Array</span>[<span class="type">Any</span>](row.numFields)</span><br><span class="line">        <span class="keyword">var</span> i = <span class="number">0</span></span><br><span class="line">        <span class="keyword">while</span> (i &lt; row.numFields) &#123;</span><br><span class="line">          <span class="keyword">val</span> dt = dataTypes(i)</span><br><span class="line">          fields(i) = <span class="type">EvaluatePython</span>.toJava(row.get(i, dt), dt)</span><br><span class="line">          i += <span class="number">1</span></span><br><span class="line">        &#125;</span><br><span class="line">        fields</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;.grouped(<span class="number">100</span>).map(x =&gt; pickle.dumps(x.toArray))</span><br></pre></td></tr></table></figure>
+
+
+<p>   由于我们的计算任务一般耗时瓶颈在于executor端的计算而不是driver，因此应该考虑尽量减少executor端调用python代码的次数从而优化性能。</p>
+<p>参考源码：<a href="https://github.com/apache/spark/blob/master/python/pyspark/java_gateway.py" target="_blank" rel="noopener">https://github.com/apache/spark/blob/master/python/pyspark/java_gateway.py</a></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">// 大概<span class="number">135</span>行的地方:</span><br><span class="line"><span class="comment"># Import the classes used by PySpark</span></span><br><span class="line">java_import(gateway.jvm, <span class="string">"org.apache.spark.SparkConf"</span>)</span><br><span class="line">java_import(gateway.jvm, <span class="string">"org.apache.spark.api.java.*"</span>)</span><br><span class="line">java_import(gateway.jvm, <span class="string">"org.apache.spark.api.python.*"</span>)</span><br><span class="line">java_import(gateway.jvm, <span class="string">"org.apache.spark.ml.python.*"</span>)</span><br><span class="line">java_import(gateway.jvm, <span class="string">"org.apache.spark.mllib.api.python.*"</span>)</span><br><span class="line"><span class="comment"># TODO(davies): move into sql</span></span><br><span class="line">java_import(gateway.jvm, <span class="string">"org.apache.spark.sql.*"</span>)</span><br><span class="line">java_import(gateway.jvm, <span class="string">"org.apache.spark.sql.api.python.*"</span>)</span><br><span class="line">java_import(gateway.jvm, <span class="string">"org.apache.spark.sql.hive.*"</span>)</span><br><span class="line">java_import(gateway.jvm, <span class="string">"scala.Tuple2"</span>)</span><br></pre></td></tr></table></figure>
+<p>pyspark可以把很多常见的运算封装到JVM中,但是显然不包括我们的UDF。<br>所以一个很自然的思路就是把我们的UDF也封到JVM中。</p>
+<h1 id="After-调用JAR包中UDF"><a href="#After-调用JAR包中UDF" class="headerlink" title="After: 调用JAR包中UDF"></a>After: 调用JAR包中UDF</h1><p>首先我们需要用scala重写一下UDF:</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">object</span> <span class="title">UdfUtils</span> <span class="keyword">extends</span> <span class="title">java</span>.<span class="title">io</span>.<span class="title">Serializable</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">case</span> <span class="class"><span class="keyword">class</span> <span class="title">Idfa</span>(<span class="params">idfa: <span class="type">String</span>, idfv: <span class="type">String</span></span>) </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">coalesce</span></span>(<span class="type">V</span>: <span class="type">String</span>, defV: <span class="type">String</span>) =</span><br><span class="line">      <span class="keyword">if</span> (<span class="type">V</span> == <span class="literal">null</span>) defV <span class="keyword">else</span> <span class="type">V</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">toString</span></span>: <span class="type">String</span> = coalesce(idfa, <span class="string">"-1"</span>) + <span class="string">"#"</span> + coalesce(idfv, <span class="string">"-1"</span>)</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">str2idfa</span></span>(txt: <span class="type">String</span>): <span class="type">Option</span>[<span class="type">String</span>] = &#123;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">      <span class="keyword">val</span> decodeTxt: <span class="type">Array</span>[<span class="type">Byte</span>] = <span class="type">Base64</span>.getDecoder.decode(txt)</span><br><span class="line">      <span class="comment">// TODO 省略一些处理逻辑</span></span><br><span class="line">      <span class="keyword">val</span> str = <span class="string">"after_some_time"</span></span><br><span class="line">      <span class="keyword">val</span> gson = <span class="keyword">new</span> <span class="type">Gson</span>()</span><br><span class="line">      <span class="keyword">val</span> reader = <span class="keyword">new</span> <span class="type">JsonReader</span>(<span class="keyword">new</span> <span class="type">StringReader</span>(str))</span><br><span class="line">      reader.setLenient(<span class="literal">true</span>)</span><br><span class="line">      <span class="keyword">val</span> idfaType: <span class="type">Type</span> = <span class="keyword">new</span> <span class="type">TypeToken</span>[<span class="type">Idfa</span>]() &#123;&#125;.getType</span><br><span class="line">      <span class="type">Some</span>(gson.fromJson(reader, idfaType).toString)</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">catch</span> &#123;</span><br><span class="line">      <span class="keyword">case</span> e: <span class="type">Throwable</span> =&gt;</span><br><span class="line">        println(txt)</span><br><span class="line">        e.printStackTrace()</span><br><span class="line">        <span class="type">None</span></span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">// 关键是这里把普通函数转成UDF:</span></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">str2idfaUDF</span></span>: <span class="type">UserDefinedFunction</span> = udf(str2idfa _)</span><br></pre></td></tr></table></figure>
+
+<p>然后在pyspark脚本里调用jar包中的UDF:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">#!/usr/bin/env python</span></span><br><span class="line"><span class="comment"># -*- coding: utf-8 -*-</span></span><br><span class="line"><span class="keyword">import</span> sys</span><br><span class="line"><span class="keyword">from</span> pytoolkit <span class="keyword">import</span> TDWSQLProvider, TDWUtil, TDWProvider</span><br><span class="line"><span class="keyword">from</span> pyspark <span class="keyword">import</span> SparkContext, SQLContext</span><br><span class="line"><span class="keyword">from</span> pyspark.sql <span class="keyword">import</span> SparkSession, Row</span><br><span class="line"><span class="keyword">from</span> pyspark.sql.types <span class="keyword">import</span> StructType, LongType, StringType, StructField, IntegerType</span><br><span class="line"><span class="keyword">from</span> pyspark.sql.functions <span class="keyword">import</span> udf, struct, array</span><br><span class="line"><span class="keyword">from</span> pyspark.sql.column <span class="keyword">import</span> Column</span><br><span class="line"><span class="keyword">from</span> pyspark.sql.column <span class="keyword">import</span> _to_java_column</span><br><span class="line"><span class="keyword">from</span> pyspark.sql.column <span class="keyword">import</span> _to_seq</span><br><span class="line"><span class="keyword">from</span> pyspark.sql.functions <span class="keyword">import</span> col</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">str2idfa</span><span class="params">(col)</span>:</span></span><br><span class="line">    _str2idfa = sc._jvm.com.tencent.kandian.utils.UdfUtils.str2idfaUDF()</span><br><span class="line">    <span class="keyword">return</span> Column(_str2idfa.apply(_to_seq(sc, [col], _to_java_column)))</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">spark = SparkSession.builder.appName(app_name).getOrCreate()</span><br><span class="line">sc = spark.sparkContext</span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">'__main__'</span>:</span><br><span class="line">    in_provider = TDWSQLProvider(spark, user=user, passwd=passwd, db=db_name)</span><br><span class="line">    in_df = in_provider.table(<span class="string">'t_dw_dcxxxx'</span>, [<span class="string">'p_2019042100'</span>])  <span class="comment"># 分区数组</span></span><br><span class="line">    print(in_df.columns)</span><br><span class="line">    in_df.createOrReplaceTempView(<span class="string">"t1"</span>)</span><br><span class="line">    out_t1 = in_df.select(col(<span class="string">'uin'</span>)</span><br><span class="line">                          , str2idfa(col(<span class="string">"value"</span>))) <span class="comment"># 直接使用scala的udf,节省43%时间,减少两个transform</span></span><br><span class="line">    print(out_t1.columns)</span><br><span class="line">    print(out_t1.take(<span class="number">10</span>))</span><br></pre></td></tr></table></figure>
+<p>其中<code>_jvm</code>变量是<code>sparkContext</code>中<code>JVMView</code>对象的名字,此外sc中还有<code>_gateway</code>变量以连接JVM中的<code>GatawayServer</code>。<br>提交时，在tesla上的配置<code>spark-conf</code>jar包路径:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">spark.driver.extraClassPath&#x3D;pipe-udf-1.0-SNAPSHOT-jar-with-dependencies.jar</span><br><span class="line">spark.executor.extraClassPath&#x3D;pipe-udf-1.0-SNAPSHOT-jar-with-dependencies.jar</span><br></pre></td></tr></table></figure>
+<p>同时在依赖包文件中上传jar包。</p>
+<p>这样一通操作之后，DAG图变成了这样:</p>
+<img src="/images/2019-05/py_jar.png" class="" width="400" height="400" title="py_jar">
+
+<p>可以看到比之前少了两个transform,没有了<code>BatchEvalPython</code>，也少了一个<code>WholeStageCodeGen</code>。<br>经过简单banchmark，对于50G数据集纯map处理。<br>第一种方案：大约13分钟；<br>第二种方案：大约7分钟。<br>第二种方案大约能节省一半的时间，并且进一步测试使用scala完全重写整个计算，运行时间和第二种方案接近，也大约需要7分钟。</p>
+<h1 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h1><p>   在pyspark中尽量使用spark算子和spark-sql，同时尽量将UDF(含lambda表达式形式)封装到一个地方减少JVM和python脚本的交互。<br>   由于<code>BatchEvalPython</code>过程每次处理100行，也可以把多行聚合成一行减少交互次数。<br>   最后还可以把UDF部分用scala重写打包成jar包，其他部分则保持python脚本以获得不用编译随时修改的灵活性，以兼顾性能和开发效率。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/05/08/2019-05/%E5%B0%86pyspark%E4%B8%AD%E7%9A%84UDF%E5%8A%A0%E9%80%9F50/" data-id="ck96cch4200ipbhamc0wh7z6v" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spark/" rel="tag">spark</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-04/spark中RDD，Dataframe，DataSet区别对比" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/04/29/2019-04/spark%E4%B8%ADRDD%EF%BC%8CDataframe%EF%BC%8CDataSet%E5%8C%BA%E5%88%AB%E5%AF%B9%E6%AF%94/" class="article-date">
+  <time datetime="2019-04-29T02:16:54.000Z" itemprop="datePublished">2019-04-29</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/spark/">spark</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/04/29/2019-04/spark%E4%B8%ADRDD%EF%BC%8CDataframe%EF%BC%8CDataSet%E5%8C%BA%E5%88%AB%E5%AF%B9%E6%AF%94/">spark中RDD，Dataframe，DataSet区别对比</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="RDD，Dataframe，DataSet的定义"><a href="#RDD，Dataframe，DataSet的定义" class="headerlink" title="RDD，Dataframe，DataSet的定义"></a>RDD，Dataframe，DataSet的定义</h1><p><code>RDD</code>: immutable、spark的基础数据集。底层api； 1.0+, 存放java/scala对象;<br><code>Dataframe</code>: immutable、多了列名、Catalyst优化。高级api;  1.3+, 存放row对象;(有列名)<br><code>Dataset</code>: 比Dataframe多类型安全。高级api。 1.6+, 存放java/scala对象(暴露更多信息给编译期)<br>可以理解成DataSet每行存一个大对象。（比如样例中的<code>DataSet[Person]</code>）</p>
+<p>DataSet一般比DataFrame慢一点点，多了类型安全的开销（<code>Row</code>=&gt;<code>Java类型</code>）</p>
+<h2 id="这里说的类型安全是什么？"><a href="#这里说的类型安全是什么？" class="headerlink" title="这里说的类型安全是什么？"></a>这里说的类型安全是什么？</h2><blockquote>
+<p>是编译期类型安全</p>
+</blockquote>
+<p>Dataframe: 访问不存在的列名=&gt;运行时报错; （非类型安全）<br>DataSet:   访问不存在的列名=&gt;编译时报错。 （类型安全）</p>
+<p>DataSet的中每个元素都是case class之类的,完全定义类型的,因此编译时就能确定schema合法性。</p>
+<p><code>Dataset[Row]</code> = <code>DataFrame</code><br>因此Row可以看做非编译期类型安全的对象。</p>
+<h2 id="java-scala对象-lt-gt-DataFrame的row对象-DataSet的元素"><a href="#java-scala对象-lt-gt-DataFrame的row对象-DataSet的元素" class="headerlink" title="java/scala对象 &lt;=&gt; DataFrame的row对象/DataSet的元素:"></a>java/scala对象 &lt;=&gt; DataFrame的row对象/DataSet的元素:</h2><ol>
+<li>对于dataframe: 传入StructType;</li>
+<li>对于dataSet:  使用Encoder。 </li>
+</ol>
+<p>类似于hive的反序列化:</p>
+<h3 id="hive反序列化原理"><a href="#hive反序列化原理" class="headerlink" title="hive反序列化原理:"></a>hive反序列化原理:</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">HDFS files –&gt; InputFileFormat –&gt; &lt;key, value&gt; –&gt; Deserializer –&gt; Row object</span><br></pre></td></tr></table></figure>
+<h3 id="hive序列化原理-Serialize"><a href="#hive序列化原理-Serialize" class="headerlink" title="hive序列化原理(Serialize):"></a>hive序列化原理(<code>Serialize</code>):</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Row object –&gt; Serializer –&gt; &lt;key, value&gt; –&gt; OutputFileFormat –&gt; HDFS files</span><br></pre></td></tr></table></figure>
+
+<p><code>Encoder</code>: <code>Dataset[Row]</code> -&gt; <code>Dataset[T]</code><br>JVM对象和非堆自定义内存二进制数据<br>Encoders生成二进制代码来跟非堆数据交互，并且提供有需访问给独立的参数而不是对整个对象反序列化。</p>
+<h1 id="优化"><a href="#优化" class="headerlink" title="优化"></a>优化</h1><p>RDD: 没有优化, 程序员自己保证RDD运算是最优的;<br>DataFrame: 走catalyst编译优化,类似于Sql的优化。根据成本模型，逻辑执行计划优化成物理执行计划。<br>DataSet: 同DataFrame. </p>
+<p>强调一点,DataFrame底层也是用的RDD实现，因此如果程序员足够牛逼，理论上执行计划能写得比DataFrame的计划好。</p>
+<h1 id="序列化"><a href="#序列化" class="headerlink" title="序列化"></a>序列化</h1><p>shuffle的时候、或者cache写内存、磁盘的时候，需要序列化。</p>
+<p><code>RDD</code>: 使用java序列化(或者kryo)成二进制; (成本高)<br><code>DataFrame</code>: Tungsten计划优化。序列化到堆外内存，然后无须反序列化，直接根据schema操作二进制运算。(因为DataFrame比RDD多一个schema信息)<br><a href="https://github.com/hustnn/TungstenSecret" target="_blank" rel="noopener">https://github.com/hustnn/TungstenSecret</a><br><code>DataSet</code>: 基本同DataFrame，多了Encoder的概念。访问某列的时候，可以只反序列化那个局部的二进制。</p>
+<h2 id="Tungsten-binary-format"><a href="#Tungsten-binary-format" class="headerlink" title="Tungsten binary format"></a>Tungsten binary format</h2><p>钨丝计划使用的二进制格式</p>
+<h1 id="垃圾收集"><a href="#垃圾收集" class="headerlink" title="垃圾收集"></a>垃圾收集</h1><p>RDD: 由于上一节中的序列化，gc压力较大；<br>DataFrame: 放堆外内存，无需jvm对象头开销，无gc；<br>DataSet: 同df.</p>
+<h1 id="钨丝计划的秘密："><a href="#钨丝计划的秘密：" class="headerlink" title="钨丝计划的秘密："></a>钨丝计划的秘密：</h1><p><a href="https://github.com/hustnn/TungstenSecret" target="_blank" rel="noopener">https://github.com/hustnn/TungstenSecret</a></p>
+<p>总结一下钨丝计划的3大优化：</p>
+<ol>
+<li>内存管理、直接操作二进制数据：放堆外内存(避免gc开销)，不用jvm对象(减少对象头开销)。</li>
+<li>缓存友好的计算: 考虑存储体系;(flink也有) 对指针排序，根据schema访问key的二进制。(估计key只能是原生类型，其他类就得反序列化了)</li>
+<li>code generation：充分利用最新的编译期和cpu性能：把jvm对象转到堆外unsafeRow，以便利用第一点。</li>
+</ol>
+<p>比如8B的String的对象头有40B开销。<br>UnsafeShuffleManager： 直接在serialized binary data上sort而不是java objects</p>
+<h2 id="wholeStageCodeGen"><a href="#wholeStageCodeGen" class="headerlink" title="wholeStageCodeGen"></a>wholeStageCodeGen</h2><p>把transform的很多步骤，合并成一个步骤，使用字符串插值生成一份重写后的代码(逼近于手写最优解)，然后用Janino(微型运行时嵌入式java编译器)编译成字节码。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/04/29/2019-04/spark%E4%B8%ADRDD%EF%BC%8CDataframe%EF%BC%8CDataSet%E5%8C%BA%E5%88%AB%E5%AF%B9%E6%AF%94/" data-id="ck96cch3y00i8bham2kx77273" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spark/" rel="tag">spark</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-04/spark中的encoder" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/04/27/2019-04/spark%E4%B8%AD%E7%9A%84encoder/" class="article-date">
+  <time datetime="2019-04-27T03:23:26.000Z" itemprop="datePublished">2019-04-27</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/spark/">spark</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/04/27/2019-04/spark%E4%B8%AD%E7%9A%84encoder/">spark中的encoder</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>参考资料:<br><a href="https://stackoverflow.com/questions/53949497/why-a-encoder-is-needed-for-creating-dataset-in-spark" target="_blank" rel="noopener">https://stackoverflow.com/questions/53949497/why-a-encoder-is-needed-for-creating-dataset-in-spark</a><br><code>It also uses less memory than Kryo/Java serialization.</code></p>
+<h1 id="What-Encoder是啥"><a href="#What-Encoder是啥" class="headerlink" title="What: Encoder是啥?"></a>What: Encoder是啥?</h1><p>所有<code>DataSet</code>都需要<code>Encoder</code>。</p>
+<p><code>Encoder</code>是spark-sql用来序列化/反序列化的一个类。主要用于<code>DataSet</code>。<br>本质上每次调用<code>toDS()</code>函数的时候都调用了<code>Encoder</code>，不过有时候我们察觉不到，因为用了隐式调用(<code>import spark.implicits._</code>)。<br>可以直接看<code>Encoder</code>源码注释中的样例:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">import spark.implicits._</span><br><span class="line">val ds &#x3D; Seq(1, 2, 3).toDS() &#x2F;&#x2F; implicitly provided (spark.implicits.newIntEncoder)</span><br><span class="line">&#x2F;&#x2F; 将数字(JVM对象)转换为DataSet中的元素</span><br><span class="line">&#x2F;&#x2F; 这里由于是常见的原始类型，所以spark提供了隐式encoder的调用，隐藏了这些细节。</span><br></pre></td></tr></table></figure>
+<p>Encoder将jvm转换为堆外内存二进制，使用成员位置信息，降低反序列化的范围（反序列化需要的列即可）。<br>// (类似于Hive中的反序列化,把kv转换为row)</p>
+<p>Encoder不要求线程安全。</p>
+<h1 id="Why-为啥用Encoder"><a href="#Why-为啥用Encoder" class="headerlink" title="Why: 为啥用Encoder?"></a>Why: 为啥用Encoder?</h1><p>stackoverflow上说encoder消耗更少的内存。因为kryo把<code>dataSet</code>中的所有行都变成了一个打平的二进制对象。<br><code>10x faster than Kryo serialization (Java serialization orders of magnitude slower)</code><br>DataFrame本质上是DataSet[Row]，用的固定是RowEncoder，所以不需要传Encoder。<br>Encoder底层是钨丝计划的堆外内存优化，节省了jvm对象头、反序列化、gc的开销。</p>
+<h1 id="When-啥时候使用Encoder"><a href="#When-啥时候使用Encoder" class="headerlink" title="When: 啥时候使用Encoder"></a>When: 啥时候使用Encoder</h1><p><code>Encoder</code>适用于原始类型、case class对象(因为有默认的apply/unapply方法)、spark-sql类型。</p>
+<p>Encoder支持的类型非常多，不支持的情况：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. 如果类型是javabean，类的成员如果是容器，只能是List，不能是其他容器（还没有实现）;</span><br><span class="line">2. 不支持大于5的Tuple；</span><br><span class="line">3. 不支持&#96;Option&#96;；</span><br><span class="line">4. 不支持&#96;null&#96;值的&#96;case class&#96;。</span><br></pre></td></tr></table></figure>
+<p>不支持的时候，可以把不支持的部分用kyro-Encoder，相当于不支持的部分直接当做一个二进制，不享受优化，但其他不支持部分可以享受优化。</p>
+<h1 id="How-怎么使用Encoder"><a href="#How-怎么使用Encoder" class="headerlink" title="How: 怎么使用Encoder:"></a>How: 怎么使用Encoder:</h1><p>显式： 使用<code>Encoders</code>类(类似于utils)的静态工厂方法;<br>隐式：<code>import spark.implicits._</code>: 原始类型和<code>Product</code>类型(也就是<code>case class</code>)可以直接隐式支持。</p>
+<h2 id="1-创建DataSet时显式使用"><a href="#1-创建DataSet时显式使用" class="headerlink" title="1. 创建DataSet时显式使用:"></a>1. 创建DataSet时显式使用:</h2><p>源码注释中的样例:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// eg1: String:</span></span><br><span class="line">List&lt;String&gt; data = Arrays.asList(<span class="string">"abc"</span>, <span class="string">"abc"</span>, <span class="string">"xyz"</span>);</span><br><span class="line">Dataset&lt;String&gt; ds = context.createDataset(data, Encoders.STRING());</span><br><span class="line"><span class="comment">// eg2: 复合Tuple:</span></span><br><span class="line">Encoder&lt;Tuple2&lt;Integer, String&gt;&gt; encoder2 = Encoders.tuple(Encoders.INT(), Encoders.STRING());</span><br><span class="line">List&lt;Tuple2&lt;Integer, String&gt;&gt; data2 = Arrays.asList(<span class="keyword">new</span> scala.Tuple2(<span class="number">1</span>, <span class="string">"a"</span>);</span><br><span class="line">Dataset&lt;Tuple2&lt;Integer, String&gt;&gt; ds2 = context.createDataset(data2, encoder2);</span><br></pre></td></tr></table></figure>
+<h2 id="2-创建DataSet时隐式使用"><a href="#2-创建DataSet时隐式使用" class="headerlink" title="2. 创建DataSet时隐式使用:"></a>2. 创建DataSet时隐式使用:</h2><p>看createDataset的签名:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">def createDataset[T](data: RDD[T])(implicit arg0: Encoder[T]): Dataset[T]</span><br><span class="line">&#x2F;&#x2F; Creates a Dataset from an RDD of a given type.</span><br></pre></td></tr></table></figure>
+<p>所以Encoder其实可以隐式传:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">import spark.implicits._</span><br><span class="line">val ds &#x3D; Seq(1, 2, 3).toDS() &#x2F;&#x2F; implicitly provided</span><br></pre></td></tr></table></figure>
+<h2 id="3-UDAF中使用"><a href="#3-UDAF中使用" class="headerlink" title="3. UDAF中使用:"></a>3. UDAF中使用:</h2><p><a href="https://github.com/apache/spark/blob/master/examples/src/main/scala/org/apache/spark/examples/sql/UserDefinedTypedAggregation.scala" target="_blank" rel="noopener">https://github.com/apache/spark/blob/master/examples/src/main/scala/org/apache/spark/examples/sql/UserDefinedTypedAggregation.scala</a></p>
+<p>当我们为<code>DataSet</code>定义<code>UDAF</code>的使用。<br>语义上: 因为涉及到数据转换，不可避免地会需要使用<code>Encoder</code>，这个时候是显式使用。<br>语法上: 由于继承了<code>Aggregator</code>也必须使用<code>Encoder</code>。</p>
+<h2 id="源码阅读"><a href="#源码阅读" class="headerlink" title="源码阅读"></a>源码阅读</h2><h3 id="Encoder"><a href="#Encoder" class="headerlink" title="Encoder"></a>Encoder</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">trait Encoder[T] extends Serializable &#123;</span><br><span class="line">  &#x2F;** Returns the schema of encoding this type of object as a Row. *&#x2F;</span><br><span class="line">  def schema: StructType</span><br><span class="line">  &#x2F;**</span><br><span class="line">   * A ClassTag that can be used to construct and Array to contain a collection of &#96;T&#96;.*&#x2F;</span><br><span class="line">  def clsTag: ClassTag[T]</span><br><span class="line">  &#x2F;&#x2F; 存了ClassTag的话，就能在运行时构建泛型的数组了。</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>TypeTag</code>: 相当于scala以前的<code>Manifest</code>,用于存储泛型参数的实际类型。(泛型参数的实际类型运行时会被JVM擦除，有了<code>TypeTag</code>就能在运行时获得实际类型了)<br><code>ClassTag</code>: 相当于scala以前的<code>ClassManifest</code>,功能大致同上，但存得少些，比如如果是泛型的泛型，参数是泛型数组<code>List[T]</code>,<code>TypeTag</code>能全部存下，<code>ClassTag</code>就存一个<code>List</code>。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">classTag[List[Int]]</span><br><span class="line">&#x2F;&#x2F;scala.reflect.ClassTag[List[Int]] &#x3D;↩</span><br><span class="line">&#x2F;&#x2F;        ClassTag[class scala.collection.immutable.List]</span><br><span class="line">typeTag[List[Int]]</span><br><span class="line">&#x2F;&#x2F;</span><br><span class="line">&#x2F;&#x2F; reflect.runtime.universe.TypeTag[List[Int]] &#x3D; TypeTag[scala.List[Int]]</span><br></pre></td></tr></table></figure>
+
+
+<h2 id="ExpressionEncoder"><a href="#ExpressionEncoder" class="headerlink" title="ExpressionEncoder"></a>ExpressionEncoder</h2><p>Encoder的内置唯一实现类。<br><code>jvm对象&lt;=&gt;内部行格式</code>: 钨丝计划unsafeRow、expressions提取case class的变量名。<br>可以支持Tupple但不支持<code>Option</code>和<code>和null</code>值的<code>case class</code>。</p>
+<p>它会生成变量名name和位置的绑定，以便钨丝计划的<code>code gen</code>使用<code>unsafe row</code>.<br>Tupple最多到5.</p>
+<p><code>Serializer</code>: raw object=&gt;InternalRow, 用expression解析提取对象值；<br><code>Deserializer</code>: InternalRow=&gt;raw object,用expression构造对象。<br>因为unsafeRow是二进制存放在堆外，所以转换成row看做序列化。</p>
+<h3 id="Encoders"><a href="#Encoders" class="headerlink" title="Encoders"></a>Encoders</h3><p>(注意比Encoder多一个s)<br>提供了很多静态工厂方法获得Encoder(实际上目前获得的都是<code>ExpressionEncoder</code>)<br>大致可以分为几类:</p>
+<ol>
+<li>java原始类型:  <code>Encoders.BOOLEAN</code>等</li>
+<li>scala原始类型: <code>Encoders.scalaBoolean</code>等.(多一个scala前缀)</li>
+<li>javaBean类型: <code>bean[T](beanClass: Class[T])</code>。但目前成员只支持List容器，不支持其他的容器。支持原始类型或嵌套javaBean。</li>
+<li>kryo序列化类型: <code>kryo[T: ClassTag]</code>；</li>
+<li>java序列化类型: <code>javaSerialization[T: ClassTag]</code>；</li>
+<li>Tuple类型: 从Tuple2到Tuple5.</li>
+<li>Product类型: 也就是<code>case class</code>.</li>
+</ol>
+<p>其中前三种是直接调用<code>ExpressionEncoder</code>，第四第五种本质上是间接调用了<code>ExpressionEncoder</code>:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">ExpressionEncoder[T](</span><br><span class="line">      schema &#x3D; new StructType().add(&quot;value&quot;, BinaryType),</span><br><span class="line">      flat &#x3D; true,</span><br><span class="line">      serializer &#x3D; Seq(</span><br><span class="line">        EncodeUsingSerializer(</span><br><span class="line">          BoundReference(0, ObjectType(classOf[AnyRef]), nullable &#x3D; true), kryo &#x3D; useKryo)),</span><br><span class="line">      deserializer &#x3D;</span><br><span class="line">        DecodeUsingSerializer[T](</span><br><span class="line">          Cast(GetColumnByOrdinal(0, BinaryType), BinaryType),</span><br><span class="line">          classTag[T],</span><br><span class="line">          kryo &#x3D; useKryo),</span><br><span class="line">      clsTag &#x3D; classTag[T]</span><br><span class="line">    )</span><br></pre></td></tr></table></figure>
+<p>因此第四第五后两种序列化本质上是把整个对象看做一个二进制类型，不利于后续优化和减少反序列化。</p>
+<p>原始类型还包括:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">java的:</span><br><span class="line">byte,short,int,long,float,double,java.math.BigDecimal,java.sql.Date,java.sql.Timestamp</span><br><span class="line">scala的:</span><br><span class="line">Array[Byte],byte,short,int,long,float,double</span><br></pre></td></tr></table></figure>
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/04/27/2019-04/spark%E4%B8%AD%E7%9A%84encoder/" data-id="ck96cch3y00icbhamc1e068af" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spark/" rel="tag">spark</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-04/2019年的人们如何生成HTTPS证书" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/04/14/2019-04/2019%E5%B9%B4%E7%9A%84%E4%BA%BA%E4%BB%AC%E5%A6%82%E4%BD%95%E7%94%9F%E6%88%90HTTPS%E8%AF%81%E4%B9%A6/" class="article-date">
+  <time datetime="2019-04-14T11:59:09.000Z" itemprop="datePublished">2019-04-14</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/http/">http</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/04/14/2019-04/2019%E5%B9%B4%E7%9A%84%E4%BA%BA%E4%BB%AC%E5%A6%82%E4%BD%95%E7%94%9F%E6%88%90HTTPS%E8%AF%81%E4%B9%A6/">2019年的人们如何生成HTTPS证书</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>由于配置相关的教程总是有年限限制，过期就不能用了，本教程至少保证2019.4.14还可用。<br>环境: centos,nginx,chrome<br>备注: 可以避免chrome的<code>NET::ERR_CERT_COMMON_NAME_INVALID</code>错误。</p>
+<p><strong>摘要</strong></p>
+<blockquote>
+<p>从HTTP升级到HTTPS: 用openssl命令创建本地的CA,然后自签证书，然后配置到nginx中，最后信任一下本地CA即可。</p>
+</blockquote>
+<h1 id="需求"><a href="#需求" class="headerlink" title="需求"></a>需求</h1><p>从HTTP协议升级到HTTPS。<br>用HTTPS可以防止会话内容被拦截解析,同时防止中间人攻击，防止他人伪装称你的网站，欺骗你的客户。<br>SSL协议的详细含义可以参见:<br><a href="https://xiaoyue26.github.io/2018/09/26/2018-09/%E9%80%9A%E4%BF%97%E7%90%86%E8%A7%A3SSL-TLS%E5%8D%8F%E8%AE%AE%E5%8C%BA%E5%88%AB%E4%B8%8E%E5%8E%9F%E7%90%86/">https://xiaoyue26.github.io/2018/09/26/2018-09/%E9%80%9A%E4%BF%97%E7%90%86%E8%A7%A3SSL-TLS%E5%8D%8F%E8%AE%AE%E5%8C%BA%E5%88%AB%E4%B8%8E%E5%8E%9F%E7%90%86/</a></p>
+<h1 id="现有架构"><a href="#现有架构" class="headerlink" title="现有架构"></a>现有架构</h1><p>请求=&gt;nginx服务器=&gt;后端网站服务</p>
+<h1 id="改造思路-原理"><a href="#改造思路-原理" class="headerlink" title="改造思路/原理"></a>改造思路/原理</h1><p>原理上只需要让nginx负责SSL协议的部分即可，不需要动后端网站服务。<br>客户端发送HTTPS请求到nginx服务器，nginx服务器转发HTTP请求到后端网站服务。<br>（封装的思想，上层变动对底层HTTP服务透明）<br><strong>HTTPS中断、TLS中断：</strong><br>nginx直接负责搞定ssl部分，netty等后端服务只需要负责http部分就好了。<br>如果依赖nginx的话，netty的SslHandler什么的都可以废掉了XD</p>
+<p>所以我们只需要关心架构中的前半部分:<br>请求=&gt;nginx服务器</p>
+<p>再分解一下这部分的话:<br>用户=&gt;浏览器(chrome)==https请求=&gt;nginx服务器</p>
+<p><strong>整个架构中我们需要修改的部分:</strong></p>
+<ol>
+<li>nginx配置. </li>
+</ol>
+<p>是的，就这么一项。所以改造成本很低。<br>当然了，如果不想花钱买官方CA证书的话，也就是自己弄一个CA, 然后给自己的网站颁发证书的话，还需要改动用户浏览器的信任CA，那么需要修改的部分就增加一项了:</p>
+<ol>
+<li>nginx配置;</li>
+<li>用户浏览器信任CA。 </li>
+</ol>
+<p>这里的证书、CA是个啥概念呢？<br>证书: 就好比我们网站的身份证；<br>CA  : 就好比派发身份证的派出所。<br>本质上是一个信任传递、担保的过程，用户浏览器会默认信任几个官方的CA，只要官方CA承认的网站，信任传递一下，用户就可以也信任了。<br>参见下图可以通过chrome右键”检查”的<code>security</code>面板查看证书的详细信息。</p>
+<img src="/images/2019-04/ca.png" class="" width="800" height="1200" title="ca">
+
+<p>所以如果花钱让官方CA帮我们签发证书的话，用户可以直接默认信任我们的证书；<br>而如果我们自己弄的CA的话，好比自己开的黑作坊，用户不可能直接信任黑作坊签发的身份证的，就需要修改用户浏览器配置了，加入我们的私人CA证书。</p>
+<h1 id="公网HTTPS"><a href="#公网HTTPS" class="headerlink" title="公网HTTPS"></a>公网HTTPS</h1><h2 id="生成数字证书"><a href="#生成数字证书" class="headerlink" title="生成数字证书"></a>生成数字证书</h2><p>可以参考:<br><a href="http://www.ruanyifeng.com/blog/2016/08/migrate-from-http-to-https.html" target="_blank" rel="noopener">http://www.ruanyifeng.com/blog/2016/08/migrate-from-http-to-https.html</a><br>从<br><a href="https://www.gogetssl.com/" target="_blank" rel="noopener">https://www.gogetssl.com/</a><br><a href="https://www.ssls.com/" target="_blank" rel="noopener">https://www.ssls.com/</a><br><a href="https://sslmate.com/" target="_blank" rel="noopener">https://sslmate.com/</a><br>购买SSL证书。</p>
+<p>免费的:<br><a href="https://certbot.eff.org/" target="_blank" rel="noopener">https://certbot.eff.org/</a><br>可以用这个工具，选择转发服务器和操作系统，生成证书:<br><a href="https://certbot.eff.org/lets-encrypt" target="_blank" rel="noopener">https://certbot.eff.org/lets-encrypt</a></p>
+<h2 id="配置nginx"><a href="#配置nginx" class="headerlink" title="配置nginx"></a>配置nginx</h2><p>把原来nginx配置中的:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">listen       80;</span><br></pre></td></tr></table></figure>
+<p>改成:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">listen 443 ssl;</span><br><span class="line">ssl_certificate &#x2F;usr&#x2F;local&#x2F;nginx&#x2F;ssl&#x2F;private&#x2F;server.crt;</span><br><span class="line">ssl_certificate_key &#x2F;usr&#x2F;local&#x2F;nginx&#x2F;ssl&#x2F;private&#x2F;device.key;</span><br></pre></td></tr></table></figure>
+<p>这里的service.crt就是数字证书了。<br>如果要支持http和https同时可以访问，就把<code>listen 80</code>再加上。</p>
+<p>如果要强制https，即使访问了http也强制跳转https(一般都需要这样搞),可以增加rewrite配置:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">server &#123;</span><br><span class="line">        listen       80;</span><br><span class="line">        server_name localhost;</span><br><span class="line">        rewrite ^(.*) https:&#x2F;&#x2F;$server_name$1 permanent;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h1 id="局域网HTTPS"><a href="#局域网HTTPS" class="headerlink" title="局域网HTTPS"></a>局域网HTTPS</h1><p>公网https起码要买个域名,买个服务器(阿里云),如果只是局域网玩玩、或者自签证书,可以如下操作:</p>
+<ol>
+<li>本地生成一个CA;</li>
+<li>用这个CA给自己网站的数字证书签名，生成网站数字证书;</li>
+<li>修改nginx配置;</li>
+<li>配置用户chrome信任第一步中的CA。</li>
+</ol>
+<p>可以看出多了1，2两步来生成证书,代替购买证书;<br>多了第4步来强制用户信任非官方CA.</p>
+<h2 id="1-本地生成CA"><a href="#1-本地生成CA" class="headerlink" title="1. 本地生成CA"></a>1. 本地生成CA</h2><p>找个干净的目录开始操作:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">openssl genrsa -des3 -out rootCA.key 2048</span><br><span class="line">openssl req -x509 -new -nodes -key rootCA.key -sha256 -days 1024 -out rootCA.pem</span><br></pre></td></tr></table></figure>
+<p>里面可以填下密码，email地址和ca的名字。其他的可以留空。</p>
+<p>第一条命令: 生成本地CA的密钥<code>rootCA.key</code>(要记住你设置的密码,比如我的是<code>staythenight</code>)；<br>第二条命令: 用这个密钥进行签名，生成一张CA的证书<code>rootCA.pem</code>.<br>(这里设置的过期时间为1024天).</p>
+<h2 id="2-生成网站数字证书-用这个CA给自己网站的数字证书签名"><a href="#2-生成网站数字证书-用这个CA给自己网站的数字证书签名" class="headerlink" title="2. 生成网站数字证书(用这个CA给自己网站的数字证书签名)"></a>2. 生成网站数字证书(用这个CA给自己网站的数字证书签名)</h2><p>为了避免chrome的<code>NET::ERR_CERT_COMMON_NAME_INVALID</code>错误，需要在网站证书里填一些额外的信息。<br>首先创建文件<code>server.csr.cnf</code>:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">[req]</span><br><span class="line">default_bits &#x3D; 2048</span><br><span class="line">prompt &#x3D; no</span><br><span class="line">default_md &#x3D; sha256</span><br><span class="line">distinguished_name &#x3D; dn</span><br><span class="line"></span><br><span class="line">[dn]</span><br><span class="line">C&#x3D;US</span><br><span class="line">ST&#x3D;RandomState</span><br><span class="line">L&#x3D;RandomCity</span><br><span class="line">O&#x3D;RandomOrganization</span><br><span class="line">OU&#x3D;RandomOrganizationUnit</span><br><span class="line">emailAddress&#x3D;296671657@qq.com # 修改成自己的email</span><br><span class="line">CN &#x3D; kandiandata.oa.com # 修改成自己的域名</span><br></pre></td></tr></table></figure>
+
+<p>然后创建文件<code>v3.ext</code>:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">authorityKeyIdentifier&#x3D;keyid,issuer</span><br><span class="line">basicConstraints&#x3D;CA:FALSE</span><br><span class="line">keyUsage &#x3D; digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment</span><br><span class="line">subjectAltName &#x3D; @alt_names</span><br><span class="line"></span><br><span class="line">[alt_names]</span><br><span class="line">DNS.1 &#x3D; kandiandata.oa.com # 修改成自己的域名</span><br><span class="line">DNS.2 &#x3D; localhost</span><br></pre></td></tr></table></figure>
+
+<p>创建证书:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">openssl req -new -sha256 -nodes -out server.csr -newkey rsa:2048 -keyout device.key -config server.csr.cnf</span><br><span class="line"></span><br><span class="line">openssl x509 -req -in server.csr \</span><br><span class="line">-CA rootCA.pem \</span><br><span class="line">-CAkey rootCA.key \</span><br><span class="line">-CAcreateserial -out server.crt -days 1800 -sha256 -extfile v3.ext</span><br></pre></td></tr></table></figure>
+<p>第一条命令: 用<code>server.csr.cnf</code>配置生成网站证书<code>server.csr</code>,同时生成网站私钥<code>device.key</code>(给nginx用的)。<br>第二条命令: 用CA私钥<code>rootCA.key</code>以CA的名义(<code>rootCA.pem</code>)️给网站证书签名，生成CA签名后的证书<code>server.crt</code>，同时加上<code>v3.ext</code>中的配置（防止chrome报错）。</p>
+<p>到这里我们就准备好了下一步nginx要用到的两个文件:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">server.crt</span><br><span class="line">device.key</span><br></pre></td></tr></table></figure>
+<p><code>server.crt</code>: 网站的数字证书;<br><code>device.key</code>: 网站的私钥，用来解开用户发过来的通信密码。详细原理参见:<br><a href="http://xiaoyue26.github.io/2018/09/26/2018-09/%E9%80%9A%E4%BF%97%E7%90%86%E8%A7%A3SSL-TLS%E5%8D%8F%E8%AE%AE%E5%8C%BA%E5%88%AB%E4%B8%8E%E5%8E%9F%E7%90%86/">http://xiaoyue26.github.io/2018/09/26/2018-09/%E9%80%9A%E4%BF%97%E7%90%86%E8%A7%A3SSL-TLS%E5%8D%8F%E8%AE%AE%E5%8C%BA%E5%88%AB%E4%B8%8E%E5%8E%9F%E7%90%86/</a></p>
+<h2 id="3-配置nginx"><a href="#3-配置nginx" class="headerlink" title="3. 配置nginx"></a>3. 配置nginx</h2><p>这里和之前的一样,打开ssl支持，监听443:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">listen 443 ssl;</span><br><span class="line">ssl_certificate &#x2F;usr&#x2F;local&#x2F;nginx&#x2F;ssl&#x2F;private&#x2F;server.crt;</span><br><span class="line">ssl_certificate_key &#x2F;usr&#x2F;local&#x2F;nginx&#x2F;ssl&#x2F;private&#x2F;device.key;</span><br></pre></td></tr></table></figure>
+<p>加上监听80+重定向:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">server &#123;</span><br><span class="line">        listen       80;</span><br><span class="line">        server_name localhost;</span><br><span class="line">        rewrite ^(.*) https:&#x2F;&#x2F;$server_name$1 permanent;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<h2 id="4-配置用户chrome信任第一步中的CA"><a href="#4-配置用户chrome信任第一步中的CA" class="headerlink" title="4. 配置用户chrome信任第一步中的CA"></a>4. 配置用户chrome信任第一步中的CA</h2><p>将第一步中的<code>rootCA.pem</code>发送给用户，让它安装即可。<br>(千万不要发错了。)<br>如果是mac系统，可以直接双击安装到钥匙串中:</p>
+<img src="/images/2019-04/rootca_pem.png" class="" width="800" height="1200" title="rootca_pem">
+<p>在钥匙串中选择<code>系统</code>=&gt;<code>证书</code>,然后完全信任ca的证书即可:</p>
+<img src="/images/2019-04/permit_ca.png" class="" width="800" height="1200" title="permit_ca">
+
+<p>最后得到chrome的承认:</p>
+<img src="/images/2019-04/chrome_safe.png" class="" width="800" height="1200" title="chrome_safe">
+
+
+<h2 id="其他"><a href="#其他" class="headerlink" title="其他"></a>其他</h2><p>还可以查看openssl支持的ssl/tls版本:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">openssl ciphers -v | awk &#39;&#123;print $2&#125;&#39; | sort | uniq</span><br></pre></td></tr></table></figure>
+<p>查看本地的443端口是否支持tls1.2协商:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">openssl s_client -connect localhost:443 -tls1_2</span><br></pre></td></tr></table></figure>
+<p>成功的话会返回一大段内容，包括:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"># 前面一大堆</span><br><span class="line">---</span><br><span class="line">Certificate chain</span><br><span class="line"> 0 s:&#x2F;C&#x3D;US&#x2F;ST&#x3D;RandomState&#x2F;L&#x3D;RandomCity&#x2F;O&#x3D;RandomOrganization&#x2F;OU&#x3D;RandomOrganizationUnit&#x2F;emailAddress&#x3D;296671657@qq.com&#x2F;CN&#x3D;kandiandata.oa.com</span><br><span class="line">   i:&#x2F;C&#x3D;XX&#x2F;L&#x3D;Default City&#x2F;O&#x3D;tencent&#x2F;OU&#x3D;kandian&#x2F;CN&#x3D;pipe_ca&#x2F;emailAddress&#x3D;296671657@qq.com</span><br><span class="line">---</span><br><span class="line">Server certificate</span><br><span class="line"># 后面一大堆</span><br></pre></td></tr></table></figure>
+<p>失败的话:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">---</span><br><span class="line">no peer certificate available</span><br><span class="line">---</span><br><span class="line">No client certificate CA names sent</span><br><span class="line">---</span><br></pre></td></tr></table></figure>
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/04/14/2019-04/2019%E5%B9%B4%E7%9A%84%E4%BA%BA%E4%BB%AC%E5%A6%82%E4%BD%95%E7%94%9F%E6%88%90HTTPS%E8%AF%81%E4%B9%A6/" data-id="ck96cch3z00ifbham4o74e02s" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/https/" rel="tag">https</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/nginx/" rel="tag">nginx</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/ssl/" rel="tag">ssl</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-03/mysql统计信息更新" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/03/31/2019-03/mysql%E7%BB%9F%E8%AE%A1%E4%BF%A1%E6%81%AF%E6%9B%B4%E6%96%B0/" class="article-date">
+  <time datetime="2019-03-31T11:38:49.000Z" itemprop="datePublished">2019-03-31</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/03/31/2019-03/mysql%E7%BB%9F%E8%AE%A1%E4%BF%A1%E6%81%AF%E6%9B%B4%E6%96%B0/">mysql统计信息更新</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <blockquote>
+<p>本文只关注innodb。 </p>
+</blockquote>
+<p>mysql优化器选择执行计划的时候需要依据一定的采样统计信息，不然对数据完全不了解的话，就无法选择成本低的执行计划了。</p>
+<p>统计信息的配置有以下几个自由度:</p>
+<ol>
+<li>是否持久化;</li>
+<li>更新统计信息的时机;</li>
+<li>采样多少个page。 </li>
+</ol>
+<h1 id="是否持久化"><a href="#是否持久化" class="headerlink" title="是否持久化"></a>是否持久化</h1><p>采样统计信息可以有两种选择：</p>
+<ol>
+<li>持久化: 默认是持久化，也就是存磁盘。</li>
+<li>非持久化.</li>
+</ol>
+<p>控制的选项:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">show variables like &#39;%innodb_stats_persistent%&#39;;</span><br></pre></td></tr></table></figure>
+<p>默认是on，也就是持久化。<br>具体存哪里呢，主要是存mysql库和information_schema库下(5.6.x):</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">INFORMATION_SCHEMA.TABLES</span><br><span class="line">INFORMATION_SCHEMA.STATISTICS</span><br><span class="line">mysql.innodb_table_stats</span><br><span class="line">mysql.innodb_index_stats</span><br></pre></td></tr></table></figure>
+
+<h1 id="更新统计信息的时机"><a href="#更新统计信息的时机" class="headerlink" title="更新统计信息的时机"></a>更新统计信息的时机</h1><p>相关参数:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">innodb_stats_on_metadata: 是否每次都重新计算统计信息(配合非持久化使用),默认off;</span><br><span class="line">innodb_stats_auto_recalc: 插入数据量超过原表10%的时候更新统计信息,默认on。</span><br></pre></td></tr></table></figure>
+<p>总结一下mysql更新统计信息的时机:</p>
+<ol>
+<li>手动运行触发语句如<code>analyze table xx</code>的时候;</li>
+<li>如果<code>innodb_stats_auto_recalc</code>为on: 插入数据量超过原表10%的时候更新统计信息;</li>
+<li>如果<code>innodb_stats_on_metadata</code>为on: 每次查询schema.table表的是更新统计信息(一般不开启，性能太差)。</li>
+</ol>
+<h1 id="采样page数量"><a href="#采样page数量" class="headerlink" title="采样page数量"></a>采样page数量</h1><p>相关参数:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">| innodb_stats_sample_pages            | 8     |</span><br><span class="line">| innodb_stats_persistent_sample_pages | 20    |</span><br><span class="line">| innodb_stats_transient_sample_pages  | 8     |</span><br></pre></td></tr></table></figure>
+<p><code>innodb_stats_sample_pages</code>废弃改成了<code>innodb_stats_persistent_sample_pages</code>和<code>innodb_stats_transient_sample_pages</code>,灵活控制持久化和非持久化下的采样page数。</p>
+<p>可以看出默认情况持久化采样20个page。 </p>
+<h2 id="单表配置"><a href="#单表配置" class="headerlink" title="单表配置"></a>单表配置</h2><p>上述所有都是全局配置，还可以为每个表单独3个参数:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">STATS_PERSISTENT  : 1: 持久化统计信息;</span><br><span class="line">STATS_AUTO_RECALC : 超过10%更新统计信息。</span><br><span class="line">STATS_SAMPLE_PAGES: 采样页数。</span><br></pre></td></tr></table></figure>
+<p>可以看出为每个表设置的参数依然是这3个自由度: 是否持久化、更新统计信息时机、采样页数。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/03/31/2019-03/mysql%E7%BB%9F%E8%AE%A1%E4%BF%A1%E6%81%AF%E6%9B%B4%E6%96%B0/" data-id="ck96cch3t00hnbhama51xgxzz" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-03/spark语法概要" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/03/31/2019-03/spark%E8%AF%AD%E6%B3%95%E6%A6%82%E8%A6%81/" class="article-date">
+  <time datetime="2019-03-31T11:36:22.000Z" itemprop="datePublished">2019-03-31</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/spark/">spark</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/03/31/2019-03/spark%E8%AF%AD%E6%B3%95%E6%A6%82%E8%A6%81/">spark笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>job: action分割<br>task: shuffle分割<br>application: 多个job</p>
+<p>join\cogroup: 确保Rdd1.partitioner = Rdd2.partitioner = join.partitioner<br>换句话就是 rdd1的key和rdd2的key，还有join时用的key,三者是相等的。</p>
+<h1 id="语法概要"><a href="#语法概要" class="headerlink" title="语法概要"></a>语法概要</h1><p>官方示例代码库:<br><a href="http://spark.apache.org/examples.html" target="_blank" rel="noopener">http://spark.apache.org/examples.html</a><br>此外还有安装目录的<code>examples</code>目录。</p>
+<h2 id="生成rdd"><a href="#生成rdd" class="headerlink" title="生成rdd"></a>生成rdd</h2><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// (1) 从数组:</span></span><br><span class="line">data = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>]</span><br><span class="line">distData = sc.parallelize(data)</span><br><span class="line"><span class="comment">// (1)从文件:</span></span><br><span class="line">scala&gt; <span class="keyword">val</span> distFile = sc.textFile(<span class="string">"data.txt"</span>)</span><br><span class="line">distFile: org.apache.spark.rdd.<span class="type">RDD</span>[<span class="type">String</span>]</span><br></pre></td></tr></table></figure>
+
+<h2 id="RDD操作"><a href="#RDD操作" class="headerlink" title="RDD操作"></a>RDD操作</h2><p>RDD分为：</p>
+<ol>
+<li>普通RDD；</li>
+<li>PairRDD。<br>两者能用的函数大不相同，每次操作RDD前需要复核一下到底是普通RDD还是Pair RDD。</li>
+</ol>
+<p>方法分为:</p>
+<ol>
+<li>transform: 变换结构;</li>
+<li>action: 真正有输出，有动作（特例是forEachPartition这种类似遍历，反函数式编程的）。</li>
+</ol>
+<h2 id="普通RDD-transform"><a href="#普通RDD-transform" class="headerlink" title="普通RDD-transform"></a>普通RDD-transform</h2><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// scala用箭头=&gt;:</span></span><br><span class="line"><span class="keyword">val</span> lineLengths = lines.map(s =&gt; s.length)</span><br><span class="line"><span class="keyword">val</span> totalLength = lineLengths.reduce((a, b) =&gt; a + b)</span><br><span class="line"><span class="comment">// python用lambda:</span></span><br><span class="line">lineLengths = lines.map(lambda s: len(s))</span><br><span class="line">totalLength = lineLengths.reduce(lambda a, b: a + b)</span><br></pre></td></tr></table></figure>
+<p>也可以传递函数:</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// scala借用object单例:</span></span><br><span class="line"><span class="class"><span class="keyword">object</span> <span class="title">MyFunctions</span> </span>&#123;</span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">func1</span></span>(s: <span class="type">String</span>): <span class="type">String</span> = &#123; ... &#125;</span><br><span class="line">&#125;</span><br><span class="line">myRdd.map(<span class="type">MyFunctions</span>.func1)</span><br></pre></td></tr></table></figure>
+<p>其他函数汇总:(因为不是pair rdd，因此基本都无shuffle)</p>
+<h3 id="无shuffle-1对1"><a href="#无shuffle-1对1" class="headerlink" title="无shuffle,1对1"></a>无shuffle,1对1</h3><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">map(func)： </span><br><span class="line">filter(func)：无shuffle</span><br></pre></td></tr></table></figure>
+<h3 id="无shuffle-1对多、多对多"><a href="#无shuffle-1对多、多对多" class="headerlink" title="无shuffle,1对多、多对多"></a>无shuffle,1对多、多对多</h3><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">flatMap(func)	:  每个item可以返回一个seq;</span><br><span class="line">mapPartitions(func)	:  输入迭代器，返回迭代器 </span><br><span class="line">mapPartitionsWithIndex(func):  输入迭代器，返回迭代器</span><br></pre></td></tr></table></figure>
+<h3 id="集合运算"><a href="#集合运算" class="headerlink" title="集合运算"></a>集合运算</h3><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">sample(withReplacement, fraction, seed)	</span><br><span class="line">union(otherDataset)	</span><br><span class="line">intersection(otherDataset)	</span><br><span class="line">distinct([numTasks])): 如果是pairRDD，有shuffle，可以定义并行度。</span><br><span class="line">coalesce(numPartitions)	</span><br><span class="line">repartition(numPartitions)	</span><br><span class="line">repartitionAndSortWithinPartitions(partitioner)</span><br></pre></td></tr></table></figure>
+<p>此外还有一个<code>forEachPartition</code>，返回值为空，是个遍历的action。<br>有shuffle的变换一般都可以定义<code>[numTasks]</code>，也就是可以定义并行度。</p>
+<h3 id="闭包"><a href="#闭包" class="headerlink" title="闭包"></a>闭包</h3><p>闭包是指 <code>executor</code> 要在<code>RDD</code>上进行计算时必须对执行节点可见的那些变量和方法。闭包被序列化并被发送到每个 <code>executor</code>。</p>
+<p>闭包的变量副本(序列化后)发给每个 <code>executor</code>.</p>
+<h2 id="Pair-RDD-transform"><a href="#Pair-RDD-transform" class="headerlink" title="Pair RDD-transform"></a>Pair RDD-transform</h2><p>加上了很多shuffle操作的函数(算子)</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> pairs = lines.map(s =&gt; (s, <span class="number">1</span>))</span><br><span class="line"><span class="keyword">val</span> counts = pairs.reduceByKey((a, b) =&gt; a + b)</span><br></pre></td></tr></table></figure>
+<p>其他函数汇总:</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">groupByKey([numTasks])： 返回(<span class="type">K</span>, <span class="type">Iterable</span>&lt;<span class="type">V</span>&gt;)，一般用reduceByKey代替这个算子</span><br><span class="line">reduceByKey(func, [numTasks])	</span><br><span class="line">aggregateByKey(zeroValue)(seqOp, combOp, [numTasks])	</span><br><span class="line">sortByKey([ascending], [numTasks])	</span><br><span class="line">join(otherDataset, [numTasks]): (<span class="type">K</span>, <span class="type">V</span>) 和 (<span class="type">K</span>, <span class="type">W</span>)  =&gt;  (<span class="type">K</span>, (<span class="type">V</span>, <span class="type">W</span>))</span><br><span class="line">cogroup(otherDataset, [numTasks])	</span><br><span class="line">cartesian(otherDataset)	</span><br><span class="line">partitionBy(partitioner): 一般比repartition靠谱，因为下一步能用到key，而不是随机划分</span><br></pre></td></tr></table></figure>
+
+
+<p>Action汇总:<br>可以注意到凡是最终需要输出、反函数式编程的（遍历）就是action，最后汇聚到driver单点处理。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">reduce(func): 注意和map相反,reduce是action。数据最后聚合成单点。</span><br><span class="line">collect()	</span><br><span class="line">count()	</span><br><span class="line">first()	</span><br><span class="line">take(n)</span><br><span class="line">takeSample(withReplacement, num, [seed])	</span><br><span class="line">takeOrdered(n, [ordering])	</span><br><span class="line">saveAsTextFile(path)	</span><br><span class="line">saveAsSequenceFile(path)	</span><br><span class="line">countByKey()	: 因为整合了reduce的功能</span><br><span class="line">foreach(func) 以及foreachPartition等。</span><br></pre></td></tr></table></figure>
+
+<h3 id="自定义UDAF的核心-combineByKey"><a href="#自定义UDAF的核心-combineByKey" class="headerlink" title="自定义UDAF的核心: combineByKey"></a>自定义UDAF的核心: combineByKey</h3><p>大部分shuffle算子都是调用<code>combineByKey</code>实现的，可以说<code>combineByKey</code>就是shuffle的核心。<br>combineByKey定义:</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">combineByKey</span></span>[<span class="type">C</span>](</span><br><span class="line">  createCombiner: <span class="type">V</span> =&gt; <span class="type">C</span>,</span><br><span class="line">  mergeValue: (<span class="type">C</span>, <span class="type">V</span>) =&gt; <span class="type">C</span>,</span><br><span class="line">  mergeCombiners: (<span class="type">C</span>, <span class="type">C</span>) =&gt; <span class="type">C</span>): <span class="type">RDD</span>[(<span class="type">K</span>, <span class="type">C</span>)] = self.withScope &#123;</span><br><span class="line">combineByKeyWithClassTag(createCombiner, mergeValue, mergeCombiners)(<span class="literal">null</span>)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="示例"><a href="#示例" class="headerlink" title="示例"></a>示例</h4><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> pairs = sc.parallelize(<span class="type">List</span>((<span class="string">"prova"</span>, <span class="number">1</span>), (<span class="string">"ciao"</span>, <span class="number">2</span>),</span><br><span class="line">                                (<span class="string">"prova"</span>, <span class="number">2</span>), (<span class="string">"ciao"</span>, <span class="number">4</span>),</span><br><span class="line">                                (<span class="string">"prova"</span>, <span class="number">3</span>), (<span class="string">"ciao"</span>, <span class="number">6</span>)))</span><br><span class="line"><span class="comment">// aggregateByKey:</span></span><br><span class="line">pairs.aggregateByKey(<span class="type">List</span>[<span class="type">Any</span>]())(</span><br><span class="line">  (aggr, value) =&gt; aggr ::: (value :: <span class="type">Nil</span>),</span><br><span class="line">  (aggr1, aggr2) =&gt; aggr1 ::: aggr2</span><br><span class="line">).collect().toMap</span><br><span class="line"><span class="comment">// combineByKey:</span></span><br><span class="line">pairs.combineByKey(</span><br><span class="line">  (value) =&gt; <span class="type">List</span>(value),</span><br><span class="line">  (aggr: <span class="type">List</span>[<span class="type">Any</span>], value) =&gt; aggr ::: (value :: <span class="type">Nil</span>),</span><br><span class="line">  (aggr1: <span class="type">List</span>[<span class="type">Any</span>], aggr2: <span class="type">List</span>[<span class="type">Any</span>]) =&gt; aggr1 ::: aggr2</span><br><span class="line">).collect().toMap</span><br></pre></td></tr></table></figure>
+<p>combineByKey比aggregateByKey更加通用，区别是它的第一个参数创建初始聚合器都是函数，而aggregateByKey第一个参数是一个初始值。</p>
+<h2 id="缓存"><a href="#缓存" class="headerlink" title="缓存"></a>缓存</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">cache()</span><br><span class="line">persist([LEVEL])</span><br></pre></td></tr></table></figure>
+<p>在 shuffle 操作中（例如 reduceByKey），即便是用户没有调用 persist 方法，Spark 也会自动缓存部分中间数据.</p>
+<h2 id="广播变量"><a href="#广播变量" class="headerlink" title="广播变量"></a>广播变量</h2><p><code>immutable</code><br>先用action从sc(driver)上广播出去，然后用<code>.value</code>访问。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">scala&gt; <span class="keyword">val</span> broadcastVar = sc.broadcast(<span class="type">Array</span>(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>))</span><br><span class="line">broadcastVar: org.apache.spark.broadcast.<span class="type">Broadcast</span>[<span class="type">Array</span>[<span class="type">Int</span>]] = <span class="type">Broadcast</span>(<span class="number">0</span>)</span><br><span class="line"></span><br><span class="line">scala&gt; broadcastVar.value</span><br><span class="line">res0: <span class="type">Array</span>[<span class="type">Int</span>] = <span class="type">Array</span>(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>)</span><br></pre></td></tr></table></figure>
+
+
+<h2 id="累加器"><a href="#累加器" class="headerlink" title="累加器"></a>累加器</h2><p>数值型。<br>可变。</p>
+<img src="/images/2019-03/acc.jpg" class="" width="800" height="1200" title="acc">
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">scala&gt; <span class="keyword">val</span> accum = sc.longAccumulator(<span class="string">"My Accumulator"</span>)</span><br><span class="line">accum: org.apache.spark.util.<span class="type">LongAccumulator</span> = <span class="type">LongAccumulator</span>(id: <span class="number">0</span>, name: <span class="type">Some</span>(<span class="type">My</span> <span class="type">Accumulator</span>), value: <span class="number">0</span>)</span><br><span class="line"></span><br><span class="line">scala&gt; sc.parallelize(<span class="type">Array</span>(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>)).foreach(x =&gt; accum.add(x))</span><br><span class="line">...</span><br><span class="line"><span class="number">10</span>/<span class="number">09</span>/<span class="number">29</span> <span class="number">18</span>:<span class="number">41</span>:<span class="number">08</span> <span class="type">INFO</span> <span class="type">SparkContext</span>: <span class="type">Tasks</span> finished in <span class="number">0.317106</span> s</span><br><span class="line"></span><br><span class="line">scala&gt; accum.value</span><br><span class="line">res2: <span class="type">Long</span> = <span class="number">10</span></span><br></pre></td></tr></table></figure>
+<p>自定义累加器需要实现的3个方法:（类似于<code>combineByKey</code>）</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">reset : 清零。防止重算。</span><br><span class="line">add: 累加</span><br><span class="line">merge: 合并累加器。</span><br></pre></td></tr></table></figure>
+<p>示例:</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">VectorAccumulatorV2</span> <span class="keyword">extends</span> <span class="title">AccumulatorV2</span>[<span class="type">MyVector</span>, <span class="type">MyVector</span>] </span>&#123;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">private</span> <span class="keyword">val</span> myVector: <span class="type">MyVector</span> = <span class="type">MyVector</span>.createZeroVector</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">reset</span></span>(): <span class="type">Unit</span> = &#123;</span><br><span class="line">    myVector.reset()</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">add</span></span>(v: <span class="type">MyVector</span>): <span class="type">Unit</span> = &#123;</span><br><span class="line">    myVector.add(v)</span><br><span class="line">  &#125;</span><br><span class="line">  ...</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// Then, create an Accumulator of this type:</span></span><br><span class="line"><span class="keyword">val</span> myVectorAcc = <span class="keyword">new</span> <span class="type">VectorAccumulatorV2</span></span><br><span class="line"><span class="comment">// Then, register it into spark context:</span></span><br><span class="line">sc.register(myVectorAcc, <span class="string">"MyVectorAcc1"</span>) <span class="comment">// 注册一下</span></span><br></pre></td></tr></table></figure>
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/03/31/2019-03/spark%E8%AF%AD%E6%B3%95%E6%A6%82%E8%A6%81/" data-id="ck96cch3w00i5bhamg1kyhw0w" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spark/" rel="tag">spark</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-03/redis设计与实现笔记12-慢查询日志" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/03/18/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B012-%E6%85%A2%E6%9F%A5%E8%AF%A2%E6%97%A5%E5%BF%97/" class="article-date">
+  <time datetime="2019-03-18T01:20:07.000Z" itemprop="datePublished">2019-03-18</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/03/18/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B012-%E6%85%A2%E6%9F%A5%E8%AF%A2%E6%97%A5%E5%BF%97/">redis设计与实现笔记12-慢查询日志与监视器</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="第23章-慢查询日志"><a href="#第23章-慢查询日志" class="headerlink" title="第23章 慢查询日志"></a>第23章 慢查询日志</h1><p>两个配置：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">slowlog-log-slower-than: 超过多少微秒的命令记录到慢查询日志；</span><br><span class="line">slowlog-max-len: 最多保存多少条慢查询日志。(删除最旧的，FIFO)</span><br></pre></td></tr></table></figure>
+
+<h2 id="查看慢查询日志"><a href="#查看慢查询日志" class="headerlink" title="查看慢查询日志"></a>查看慢查询日志</h2><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">slowlog get</span><br><span class="line">1) 1) (integer) 4 # 日志id: uid</span><br><span class="line">   2) (integer) 1578781447 # 日志执行时间戳</span><br><span class="line">   3) (integer) 13 # 执行了多少微秒</span><br><span class="line">   4) 1) "SET"     # 具体命令</span><br><span class="line">      2) "database"</span><br><span class="line">      3) "Redis"</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+
+<h2 id="慢查询日志存储"><a href="#慢查询日志存储" class="headerlink" title="慢查询日志存储"></a>慢查询日志存储</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">redisServer</span>&#123;</span></span><br><span class="line">    <span class="comment">// 下一条慢查询日志的id:(类似于自增id)</span></span><br><span class="line">    <span class="keyword">long</span> <span class="keyword">long</span> slowlog_entry_id;</span><br><span class="line">    <span class="comment">// 保存了所有慢查询日志的链表:</span></span><br><span class="line">    <span class="built_in">list</span> *slowlog;</span><br><span class="line">    <span class="comment">// 配置:</span></span><br><span class="line">    <span class="keyword">long</span> <span class="keyword">long</span> slowlog_log_slower_than;</span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> slowlog_max_len;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">slowlogEntry</span>&#123;</span></span><br><span class="line">    <span class="keyword">long</span> <span class="keyword">long</span> id;</span><br><span class="line">    <span class="keyword">time_t</span> time;</span><br><span class="line">    <span class="keyword">long</span> <span class="keyword">long</span> duration;</span><br><span class="line">    robj **argv; <span class="comment">// 命令和参数</span></span><br><span class="line">    <span class="keyword">int</span> argc; <span class="comment">// 命令和参数数量</span></span><br><span class="line">    </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h1 id="第24章-监视器"><a href="#第24章-监视器" class="headerlink" title="第24章 监视器"></a>第24章 监视器</h1><p>Monitor命令:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">redis&gt;</span><span class="bash"> MONITOR</span></span><br></pre></td></tr></table></figure>
+<p>然后客户端可以监视服务器当前处理的命令请求。</p>
+<img src="/images/2019-03/monitor.png" class="" width="800" height="1200" title="monitor">
+
+<h2 id="监视器实现"><a href="#监视器实现" class="headerlink" title="监视器实现"></a>监视器实现</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">redisServer</span>&#123;</span></span><br><span class="line">    <span class="comment">// 监视器链表:</span></span><br><span class="line">     <span class="comment">// 链表，保存了所有从服务器，以及所有监视器</span></span><br><span class="line">    <span class="built_in">list</span> *slaves, *monitors;    <span class="comment">/* List of slaves and MONITORs */</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<h2 id="这本书戛然而止"><a href="#这本书戛然而止" class="headerlink" title="这本书戛然而止"></a>这本书戛然而止</h2>
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/03/18/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B012-%E6%85%A2%E6%9F%A5%E8%AF%A2%E6%97%A5%E5%BF%97/" data-id="ck96cch3v00hybhamar463m7j" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-03/redis设计与实现笔记11-排序与二进制数组" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/03/17/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B011-%E6%8E%92%E5%BA%8F%E4%B8%8E%E4%BA%8C%E8%BF%9B%E5%88%B6%E6%95%B0%E7%BB%84/" class="article-date">
+  <time datetime="2019-03-17T12:35:13.000Z" itemprop="datePublished">2019-03-17</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/03/17/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B011-%E6%8E%92%E5%BA%8F%E4%B8%8E%E4%BA%8C%E8%BF%9B%E5%88%B6%E6%95%B0%E7%BB%84/">redis设计与实现笔记11-排序与二进制数组</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>排序命令<code>SORT</code>:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">RPUSH numbers 5 3 1 4 2</span><br><span class="line">SORT numbers</span><br><span class="line"><span class="meta">#</span><span class="bash"> 结果:</span></span><br><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td></tr></table></figure>
+<p>也可以在末尾加上<code>alpha</code>参数，指定按字母序排序。<br>还可以在末尾加上<code>By</code>参数，指定按某个集合定义的权重进行排序。</p>
+<h2 id="sort-命令的实现"><a href="#sort-命令的实现" class="headerlink" title="sort 命令的实现"></a>sort <key>命令的实现</h2><img src="/images/2019-03/sort_key.png" class="" width="800" height="1200" title="sort_key">
+<p>实现sort的时候为被排序的key创建一个与排序目标长度相同的数组，数组中的节点的obj字段存放实际数据指针，score字段是double，存放每个对象的排序值。<br>实际排序对这个新创建的数组进行即可。</p>
+<h2 id="sort-By-price命令的实现"><a href="#sort-By-price命令的实现" class="headerlink" title="sort  By *-price命令的实现"></a>sort <key> By *-price命令的实现</h2><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">MSEST apple-price 8 banana-price 5.5 cherry-price 7</span><br><span class="line">SORT fruits BY *-price</span><br></pre></td></tr></table></figure>
+
+<p>不同选项顺序：(执行顺序和编程时书写顺序无关)</p>
+<ol>
+<li>先<code>by *-price</code>；</li>
+<li>后<code>alpha</code></li>
+</ol>
+<h2 id="limit命令的实现"><a href="#limit命令的实现" class="headerlink" title="limit命令的实现"></a>limit命令的实现</h2><p><code>sort fruits limit &lt;offset&gt; &lt;count&gt;</code><br>实现上是先排序后，然后在跳转到<code>offset</code>上选<code>count</code>个。</p>
+<h2 id="STORE命令"><a href="#STORE命令" class="headerlink" title="STORE命令"></a>STORE命令</h2><p>可以用<code>STORE</code>命令保存<code>SORT</code>的结果:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Sort fruits STORE sorted_fruits</span><br></pre></td></tr></table></figure>
+<p>实现上，首先排序，然后：</p>
+<ol>
+<li>检查要保存的键<code>sorted_fruits</code>是否存在,存在则删除;</li>
+<li>创建<code>sorted_fruits</code>列表；</li>
+<li>将辅助排序数组依次压入<code>sorted_fruits</code>.</li>
+</ol>
+<h1 id="第22章-二进制数组"><a href="#第22章-二进制数组" class="headerlink" title="第22章-二进制数组"></a>第22章-二进制数组</h1><p>单个数组操作:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">SETBIT bit 0 1 # 第0位设置为1</span><br><span class="line">GETBIT bit 3   # 获取第3位的值</span><br><span class="line">BITCOUNT bit   # 获取bit数组中1的个数</span><br></pre></td></tr></table></figure>
+<p>多个数组之间操作:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">BITOP AND and-result x y z # x,y,z求与的结果放and-result</span><br><span class="line">类似的操作还有OR,XOR,NOT,也就是与、或、非、异或、取反。</span><br></pre></td></tr></table></figure>
+
+<h2 id="底层存储"><a href="#底层存储" class="headerlink" title="底层存储"></a>底层存储</h2><p>用SDS字符串存储二进制数组。<br>对二进制数组的操作： 也借用SDS的字符串函数。</p>
+<p>因为SDS是二进制安全的(也就是存储的数据中有\0也没关系，因为SDS中有存长度)，所以可以用来存储二进制数组。</p>
+<h3 id="逆序存储"><a href="#逆序存储" class="headerlink" title="逆序存储"></a>逆序存储</h3><img src="/images/2019-03/sds_binary.png" class="" width="800" height="1200" title="sds_binary">
+<p>这里保存的二进制数组是<code>0100 1101</code>;<br>图中SDS保存的是逆序的:<code>1011 0010</code>，之所以逆序存储的原因为了简化<code>SETBIT</code>命令的实现。</p>
+<h4 id="offset、高位、低位"><a href="#offset、高位、低位" class="headerlink" title="offset、高位、低位"></a>offset、高位、低位</h4><p>这里要强调一下二进制的offset、高位、低位的概念，方便理解为什么要逆序存储以及因为逆序存储所以扩展时不需要移动。<br>二进制数组是<code>0100 1101</code>：<br>高位、低位: <code>0100</code>是高位,<code>1101</code>是低位,(想象十进制数字9876的高位是9).<br>offset: offset为0的是1，offset为1的为0.</p>
+<p><code>GETBIT 7</code>是0<br><code>SETBIT 11 1</code>其中第11位不存在，因此扩展后会变成<code>1000 0100 1101</code>。</p>
+<h2 id="GETBIT实现O-1"><a href="#GETBIT实现O-1" class="headerlink" title="GETBIT实现O(1)"></a>GETBIT实现O(1)</h2><p>由于前面是逆序存储的二进制数组，因此可以从左边开始数offset了（原来是从右边往左数，负负得正）。<br>由于用SDS存储二进制，当我们想要获取第n位0，1值的时候，相当于需要获取两个坐标：</p>
+<ol>
+<li>位于哪个byte:    <code>n/8</code></li>
+<li>位于byte的第几位:<code>n%8+1</code> 。<br>换句话说所有值的坐标计算公式为: <code>(n/8，n%8+1)</code>。<img src="/images/2019-03/locate_binary.png" class="" width="800" height="1200" title="locate_binary">
+而<code>GETBIT &lt;bitarray&gt; 10</code>的结果是:<br><code>(10/8，10%8+1)</code>也就是byte[1][3-1]。<br>（从左到右第3位）。<br>其实如果统一从0开始计数，公式可以简化为：<br><code>(n/8,n%8)</code></li>
+</ol>
+<img src="/images/2019-03/locate_binary10.png" class="" width="800" height="1200" title="locate_binary10">
+<p>GETBIT命令算法复杂度为O(1)。</p>
+<h2 id="SETBIT命令实现O-1"><a href="#SETBIT命令实现O-1" class="headerlink" title="SETBIT命令实现O(1)"></a>SETBIT命令实现O(1)</h2><p>命令格式：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">SETBIT &lt;bitarray&gt; &lt;offset&gt; &lt;value&gt;</span><br></pre></td></tr></table></figure>
+<p>这个命令会做3件事：</p>
+<ol>
+<li>设置新值</li>
+<li>返回旧值；</li>
+<li>如果offset超出原有数组长度，会拓展原数组，并且把新扩展空间的值设置为0.<br>这里的扩展应当注意到SDS的空间预分配策略：<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">总长度len&lt;1MB: 总空间为2*len+1;</span><br><span class="line">总长度len&gt;&#x3D;1MB: 总空间为len+1MB+1。</span><br><span class="line">换句话说，预分配的空间上限是1MB，尽量为len。</span><br></pre></td></tr></table></figure>
+
+</li>
+</ol>
+<h3 id="逆序存储与扩展不需要移动"><a href="#逆序存储与扩展不需要移动" class="headerlink" title="逆序存储与扩展不需要移动"></a>逆序存储与扩展不需要移动</h3><p>由于扩展是扩展高位，而高位经过逆序存储后，放在了buf数组的末尾，因此扩展时就不需要移动原来的数据了。</p>
+<h2 id="BITCOUNT命令实现"><a href="#BITCOUNT命令实现" class="headerlink" title="BITCOUNT命令实现"></a>BITCOUNT命令实现</h2><p>有几种实现算法：<br>(1) 遍历：最慢；<br>(2) 查表：空间换时间，二进制数组的排列是有穷的，可以预先存下不同排列对应的1数量；<br>(3) SWAR算法: 计算汉明码问题，Hamming Weight。<br>如果cpu不支持直接进行汉明码计算，可以使用SWAR算法:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">uint32_t</span> <span class="title">swar</span><span class="params">(<span class="keyword">uint32_t</span> i)</span></span>&#123;</span><br><span class="line">    i = (i&amp; <span class="number">0x55555555</span>)+((i&gt;&gt;<span class="number">1</span>)&amp;<span class="number">0x55555555</span>);</span><br><span class="line">    i = (i&amp; <span class="number">0x33333333</span>)+((i&gt;&gt;<span class="number">2</span>)&amp;<span class="number">0x33333333</span>);</span><br><span class="line">    i = (i&amp; <span class="number">0x0F0F0F0F</span>)+((i&gt;&gt;<span class="number">4</span>)&amp;<span class="number">0x0F0F0F0F</span>);</span><br><span class="line">    i = (i*(<span class="number">0x01010101</span>)&gt;&gt;<span class="number">24</span>);</span><br><span class="line">    <span class="keyword">return</span> i;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>比遍历快32倍，比查8位的表快4倍，比查16位的表快2倍，无需额外内存。<br>由于SWAR算法缓存的值较少而且规整，是缓存友好的。<br>(4)redis的二进制位统计算法：<br>结合查8位的表和SWAR算法。<br>如果n&lt; 128: 直接用查表；<br>如果n&gt;=128: 使用SWAR，每次载入128位，调用4次SWAR。</p>
+<h2 id="BITOP-OR-XOR-NOT命令实现"><a href="#BITOP-OR-XOR-NOT命令实现" class="headerlink" title="BITOP OR\XOR\NOT命令实现"></a>BITOP OR\XOR\NOT命令实现</h2><p>对于每个byte调用c函数操作。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/03/17/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B011-%E6%8E%92%E5%BA%8F%E4%B8%8E%E4%BA%8C%E8%BF%9B%E5%88%B6%E6%95%B0%E7%BB%84/" data-id="ck96cch3u00hubham1gyf1hzl" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-03/redis设计与实现笔记10-订阅-事物-lua" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/03/10/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B010-%E8%AE%A2%E9%98%85-%E4%BA%8B%E7%89%A9-lua/" class="article-date">
+  <time datetime="2019-03-10T12:08:34.000Z" itemprop="datePublished">2019-03-10</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/03/10/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B010-%E8%AE%A2%E9%98%85-%E4%BA%8B%E7%89%A9-lua/">redis设计与实现笔记10-订阅,事物,lua</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="发布订阅"><a href="#发布订阅" class="headerlink" title="发布订阅"></a>发布订阅</h1><p>(书上第18章)<br>客户端可以订阅某个频道，或者订阅符合某种模式的频道们。</p>
+<img src="/images/2019-03/publish.png" class="" width="800" height="1200" title="publish">
+
+<h2 id="订阅关系保存"><a href="#订阅关系保存" class="headerlink" title="订阅关系保存"></a>订阅关系保存</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">redisServer</span>&#123;</span></span><br><span class="line">    <span class="comment">// 保存所有频道的订阅关系:</span></span><br><span class="line">    dict* pubsub_channels;</span><br><span class="line">    <span class="comment">// key: 频道名字(string)</span></span><br><span class="line">    <span class="comment">// value: 订阅的客户端们(链表)</span></span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 模式订阅: 订阅符合某种模式的频道</span></span><br><span class="line">    dict* pubsub_patterns;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>（如果有个客户端疯狂乱订阅，服务器是不是内存就爆了？）</p>
+<h1 id="第19章-事务"><a href="#第19章-事务" class="headerlink" title="第19章-事务"></a>第19章-事务</h1><p>相关命令:</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">MULTI: 类似于事务开始start transaction;</span><br><span class="line"><span class="comment"># 中间一堆正常redis set命令。</span></span><br><span class="line">EXEC: 类似于commit.</span><br><span class="line">WATCH: 乐观锁，在<span class="built_in">exec</span>执行前监视一些key是否被修改。</span><br><span class="line">如果被修改，则拒绝执行事务（类似于CAS）</span><br></pre></td></tr></table></figure>
+<p>事务执行阶段不会执行别的客户端的命令。（相当于独占了）</p>
+<h3 id="事务开始"><a href="#事务开始" class="headerlink" title="事务开始"></a>事务开始</h3><p>MULTI: 客户端状态打开<code>REDIS_MULTI</code>标识。</p>
+<h3 id="命令入队"><a href="#命令入队" class="headerlink" title="命令入队"></a>命令入队</h3><p>除了<code>EXEC</code>,<code>DISCARD</code>,<code>WATCH</code>,<code>MULTI</code>之外的命令放入队列中；<br>否则立即执行。</p>
+<h3 id="Watch功能实现"><a href="#Watch功能实现" class="headerlink" title="Watch功能实现"></a>Watch功能实现</h3><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">redisDb</span>&#123;</span></span><br><span class="line">    <span class="comment">// 正在被watch监视的key:</span></span><br><span class="line">    dict *watched_keys;</span><br><span class="line">    <span class="comment">// key: 被监视的key</span></span><br><span class="line">    <span class="comment">// value: 监视的客户端们(list)</span></span><br><span class="line">&#125;redisDb;</span><br></pre></td></tr></table></figure>
+<p>存在redisDb中，可见每个数据库都保存一个这个字典。</p>
+<p>每个修改操作都要检查watched_keys字典，通知对应的客户端。（打脏标记<code>REIDS_DIRTY_CAS</code>）</p>
+<h2 id="事务的ACID"><a href="#事务的ACID" class="headerlink" title="事务的ACID"></a>事务的ACID</h2><p>A: 原子性 Atomicity<br>C: 一致性 Consistency<br>I: 隔离性 Isolation<br>D: 耐久性 Durability</p>
+<h3 id="A：原子性"><a href="#A：原子性" class="headerlink" title="A：原子性"></a>A：原子性</h3><ul>
+<li>mysql：<br>要么一个都不执行成功，要么都全部执行成功。</li>
+</ul>
+<p>redis这里略有修改，它只保证执行，不保证执行成功：<br>要么一个都不执行，要么都全部执行。<br>（redis只检查编译错误，如命令不存在，不检查运行时错误）<br>redis执行事务过程中出错的话，不会回滚已经执行的命令。<br>（开发者表示这算程序员自己的锅）</p>
+<h3 id="C-一致性"><a href="#C-一致性" class="headerlink" title="C: 一致性"></a>C: 一致性</h3><p>单实例：肯定一致。<br>主从： 由raft保证；<br>cluster: 分slot以后，相当于单实例+主从，因此一致。</p>
+<h3 id="I-隔离性"><a href="#I-隔离性" class="headerlink" title="I: 隔离性"></a>I: 隔离性</h3><p>也就是让并发执行达到串行一致性。<br>由于redis本来就是单线程串行执行事务，因此天然不需要做额外的事就能达到隔离性。</p>
+<h3 id="D-耐久性"><a href="#D-耐久性" class="headerlink" title="D: 耐久性"></a>D: 耐久性</h3><p>redis三种模式:<br>无持久化存储: 无耐久<br>RDB: 不能完全保证；<br>AOF: <code>appendfsync</code>为<code>always</code>时，达到事务耐久性。</p>
+<h1 id="第20章-Lua脚本"><a href="#第20章-Lua脚本" class="headerlink" title="第20章-Lua脚本"></a>第20章-Lua脚本</h1><p>主要涉及两个命令<code>EVAL</code>和<code>EVALSHA</code>。<br>redis服务器端2.6开始有lua环境，因此客户端可以：</p>
+<ol>
+<li>执行lua脚本: <figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">redis&gt;</span><span class="bash"> EVAL <span class="string">"return 'hello world'"</span> 0</span></span><br></pre></td></tr></table></figure>
+最后的0表示输入参数的个数是0个。参见：<a href="http://doc.redisfans.com/script/eval.html" target="_blank" rel="noopener">http://doc.redisfans.com/script/eval.html</a></li>
+<li>通过SHA1校验和，执行对应的lua脚本:<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">redis&gt;</span><span class="bash"> EVALSHA <span class="string">"a27e72..........."</span></span></span><br></pre></td></tr></table></figure>
+这个校验和需要服务器认识才行，服务器认识的方法：<br>(1)服务器以前执行过对应的lua脚本；<br>(2)客户端用<code>SCRIPT LOAD</code>命令告诉过服务器：<code>SCRIPT LOAD &quot;return 2*2&quot;</code>。</li>
+</ol>
+<h3 id="如果在cluster模式："><a href="#如果在cluster模式：" class="headerlink" title="如果在cluster模式："></a>如果在cluster模式：</h3><p>lua脚本如果要使用redis数据库中的键，一定要通过参数传递进去，才能被分析出来，方便兼容新版本的集群功能。</p>
+<h3 id="redis的lua环境"><a href="#redis的lua环境" class="headerlink" title="redis的lua环境"></a>redis的lua环境</h3><p>为了保证lua脚本之间不会互相影响，redis服务器需要保证luz脚本无副作用，它做了一下措施：</p>
+<ol>
+<li>修改随机数函数，消除副作用；</li>
+<li>禁止lua脚本创建全局变量；</li>
+</ol>
+<p>但是好像遗漏了lua脚本对于已有全局变量的修改：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">math.randomseed(10086) --change seed</span><br></pre></td></tr></table></figure>
+<p>应该是把这块儿交给程序员自行保证。</p>
+<h3 id="lua脚本特有的排序辅助"><a href="#lua脚本特有的排序辅助" class="headerlink" title="lua脚本特有的排序辅助"></a>lua脚本特有的排序辅助</h3><p>此外，为了获得确定性一致的结果，redis对集合的输出结果做了排序。<br>例如调用<code>SMEMBERS</code>后的结果，会经过排序辅助函数进行排序。<br>保证同样的数据集的输出结果相同。</p>
+<h2 id="lua-scripts字典"><a href="#lua-scripts字典" class="headerlink" title="lua_scripts字典"></a>lua_scripts字典</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">redisServer</span>&#123;</span></span><br><span class="line">    <span class="comment">// 整个服务器全局的lua校验和</span></span><br><span class="line">    dict *lua_scripts;</span><br><span class="line">    <span class="comment">// key: checksum</span></span><br><span class="line">    <span class="comment">// value: lua脚本代码</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>所有执行过或要求记住的lua校验和都会存下来。</p>
+<h2 id="EVAL命令实现"><a href="#EVAL命令实现" class="headerlink" title="EVAL命令实现"></a>EVAL命令实现</h2><p>3个步骤:</p>
+<ol>
+<li>计算校验和，然后用校验和定义一个函数f_校验和;</li>
+<li>&lt;校验和，脚本&gt;保存到<code>lua_scripts</code>字典；</li>
+<li>执行函数。</li>
+</ol>
+<p>比如校验和是a0e1ffff,函数名就是f_a0e1fffffffff。<br>然后利用函数的局部性，避免全局变量。</p>
+<h2 id="超时检测"><a href="#超时检测" class="headerlink" title="超时检测"></a>超时检测</h2><p>参数<code>lua-time-limit</code>。<br>lua脚本的运行时间是有上限的，避免编程错误的死循环。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/03/10/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B010-%E8%AE%A2%E9%98%85-%E4%BA%8B%E7%89%A9-lua/" data-id="ck96cch3u00hrbham75k75ap4" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-03/redis设计与实现笔记9-cluster模式" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/03/03/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B09-cluster%E6%A8%A1%E5%BC%8F/" class="article-date">
+  <time datetime="2019-03-03T13:05:48.000Z" itemprop="datePublished">2019-03-03</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/03/03/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B09-cluster%E6%A8%A1%E5%BC%8F/">redis设计与实现笔记9-cluster模式</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>cluster功能是3.0及以后才有的。需要开启cluster模式才能让redis-server以cluster模式启动，这种模式下只有一个数据库（0号数据库）。</p>
+<p>启动集群模式的redis客户端:</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 加上-c参数: </span></span><br><span class="line">redis-cli -c</span><br></pre></td></tr></table></figure>
+
+<h2 id="集群纳入新成员过程"><a href="#集群纳入新成员过程" class="headerlink" title="集群纳入新成员过程"></a>集群纳入新成员过程</h2><ol>
+<li>节点A接到Cluster meet B命令，节点A和B进行握手；</li>
+<li>节点A会将节点B的信息通过<code>Gossip</code>协议传播给集群中的其他节点；</li>
+<li>最终节点B被集群完全认识、接受。</li>
+</ol>
+<h2 id="Gossip协议消息类型"><a href="#Gossip协议消息类型" class="headerlink" title="Gossip协议消息类型"></a>Gossip协议消息类型</h2><ol>
+<li>Meet;</li>
+<li>Ping;</li>
+<li>Pong。</li>
+</ol>
+<h2 id="slot-槽指派"><a href="#slot-槽指派" class="headerlink" title="slot: 槽指派"></a>slot: 槽指派</h2><p>某个节点负责哪些slot:</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">127.0.0.1&gt; cluster ADDslots &lt;slot&gt; [slot ...]</span><br></pre></td></tr></table></figure>
+
+<h2 id="Cluster-Nodes命令"><a href="#Cluster-Nodes命令" class="headerlink" title="Cluster Nodes命令"></a>Cluster Nodes命令</h2><p>用redis-cli客户端可以查看当前集群的节点情况、id，以及slot的分派情况：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Cluster Nodes</span><br></pre></td></tr></table></figure>
+
+<h2 id="clusterState信息"><a href="#clusterState信息" class="headerlink" title="clusterState信息"></a>clusterState信息</h2><p>clusterState信息中有一项是<code>slots_to_keys</code>跳表(类似一个有序hashmap)，保存slot和key之间的关联。<br>key=&gt;跳表中的key;<br>slot号码=&gt;跳表中的score。</p>
+<p>key查节点、节点查key都可以快速完成:</p>
+<ol>
+<li>每个节点可以根据key，查到对应的slot(crc算法)，然后可以查到对应存在哪个节点（存在跳表）；</li>
+<li>可以查自己节点负责的slot:<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">clusterNode</span>&#123;</span></span><br><span class="line">    <span class="comment">// 总共16384(也就是2^14)位，每一位的1,0代表是否负责</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> slots[<span class="number">16384</span>/<span class="number">8</span>];</span><br><span class="line">    <span class="keyword">int</span> numslots;<span class="comment">// 该节点总共负责多少个slot(1的数量)</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+</li>
+</ol>
+<p><code>clusterState</code>中存储了所有slots的指派情况:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">clusterState</span>&#123;</span></span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">    clusterNode* slots[<span class="number">16384</span>];</span><br><span class="line">&#125;clusterState;</span><br></pre></td></tr></table></figure>
+
+<p>如果集群中所有的slot都有人负责，cluster进入上线状态。</p>
+<h2 id="Moved错误"><a href="#Moved错误" class="headerlink" title="Moved错误"></a>Moved错误</h2><p>客户端访问了错误的节点，需要的key在别的节点负责的slot里头：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">MOVED &lt;slot&gt; &lt;ip&gt;:&lt;port&gt;</span><br></pre></td></tr></table></figure>
+<p>cluster模式的redis客户端能自动处理<code>MOVED</code>错误。</p>
+<h2 id="ASK错误"><a href="#ASK错误" class="headerlink" title="ASK错误"></a>ASK错误</h2><h3 id="重新指派"><a href="#重新指派" class="headerlink" title="重新指派"></a>重新指派</h3><img src="/images/2019-03/cluster_migrate.png" class="" width="800" height="1200" title="cluster_migrate">
+<p>集群可以将slot重新分派给另一个节点。<br>也就是: 源节点=迁移到=&gt;目标节点。<br>其中节点id可以通过<code>cluster nodes</code>获得。<br>通过redis-trib工具：<br>1.在target_id节点上发送: (准备好导入)</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Cluster setslot &lt;slot&gt; Importing &lt;source_id&gt;</span><br></pre></td></tr></table></figure>
+<p>2.向source_id发送:（准备好导出）</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Cluster SetSlot &lt;slot&gt; Migrating &lt;target_id&gt;</span><br></pre></td></tr></table></figure>
+<p>3.向source_id发送:</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Cluster GETkeysInSlot &lt;slot&gt; &lt;count&gt;</span><br></pre></td></tr></table></figure>
+<p>获得最多count个属于slot的key；<br>4.对于第3步中的每个key，redis-trib向source_id发送一个命令:</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Migrate &lt;target_ip&gt; &lt;target_port&gt; &lt;key_name&gt; 0 &lt;timeout&gt;</span><br></pre></td></tr></table></figure>
+<p>实际进行迁移每一个key。<br>5.完成迁移，发布:</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Cluster SetSlot &lt;slot&gt; Node &lt;target_id&gt;</span><br></pre></td></tr></table></figure>
+<p>任意节点收到后传播给整个集群。</p>
+<h3 id="ASK错误-1"><a href="#ASK错误-1" class="headerlink" title="ASK错误"></a>ASK错误</h3><img src="/images/2019-03/ask_error.png" class="" width="800" height="1200" title="ask_error">
+<p>迁移过程中，源节点遇到缺少的key会向客户端返回ASK错误:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ASK 16198 127.0.0.1:7003</span><br></pre></td></tr></table></figure>
+<p>表示这个key正在将16198号slot迁移到<code>127.0.0.1:7003</code>。</p>
+<img src="/images/2019-03/ask_query.png" class="" width="800" height="1200" title="ask_query">
+<p>cluster模式的客户端获得ASK错误后，带着ASK标记去访问目标节点，才能获得数据。</p>
+<h3 id="故障恢复"><a href="#故障恢复" class="headerlink" title="故障恢复"></a>故障恢复</h3><p>节点状态：<br><code>在线</code>==&gt;<code>疑似下线</code>==&gt;<code>下线</code><br>(类似于之前<code>sentinel</code>模式中的<code>主观下线</code>和<code>客观下线</code>)。</p>
+<p>cluster模式的各个主节点之间都有连接，相当于一张完全图了。<br>这个网络内，它们每隔一段时间就互相ping，看看对方是否活着（返回pong）。</p>
+<p><code>疑似下线</code>： 不返回pong，标记为<code>疑似下线</code>；<br><code>下线</code>    ： 节点之间交流看法(集群状态)，超过半数认为<code>疑似下线</code>则认为确实是<code>下线</code>，开始故障恢复。</p>
+<p>如果离线的节点有从节点，则可以开始选举了。<br>从节点们发现主节点下线了，就开始向集群存活的主节点们请求投票，获得超过半数的票则当选。</p>
+<h2 id="Publish命令实现"><a href="#Publish命令实现" class="headerlink" title="Publish命令实现"></a>Publish命令实现</h2><p>订阅频道：      subscribe<br>发布消息到频道：publish</p>
+<p>客户端发布消息的流程：</p>
+<ol>
+<li>客户端=&gt;某个节点: publish命令: 发布xx消息到xxx频道;</li>
+<li>该节点=&gt;其他节点: publish的具体消息。</li>
+</ol>
+<p>第2步中为什么不是直接转发命令到其他节点，而是转发消息呢？<br>这个主要是设计理念上，希望节点之间不是命令交互，而是消息交互。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/03/03/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B09-cluster%E6%A8%A1%E5%BC%8F/" data-id="ck96cch3w00i1bhamgoz8hch5" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+
+
+  <nav id="page-nav">
+    <a class="extend prev" rel="prev" href="/page/3/">&amp;laquo; 上一页</a><a class="page-number" href="/">1</a><a class="page-number" href="/page/2/">2</a><a class="page-number" href="/page/3/">3</a><span class="page-number current">4</span><a class="page-number" href="/page/5/">5</a><a class="page-number" href="/page/6/">6</a><span class="space">&hellip;</span><a class="page-number" href="/page/20/">20</a><a class="extend next" rel="next" href="/page/5/">下一页&amp;raquo;</a>
+  </nav>
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+  
+    
+
+  
+    
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title recent-posts">最新文章</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2020/04/19/2020-04/spring%E6%8B%BE%E9%81%97/">spring拾遗</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/26/2020-03/%E5%88%A9%E7%94%A8UTF-8%E7%BC%96%E7%A0%81%E7%9A%84%E7%89%B9%E6%80%A7%E8%BF%9B%E8%A1%8C%E4%BC%98%E5%8C%96/">利用UTF-8编码的特性进行优化</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/24/2020-03/linux%E8%87%AA%E8%BF%9E%E6%8E%A5/">linux自连接</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/23/2020-03/redis%E5%A4%A7key%E9%97%AE%E9%A2%98/">redis大key问题</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/23/2020-03/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/">分布式事务</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>nginx笔记-编译安装 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="参考资料：https:&#x2F;&#x2F;www.jianshu.com&#x2F;p&#x2F;5eab0f83e3b4 架构 master+worker架构。 master: 管理nginx.conf,同步到worker;worker: 单线程绑定cpu，实际处理&#x2F;转发请求; master咋同步配置到worker呢？直接用新conf起新worker,旧worker处理完手头的活就kill掉。 常用命令12345678# 启动:n">
+<meta property="og:type" content="article">
+<meta property="og:title" content="nginx笔记-编译安装">
+<meta property="og:url" content="http://xiaoyue26.github.io/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E7%BC%96%E8%AF%91%E5%AE%89%E8%A3%85/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="参考资料：https:&#x2F;&#x2F;www.jianshu.com&#x2F;p&#x2F;5eab0f83e3b4 架构 master+worker架构。 master: 管理nginx.conf,同步到worker;worker: 单线程绑定cpu，实际处理&#x2F;转发请求; master咋同步配置到worker呢？直接用新conf起新worker,旧worker处理完手头的活就kill掉。 常用命令12345678# 启动:n">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-02/master-worker.png">
+<meta property="article:published_time" content="2019-02-28T07:08:23.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.280Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="nginx">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://xiaoyue26.github.io/images/2019-02/master-worker.png">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2019-02/nginx笔记-编译安装" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E7%BC%96%E8%AF%91%E5%AE%89%E8%A3%85/" class="article-date">
+  <time datetime="2019-02-28T07:08:23.000Z" itemprop="datePublished">2019-02-28</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/nginx/">nginx</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      nginx笔记-编译安装
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>参考资料：<br><a href="https://www.jianshu.com/p/5eab0f83e3b4" target="_blank" rel="noopener">https://www.jianshu.com/p/5eab0f83e3b4</a></p>
+<h1 id="架构"><a href="#架构" class="headerlink" title="架构"></a>架构</h1><img src="/images/2019-02/master-worker.png" class="" width="800" height="1200" title="master-worker">
+<p>master+worker架构。</p>
+<p>master: 管理<code>nginx.conf</code>,同步到worker;<br>worker: 单线程绑定cpu，实际处理/转发请求;</p>
+<p>master咋同步配置到worker呢？<br>直接用新conf起新worker,旧worker处理完手头的活就kill掉。</p>
+<h1 id="常用命令"><a href="#常用命令" class="headerlink" title="常用命令"></a>常用命令</h1><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 启动:</span></span><br><span class="line">nginx -c nginx配置文件地址   </span><br><span class="line"><span class="meta">#</span><span class="bash"> 重新载入配置:</span></span><br><span class="line">nginx -s reload</span><br><span class="line"><span class="meta">#</span><span class="bash"> 检查配置（或查看配置地址）：</span></span><br><span class="line">nginx -t</span><br><span class="line"><span class="meta">#</span><span class="bash"> 停止：</span></span><br><span class="line">nginx -s stop</span><br></pre></td></tr></table></figure>
+<p>比如如果想知道当前nginx的配置文件在哪里，可以运行<code>nginx -t</code>,就能看到了。</p>
+<h1 id="编译安装"><a href="#编译安装" class="headerlink" title="编译安装"></a>编译安装</h1><p>下载解压缩:<br><a href="http://nginx.org/en/download.html" target="_blank" rel="noopener">http://nginx.org/en/download.html</a><br><strong>配置</strong></p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> KERNEL_BITS=64</span><br><span class="line">./configure --user=mengqifeng \</span><br><span class="line">--group=staff \</span><br><span class="line">--prefix=/usr/<span class="built_in">local</span>/nginx \</span><br><span class="line">--pid-path=/var/run/nginx.pid \</span><br><span class="line">--lock-path=/var/lock/nginx.lock \</span><br><span class="line">--with-http_ssl_module \</span><br><span class="line">--with-http_dav_module \</span><br><span class="line">--with-http_flv_module \</span><br><span class="line">--with-http_realip_module \</span><br><span class="line">--with-http_gzip_static_module \</span><br><span class="line">--with-http_stub_status_module \</span><br><span class="line">--with-mail --with-mail_ssl_module \</span><br><span class="line">--with-debug \</span><br><span class="line">--with-http_auth_request_module \</span><br><span class="line">--http-client-body-temp-path=/var/tmp/nginx/client \</span><br><span class="line">--http-proxy-temp-path=/var/tmp/nginx/proxy \</span><br><span class="line">--http-fastcgi-temp-path=/var/tmp/nginx/fastcgi \</span><br><span class="line">--http-uwsgi-temp-path=/var/tmp/nginx/uwsgi \</span><br><span class="line">--http-scgi-temp-path=/var/tmp/nginx/scgi \</span><br><span class="line">--with-pcre=/Users/mengqifeng/Public/build_home/pcre-8.42 \</span><br><span class="line">--with-openssl=/Users/mengqifeng/Public/build_home/openssl \</span><br><span class="line">--with-zlib=/Users/mengqifeng/Public/build_home/zlib-1.2.11</span><br></pre></td></tr></table></figure>
+<p>其中最后3行要看情况,先不加。<br>报错以后下载pcre和openssl,加上参数提供给nginx.<br><strong>编译</strong></p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">make</span><br></pre></td></tr></table></figure>
+<p><strong>安装</strong></p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo make install</span><br></pre></td></tr></table></figure>
+
+<p>最后设置一下环境变量: (<code>/etc/profile.d/nginx.sh</code>)</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> NGINX_HOME=/usr/<span class="built_in">local</span>/nginx</span><br><span class="line"><span class="built_in">export</span> PATH=<span class="variable">$PATH</span>:<span class="variable">$NGINX_HOME</span>/sbin</span><br></pre></td></tr></table></figure>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E7%BC%96%E8%AF%91%E5%AE%89%E8%A3%85/" data-id="ck96cch3e00fxbham0bsh7u15" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/nginx/" rel="tag">nginx</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E9%89%B4%E6%9D%83%E5%8F%8A%E8%BD%AC%E5%8F%91%E9%85%8D%E7%BD%AE/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          nginx笔记-鉴权及转发配置
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2019/02/24/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B08-sentinel%E5%93%A8%E5%85%B5%E6%A8%A1%E5%BC%8F/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">redis设计与实现笔记8-sentinel哨兵模式</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#架构"><span class="toc-number">1.</span> <span class="toc-text">架构</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#常用命令"><span class="toc-number">2.</span> <span class="toc-text">常用命令</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#编译安装"><span class="toc-number">3.</span> <span class="toc-text">编译安装</span></a></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

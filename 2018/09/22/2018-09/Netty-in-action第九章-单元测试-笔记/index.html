@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>Netty in action第九章-单元测试-笔记 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="EmbeddedChannel(测试Handler)实际应用中,我们大概率需要编写各种inboundHandler,outboundHandler，这个时候可以使用EmbeddedChannel来测试处理逻辑。(测Handler用的)     api 作用    writeInbound 往测试channel里写数据.测试入站事件。如果这条数据能够通过所有InboundHandler，则返回tru">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Netty in action第九章-单元测试-笔记">
+<meta property="og:url" content="http://xiaoyue26.github.io/2018/09/22/2018-09/Netty-in-action%E7%AC%AC%E4%B9%9D%E7%AB%A0-%E5%8D%95%E5%85%83%E6%B5%8B%E8%AF%95-%E7%AC%94%E8%AE%B0/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="EmbeddedChannel(测试Handler)实际应用中,我们大概率需要编写各种inboundHandler,outboundHandler，这个时候可以使用EmbeddedChannel来测试处理逻辑。(测Handler用的)     api 作用    writeInbound 往测试channel里写数据.测试入站事件。如果这条数据能够通过所有InboundHandler，则返回tru">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-09/9.1.png">
+<meta property="article:published_time" content="2018-09-22T13:26:52.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.275Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="java">
+<meta property="article:tag" content="Netty">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://xiaoyue26.github.io/images/2018-09/9.1.png">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2018-09/Netty-in-action第九章-单元测试-笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/09/22/2018-09/Netty-in-action%E7%AC%AC%E4%B9%9D%E7%AB%A0-%E5%8D%95%E5%85%83%E6%B5%8B%E8%AF%95-%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2018-09-22T13:26:52.000Z" itemprop="datePublished">2018-09-22</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/Netty/">Netty</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      Netty in action第九章-单元测试-笔记
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="EmbeddedChannel-测试Handler"><a href="#EmbeddedChannel-测试Handler" class="headerlink" title="EmbeddedChannel(测试Handler)"></a>EmbeddedChannel(测试Handler)</h1><p>实际应用中,我们大概率需要编写各种<code>inboundHandler</code>,<code>outboundHandler</code>，这个时候可以使用<code>EmbeddedChannel</code>来测试处理逻辑。<br>(测<code>Handler</code>用的)</p>
+<img src="/images/2018-09/9.1.png" class="" width="400" height="600" title="单元测试">
+<table>
+<thead>
+<tr>
+<th align="center">api</th>
+<th align="left">作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">writeInbound</td>
+<td align="left">往测试channel里写数据.测试入站事件。如果这条数据能够通过所有<code>InboundHandler</code>，则返回<code>true</code></td>
+</tr>
+<tr>
+<td align="center">writeOutbound</td>
+<td align="left">往测试channel里写数据.测试出站事件。如果这条数据能够通过所有<code>OutboundHandler</code>，则返回<code>true</code></td>
+</tr>
+<tr>
+<td align="center">readInbound</td>
+<td align="left">读入站消息，无则返回<code>null</code></td>
+</tr>
+<tr>
+<td align="center">readOutbound</td>
+<td align="left">读出站消息，无则返回<code>null</code></td>
+</tr>
+<tr>
+<td align="center">finish</td>
+<td align="left">关闭写。还可以读。</td>
+</tr>
+</tbody></table>
+<p>示例代码:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Test</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">testFramesDecoded</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="comment">//创建一个 ByteBuf，并存储 9 字节</span></span><br><span class="line">    ByteBuf buf = Unpooled.buffer();</span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; <span class="number">9</span>; i++) &#123;</span><br><span class="line">        buf.writeByte(i);</span><br><span class="line">    &#125;</span><br><span class="line">    ByteBuf input = buf.duplicate(); <span class="comment">// 1</span></span><br><span class="line">    EmbeddedChannel channel = <span class="keyword">new</span> EmbeddedChannel(</span><br><span class="line">        <span class="keyword">new</span> FixedLengthFrameDecoder(<span class="number">3</span>));</span><br><span class="line">     </span><br><span class="line">    assertTrue(channel.writeInbound(input.retain())); <span class="comment">// 2. 数据量够,能够传到末端</span></span><br><span class="line">    assertTrue(channel.finish()); <span class="comment">// 3. 还有可读数据,返回true</span></span><br><span class="line">   </span><br><span class="line">    <span class="comment">// 读3帧(3个入站消息):</span></span><br><span class="line">    ByteBuf read = (ByteBuf) channel.readInbound();</span><br><span class="line">    assertEquals(buf.readSlice(<span class="number">3</span>), read); <span class="comment">// 4</span></span><br><span class="line">    read.release(); <span class="comment">// 5</span></span><br><span class="line"></span><br><span class="line">    read = (ByteBuf) channel.readInbound();</span><br><span class="line">    assertEquals(buf.readSlice(<span class="number">3</span>), read);</span><br><span class="line">    read.release();</span><br><span class="line"></span><br><span class="line">    read = (ByteBuf) channel.readInbound();</span><br><span class="line">    assertEquals(buf.readSlice(<span class="number">3</span>), read);</span><br><span class="line">    read.release();</span><br><span class="line"></span><br><span class="line">    assertNull(channel.readInbound());</span><br><span class="line">    buf.release();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>可以结合<code>JUnit</code>编写单元测试。<br>上述代码中标了几个要注意的地方:</p>
+<ul>
+<li><p>1.duplicate和copy:</p>
+<blockquote>
+<p>duplicate: 浅拷贝buf,生成input。数据是共享的，writerIndex和readerIndex是隔离的。<br>copy: 深拷贝，数据和index都是隔离的。</p>
+</blockquote>
+</li>
+<li><p>2.retain和release:</p>
+<blockquote>
+<p>retain: 引用计数器+1;<br>release: 引用计数器-1。<br>因为进行了浅拷贝，把引用传递给方法之前必须调一次<code>retain</code>。<br>(如果只是和父ByteBuf同生命周期范围,不传递,可以不调。大部分时候还是调一下为好。)<br>最后使用结束记得要release。</p>
+</blockquote>
+</li>
+<li><p>3.channel.finish():</p>
+<blockquote>
+<p>channel.finish():<br>标记这个channel已经不能再写入数据了。(但是可以读)</p>
+</blockquote>
+</li>
+<li><p>4.buf.readSlice(3);</p>
+<blockquote>
+<p>返回值类似于buf.slice(3), 但是有一个read前缀,说明这个方法调用结束后会增加readerIndex。(消费行为)<br>作用是读出3个字节来。</p>
+</blockquote>
+</li>
+<li><p>5.release: </p>
+<blockquote>
+<p>使用结束记得release。</p>
+</blockquote>
+</li>
+</ul>
+<p>上述代码是测试入站事件,所以样例用的是<code>inbound</code>和<code>decoder</code>；<br>如果要测试出站事件,只要类似改成<code>outbound</code>和<code>encoder</code>即可。</p>
+<h2 id="异常测试"><a href="#异常测试" class="headerlink" title="异常测试"></a>异常测试</h2><p>除了出站入站事件,还可以测试异常捕捉(<code>exceptionCaught</code>)。</p>
+<ul>
+<li>如果写了<code>exceptionCaught</code>，期望的结果是测试中不能捕捉到异常;</li>
+<li>反之如果没写,期望的结果是测试中能捕捉到异常。</li>
+</ul>
+<p>前者:期望不能捕捉到(被<code>exceptionCaught</code>处理了)</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">try</span> &#123;</span><br><span class="line">        channel.writeInbound(input.readBytes(<span class="number">4</span>));</span><br><span class="line">    &#125; <span class="keyword">catch</span> (TooLongFrameException e) &#123;</span><br><span class="line">    Assert.fail();<span class="comment">// 期望不能抵达这里</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<p>后者:期望能捕捉到:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">try</span> &#123;</span><br><span class="line">            channel.writeInbound(input.readBytes(<span class="number">4</span>));</span><br><span class="line">            Assert.fail();<span class="comment">// 期望不能抵达这里。</span></span><br><span class="line">        &#125; <span class="keyword">catch</span> (TooLongFrameException e) &#123;</span><br><span class="line">        &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>主要还是逻辑上的控制流测试。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/09/22/2018-09/Netty-in-action%E7%AC%AC%E4%B9%9D%E7%AB%A0-%E5%8D%95%E5%85%83%E6%B5%8B%E8%AF%95-%E7%AC%94%E8%AE%B0/" data-id="ck96cch2q00dcbhamdcu4fwv4" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Netty/" rel="tag">Netty</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2018/09/22/2018-09/Netty-in-action%E7%AC%AC%E5%8D%81%E7%AB%A0-%E7%BC%96%E8%A7%A3%E7%A0%81%E5%99%A8-%E7%AC%94%E8%AE%B0/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          Netty in action-第十章-编解码器-笔记
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2018/09/17/2018-09/Netty-in-action%E7%AC%AC%E5%85%AB%E7%AB%A0-%E5%BC%95%E5%AF%BC-%E7%AC%94%E8%AE%B0/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">Netty in action第八章-引导-笔记</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#EmbeddedChannel-测试Handler"><span class="toc-number">1.</span> <span class="toc-text">EmbeddedChannel(测试Handler)</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#异常测试"><span class="toc-number">1.1.</span> <span class="toc-text">异常测试</span></a></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

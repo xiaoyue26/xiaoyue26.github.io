@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>hive调优之数据倾斜 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="上一篇中记录了hive调优的一些常规手段. 但对于某些数据集, 常规手段是无能为力的, 例如数据倾斜时. 对于hive而言,数据倾斜就是某个reducer跑得特别慢,这一点可以从日志中reducer开在99%或某个值很久看出,也可以从web ui中查看: 1234运行后:http:&#x2F;&#x2F;xxx:19888&#x2F;jobhistory&#x2F;tasks&#x2F;job_1">
+<meta property="og:type" content="article">
+<meta property="og:title" content="hive调优之数据倾斜">
+<meta property="og:url" content="http://xiaoyue26.github.io/2017/12/26/2017-12/hive%E8%B0%83%E4%BC%98%E4%B9%8B%E6%95%B0%E6%8D%AE%E5%80%BE%E6%96%9C/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="上一篇中记录了hive调优的一些常规手段. 但对于某些数据集, 常规手段是无能为力的, 例如数据倾斜时. 对于hive而言,数据倾斜就是某个reducer跑得特别慢,这一点可以从日志中reducer开在99%或某个值很久看出,也可以从web ui中查看: 1234运行后:http:&#x2F;&#x2F;xxx:19888&#x2F;jobhistory&#x2F;tasks&#x2F;job_1">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2017-12-26T11:35:00.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.266Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="hive">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2017-12/hive调优之数据倾斜" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2017/12/26/2017-12/hive%E8%B0%83%E4%BC%98%E4%B9%8B%E6%95%B0%E6%8D%AE%E5%80%BE%E6%96%9C/" class="article-date">
+  <time datetime="2017-12-26T11:35:00.000Z" itemprop="datePublished">2017-12-26</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/hadoop/">hadoop</a>►<a class="article-category-link" href="/categories/hadoop/hive/">hive</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      hive调优之数据倾斜
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>上一篇中记录了hive调优的一些常规手段. 但对于某些数据集, 常规手段是无能为力的, 例如数据倾斜时.</p>
+<p>对于hive而言,数据倾斜就是某个reducer跑得特别慢,这一点可以从日志中reducer开在99%或某个值很久看出,也可以从web ui中查看:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">运行后:</span><br><span class="line">http:&#x2F;&#x2F;xxx:19888&#x2F;jobhistory&#x2F;tasks&#x2F;job_1472710912354_3070682&#x2F;r</span><br><span class="line">运行前:</span><br><span class="line">http:&#x2F;&#x2F;xxx:8088&#x2F;proxy&#x2F;application_1472710912354_3070684&#x2F;mapreduce&#x2F;tasks&#x2F;job_1472710912354_3070684&#x2F;r</span><br></pre></td></tr></table></figure>
+<p>如果具体看日志的话,会发现大部分时间在进行外排.<br>对于这种任务最重要的是消除外排,有如下几种优化手段:</p>
+<h2 id="1-加内存"><a href="#1-加内存" class="headerlink" title="1. 加内存"></a>1. 加内存</h2><p>最简单粗暴就是给reduce加内存了. 让它别外排:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">set</span> mapreduce.reduce.memory.mb=<span class="number">10240</span>;</span><br></pre></td></tr></table></figure>
+<p>类似的,如果mapper内存不够,可以减小每个mapper处理的数据量,增大mapper的数量:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">set</span> mapreduce.input.fileinputformat.split.maxsize=<span class="number">64000000</span>;</span><br></pre></td></tr></table></figure>
+
+<h2 id="2-倾斜key单独处理"><a href="#2-倾斜key单独处理" class="headerlink" title="2. 倾斜key单独处理"></a>2. 倾斜key单独处理</h2><p>第二种手段也比较简单, 就是把出现倾斜的key找出来,假如很少的话,可以把它们摘出来,单独处理(或遗弃). 开启hive自动消除数据倾斜:(效果有效)</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">set</span> hive.optimize.skewjoin = <span class="literal">true</span>;</span><br><span class="line"><span class="keyword">set</span> hive.skewjoin.key=<span class="number">1000</span>;</span><br><span class="line"><span class="keyword">set</span> hive.groupby.skewindata=<span class="literal">true</span>;</span><br><span class="line"><span class="keyword">set</span> hive.groupby.mapaggr.checkinterval=<span class="number">100</span>;</span><br></pre></td></tr></table></figure>
+
+<h2 id="3-局部聚合-1-相同value聚合"><a href="#3-局部聚合-1-相同value聚合" class="headerlink" title="3. 局部聚合(1): 相同value聚合"></a>3. 局部聚合(1): 相同value聚合</h2><p>(没有什么优化是增加一个阶段不能解决的.如果有,就再加一个阶段)<br>为了减少最后汇聚到reducer上的数据量,可以在之前增加一个阶段,对某个key的数据进行局部聚合. </p>
+<p>以某次需求为例,需要求各个省市区维度下的丢包率\延迟的50,90,99分位数.数据量每天200G. 分位数计算极其耗时, 尤其是计算周统计数据时, 数据量达到TB级. </p>
+<p>在使用了前一篇优化笔记手段以及上述手段后,依然耗时4小时.原来查询最耗时的部分如下:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span>  es</span><br><span class="line">       ,province</span><br><span class="line">       ,city</span><br><span class="line">       ,ipOprator</span><br><span class="line">       ,percentile(xxx,<span class="number">0.5</span>,<span class="number">0.9</span>,<span class="number">0.99</span>)</span><br><span class="line"><span class="keyword">FROM</span> ttt</span><br><span class="line"><span class="keyword">GROUP</span> <span class="keyword">BY</span> es,province,ipOprator <span class="keyword">with</span> <span class="keyword">cube</span></span><br></pre></td></tr></table></figure>
+<p>查看hive的percentile源码实现,其对于同一个key的处理逻辑大致这么几步:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">(依次输入每个value)</span><br><span class="line">1. O(n)</span><br><span class="line">把所有value放进一个Map&lt;value,LongWriteable&gt;里,相同的value则增加map中的计数值;</span><br><span class="line">2. O(nlogn)</span><br><span class="line">在reduce中把map中的所有entry放入一个List中,然后对List根据value值进行全排序(&#96;Collections.sort(entriesList, new MyComparator());&#96;);</span><br><span class="line">3. O(n)</span><br><span class="line">从头开始扫一遍上一步的List, 根据计数器的值总和,分位数,定位到对应的分位数,返回.</span><br></pre></td></tr></table></figure>
+<p>将其重写为可以进行局部聚合, 从而略去第一步:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span>  es</span><br><span class="line">       ,province</span><br><span class="line">       ,city</span><br><span class="line">       ,ipOprator</span><br><span class="line">      ,percent_new(c1,<span class="keyword">num</span>,<span class="number">0.5</span>,<span class="number">0.9</span>,<span class="number">0.99</span>)</span><br><span class="line"><span class="keyword">FROM</span> (<span class="keyword">select</span> es,province,ipOprator,c1,<span class="keyword">count</span>(<span class="number">1</span>) <span class="keyword">as</span> <span class="keyword">num</span></span><br><span class="line">    <span class="keyword">FROM</span> xxx</span><br><span class="line">    <span class="keyword">GROUP</span> <span class="keyword">BY</span> es,province,ipOprator,c1</span><br><span class="line">) <span class="keyword">as</span> t </span><br><span class="line"><span class="keyword">GROUP</span> <span class="keyword">BY</span> es,province,ipOprator <span class="keyword">with</span> <span class="keyword">cube</span></span><br></pre></td></tr></table></figure>
+<p>优化后,时间缩短到30分钟.</p>
+<ul>
+<li>TODO:<br>优化第二步中的全排序. </li>
+</ul>
+<h2 id="4-局部聚合2-相同key聚合"><a href="#4-局部聚合2-相同key聚合" class="headerlink" title="4. 局部聚合2: 相同key聚合"></a>4. 局部聚合2: 相同key聚合</h2><p>由于上一案例中的聚合函数是分位数计算,聚合的粒度只能达到相同value聚合,对于其他聚合函数,如最大值,最小值等,如果语义上能对相同key先聚合,问题的规模就可以进一步缩小. 方法是先把相同key的数据分拆成不同的key,加上前缀或后缀 如:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">key -&gt; key_1</span><br><span class="line">key -&gt; key_2</span><br><span class="line">...</span><br><span class="line">key -&gt; key_10</span><br></pre></td></tr></table></figure>
+<p>分拆的数量等于并行度,取决于原有的数据集, 然后先进行一阶段聚合,最后去掉前缀后缀,再进行一次聚合得到最后的结果.<br>这种方法的关键就是要求同一个key的聚合计算可以分拆.</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2017/12/26/2017-12/hive%E8%B0%83%E4%BC%98%E4%B9%8B%E6%95%B0%E6%8D%AE%E5%80%BE%E6%96%9C/" data-id="ck96cch1t009abham36uwbzqs" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/hive/" rel="tag">hive</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2018/01/01/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-8%E7%AB%A0/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          java并发编程实战笔记-8章
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2017/12/25/2017-12/hive%E8%B0%83%E4%BC%98/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">hive sql调优</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#1-加内存"><span class="toc-number">1.</span> <span class="toc-text">1. 加内存</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-倾斜key单独处理"><span class="toc-number">2.</span> <span class="toc-text">2. 倾斜key单独处理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-局部聚合-1-相同value聚合"><span class="toc-number">3.</span> <span class="toc-text">3. 局部聚合(1): 相同value聚合</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-局部聚合2-相同key聚合"><span class="toc-number">4.</span> <span class="toc-text">4. 局部聚合2: 相同key聚合</span></a></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

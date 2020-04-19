@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>ThreadLocal的线性探测 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="参考:https:&#x2F;&#x2F;www.liaoxuefeng.com&#x2F;wiki&#x2F;1252599548343744&#x2F;1306581251653666http:&#x2F;&#x2F;songkun.me&#x2F;2019&#x2F;10&#x2F;26&#x2F;2019-10-26-java-threadlocal-hash-clash&#x2F;https:&#x2F;&#x2F;juejin.im&#x2F;post&#x2F;5d43e415e51d4561db5e39ed 避免ThreadLocal的内">
+<meta property="og:type" content="article">
+<meta property="og:title" content="ThreadLocal的线性探测">
+<meta property="og:url" content="http://xiaoyue26.github.io/2020/01/12/2020-01/ThreadLocal%E7%9A%84%E7%BA%BF%E6%80%A7%E6%8E%A2%E6%B5%8B/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="参考:https:&#x2F;&#x2F;www.liaoxuefeng.com&#x2F;wiki&#x2F;1252599548343744&#x2F;1306581251653666http:&#x2F;&#x2F;songkun.me&#x2F;2019&#x2F;10&#x2F;26&#x2F;2019-10-26-java-threadlocal-hash-clash&#x2F;https:&#x2F;&#x2F;juejin.im&#x2F;post&#x2F;5d43e415e51d4561db5e39ed 避免ThreadLocal的内">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2020-01-12T10:01:31.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.289Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="java">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2020-01/ThreadLocal的线性探测" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/01/12/2020-01/ThreadLocal%E7%9A%84%E7%BA%BF%E6%80%A7%E6%8E%A2%E6%B5%8B/" class="article-date">
+  <time datetime="2020-01-12T10:01:31.000Z" itemprop="datePublished">2020-01-12</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      ThreadLocal的线性探测
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>参考:<br><a href="https://www.liaoxuefeng.com/wiki/1252599548343744/1306581251653666" target="_blank" rel="noopener">https://www.liaoxuefeng.com/wiki/1252599548343744/1306581251653666</a><br><a href="http://songkun.me/2019/10/26/2019-10-26-java-threadlocal-hash-clash/" target="_blank" rel="noopener">http://songkun.me/2019/10/26/2019-10-26-java-threadlocal-hash-clash/</a><br><a href="https://juejin.im/post/5d43e415e51d4561db5e39ed" target="_blank" rel="noopener">https://juejin.im/post/5d43e415e51d4561db5e39ed</a></p>
+<h1 id="避免ThreadLocal的内存泄露"><a href="#避免ThreadLocal的内存泄露" class="headerlink" title="避免ThreadLocal的内存泄露"></a>避免ThreadLocal的内存泄露</h1><p>参考上述资料,ThreadLocal是存在线程自己的变量,只不过用threadLocalMap把这个线程所有的ThreadLocal变量都集中存储了,key用的是ThreadLocal对象,value用的是对象T,也就是实际的数据。<br>由于key用的是弱引用,因此使用ThreadLocal时,使用结束时一定要进行<code>remove()</code>,否则会导致内存泄露。</p>
+<p>这里的内存泄露有3重含义:</p>
+<h2 id="局部ThreadLocal变量"><a href="#局部ThreadLocal变量" class="headerlink" title="局部ThreadLocal变量"></a>局部ThreadLocal变量</h2><p>这个数据语义上已经不用了,而且语法上ThreadLocal变量也已经离开作用域，也回收了,key变成了null;但由于ThreadLocal设计实现上的缺陷,ThreadLocalMap中的key变成null,value却不是null,依然强引用了数据,所以不能自动回收,需要程序员手动处理:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">try</span> &#123;</span><br><span class="line">    threadLocalUser.set(user);</span><br><span class="line">    ...</span><br><span class="line">&#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">    threadLocalUser.remove();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="static-ThreadLocal变量"><a href="#static-ThreadLocal变量" class="headerlink" title="static ThreadLocal变量"></a>static ThreadLocal变量</h2><p>这个数据语义上已经不用了,但语法上这个ThreadLocal是static，没有离开作用域,<br>因此理论上还能访问到,设计上的生命周期太过于长了。 这种属于设计缺陷。也需要程序员手动处理,代码同上,也是调用<code>remove()</code>方法。</p>
+<h2 id="搭配线程池的ThreadLocal变量"><a href="#搭配线程池的ThreadLocal变量" class="headerlink" title="搭配线程池的ThreadLocal变量"></a>搭配线程池的ThreadLocal变量</h2><p>这个数据本意上已经不用了,  如果不是线程池的线程，如果只是上述两种情况，也只会内存泄露一段时间，等到线程销毁的时候，就会释放相应的threadlocalMap和内存。<br>但如果搭配线程池使用，这里的ThreadLocalMap和ThreadLocal变量都会继续使用,永不释放内存。<br>因此程序语义变为不同任务都共享这个threadLocal变量，很可能有语义错误。<br>保险起见,也是同上,调用<code>remove()</code>方法即可。</p>
+<h1 id="remove方法背后-ThreadLocalMap的实现机制"><a href="#remove方法背后-ThreadLocalMap的实现机制" class="headerlink" title="remove方法背后: ThreadLocalMap的实现机制"></a>remove方法背后: ThreadLocalMap的实现机制</h1><p>remove方法的语义很简单,就是将ThreadLocalMap的对应key/value都删除。<br>实际底层实现却并不简单,涉及到性能考虑=&gt;线性探测法=&gt;删除时rehash的连锁反应,导致实现较为特殊。</p>
+<h2 id="斐波那契哈希"><a href="#斐波那契哈希" class="headerlink" title="斐波那契哈希"></a>斐波那契哈希</h2><p>ThreadLocalMap希望尽可能提高性能,因此使用斐波那契哈希,使用魔法数0x61c88647,为每一个ThreadLocal变量涉及了尽可能均匀、理论无碰撞的完美哈希，同时辅助以rehash扩容，来保证碰撞和线性探测死循环尽可能不发生。</p>
+<h2 id="线性探测与删除"><a href="#线性探测与删除" class="headerlink" title="线性探测与删除"></a>线性探测与删除</h2><p>ThreadLocalMap处理哈希冲突时使用的是线性探测法,因此删除key的时候不能直接简单把entry置为null; 它采用的方法是把后续每个不为null的entry进行rehash, 放在合适的位置,保证不会因为删除导致线性探测失效中断。这里会把整个哈希表的数组看作循环队列,一直rehash到null的entry,因为当前的entry一定是null,而且负载因子不会太高,而且是单线程,因此一定不会死循环,有终止条件。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">int</span> <span class="title">expungeStaleEntry</span><span class="params">(<span class="keyword">int</span> staleSlot)</span> </span>&#123;</span><br><span class="line">  Entry[] tab = table;</span><br><span class="line">  <span class="keyword">int</span> len = tab.length;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 删除对应位置的entry</span></span><br><span class="line">  tab[staleSlot].value = <span class="keyword">null</span>;</span><br><span class="line">  tab[staleSlot] = <span class="keyword">null</span>;</span><br><span class="line">  size--;</span><br><span class="line"></span><br><span class="line">  Entry e;</span><br><span class="line">  <span class="keyword">int</span> i;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// rehash过程,直到entry为null</span></span><br><span class="line">  <span class="keyword">for</span> (i = nextIndex(staleSlot, len);(e = tab[i]) != <span class="keyword">null</span>; i = nextIndex(i, len)) &#123;</span><br><span class="line">    ThreadLocal&lt;?&gt; k = e.get();</span><br><span class="line">    <span class="comment">// k为空,证明已经被垃圾回收了</span></span><br><span class="line">    <span class="keyword">if</span> (k == <span class="keyword">null</span>) &#123;</span><br><span class="line">        e.value = <span class="keyword">null</span>;</span><br><span class="line">        tab[i] = <span class="keyword">null</span>;</span><br><span class="line">        size--;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="keyword">int</span> h = k.threadLocalHashCode &amp; (len - <span class="number">1</span>);</span><br><span class="line">        <span class="comment">// 判断当前元素是否处于"真正"应该待的位置</span></span><br><span class="line">        <span class="keyword">if</span> (h != i) &#123;</span><br><span class="line">            tab[i] = <span class="keyword">null</span>;</span><br><span class="line">            <span class="comment">// 线性探测</span></span><br><span class="line">            <span class="keyword">while</span> (tab[h] != <span class="keyword">null</span>)</span><br><span class="line">                h = nextIndex(h, len);</span><br><span class="line">            tab[h] = e;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">return</span> i;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>综上, 理论上每次删除都会进行局部链的rehash,但是由于斐波那契哈希设计上是绝对均匀，因此这个”局部链”的长度理论上是非常短甚至是0.<br>此外, 除了这种rehash的方法,还可以对entry进行delete标记来确保线性探测不会中断。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2020/01/12/2020-01/ThreadLocal%E7%9A%84%E7%BA%BF%E6%80%A7%E6%8E%A2%E6%B5%8B/" data-id="ck96cch4o00l9bham1f90b8mx" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2020/03/23/2020-03/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          分布式事务
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2019/12/29/2019-12/%E9%95%BF%E8%BF%9E%E6%8E%A5%E7%9B%B8%E5%85%B3/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">长连接相关</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#避免ThreadLocal的内存泄露"><span class="toc-number">1.</span> <span class="toc-text">避免ThreadLocal的内存泄露</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#局部ThreadLocal变量"><span class="toc-number">1.1.</span> <span class="toc-text">局部ThreadLocal变量</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#static-ThreadLocal变量"><span class="toc-number">1.2.</span> <span class="toc-text">static ThreadLocal变量</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#搭配线程池的ThreadLocal变量"><span class="toc-number">1.3.</span> <span class="toc-text">搭配线程池的ThreadLocal变量</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#remove方法背后-ThreadLocalMap的实现机制"><span class="toc-number">2.</span> <span class="toc-text">remove方法背后: ThreadLocalMap的实现机制</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#斐波那契哈希"><span class="toc-number">2.1.</span> <span class="toc-text">斐波那契哈希</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#线性探测与删除"><span class="toc-number">2.2.</span> <span class="toc-text">线性探测与删除</span></a></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

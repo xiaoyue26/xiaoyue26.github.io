@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>Netty-in-action第14-15章案例研究-笔记 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="文件上传案例: Droplr需求:上传文件到S3,返回一个下载url。 数据流: 客户端&#x3D;&gt;服务端&#x3D;&gt;S3 原始方案: 服务器接受上传,存成文件; 服务器上传到S3; 服务器回复url给客户端。  缺点:   每个上传开销大占用大量内存,导致并发低; 上传完整个文件才开始上传S3,而瓶颈恰恰在于S3。 有磁盘IO。  改进方案流式上传,只在内存,不过磁盘。  服务器接受上传，每块数据实">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Netty-in-action第14-15章案例研究-笔记">
+<meta property="og:url" content="http://xiaoyue26.github.io/2018/10/14/2018-10/Netty-in-action%E7%AC%AC14-15%E7%AB%A0%E6%A1%88%E4%BE%8B%E7%A0%94%E7%A9%B6-%E7%AC%94%E8%AE%B0/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="文件上传案例: Droplr需求:上传文件到S3,返回一个下载url。 数据流: 客户端&#x3D;&gt;服务端&#x3D;&gt;S3 原始方案: 服务器接受上传,存成文件; 服务器上传到S3; 服务器回复url给客户端。  缺点:   每个上传开销大占用大量内存,导致并发低; 上传完整个文件才开始上传S3,而瓶颈恰恰在于S3。 有磁盘IO。  改进方案流式上传,只在内存,不过磁盘。  服务器接受上传，每块数据实">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-10/15.6.png">
+<meta property="article:published_time" content="2018-10-14T04:00:00.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.277Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="java">
+<meta property="article:tag" content="Netty">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://xiaoyue26.github.io/images/2018-10/15.6.png">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2018-10/Netty-in-action第14-15章案例研究-笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/10/14/2018-10/Netty-in-action%E7%AC%AC14-15%E7%AB%A0%E6%A1%88%E4%BE%8B%E7%A0%94%E7%A9%B6-%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2018-10-14T04:00:00.000Z" itemprop="datePublished">2018-10-14</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/Netty/">Netty</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      Netty-in-action第14-15章案例研究-笔记
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="文件上传案例-Droplr"><a href="#文件上传案例-Droplr" class="headerlink" title="文件上传案例: Droplr"></a>文件上传案例: Droplr</h1><h2 id="需求"><a href="#需求" class="headerlink" title="需求:"></a>需求:</h2><p>上传文件到S3,返回一个下载url。</p>
+<p>数据流: 客户端=&gt;服务端=&gt;S3</p>
+<h2 id="原始方案"><a href="#原始方案" class="headerlink" title="原始方案:"></a>原始方案:</h2><ol>
+<li>服务器接受上传,存成文件;</li>
+<li>服务器上传到S3;</li>
+<li>服务器回复url给客户端。</li>
+</ol>
+<p>缺点: </p>
+<ol>
+<li>每个上传开销大占用大量内存,导致并发低;</li>
+<li>上传完整个文件才开始上传S3,而瓶颈恰恰在于S3。</li>
+<li>有磁盘IO。</li>
+</ol>
+<h2 id="改进方案"><a href="#改进方案" class="headerlink" title="改进方案"></a>改进方案</h2><p>流式上传,只在内存,不过磁盘。</p>
+<ol>
+<li>服务器接受上传，每块数据实时传输到S3;</li>
+<li>接受和上传做速度适配，保持低内存消耗，高并发；</li>
+<li>最后返回url给客户端。</li>
+</ol>
+<p>并发达到10K。</p>
+<h3 id="要点"><a href="#要点" class="headerlink" title="要点"></a>要点</h3><ol>
+<li><code>IdelStateHandler</code>关闭不活跃的连接,回滚历史进度(速度控制失败时);</li>
+<li>并发达到上限时,返回503;</li>
+<li>需要保证<code>HttpChunk</code>的顺序(线程池)。<br>(注: 503: 服务不可用（服务器资源耗尽，拒绝服务）)</li>
+</ol>
+<p>http-client库:<br><a href="https://github.com/akka/akka-http" target="_blank" rel="noopener">https://github.com/akka/akka-http</a><br><a href="https://github.com/AsyncHttpClient/async-http-client" target="_blank" rel="noopener">https://github.com/AsyncHttpClient/async-http-client</a></p>
+<h1 id="实时数据同步：FireBase（被谷歌收购）"><a href="#实时数据同步：FireBase（被谷歌收购）" class="headerlink" title="实时数据同步：FireBase（被谷歌收购）"></a>实时数据同步：FireBase（被谷歌收购）</h1><h2 id="需求1"><a href="#需求1" class="headerlink" title="需求1:"></a>需求1:</h2><p>在各个用户和设备之间实时同步数据。<br>(服务器同步到各个客户端)</p>
+<h2 id="解决方案"><a href="#解决方案" class="headerlink" title="解决方案"></a>解决方案</h2><p>长轮询+WebSocket.<br>先使用长轮询连接，当WebSocket可用时切换到WebSocket。</p>
+<p>难点在于长轮询。</p>
+<h2 id="具体细节"><a href="#具体细节" class="headerlink" title="具体细节"></a>具体细节</h2><p>轮询 : 客户端每隔N秒轮询一次;实时性不强,开销大（空转）;<br>长轮询 : 客户端询问一次服务器,然后等待服务器响应,收到响应以后才继续轮询。<br>在服务端没有回复客户端的期间,如果客户端此时想发送数据给服务端,它会先阻塞。<br><code>此时，客户端手头的数据会堆积在缓冲区。</code><br>换言之，限制是: <code>未完成请求数&lt;=1</code>。(同一个客户端)</p>
+<h3 id="长轮询"><a href="#长轮询" class="headerlink" title="长轮询"></a>长轮询</h3><p>优点: 没有新数据时,服务器可以不回应客户端,这样客户端就不会接着轮询,减少空转;<br>缺点: 客户端发送数据可能被阻塞。 </p>
+<h4 id="改进"><a href="#改进" class="headerlink" title="改进"></a>改进</h4><p>客户端: 限制改成<code>未完成请求数&lt;=2</code>。(从1上调到2)<br>服务端: 如果当前有1个未完成请求<code>A</code>，此时又收到了同一个客户端的第二个请求<code>B</code>(一般第二个是发送数据的请求),会先对<code>A</code>进行空响应,然后处理请求<code>B</code>。</p>
+<p>引入新问题: <strong>消息的有序性;</strong><br>解决方案: 元数据加入消息序列号。</p>
+<p>引入新问题: <strong>连接断开检测</strong><br>解决方案:<br>客户端: 超时重试(以区分于慢速网络)。<br>服务端: 超时判断为连接断开。</p>
+<p>要点: Netty支持一个端口多个协议(HTTP,Websocket,长轮询,TCP)</p>
+<h2 id="需求2"><a href="#需求2" class="headerlink" title="需求2:"></a>需求2:</h2><p>加密环境(<code>SSLHandler</code>)下，基于带宽计费。</p>
+<h3 id="方案"><a href="#方案" class="headerlink" title="方案:"></a>方案:</h3><ol>
+<li>解密前统计字节数;</li>
+<li>解密后得到账户名,计入该账户的账单。</li>
+</ol>
+<p>要点: 统计字节数提前到解密前，提高性能。</p>
+<h1 id="app推送通知-Urban-Airship案例"><a href="#app推送通知-Urban-Airship案例" class="headerlink" title="app推送通知: Urban Airship案例"></a>app推送通知: Urban Airship案例</h1><h2 id="需求-1"><a href="#需求-1" class="headerlink" title="需求"></a>需求</h2><p>实时推送通知</p>
+<h2 id="方案-1"><a href="#方案-1" class="headerlink" title="方案"></a>方案</h2><ol>
+<li>app维护一条到后端服务的连接;</li>
+<li>借助第三方推送服务中转,服务器把消息传输给第三方平台，然后转交给app。</li>
+</ol>
+<p>其中苹果的APNS推送服务的使用流程:</p>
+<ol>
+<li>生产者: 通过TCP+SSLv3连接到APNS服务器,使用X.509证书进行身份认证;</li>
+<li>生产者: 按APNS规定的格式，发送消息(二进制);</li>
+<li>生产者: 读取(消息id,错误码)或成功。(因为有消息id,这里可以异步)</li>
+</ol>
+<p>其中消息格式是大端字节序，可以如下显式指定:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ByteBuf buf = Unpooled.buffer(size).order(ByteOrder.BIG_ENDIAN);</span><br></pre></td></tr></table></figure>
+
+<p>初始化,设置允许重新协商密钥:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> ChannelPipeline pipeline = channel.pipeline();</span><br><span class="line"> <span class="keyword">final</span> SslHandler handler = <span class="keyword">new</span> SslHandler(clientEngine);</span><br><span class="line"> handler.setEnableRenegotiation(<span class="keyword">true</span>);<span class="comment">// 重新协商</span></span><br><span class="line"> pipeline.addLast(<span class="string">"ssl"</span>, handler);</span><br><span class="line"> pipeline.addLast(<span class="string">"decoder"</span>, <span class="keyword">new</span> ApnsResponseDecoder());</span><br></pre></td></tr></table></figure>
+
+<h2 id="需要注意的经验"><a href="#需要注意的经验" class="headerlink" title="需要注意的经验"></a>需要注意的经验</h2><ol>
+<li>运营商可能不允许TCP的keep-alive特性,会积极剔除空闲的TCP会话;</li>
+<li>移动运营商可能禁止UDP.</li>
+</ol>
+<h1 id="第15章-案例研究，第二部分"><a href="#第15章-案例研究，第二部分" class="headerlink" title="第15章 案例研究，第二部分"></a>第15章 案例研究，第二部分</h1><h1 id="服务通信案例-Nifty和Swift-Facebook"><a href="#服务通信案例-Nifty和Swift-Facebook" class="headerlink" title="服务通信案例: Nifty和Swift(Facebook)"></a>服务通信案例: Nifty和Swift(Facebook)</h1><p><code>Thrift</code>: facebook开发的跨语言rpc远程调用、服务通信的框架。<br>组件:</p>
+<ol>
+<li>IDL: 定义通信的格式;</li>
+<li>协议；</li>
+<li>传输接口;</li>
+<li>编译器: 从IDL生成服务端和客户端的存根代码(不同语言);</li>
+<li>客户端和服务端实现。</li>
+</ol>
+<h2 id="场景"><a href="#场景" class="headerlink" title="场景:"></a>场景:</h2><p>由于<code>Thrift</code>是跨语言的远程调用。<br>其中C++版本基于<code>libevent</code>\ <code>Folly</code>开发，性能很高;<br>Java版本(<code>Nifty</code>)基于<code>Netty</code>开发，性能与C++版本不相上下。</p>
+<p><strong>Nifty</strong>：</p>
+<blockquote>
+<p>基于<code>Netty</code>的<code>Thrift</code>java实现。</p>
+</blockquote>
+<h3 id="需求1：-按顺序响应"><a href="#需求1：-按顺序响应" class="headerlink" title="需求1： 按顺序响应"></a>需求1： 按顺序响应</h3><p>客户端可能会要求:<br>服务器端并行处理请求，但是返回响应必须是顺序的。</p>
+<p>解决方案: 服务器端并行处理请求, 返回前排序响应。(缓冲处理好的请求结果)<br>开销: 缓冲响应的内存。（所以如果客户端不要求顺序响应，可以免除这部分开销）</p>
+<p>Netty4的实现支持: <code>EventExecutor</code><br>Netty3的实现支持: <code>OrderedMemoryAwareThreadPoolExcecutor</code></p>
+<p><strong>Swift</strong></p>
+<blockquote>
+<p>用注解来定义模型，无效IDL文件和存根。<br>底层使用Nifty作为I/O引擎。<br><a href="https://github.com/facebookarchive/swift" target="_blank" rel="noopener">https://github.com/facebookarchive/swift</a><br>已经不再维护。<br>还在维护的类似开源项目是:<br><a href="https://github.com/airlift/drift" target="_blank" rel="noopener">https://github.com/airlift/drift</a></p>
+</blockquote>
+<h2 id="超时处理"><a href="#超时处理" class="headerlink" title="超时处理"></a>超时处理</h2><p>问题: 每个请求维护一个超时事件的话，代价很昂贵。</p>
+<p>方案1: 超时集。<br>每个客户端维护一个计时器，或者每组相同超时间隔的请求，维护一个计时器。<br>每次超时结束以后，进行下一个超时计时器。<br>优点: 开销小;<br>缺点: 要求超时间隔长度一致。</p>
+<p>方案2: 使用<code>Netty</code>的<code>HashedWheelTimer</code>工具类。（空间换时间）<br>算法来自:<br><a href="http://www.cs.columbia.edu/~nahum/w6998/papers/sosp87-timing-wheels.pdf" target="_blank" rel="noopener">http://www.cs.columbia.edu/~nahum/w6998/papers/sosp87-timing-wheels.pdf</a><br>示例代码:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">HashedWheelTimer timer = <span class="keyword">new</span> HashedWheelTimer(<span class="number">100</span>, TimeUnit.MILLISECONDS, <span class="number">16</span>);</span><br><span class="line">System.out.println(LocalTime.now());</span><br><span class="line">timer.newTimeout((timeout) -&gt; &#123;</span><br><span class="line">    System.out.println(LocalTime.now());</span><br><span class="line">    System.out.println(timeout);</span><br><span class="line">&#125;, <span class="number">5</span>, TimeUnit.SECONDS);</span><br><span class="line"><span class="comment">//阻塞main线程</span></span><br><span class="line">System.in.read();</span><br></pre></td></tr></table></figure>
+
+
+<h1 id="RPC框架案例-Finagle-Twitter"><a href="#RPC框架案例-Finagle-Twitter" class="headerlink" title="RPC框架案例: Finagle(Twitter)"></a>RPC框架案例: Finagle(Twitter)</h1><p>前端api端点&lt;=&gt;<code>Finagle</code>&lt;=&gt;后端服务们(提供:用户信息、twitter、时间线)<br>(大部分是scala开发。原先是ruby on rails)</p>
+<img src="/images/2018-10/15.6.png" class="" width="400" height="600" title="Finagle">
+<p>主要功能包括: SSL、打日志(统计)、负载均衡</p>
+<h3 id="负载均衡（故障管理）"><a href="#负载均衡（故障管理）" class="headerlink" title="负载均衡（故障管理）"></a>负载均衡（故障管理）</h3><p>客户端统计所有服务器的延迟、未完成请求数（负载），<br>每次选择最低负载的主机派发请求。</p>
+<p>失败请求=&gt;从列表中移除对应服务器=&gt;后台不断尝试重连。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/10/14/2018-10/Netty-in-action%E7%AC%AC14-15%E7%AB%A0%E6%A1%88%E4%BE%8B%E7%A0%94%E7%A9%B6-%E7%AC%94%E8%AE%B0/" data-id="ck96cch2y00e7bhamcyq63dcc" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Netty/" rel="tag">Netty</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2018/10/22/2018-10/mysql%E4%BC%98%E5%8C%96%E5%AE%9E%E6%88%98-%E8%8C%83%E5%9B%B4%E6%9F%A5%E8%AF%A2%E8%BD%AC%E7%82%B9%E6%9F%A5%E8%AF%A2/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          mysql优化实战-范围查询转点查询
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2018/10/10/2018-10/Netty-in-action-%E7%AC%AC%E5%8D%81%E4%B8%80%E7%AB%A0-SSL%E7%AD%89%E9%A2%84%E7%BD%AE%E5%AE%9E%E7%8E%B0-%E7%AC%94%E8%AE%B0/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">Netty-in-action-第十一章-SSL等预置实现-笔记</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#文件上传案例-Droplr"><span class="toc-number">1.</span> <span class="toc-text">文件上传案例: Droplr</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#需求"><span class="toc-number">1.1.</span> <span class="toc-text">需求:</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#原始方案"><span class="toc-number">1.2.</span> <span class="toc-text">原始方案:</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#改进方案"><span class="toc-number">1.3.</span> <span class="toc-text">改进方案</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#要点"><span class="toc-number">1.3.1.</span> <span class="toc-text">要点</span></a></li></ol></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#实时数据同步：FireBase（被谷歌收购）"><span class="toc-number">2.</span> <span class="toc-text">实时数据同步：FireBase（被谷歌收购）</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#需求1"><span class="toc-number">2.1.</span> <span class="toc-text">需求1:</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#解决方案"><span class="toc-number">2.2.</span> <span class="toc-text">解决方案</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#具体细节"><span class="toc-number">2.3.</span> <span class="toc-text">具体细节</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#长轮询"><span class="toc-number">2.3.1.</span> <span class="toc-text">长轮询</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#改进"><span class="toc-number">2.3.1.1.</span> <span class="toc-text">改进</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#需求2"><span class="toc-number">2.4.</span> <span class="toc-text">需求2:</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#方案"><span class="toc-number">2.4.1.</span> <span class="toc-text">方案:</span></a></li></ol></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#app推送通知-Urban-Airship案例"><span class="toc-number">3.</span> <span class="toc-text">app推送通知: Urban Airship案例</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#需求-1"><span class="toc-number">3.1.</span> <span class="toc-text">需求</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#方案-1"><span class="toc-number">3.2.</span> <span class="toc-text">方案</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#需要注意的经验"><span class="toc-number">3.3.</span> <span class="toc-text">需要注意的经验</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#第15章-案例研究，第二部分"><span class="toc-number">4.</span> <span class="toc-text">第15章 案例研究，第二部分</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#服务通信案例-Nifty和Swift-Facebook"><span class="toc-number">5.</span> <span class="toc-text">服务通信案例: Nifty和Swift(Facebook)</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#场景"><span class="toc-number">5.1.</span> <span class="toc-text">场景:</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#需求1：-按顺序响应"><span class="toc-number">5.1.1.</span> <span class="toc-text">需求1： 按顺序响应</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#超时处理"><span class="toc-number">5.2.</span> <span class="toc-text">超时处理</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#RPC框架案例-Finagle-Twitter"><span class="toc-number">6.</span> <span class="toc-text">RPC框架案例: Finagle(Twitter)</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#负载均衡（故障管理）"><span class="toc-number">6.0.1.</span> <span class="toc-text">负载均衡（故障管理）</span></a></li></ol></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

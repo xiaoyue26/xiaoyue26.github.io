@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>利用序列样本超越A/B Test: interleaving和多臂老虎机 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="interleaving实验: 快速找到最优解;多臂老虎机: 降低实验成本;  背景经典统计分析的样本: 农业统计中样本是同时产生的。在线服务中的样本: 序列样本,在线服务中样本是依次到达的; 利用这个特性,可以有比传统统计分析方法成本更小、更灵活的实验方法。序列样本环境下的假设检验,在相同显著性和检验力下,经典t检验结束更早,需要样本更少。 Interleaving实验交错实验优先确定哪个方案">
+<meta property="og:type" content="article">
+<meta property="og:title" content="利用序列样本超越A&#x2F;B Test: interleaving和多臂老虎机">
+<meta property="og:url" content="http://xiaoyue26.github.io/2019/11/13/2019-11/%E5%88%A9%E7%94%A8%E5%BA%8F%E5%88%97%E6%A0%B7%E6%9C%AC%E8%B6%85%E8%B6%8AA-B-Test-interleaving%E5%92%8C%E5%A4%9A%E8%87%82%E8%80%81%E8%99%8E%E6%9C%BA/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="interleaving实验: 快速找到最优解;多臂老虎机: 降低实验成本;  背景经典统计分析的样本: 农业统计中样本是同时产生的。在线服务中的样本: 序列样本,在线服务中样本是依次到达的; 利用这个特性,可以有比传统统计分析方法成本更小、更灵活的实验方法。序列样本环境下的假设检验,在相同显著性和检验力下,经典t检验结束更早,需要样本更少。 Interleaving实验交错实验优先确定哪个方案">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-11/right.jpg">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-11/interleaving.jpg">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-11/mab.jpg">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-11/error2.jpg">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-11/mab_book.jpg">
+<meta property="article:published_time" content="2019-11-13T06:13:15.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.288Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="论文">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://xiaoyue26.github.io/images/2019-11/right.jpg">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2019-11/利用序列样本超越A-B-Test-interleaving和多臂老虎机" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/11/13/2019-11/%E5%88%A9%E7%94%A8%E5%BA%8F%E5%88%97%E6%A0%B7%E6%9C%AC%E8%B6%85%E8%B6%8AA-B-Test-interleaving%E5%92%8C%E5%A4%9A%E8%87%82%E8%80%81%E8%99%8E%E6%9C%BA/" class="article-date">
+  <time datetime="2019-11-13T06:13:15.000Z" itemprop="datePublished">2019-11-13</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E8%AE%BA%E6%96%87/">论文</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      利用序列样本超越A/B Test: interleaving和多臂老虎机
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <blockquote>
+<p>interleaving实验: 快速找到最优解;<br>多臂老虎机: 降低实验成本;</p>
+</blockquote>
+<h1 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h1><p>经典统计分析的样本: 农业统计中样本是同时产生的。<br>在线服务中的样本: 序列样本,在线服务中样本是依次到达的;</p>
+<p>利用这个特性,可以有比传统统计分析方法成本更小、更灵活的实验方法。<br>序列样本环境下的假设检验,在相同显著性和检验力下,经典t检验结束更早,需要样本更少。</p>
+<h1 id="Interleaving实验"><a href="#Interleaving实验" class="headerlink" title="Interleaving实验"></a>Interleaving实验</h1><p><code>交错实验</code><br>优先确定哪个方案更好,而不是统计出具体效果好多少.<br>参考: <a href="https://zhuanlan.zhihu.com/p/31770319" target="_blank" rel="noopener">https://zhuanlan.zhihu.com/p/31770319</a><br><code>优点</code>: 更少的样本达到与Abtest相同的偏向结果；<br><code>缺点</code>： 无法知道究竟有多好的效果；（比如A组究竟能提高多少阅读时长）</p>
+<h2 id="解决方案"><a href="#解决方案" class="headerlink" title="解决方案"></a>解决方案</h2><p>用<code>Interleaving</code>+<code>ABtest</code>两阶段完成整个评估。</p>
+<p><code>要点</code>：抛硬币交错，保证公平。<br><code>灵敏度</code>： 高于AB；<br><code>准确度</code>： 与AB有很强的相关性；<br><code>场景</code>： 排名算法</p>
+<img src="/images/2019-11/right.jpg" class="" width="800" height="1200" title="right">
+
+
+<h2 id="案例-Netflix的方法"><a href="#案例-Netflix的方法" class="headerlink" title="案例: Netflix的方法"></a>案例: Netflix的方法</h2><p>第一阶段: 快速筛选,从众多算法中挑选出最有前途的排名算法;<br>第二阶段，进行传统的A/B测试,以测量长期效应;</p>
+<img src="/images/2019-11/interleaving.jpg" class="" width="800" height="1200" title="interleaving">
+
+<h2 id="使用条件"><a href="#使用条件" class="headerlink" title="使用条件"></a>使用条件</h2><ol>
+<li>指标对排序算法的质量非常敏感;</li>
+<li>对第二阶段进行准确预测：第一阶段衡量的指标与A/B 评估的指标正相关；</li>
+</ol>
+<h3 id="指标示例"><a href="#指标示例" class="headerlink" title="指标示例"></a>指标示例</h3><p>传统AB指标: 留存、观看时长；<br>交错测试指标: 观看时长比例；</p>
+<h1 id="MAB-多臂老虎机"><a href="#MAB-多臂老虎机" class="headerlink" title="MAB: 多臂老虎机"></a>MAB: 多臂老虎机</h1><p>参考: <a href="http://www.fengjunchen.com/%E9%80%82%E7%94%A8%E4%BA%8E%E5%9C%A8%E7%BA%BF%E6%9C%8D%E5%8A%A1%E7%9A%84ab%E6%B5%8B%E8%AF%95%E6%96%B9%E6%B3%95%E8%AE%BA/" target="_blank" rel="noopener">http://www.fengjunchen.com/%E9%80%82%E7%94%A8%E4%BA%8E%E5%9C%A8%E7%BA%BF%E6%9C%8D%E5%8A%A1%E7%9A%84ab%E6%B5%8B%E8%AF%95%E6%96%B9%E6%B3%95%E8%AE%BA/</a></p>
+<h2 id="What-什么是多臂老虎机"><a href="#What-什么是多臂老虎机" class="headerlink" title="What: 什么是多臂老虎机"></a>What: 什么是多臂老虎机</h2><p>一种在线实验的方法，特点是兼顾实验结果和实验成本，不会让差劲的方案暴露给用户太久。</p>
+<p>在线上进行大规模实验的时候，可能会影响用户体验，从而影响用户留存等关键业务指标。因此我们希望在实验过程中，尽可能降低差方案曝光的频率。为了达到这个目的,大致有两种思路:<br>思路1: 动态结束;一旦A方案胜出,立即停止实验,采用A方案;<br>思路2: 非均衡分组;在优势方案下多分配用户.(多臂老虎机)</p>
+<p>使用场景: 序列样本/在线服务</p>
+<h3 id="背景-1"><a href="#背景-1" class="headerlink" title="背景"></a>背景</h3><blockquote>
+<p>Bandit: 老虎机</p>
+</blockquote>
+<img src="/images/2019-11/mab.jpg" class="" width="400" height="600" title="mab">
+<p>多臂老虎机问题:<br>老虎机有N个摇杆,每个得到奖励的概率为p1~pN;<br>假设可以拉很多次摇杆，使用什么策略可以使总收益最大化?</p>
+<h4 id="一种可能的思路"><a href="#一种可能的思路" class="headerlink" title="一种可能的思路"></a>一种可能的思路</h4><p>先抽样统计收益较好的摇杆,然后利用统计解决快速调整策略。<br>也就是分两个阶段:</p>
+<ol>
+<li>探索规律;</li>
+<li>利用规律;</li>
+</ol>
+<h3 id="汤普森抽样"><a href="#汤普森抽样" class="headerlink" title="汤普森抽样"></a>汤普森抽样</h3><p>在每个周期计算”摇杆i是最优摇杆”的后验概率,作为下一个周期随机分配摇杆的依据。</p>
+<p>优点: 灵活性、扩展性、保证实验过程坑用户比例最小;<br>缺点: 没有人公开发表过简单靠谱的停止条件。</p>
+<h4 id="PVR-停止条件的解决方案"><a href="#PVR-停止条件的解决方案" class="headerlink" title="PVR: 停止条件的解决方案"></a>PVR: 停止条件的解决方案</h4><p><code>google analytics</code>: PVR(潜在剩余价值)。<br>定义分界线为a,分界概率为b:</p>
+<blockquote>
+<p>P(潜在最优收益&gt;(1+a%)*目前最优收益) &lt; b</p>
+</blockquote>
+<p>google analytics的参数设置是<code>a=0.01,b=0.05</code>,即潜在最优收益比目前最优收益大1%的概率不到5%。</p>
+<h3 id="PVR方案的缺点"><a href="#PVR方案的缺点" class="headerlink" title="PVR方案的缺点"></a>PVR方案的缺点</h3><p>即使A/B方案没有任何区别,PVR也会导致相当一部分实验在有限时间内终止。<br>第一类错误的概率随时间延长增加。</p>
+<img src="/images/2019-11/error2.jpg" class="" width="800" height="1200" title="error2">
+<p>scott: 线上实验不需要考虑第一类错误，因为代价极小；而第二类错误是致命的。</p>
+<h2 id="案例"><a href="#案例" class="headerlink" title="案例"></a>案例</h2><p>谷歌analytics/yahoo/bing: 汤普森抽样的贝叶斯解法<br>论文: <a href="http://quinonero.net/Publications/AdPredictorICML2010-final.pdf" target="_blank" rel="noopener">http://quinonero.net/Publications/AdPredictorICML2010-final.pdf</a><br>数学要求: 超精深<br>相关图灵书: 《Bandit Algorithms for Website Optimization》</p>
+<img src="/images/2019-11/mab_book.jpg" class="" width="400" height="600" title="mab_book">
+<p>相关论文： <a href="http://www.economics.uci.edu/~ivan/asmb.874.pdf" target="_blank" rel="noopener">http://www.economics.uci.edu/~ivan/asmb.874.pdf</a></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/11/13/2019-11/%E5%88%A9%E7%94%A8%E5%BA%8F%E5%88%97%E6%A0%B7%E6%9C%AC%E8%B6%85%E8%B6%8AA-B-Test-interleaving%E5%92%8C%E5%A4%9A%E8%87%82%E8%80%81%E8%99%8E%E6%9C%BA/" data-id="ck96cch4i00kibhamcw3ufgnq" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E8%AE%BA%E6%96%87/" rel="tag">论文</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2019/12/02/2019-12/RTP-RTCP%E5%8D%8F%E8%AE%AE/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          RTP/RTCP协议
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2019/11/13/2019-11/%E8%AE%BA%E6%96%87%E6%A2%97%E6%A6%82-%E5%9C%A8%E7%BA%BF%E6%9C%8D%E5%8A%A1%E7%9A%84%E5%AE%9E%E9%AA%8C%E8%AF%84%E4%BC%B0%E9%9D%A2%E4%B8%B4%E7%9A%84%E6%8C%91%E6%88%98/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">[论文梗概]在线服务的实验评估面临的挑战</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#背景"><span class="toc-number">1.</span> <span class="toc-text">背景</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#Interleaving实验"><span class="toc-number">2.</span> <span class="toc-text">Interleaving实验</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#解决方案"><span class="toc-number">2.1.</span> <span class="toc-text">解决方案</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#案例-Netflix的方法"><span class="toc-number">2.2.</span> <span class="toc-text">案例: Netflix的方法</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#使用条件"><span class="toc-number">2.3.</span> <span class="toc-text">使用条件</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#指标示例"><span class="toc-number">2.3.1.</span> <span class="toc-text">指标示例</span></a></li></ol></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#MAB-多臂老虎机"><span class="toc-number">3.</span> <span class="toc-text">MAB: 多臂老虎机</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#What-什么是多臂老虎机"><span class="toc-number">3.1.</span> <span class="toc-text">What: 什么是多臂老虎机</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#背景-1"><span class="toc-number">3.1.1.</span> <span class="toc-text">背景</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#一种可能的思路"><span class="toc-number">3.1.1.1.</span> <span class="toc-text">一种可能的思路</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#汤普森抽样"><span class="toc-number">3.1.2.</span> <span class="toc-text">汤普森抽样</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#PVR-停止条件的解决方案"><span class="toc-number">3.1.2.1.</span> <span class="toc-text">PVR: 停止条件的解决方案</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#PVR方案的缺点"><span class="toc-number">3.1.3.</span> <span class="toc-text">PVR方案的缺点</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#案例"><span class="toc-number">3.2.</span> <span class="toc-text">案例</span></a></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>spark中编写UDAF的4种姿势 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="摘要:   (探索解决sql的多行处理能力盲区)   搭配collect_set+UDF;  RDD: combineByKey;  Dataframe: 继承UserDefinedAggregateFunction;  Dataset: 继承Aggregator。 前文探索了解决sql对于单行处理的能力盲区(http:&#x2F;&#x2F;xiaoyue26.github.io&#x2F;2019&#x2F;05&#x2F;08&#x2F;2019-0">
+<meta property="og:type" content="article">
+<meta property="og:title" content="spark中编写UDAF的4种姿势">
+<meta property="og:url" content="http://xiaoyue26.github.io/2019/05/11/2019-05/spark%E4%B8%AD%E7%BC%96%E5%86%99UDAF%E7%9A%844%E7%A7%8D%E5%A7%BF%E5%8A%BF/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="摘要:   (探索解决sql的多行处理能力盲区)   搭配collect_set+UDF;  RDD: combineByKey;  Dataframe: 继承UserDefinedAggregateFunction;  Dataset: 继承Aggregator。 前文探索了解决sql对于单行处理的能力盲区(http:&#x2F;&#x2F;xiaoyue26.github.io&#x2F;2019&#x2F;05&#x2F;08&#x2F;2019-0">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2019-05-11T12:15:05.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.284Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="spark">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2019-05/spark中编写UDAF的4种姿势" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/05/11/2019-05/spark%E4%B8%AD%E7%BC%96%E5%86%99UDAF%E7%9A%844%E7%A7%8D%E5%A7%BF%E5%8A%BF/" class="article-date">
+  <time datetime="2019-05-11T12:15:05.000Z" itemprop="datePublished">2019-05-11</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/spark/">spark</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      spark中编写UDAF的4种姿势
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>摘要: </p>
+<blockquote>
+<p>(探索解决sql的多行处理能力盲区)</p>
+</blockquote>
+<ol>
+<li><p>搭配collect_set+UDF;</p>
+</li>
+<li><p>RDD: combineByKey;</p>
+</li>
+<li><p>Dataframe: 继承UserDefinedAggregateFunction;</p>
+</li>
+<li><p>Dataset: 继承Aggregator。</p>
+<p>前文探索了解决sql对于单行处理的能力盲区(<a href="http://xiaoyue26.github.io/2019/05/08/2019-05/%E5%B0%86pyspark%E4%B8%AD%E7%9A%84UDF%E5%8A%A0%E9%80%9F50/">http://xiaoyue26.github.io/2019/05/08/2019-05/%E5%B0%86pyspark%E4%B8%AD%E7%9A%84UDF%E5%8A%A0%E9%80%9F50/</a> )，本文接着探索解决sql对于多行处理(UDAF/用户自定义聚合函数)的能力盲区。</p>
+</li>
+</ol>
+<h1 id="姿势1：搭配collect-set-UDF"><a href="#姿势1：搭配collect-set-UDF" class="headerlink" title="姿势1：搭配collect_set+UDF"></a>姿势1：搭配collect_set+UDF</h1><p>基本思想是强行把一个group行拼成一个数组，然后编写一个能处理数组的UDF即可。如果是多行变多行，则UDF的输出也构造成数组，然后用explode打开。如果想要把多行聚合成一行（类似于sum），则直接输出结果即可。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">str_list2idfa</span><span class="params">(txt_list)</span>:</span></span><br><span class="line">    <span class="keyword">try</span>:</span><br><span class="line">        res = list()</span><br><span class="line">        <span class="keyword">for</span> txt <span class="keyword">in</span> txt_list:</span><br><span class="line">            res.append(str2idfa(txt))</span><br><span class="line">        <span class="keyword">return</span> res</span><br><span class="line">    <span class="keyword">except</span>:</span><br><span class="line">        <span class="keyword">return</span> []</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">'__main__'</span>:</span><br><span class="line">    spark = SparkSession.builder.appName(app_name).getOrCreate()</span><br><span class="line">    provider = TDWSQLProvider(spark, user=user, passwd=passwd, db=db_name)</span><br><span class="line"></span><br><span class="line">    in_df = provider.table(in_table_name, [<span class="string">'p_2019042100'</span>])  <span class="comment"># 分区数组</span></span><br><span class="line">    print(in_df.columns)</span><br><span class="line">    <span class="comment"># 1. 创建udaf:</span></span><br><span class="line">    str_list2idfa_udaf = udf(str_list2idfa  <span class="comment"># 实际运行的函数</span></span><br><span class="line">                            , ArrayType(ArrayType(StringType()))  <span class="comment"># 函数返回值类型</span></span><br><span class="line">                            )</span><br><span class="line">    <span class="comment"># 2. 在df中使用,将数组转成二维数组:</span></span><br><span class="line">    out_t1 = in_df.groupBy(<span class="string">'uin'</span>).agg(</span><br><span class="line">        str_list2idfa_udaf(</span><br><span class="line">            collect_set(<span class="string">'value'</span>)</span><br><span class="line">        ).alias(<span class="string">'value_list'</span>)</span><br><span class="line">    )</span><br><span class="line">    print(out_t1.columns)</span><br><span class="line">    out_t1.printSchema()</span><br><span class="line">    out_t1.createOrReplaceTempView(<span class="string">"t1"</span>)</span><br><span class="line">    <span class="comment"># 3. 将二维数组打开,一行变多行,一列变两列:</span></span><br><span class="line">    out_t2 = spark.sql(<span class="string">'''</span></span><br><span class="line"><span class="string">    select uin</span></span><br><span class="line"><span class="string">          ,idfa_idfv[0] as idfa</span></span><br><span class="line"><span class="string">          ,idfa_idfv[1] as idfv</span></span><br><span class="line"><span class="string">    from t1</span></span><br><span class="line"><span class="string">    lateral view explode(value_list) tt as idfa_idfv</span></span><br><span class="line"><span class="string">    '''</span>)</span><br><span class="line">    out_t2.printSchema()</span><br><span class="line">    print(out_t2.take(<span class="number">10</span>))</span><br></pre></td></tr></table></figure>
+<ul>
+<li>优点： 开发成本低，不用编译。</li>
+<li>缺点： 性能一般，增加了转换数组、explode的成本，可能导致聚合过程完全在单点进行，对于数据倾斜的承受能力较低。</li>
+</ul>
+<h1 id="姿势2：-使用RDD的combineByKey算子"><a href="#姿势2：-使用RDD的combineByKey算子" class="headerlink" title="姿势2： 使用RDD的combineByKey算子"></a>姿势2： 使用RDD的combineByKey算子</h1><p>  上述方法本质上是用UDF强行模拟了UDAF的功能，性能上有所损失。第二种方法是使用RDD的<code>combineByKey</code>算子: </p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> spark = <span class="type">SparkSession</span>.builder.appName(<span class="string">"UdafDemo"</span>).getOrCreate()</span><br><span class="line"><span class="keyword">val</span> rddProvider = <span class="keyword">new</span> <span class="type">TDWProvider</span>(spark.sparkContext, user, pass, db) <span class="comment">// 这个返回rdd</span></span><br><span class="line"><span class="keyword">val</span> inRdd = rddProvider.table(<span class="string">"t_dw_dc0xxxx"</span>, <span class="type">Array</span>(<span class="string">"p_2019042100"</span>))</span><br><span class="line">println(<span class="string">"getNumPartitions:"</span>)</span><br><span class="line">println(inRdd.getNumPartitions)</span><br><span class="line"><span class="keyword">val</span> kvRdd: <span class="type">RDD</span>[(<span class="type">Long</span>, <span class="type">String</span>)] = inRdd</span><br><span class="line">  .map(row =&gt; (row(<span class="number">3</span>).toLong, <span class="type">UdfUtils</span>.str2idfa(row(<span class="number">9</span>))))</span><br><span class="line">  .filter(x =&gt; x._2.isDefined)</span><br><span class="line">  .map(x =&gt; (x._1, x._2.get))</span><br><span class="line"></span><br><span class="line"><span class="keyword">val</span> combineRdd: <span class="type">RDD</span>[(<span class="type">Long</span>, mutable.<span class="type">Set</span>[<span class="type">String</span>])] = kvRdd</span><br><span class="line">  .combineByKey(</span><br><span class="line">    (v: <span class="type">String</span>) =&gt; mutable.<span class="type">Set</span>(v),</span><br><span class="line">    (set: mutable.<span class="type">Set</span>[<span class="type">String</span>], v: <span class="type">String</span>) =&gt; set += v,</span><br><span class="line">    (set1: mutable.<span class="type">Set</span>[<span class="type">String</span>], set2: mutable.<span class="type">Set</span>[<span class="type">String</span>]) =&gt; set1 ++= set2)</span><br><span class="line"></span><br><span class="line"><span class="keyword">val</span> outRdd: <span class="type">RDD</span>[(<span class="type">Long</span>, <span class="type">String</span>)] = combineRdd.flatMap(kv =&gt; &#123;</span><br><span class="line">  <span class="keyword">val</span> uin = kv._1</span><br><span class="line">  <span class="keyword">val</span> set = kv._2</span><br><span class="line">  <span class="keyword">val</span> res = mutable.<span class="type">MutableList</span>.empty[(<span class="type">Long</span>, <span class="type">String</span>)]</span><br><span class="line">  set.foreach(x =&gt; res += ((uin, x)))</span><br><span class="line">  res.iterator</span><br><span class="line">&#125;)</span><br><span class="line">outRdd.take(<span class="number">10</span>).foreach(println)</span><br><span class="line"><span class="comment">// println(outRdd.count())</span></span><br></pre></td></tr></table></figure>
+<ul>
+<li>优点： 代码简洁，容易理解，性能高; </li>
+<li>缺点： 需要学习RDD相关知识。</li>
+</ul>
+<h1 id="姿势3-使用Dataframe-继承UserDefinedAggregateFunction"><a href="#姿势3-使用Dataframe-继承UserDefinedAggregateFunction" class="headerlink" title="姿势3: 使用Dataframe(继承UserDefinedAggregateFunction)"></a>姿势3: 使用Dataframe(继承UserDefinedAggregateFunction)</h1><p>假设用户比较熟悉Dataframe操作，还可以通过继承<code>UserDefinedAggregateFunction</code>类编写一个完整的UDAF：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// part1: UDAF:</span></span><br><span class="line"><span class="keyword">import</span> org.apache.spark.sql.<span class="type">Row</span></span><br><span class="line"><span class="keyword">import</span> org.apache.spark.sql.expressions.&#123;<span class="type">MutableAggregationBuffer</span>, <span class="type">UserDefinedAggregateFunction</span>&#125;</span><br><span class="line"><span class="keyword">import</span> org.apache.spark.sql.types._</span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">object</span> <span class="title">DfUdaf</span> <span class="keyword">extends</span> <span class="title">UserDefinedAggregateFunction</span> </span>&#123;</span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">inputSchema</span></span>: <span class="type">StructType</span> = <span class="type">StructType</span>(<span class="type">StructField</span>(<span class="string">"value"</span>, <span class="type">StringType</span>) :: <span class="type">Nil</span>)</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Map[String,Null] 当Set用了</span></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">bufferSchema</span></span>: <span class="type">StructType</span> = <span class="keyword">new</span> <span class="type">StructType</span>().add(<span class="string">"idfa_idfv"</span>, <span class="type">MapType</span>(<span class="type">StringType</span>, <span class="type">NullType</span>))</span><br><span class="line"></span><br><span class="line">  <span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">dataType</span></span>: <span class="type">DataType</span> = <span class="type">MapType</span>(<span class="type">StringType</span>, <span class="type">NullType</span>)</span><br><span class="line"></span><br><span class="line">  <span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">deterministic</span></span>: <span class="type">Boolean</span> = <span class="literal">true</span></span><br><span class="line"></span><br><span class="line">  <span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">initialize</span></span>(buffer: <span class="type">MutableAggregationBuffer</span>): <span class="type">Unit</span> = &#123;</span><br><span class="line">    buffer.update(<span class="number">0</span>, <span class="type">Map</span>[<span class="type">String</span>, <span class="type">Null</span>]())</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">update</span></span>(buffer: <span class="type">MutableAggregationBuffer</span>, input: <span class="type">Row</span>): <span class="type">Unit</span> = &#123;</span><br><span class="line">    <span class="keyword">val</span> map = buffer.getAs[<span class="type">Map</span>[<span class="type">String</span>, <span class="type">Null</span>]](<span class="number">0</span>)</span><br><span class="line">    <span class="keyword">val</span> value = input.getAs[<span class="type">String</span>](<span class="number">0</span>)</span><br><span class="line">    <span class="keyword">val</span> idfa_idfv = <span class="type">UdfUtils</span>.str2idfa(value)</span><br><span class="line">    <span class="keyword">if</span> (idfa_idfv.isDefined) &#123;</span><br><span class="line">      buffer.update(<span class="number">0</span>, map ++ <span class="type">Map</span>(idfa_idfv.get -&gt; <span class="literal">null</span>))</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">merge</span></span>(buffer1: <span class="type">MutableAggregationBuffer</span>, buffer2: <span class="type">Row</span>): <span class="type">Unit</span> = &#123;</span><br><span class="line">    <span class="keyword">val</span> map1 = buffer1.getAs[<span class="type">Map</span>[<span class="type">String</span>, <span class="type">Null</span>]](<span class="number">0</span>)</span><br><span class="line">    <span class="keyword">val</span> map2 = buffer2.getAs[<span class="type">Map</span>[<span class="type">String</span>, <span class="type">Null</span>]](<span class="number">0</span>)</span><br><span class="line">    buffer1.update(<span class="number">0</span>, map1 ++ map2)</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">evaluate</span></span>(buffer: <span class="type">Row</span>): <span class="type">Any</span> = buffer.getAs[<span class="type">Map</span>[<span class="type">String</span>, <span class="type">Null</span>]](<span class="number">0</span>)</span><br><span class="line">&#125;</span><br><span class="line"> </span><br><span class="line"><span class="comment">// part2: main函数:</span></span><br><span class="line">    <span class="keyword">val</span> spark = <span class="type">SparkSession</span>.builder.appName(<span class="string">"UdafDemo"</span>).getOrCreate()</span><br><span class="line">    <span class="keyword">val</span> sqlProvider = <span class="keyword">new</span> <span class="type">TDWSQLProvider</span>(spark, user, pass, db)</span><br><span class="line"></span><br><span class="line">    <span class="comment">// val rddProvider = TDWProvider(spark.sparkContext, user, pass, db) // 这个返回rdd</span></span><br><span class="line">    <span class="keyword">val</span> inDf = sqlProvider.table(<span class="string">"t_dw_dc0xxxx"</span>, <span class="type">Array</span>(<span class="string">"p_2019042100"</span>))</span><br><span class="line">    println(<span class="string">"getNumPartitions:"</span>)</span><br><span class="line">    println(inDf.rdd.getNumPartitions)</span><br><span class="line"></span><br><span class="line">    spark.udf.register(<span class="string">"collect_idfa"</span>, <span class="type">DfUdaf</span>)</span><br><span class="line">    inDf.createOrReplaceTempView(<span class="string">"t1"</span>)</span><br><span class="line">    <span class="keyword">val</span> outDf = spark.sql(<span class="string">""</span> +</span><br><span class="line">      <span class="string">"select uin,idfa_idfv "</span> +</span><br><span class="line">      <span class="string">"from "</span> +</span><br><span class="line">      <span class="string">"(select uin,collect_idfa(value) as vmap from t1 group by uin) a "</span> +</span><br><span class="line">      <span class="string">"lateral view explode(vmap) tt as idfa_idfv,n"</span> +</span><br><span class="line">      <span class="string">""</span>)</span><br><span class="line">    outDf.take(<span class="number">10</span>).foreach(println)</span><br></pre></td></tr></table></figure>
+<p>优点: 可以直接在sql中引用，重用性高，性能高;<br>缺点: 开发成本高，只支持scala，需要编译。</p>
+<h1 id="姿势4：-使用Dataset（继承Aggregator）"><a href="#姿势4：-使用Dataset（继承Aggregator）" class="headerlink" title="姿势4： 使用Dataset（继承Aggregator）"></a>姿势4： 使用Dataset（继承Aggregator）</h1><p>如果用户对于Dataset的api比较熟悉，可以继承Aggregator开发UDAF:</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// part1: UDAF:</span></span><br><span class="line"><span class="keyword">import</span> org.apache.spark.sql.&#123;<span class="type">Encoder</span>, <span class="type">Encoders</span>&#125;</span><br><span class="line"><span class="keyword">import</span> org.apache.spark.sql.expressions.<span class="type">Aggregator</span></span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">DsUdaf</span>[<span class="type">IN</span>](<span class="params">val f: <span class="type">IN</span> =&gt; <span class="type">String</span></span>) <span class="keyword">extends</span> <span class="title">Aggregator</span>[<span class="type">IN</span>, <span class="type">Set</span>[<span class="type">String</span>], <span class="title">Set</span>[<span class="type">String</span>]] </span>&#123;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">zero</span></span>: <span class="type">Set</span>[<span class="type">String</span>] = <span class="type">Set</span>[<span class="type">String</span>]()</span><br><span class="line"></span><br><span class="line">  <span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">reduce</span></span>(buf: <span class="type">Set</span>[<span class="type">String</span>], a: <span class="type">IN</span>): <span class="type">Set</span>[<span class="type">String</span>] = &#123;</span><br><span class="line">    <span class="keyword">val</span> idfa_idfv = <span class="type">UdfUtils</span>.str2idfa(f(a))</span><br><span class="line">    buf ++ idfa_idfv</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">merge</span></span>(b1: <span class="type">Set</span>[<span class="type">String</span>], b2: <span class="type">Set</span>[<span class="type">String</span>]): <span class="type">Set</span>[<span class="type">String</span>] = b1 ++ b2</span><br><span class="line"></span><br><span class="line">  <span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">finish</span></span>(reduction: <span class="type">Set</span>[<span class="type">String</span>]): <span class="type">Set</span>[<span class="type">String</span>] = reduction</span><br><span class="line"></span><br><span class="line">  <span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">bufferEncoder</span></span>: <span class="type">Encoder</span>[<span class="type">Set</span>[<span class="type">String</span>]] = <span class="type">Encoders</span>.kryo[<span class="type">Set</span>[<span class="type">String</span>]]</span><br><span class="line"></span><br><span class="line">  <span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">outputEncoder</span></span>: <span class="type">Encoder</span>[<span class="type">Set</span>[<span class="type">String</span>]] = <span class="type">Encoders</span>.kryo[<span class="type">Set</span>[<span class="type">String</span>]]</span><br><span class="line"></span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// part2: main函数:</span></span><br><span class="line"><span class="keyword">val</span> spark = <span class="type">SparkSession</span>.builder.appName(<span class="string">"UdfDemo"</span>).getOrCreate()</span><br><span class="line">    <span class="keyword">val</span> sqlProvider = <span class="keyword">new</span> <span class="type">TDWSQLProvider</span>(spark, user, pass, db)</span><br><span class="line"></span><br><span class="line">    <span class="comment">// val rddProvider = TDWProvider(spark.sparkContext, user, pass, db) // 这个返回rdd</span></span><br><span class="line">    <span class="keyword">val</span> inDf = sqlProvider.table(<span class="string">"t_dw_dc0xxxx"</span>, <span class="type">Array</span>(<span class="string">"p_2019042100"</span>))</span><br><span class="line">    println(<span class="string">"getNumPartitions:"</span>)</span><br><span class="line">    println(inDf.rdd.getNumPartitions)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">import</span> spark.implicits._</span><br><span class="line">    inDf.createOrReplaceTempView(<span class="string">"t1"</span>)</span><br><span class="line">    <span class="keyword">val</span> df2 = spark.sql(<span class="string">"select uin,value from t1"</span>)</span><br><span class="line">    df2.printSchema()</span><br><span class="line"></span><br><span class="line">    <span class="keyword">val</span> inDS = df2.as[<span class="type">UinValue</span>]</span><br><span class="line">    <span class="comment">// inDS.take(10).foreach(println)</span></span><br><span class="line">    <span class="keyword">val</span> outDs: <span class="type">Dataset</span>[(<span class="type">Long</span>, <span class="type">Set</span>[<span class="type">String</span>])] = inDS.groupByKey(_.uin).agg(<span class="keyword">new</span> <span class="type">DsUdaf</span>[<span class="type">UinValue</span>](_.value).toColumn)</span><br><span class="line">    <span class="comment">// outDs.take(10).foreach(println)</span></span><br><span class="line">    <span class="keyword">val</span> ds2 = outDs.flatMap(pair =&gt; &#123;</span><br><span class="line">      <span class="keyword">val</span> uin = pair._1</span><br><span class="line">      <span class="keyword">val</span> idfa_set = pair._2</span><br><span class="line">      idfa_set.map(idfa =&gt; (uin, idfa))</span><br><span class="line">    &#125;)</span><br><span class="line">    ds2.printSchema()</span><br><span class="line">    ds2.take(<span class="number">10</span>).foreach(println)</span><br></pre></td></tr></table></figure>
+<p>其中<code>Encoder</code>部分由于还不支持Set集合类型，可以使用kryo序列化成二进制。（更多Encoder相关参见:<a href="http://xiaoyue26.github.io/2019/04/27/2019-04/spark%E4%B8%AD%E7%9A%84encoder/">http://xiaoyue26.github.io/2019/04/27/2019-04/spark%E4%B8%AD%E7%9A%84encoder/</a> ）</p>
+<p>优点: 类型安全，继承Aggregator开发的成本略小于继承UserDefinedAggregateFunction;<br>缺点: 只支持scala，需要编译。</p>
+<h1 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h1><p>本文总结了在Rdd,Dataframe,Dataset三种api下编写UDAF的方法（三种api的对比参见<a href="http://xiaoyue26.github.io/2019/04/29/2019-04/spark%E4%B8%ADRDD%EF%BC%8CDataframe%EF%BC%8CDataSet%E5%8C%BA%E5%88%AB%E5%AF%B9%E6%AF%94/">http://xiaoyue26.github.io/2019/04/29/2019-04/spark%E4%B8%ADRDD%EF%BC%8CDataframe%EF%BC%8CDataSet%E5%8C%BA%E5%88%AB%E5%AF%B9%E6%AF%94/</a> ），以及使用UDF模拟UDAF功能的方法。大家可以根据自己熟悉的api和需求选择。</p>
+<ul>
+<li>如果不在意性能：用<code>collect_set</code>+<code>UDF</code>模拟一个；(姿势1)</li>
+<li>如果在意性能，但是只用一次: 可以直接用RDD的<code>combineByKey</code>，代码较短；（姿势2） </li>
+<li>如果在意性能，而且会反复复用: 建议使用Dataframe，继承<code>UserDefinedAggregateFunction</code>编写一个UDAF。（姿势3）</li>
+</ul>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/05/11/2019-05/spark%E4%B8%AD%E7%BC%96%E5%86%99UDAF%E7%9A%844%E7%A7%8D%E5%A7%BF%E5%8A%BF/" data-id="ck96cch4100imbham9s535buw" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spark/" rel="tag">spark</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2019/05/26/2019-05/spark-sql%E4%B8%AD%E7%9A%84%E5%88%86%E4%BD%8D%E6%95%B0%E7%AE%97%E6%B3%95/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          spark-sql中的分位数算法
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2019/05/08/2019-05/%E5%B0%86pyspark%E4%B8%AD%E7%9A%84UDF%E5%8A%A0%E9%80%9F50/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">将pyspark中的UDF加速50%</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#姿势1：搭配collect-set-UDF"><span class="toc-number">1.</span> <span class="toc-text">姿势1：搭配collect_set+UDF</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#姿势2：-使用RDD的combineByKey算子"><span class="toc-number">2.</span> <span class="toc-text">姿势2： 使用RDD的combineByKey算子</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#姿势3-使用Dataframe-继承UserDefinedAggregateFunction"><span class="toc-number">3.</span> <span class="toc-text">姿势3: 使用Dataframe(继承UserDefinedAggregateFunction)</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#姿势4：-使用Dataset（继承Aggregator）"><span class="toc-number">4.</span> <span class="toc-text">姿势4： 使用Dataset（继承Aggregator）</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#总结"><span class="toc-number">5.</span> <span class="toc-text">总结</span></a></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

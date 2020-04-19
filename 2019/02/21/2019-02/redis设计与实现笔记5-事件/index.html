@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>redis设计与实现笔记5-事件 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="redis服务器需要处理的事件可以分为两类：  文件事件(file event): 套接字的抽象。服务器通过套接字与客户端或其他服务端连接、通信； 时间事件(time event): 定时任务。  文件事件事件模型是基于Reactor开发的:   套接字; IO多路复用程序； 事件分派器;(dispatcher) 事件处理器。  每当一个套接字准备好执行：连接应答(accept)、写入、读取、关闭">
+<meta property="og:type" content="article">
+<meta property="og:title" content="redis设计与实现笔记5-事件">
+<meta property="og:url" content="http://xiaoyue26.github.io/2019/02/21/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B05-%E4%BA%8B%E4%BB%B6/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="redis服务器需要处理的事件可以分为两类：  文件事件(file event): 套接字的抽象。服务器通过套接字与客户端或其他服务端连接、通信； 时间事件(time event): 定时任务。  文件事件事件模型是基于Reactor开发的:   套接字; IO多路复用程序； 事件分派器;(dispatcher) 事件处理器。  每当一个套接字准备好执行：连接应答(accept)、写入、读取、关闭">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-02/file_event_handler.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-02/force_single.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-02/time_event.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-02/all_event.png">
+<meta property="article:published_time" content="2019-02-21T13:53:58.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.281Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="redis">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://xiaoyue26.github.io/images/2019-02/file_event_handler.png">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2019-02/redis设计与实现笔记5-事件" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/21/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B05-%E4%BA%8B%E4%BB%B6/" class="article-date">
+  <time datetime="2019-02-21T13:53:58.000Z" itemprop="datePublished">2019-02-21</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      redis设计与实现笔记5-事件
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>redis服务器需要处理的事件可以分为两类：</p>
+<ol>
+<li>文件事件(file event): 套接字的抽象。服务器通过套接字与客户端或其他服务端连接、通信；</li>
+<li>时间事件(time event): 定时任务。</li>
+</ol>
+<h2 id="文件事件"><a href="#文件事件" class="headerlink" title="文件事件"></a>文件事件</h2><p>事件模型是基于Reactor开发的:</p>
+<img src="/images/2019-02/file_event_handler.png" class="" width="800" height="1200" title="file_event_handler">
+<ol>
+<li>套接字;</li>
+<li>IO多路复用程序；</li>
+<li>事件分派器;(dispatcher)</li>
+<li>事件处理器。</li>
+</ol>
+<p>每当一个套接字准备好执行：<br>连接应答(accept)、<br>写入、<br>读取、<br>关闭<br>等操作时，就会产生一个事件（可能并发）。</p>
+<img src="/images/2019-02/force_single.png" class="" width="800" height="1200" title="force_single">
+<p><code>IO多路复用程序</code>：把上游并发的事件组织成一个队列（方便下游单线程地使用）。<br>当上一个套接字事件被处理完以后，IO多路复用程序才会向事件分派器传送下一个套接字事件。</p>
+<h3 id="IO多路复用"><a href="#IO多路复用" class="headerlink" title="IO多路复用"></a>IO多路复用</h3><p>具体啥是IO多路复用？就是一个进程处理多个连接。<br>方案有很多：(详见:<a href="http://xiaoyue26.github.io/2017/11/06/2017-11/epoll%E7%9B%B8%E5%85%B3%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86/">http://xiaoyue26.github.io/2017/11/06/2017-11/epoll%E7%9B%B8%E5%85%B3%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86/</a>)</p>
+<ol>
+<li>循环、轮询；</li>
+<li>Select;</li>
+<li>poll;</li>
+<li>epoll(红黑树)/kqueue(哈希表);</li>
+<li>libevent库。</li>
+</ol>
+<h3 id="事件优先级"><a href="#事件优先级" class="headerlink" title="事件优先级"></a>事件优先级</h3><p>先处理可读，再处理可写。</p>
+<h3 id="API接口"><a href="#API接口" class="headerlink" title="API接口"></a>API接口</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">1. createFileEvent(套接字描述符,事件类型,事件处理器):开始监听;</span><br><span class="line">2. deleteFileEvent(套接字描述符,事件类型): 取消监听;</span><br><span class="line">3. getFileEvents(套接字描述符): 返回被监听的事件类型;</span><br><span class="line">4. wait(套接字描述符,事件类型,超时时长(ms)): 等待事件;</span><br><span class="line">5. apiPoll(超时时长): 等待所有被监听事件直至至少一个发生；</span><br><span class="line">6. processEvent():等待事件,然后分派;</span><br><span class="line">7. getApiName: 返回底层使用的IO库(epoll,poll或select等)</span><br></pre></td></tr></table></figure>
+
+<h2 id="时间事件"><a href="#时间事件" class="headerlink" title="时间事件"></a>时间事件</h2><ol>
+<li>定时事件：指定时间后执行1次；</li>
+<li>周期事件：每隔指定时间就执行1次（总N次)。</li>
+</ol>
+<h3 id="时间事件属性："><a href="#时间事件属性：" class="headerlink" title="时间事件属性："></a>时间事件属性：</h3><ol>
+<li>id: 全局唯一，递增；</li>
+<li>when: 毫秒，事件到达时间；</li>
+<li>timeProc: 函数，到期执行。</li>
+</ol>
+<p>定时事件和周期事件区分：</p>
+<ol>
+<li>timeProc返回<code>AE_NOMORE</code>: no more事件，不再调用；</li>
+<li>timeProc返回30： 周期事件，30ms后再次调用。</li>
+</ol>
+<p>TODO: 全局唯一id=&gt;服务器内唯一？</p>
+<h3 id="实现"><a href="#实现" class="headerlink" title="实现"></a>实现</h3><img src="/images/2019-02/time_event.png" class="" width="800" height="1200" title="time_event">
+<p>所有时间事件放在一个无序链表中，每次遍历整个链表，查找所有已到达的时间事件。</p>
+<h3 id="性能"><a href="#性能" class="headerlink" title="性能"></a>性能</h3><p>由于时间事件很少（1，2个），所以虽然实现很naive，性能也还行。</p>
+<h3 id="现有时间事件"><a href="#现有时间事件" class="headerlink" title="现有时间事件"></a>现有时间事件</h3><p><code>serverCron</code>:（每100ms）</p>
+<ol>
+<li>更新统计信息：时间、内存、数据库占用；</li>
+<li>清理过期KV；</li>
+<li>关闭清理失效客户端；</li>
+<li>AOF\RDB持久化；</li>
+<li>主从同步；</li>
+<li>集群模式：定期同步、连接测试。</li>
+</ol>
+<h2 id="事件循环"><a href="#事件循环" class="headerlink" title="事件循环"></a>事件循环</h2><img src="/images/2019-02/all_event.png" class="" width="800" height="1200" title="all_event">
+<p>事件无抢占。<br>先文件事件后时间事件，因此时间事件一般会滞后一点。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/21/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B05-%E4%BA%8B%E4%BB%B6/" data-id="ck96cch3i00gcbham4ja37crz" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2019/02/21/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B06-%E5%AE%A2%E6%88%B7%E7%AB%AF%E4%B8%8E%E6%9C%8D%E5%8A%A1%E5%99%A8/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          redis设计与实现笔记6-客户端与服务器
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2019/02/17/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B04-%E6%8C%81%E4%B9%85%E5%8C%96/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">redis设计与实现笔记4-持久化</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#文件事件"><span class="toc-number">1.</span> <span class="toc-text">文件事件</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#IO多路复用"><span class="toc-number">1.1.</span> <span class="toc-text">IO多路复用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#事件优先级"><span class="toc-number">1.2.</span> <span class="toc-text">事件优先级</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#API接口"><span class="toc-number">1.3.</span> <span class="toc-text">API接口</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#时间事件"><span class="toc-number">2.</span> <span class="toc-text">时间事件</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#时间事件属性："><span class="toc-number">2.1.</span> <span class="toc-text">时间事件属性：</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#实现"><span class="toc-number">2.2.</span> <span class="toc-text">实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#性能"><span class="toc-number">2.3.</span> <span class="toc-text">性能</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#现有时间事件"><span class="toc-number">2.4.</span> <span class="toc-text">现有时间事件</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#事件循环"><span class="toc-number">3.</span> <span class="toc-text">事件循环</span></a></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

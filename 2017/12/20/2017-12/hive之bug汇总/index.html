@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>hive之bug汇总 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="这里总结一下hive的bug,或者说表现与spark sql不同的feature(bug?).由于hive的distinct实际实现为group by,因此下述的group by相关bug也适用于distinct. 1. 列重命名BUG 导致结果错误.spark-sql能正常处理.  子查询中重命名列时,如果和原有表中某列名相同,并且where条件中有那一列,取原有表的列值.构造测试用例: 123">
+<meta property="og:type" content="article">
+<meta property="og:title" content="hive之bug汇总">
+<meta property="og:url" content="http://xiaoyue26.github.io/2017/12/20/2017-12/hive%E4%B9%8Bbug%E6%B1%87%E6%80%BB/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="这里总结一下hive的bug,或者说表现与spark sql不同的feature(bug?).由于hive的distinct实际实现为group by,因此下述的group by相关bug也适用于distinct. 1. 列重命名BUG 导致结果错误.spark-sql能正常处理.  子查询中重命名列时,如果和原有表中某列名相同,并且where条件中有那一列,取原有表的列值.构造测试用例: 123">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2017-12-20T10:01:19.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.266Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="hive">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2017-12/hive之bug汇总" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2017/12/20/2017-12/hive%E4%B9%8Bbug%E6%B1%87%E6%80%BB/" class="article-date">
+  <time datetime="2017-12-20T10:01:19.000Z" itemprop="datePublished">2017-12-20</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/hadoop/">hadoop</a>►<a class="article-category-link" href="/categories/hadoop/hive/">hive</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      hive之bug汇总
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>这里总结一下hive的bug,或者说表现与spark sql不同的feature(bug?).<br>由于hive的distinct实际实现为group by,因此下述的group by相关bug也适用于distinct.</p>
+<h1 id="1-列重命名BUG"><a href="#1-列重命名BUG" class="headerlink" title="1. 列重命名BUG"></a>1. 列重命名BUG</h1><blockquote>
+<p>导致结果错误.<br>spark-sql能正常处理.</p>
+</blockquote>
+<p>子查询中重命名列时,如果和原有表中某列名相同,并且where条件中有那一列,取原有表的列值.<br>构造测试用例:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> * <span class="keyword">FROM</span></span><br><span class="line">(<span class="keyword">SELECT</span> <span class="number">123</span> <span class="keyword">as</span> paperid</span><br><span class="line"><span class="keyword">FROM</span>  temp.feng_test1</span><br><span class="line"><span class="keyword">where</span> paperid=<span class="number">70455</span></span><br><span class="line">)<span class="keyword">AS</span> a</span><br></pre></td></tr></table></figure>
+<p>上述查询的结果是70455,而不是我们想象中的123.<br>而这个查询:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> * <span class="keyword">FROM</span></span><br><span class="line">(<span class="keyword">SELECT</span> <span class="number">123</span> <span class="keyword">as</span> paperid</span><br><span class="line"><span class="keyword">FROM</span>  temp.feng_test1</span><br><span class="line">)<span class="keyword">AS</span> a</span><br></pre></td></tr></table></figure>
+<p>或这个查询:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> * <span class="keyword">FROM</span></span><br><span class="line">(<span class="keyword">SELECT</span> <span class="number">123</span> <span class="keyword">as</span> paperid</span><br><span class="line"><span class="keyword">FROM</span>  (<span class="keyword">select</span> <span class="number">70455</span> <span class="keyword">as</span> paperid) <span class="keyword">as</span> t </span><br><span class="line"><span class="keyword">where</span> paperid=<span class="number">70455</span></span><br><span class="line">)<span class="keyword">AS</span> a</span><br></pre></td></tr></table></figure>
+<p>都能正确返回123.</p>
+<h1 id="2-GROUP-BY-UDF-Serde复合bug"><a href="#2-GROUP-BY-UDF-Serde复合bug" class="headerlink" title="2. GROUP BY+UDF+Serde复合bug"></a>2. GROUP BY+UDF+Serde复合bug</h1><blockquote>
+<p>导致抛异常退出.<br>spark-sql能正常处理.</p>
+</blockquote>
+<p>GROUP BY,自定义UDF和自定义Serde都能正常独立工作.<br>这是一个多重条件下产生的bug:<br>1.表定义为string,而自定义的serde类放入了long对象;(bug)<br>2.自定义UDF使用简便写法(继承UDF,复杂写法为继承GenericUDF);(正常行为)<br>3.运行如下语句:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> xx</span><br><span class="line"><span class="keyword">from</span> <span class="string">`1中serde的表`</span></span><br><span class="line"><span class="keyword">group</span> <span class="keyword">by</span> <span class="string">`2中udf`</span></span><br></pre></td></tr></table></figure>
+
+<p>这个bug可以说是serde写得有问题导致的,严格来说hive没有太大问题.<br>原因是hive调用简单udf时,是运行时进行反射,填入方法的参数,实参与形参定义不同抛出异常.</p>
+<h1 id="3-GROUP-BY-重复列-BUG"><a href="#3-GROUP-BY-重复列-BUG" class="headerlink" title="3. GROUP BY+重复列 BUG"></a>3. GROUP BY+重复列 BUG</h1><blockquote>
+<p>导致结果错误.<br>spark-sql能正常处理.</p>
+</blockquote>
+<p>GROUP BY 时,如果有涉及引用的重复列, 如构造用例中的alist[0],由于hive在各种方面都会重用引用,会导致bug.<br>用例的输出结果为: <code>1,1,1</code>.<br>而不是我们想象中的: <code>1,1,3333</code>.</p>
+<p>构造用例如下:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> aid,bid,mistake</span><br><span class="line"><span class="keyword">FROM</span></span><br><span class="line">      (<span class="keyword">SELECT</span> <span class="number">1</span> <span class="keyword">as</span> aid</span><br><span class="line">      )<span class="keyword">AS</span> a</span><br><span class="line"><span class="keyword">JOIN</span></span><br><span class="line">      (<span class="keyword">SELECT</span> alist[<span class="number">0</span>] <span class="keyword">as</span> bid</span><br><span class="line">            ,mistake</span><br><span class="line">      <span class="keyword">FROM</span> (<span class="keyword">SELECT</span> <span class="number">2</span> <span class="keyword">as</span> courseid) <span class="keyword">AS</span> a</span><br><span class="line">      <span class="keyword">JOIN</span> (<span class="keyword">SELECT</span> <span class="number">2</span> <span class="keyword">as</span> courseid</span><br><span class="line">                  ,<span class="string">'3333'</span> <span class="keyword">as</span> mistake</span><br><span class="line">                  ,<span class="built_in">array</span>(<span class="number">1</span>) <span class="keyword">as</span> alist</span><br><span class="line">            ) <span class="keyword">AS</span> b</span><br><span class="line">        <span class="keyword">ON</span> a.courseid=b.courseid</span><br><span class="line">      <span class="keyword">GROUP</span> <span class="keyword">BY</span> alist[<span class="number">0</span>]</span><br><span class="line">              ,alist[<span class="number">0</span>]</span><br><span class="line">              ,mistake</span><br><span class="line">      )<span class="keyword">AS</span> b</span><br><span class="line"> <span class="keyword">ON</span> aid=bid</span><br></pre></td></tr></table></figure>
+
+<h1 id="4-row-number-数据类型溢出-bug"><a href="#4-row-number-数据类型溢出-bug" class="headerlink" title="4. row_number + 数据类型溢出 bug"></a>4. row_number + 数据类型溢出 bug</h1><blockquote>
+<p>导致结果错误.<br>spark-sql能正常处理.</p>
+</blockquote>
+<p>假设tp是一个字符串类型,强行转换成int类型时,如果发生数据溢出,比如值是13位时间戳(1514285700375),排序行为将不可预测.既不是降序也不是升序.</p>
+<p>构造错误样例如下:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> userid,phaseid,tp</span><br><span class="line">,row_number()<span class="keyword">over</span>(<span class="keyword">partition</span> <span class="keyword">by</span> userid <span class="keyword">order</span> <span class="keyword">by</span> <span class="built_in">int</span>(tp)) <span class="keyword">as</span> <span class="keyword">rank</span></span><br><span class="line"><span class="keyword">from</span> xxxx</span><br></pre></td></tr></table></figure>
+
+<p>正确样例:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> userid,phaseid,tp</span><br><span class="line">,row_number()<span class="keyword">over</span>(<span class="keyword">partition</span> <span class="keyword">by</span> userid <span class="keyword">order</span> <span class="keyword">by</span> <span class="built_in">bigint</span>(tp)) <span class="keyword">as</span> <span class="keyword">rank</span></span><br><span class="line"><span class="keyword">from</span> xxxx</span><br></pre></td></tr></table></figure>
+
+<h1 id="5-sort-array-BUG-Feature-函数副作用"><a href="#5-sort-array-BUG-Feature-函数副作用" class="headerlink" title="5. sort_array BUG(Feature) 函数副作用"></a>5. sort_array BUG(Feature) 函数副作用</h1><blockquote>
+<p>导致结果错误.<br>spark-sql能正确处理.</p>
+</blockquote>
+<p>hive中对数组进行排序后,会改变原有数组.(会在原有数组基础上排序)<br>spark-sql则会返回一个深拷贝,不改变原有数组.</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> alist</span><br><span class="line">      ,sort_array(alist) <span class="keyword">as</span> alist2</span><br><span class="line"><span class="keyword">FROM</span></span><br><span class="line">(<span class="keyword">select</span> <span class="built_in">array</span>(<span class="number">1</span>,<span class="number">3</span>,<span class="number">2</span>) <span class="keyword">as</span> alist</span><br><span class="line">)<span class="keyword">AS</span> t</span><br></pre></td></tr></table></figure>
+
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2017/12/20/2017-12/hive%E4%B9%8Bbug%E6%B1%87%E6%80%BB/" data-id="ck96cch1p008ubham1q6oe76n" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/hive/" rel="tag">hive</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2017/12/25/2017-12/hive%E8%B0%83%E4%BC%98/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          hive sql调优
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2017/12/07/2017-12/mysql%E8%B0%83%E4%BC%98%E5%B0%8F%E8%AE%B0/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">mysql调优小记</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#1-列重命名BUG"><span class="toc-number">1.</span> <span class="toc-text">1. 列重命名BUG</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#2-GROUP-BY-UDF-Serde复合bug"><span class="toc-number">2.</span> <span class="toc-text">2. GROUP BY+UDF+Serde复合bug</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#3-GROUP-BY-重复列-BUG"><span class="toc-number">3.</span> <span class="toc-text">3. GROUP BY+重复列 BUG</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#4-row-number-数据类型溢出-bug"><span class="toc-number">4.</span> <span class="toc-text">4. row_number + 数据类型溢出 bug</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#5-sort-array-BUG-Feature-函数副作用"><span class="toc-number">5.</span> <span class="toc-text">5. sort_array BUG(Feature) 函数副作用</span></a></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta property="og:type" content="website">
+<meta property="og:title" content="笔记本">
+<meta property="og:url" content="http://xiaoyue26.github.io/page/17/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:author" content="风梦七">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main">
+  
+    <article id="post-fluentd学习笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2016/12/24/fluentd%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2016-12-24T11:12:51.000Z" itemprop="datePublished">2016-12-24</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E9%85%8D%E7%BD%AE/">配置</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2016/12/24/fluentd%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/">fluentd学习笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h2 id="配置文件"><a href="#配置文件" class="headerlink" title="配置文件"></a>配置文件</h2><p><code>vi /etc/td-agent/td-agent.conf</code></p>
+<h2 id="插件"><a href="#插件" class="headerlink" title="插件"></a>插件</h2><p><code>cd /etc/td-agent/plugin</code></p>
+<h2 id="日志"><a href="#日志" class="headerlink" title="日志"></a>日志</h2><p><code>tail -fn 100 /var/log/td-agent/td-agent.log</code></p>
+<h2 id="运行"><a href="#运行" class="headerlink" title="运行"></a>运行</h2><p><code>sudo /opt/td-agent/usr/sbin/td-agent --log /var/log/td-agent/td-agent.log --use-v1-config</code></p>
+<h2 id="测试"><a href="#测试" class="headerlink" title="测试"></a>测试</h2><p><code>curl -X POST -d &#39;json={&quot;json&quot;:&quot;message&quot;}&#39; http://localhost:8888/debug.test</code></p>
+<h1 id="配置"><a href="#配置" class="headerlink" title="配置"></a>配置</h1><p><code>source</code>: 输入<br><code>match</code>: 输出目标<br><code>filter</code>: 过滤 (输入与输出之间)<br><code>system</code>: 系统级别设置<br><code>label</code>: 操作名字<br><code>@include</code>: 引入其他文件</p>
+<h2 id="fluentd-Event事件的生命周期"><a href="#fluentd-Event事件的生命周期" class="headerlink" title="fluentd Event事件的生命周期"></a>fluentd Event事件的生命周期</h2><ul>
+<li><p>设置:</p>
+<blockquote>
+<p>定义输入\监听,匹配规则,输出.</p>
+</blockquote>
+</li>
+<li><p>event的结构:<br><code>(tag,time,record)</code><br>input插件负责把数据源的数据转换到event的结构.(三元组)<br>例如数据源是:<br><code>192.168.0.1 - - [28/Feb/2013:12:00:00 +0900] &quot;GET / HTTP/1.1&quot; 200 777</code></p>
+</li>
+<li><p>event:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">tag: apache.access # set by configuration</span><br><span class="line">time: 1362020400   # 28&#x2F;Feb&#x2F;2013:12:00:00 +0900</span><br><span class="line">record: &#123;&quot;user&quot;:&quot;-&quot;,&quot;method&quot;:&quot;GET&quot;,&quot;code&quot;:200,&quot;size&quot;:777,&quot;host&quot;:&quot;192.168.0.1&quot;,&quot;path&quot;:&quot;&#x2F;&quot;&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="filter"><a href="#filter" class="headerlink" title="filter:"></a>filter:</h2></li>
+<li><p>过滤器:</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">filter</span> <span class="attr">test.cycle</span>&gt;</span></span><br><span class="line">  @type grep</span><br><span class="line">  exclude1 action logout</span><br><span class="line"><span class="tag">&lt;/<span class="name">filter</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<p>这个filter会过滤掉这种输入:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">curl -i -X POST -d 'json=&#123;"action":"logout","user":2&#125;' http://localhost:8888/test.cycle</span><br></pre></td></tr></table></figure>
+
+</li>
+</ul>
+<h2 id="label"><a href="#label" class="headerlink" title="label"></a>label</h2><figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">source</span>&gt;</span></span><br><span class="line">  @type http</span><br><span class="line">  bind 0.0.0.0</span><br><span class="line">  port 8888</span><br><span class="line">  @label @STAGING</span><br><span class="line"><span class="tag">&lt;/<span class="name">source</span>&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="tag">&lt;<span class="name">filter</span> <span class="attr">test.cycle</span>&gt;</span></span><br><span class="line">  @type grep</span><br><span class="line">  exclude1 action login</span><br><span class="line"><span class="tag">&lt;/<span class="name">filter</span>&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="tag">&lt;<span class="name">label</span> @<span class="attr">STAGING</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">filter</span> <span class="attr">test.cycle</span>&gt;</span></span><br><span class="line">    @type grep</span><br><span class="line">    exclude1 action logout</span><br><span class="line">  <span class="tag">&lt;/<span class="name">filter</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;<span class="name">match</span> <span class="attr">test.cycle</span>&gt;</span></span><br><span class="line">    @type stdout</span><br><span class="line">  <span class="tag">&lt;/<span class="name">match</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">label</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="source-type"><a href="#source-type" class="headerlink" title="source type"></a>source type</h2><p>几种输入type:</p>
+<blockquote>
+<p>forward: tcp<br>http: http</p>
+</blockquote>
+<ul>
+<li><code>e.g.</code>:</li>
+</ul>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"># Receive events from 24224/tcp</span><br><span class="line"># This is used by log forwarding and the fluent-cat command</span><br><span class="line"><span class="tag">&lt;<span class="name">source</span>&gt;</span></span><br><span class="line">  @type forward</span><br><span class="line">  port 24224</span><br><span class="line"><span class="tag">&lt;/<span class="name">source</span>&gt;</span></span><br><span class="line"></span><br><span class="line"># http://this.host:9880/myapp.access?json=&#123;"event":"data"&#125;</span><br><span class="line"><span class="tag">&lt;<span class="name">source</span>&gt;</span></span><br><span class="line">  @type http</span><br><span class="line">  port 9880</span><br><span class="line"><span class="tag">&lt;/<span class="name">source</span>&gt;</span></span><br><span class="line"># 把发送到localhost:9880/test.cyle的数据转发到标准输出上.</span><br><span class="line"><span class="tag">&lt;<span class="name">match</span> <span class="attr">test.cycle</span>&gt;</span></span><br><span class="line">  @type stdout</span><br><span class="line"><span class="tag">&lt;/<span class="name">match</span>&gt;</span></span><br><span class="line"># 发送到myapp.access的数据发到/var/log...文件.</span><br><span class="line"><span class="tag">&lt;<span class="name">match</span> <span class="attr">myapp.access</span>&gt;</span></span><br><span class="line">  @type file</span><br><span class="line">  path /var/log/fluent/access</span><br><span class="line"><span class="tag">&lt;/<span class="name">match</span>&gt;</span></span><br></pre></td></tr></table></figure>
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2016/12/24/fluentd%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/" data-id="ck96ccgz50018bham5l1p7v7q" class="article-share-link">分享</a>
+      
+      
+      
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-builder模式" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2016/12/23/builder%E6%A8%A1%E5%BC%8F/" class="article-date">
+  <time datetime="2016-12-23T11:09:40.000Z" itemprop="datePublished">2016-12-23</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/">设计模式</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2016/12/23/builder%E6%A8%A1%E5%BC%8F/">builder模式</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>构造一个对象时，若参数有多个，且其中几个为可选，有几种实现方式:</p>
+<ul>
+<li>重叠构造函数(重叠构造器)<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">public NutritionFacts(int a,int b)&#123;this(a,b,0);&#125;#调用底层构造函数</span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">NutritionFacts</span><span class="params">(<span class="keyword">int</span> a,<span class="keyword">int</span> b,<span class="keyword">int</span> c)</span></span>&#123;</span><br><span class="line"> <span class="keyword">this</span>.a=a;</span><br><span class="line"> <span class="keyword">this</span>.b=b;</span><br><span class="line"> <span class="keyword">this</span>.b=b;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+这种方法较为繁琐，颠倒其中两个参数顺序会造成严重后果。不易扩展。</li>
+</ul>
+<hr>
+<ul>
+<li>javeBeans模式<br>  使用多个setter方法来设定必要的参数，可读性很强，但同时也是javabean容易处于不一致状态、不可用状态，需要额外努力来保证线程安全要求。</li>
+</ul>
+<hr>
+<ul>
+<li>builder模式<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> java.lang.reflect.Field;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">NutritionFacts</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> servingSize;</span><br><span class="line">	<span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> serving;</span><br><span class="line">	<span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> calories;</span><br><span class="line">	<span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> fat;</span><br><span class="line">	<span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> sodium;</span><br><span class="line">	<span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> carbohydrate;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">public</span> <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">Builder</span> </span>&#123;</span><br><span class="line">		<span class="comment">// Required parameters:</span></span><br><span class="line">		<span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> servingSize;</span><br><span class="line">		<span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> serving;</span><br><span class="line">		<span class="comment">// optional parameters:</span></span><br><span class="line">		<span class="keyword">private</span> <span class="keyword">int</span> calories = <span class="number">0</span>;</span><br><span class="line">		<span class="keyword">private</span> <span class="keyword">int</span> fat = <span class="number">0</span>;</span><br><span class="line">		<span class="keyword">private</span> <span class="keyword">int</span> sodium = <span class="number">0</span>;</span><br><span class="line">		<span class="keyword">private</span> <span class="keyword">int</span> carbohydrate = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">		<span class="function"><span class="keyword">public</span> <span class="title">Builder</span><span class="params">(<span class="keyword">int</span> servingSize, <span class="keyword">int</span> serving)</span> </span>&#123;</span><br><span class="line">			<span class="keyword">this</span>.servingSize = servingSize;</span><br><span class="line">			<span class="keyword">this</span>.serving = serving;</span><br><span class="line">		&#125;</span><br><span class="line"></span><br><span class="line">		<span class="function"><span class="keyword">public</span> Builder <span class="title">calories</span><span class="params">(<span class="keyword">int</span> val)</span> </span>&#123;</span><br><span class="line">			calories = val;</span><br><span class="line">			<span class="keyword">return</span> <span class="keyword">this</span>;</span><br><span class="line">		&#125;</span><br><span class="line"></span><br><span class="line">		<span class="function"><span class="keyword">public</span> Builder <span class="title">fat</span><span class="params">(<span class="keyword">int</span> val)</span> </span>&#123;</span><br><span class="line">			fat = val;</span><br><span class="line">			<span class="keyword">return</span> <span class="keyword">this</span>;</span><br><span class="line">		&#125;</span><br><span class="line"></span><br><span class="line">		<span class="function"><span class="keyword">public</span> Builder <span class="title">sodium</span><span class="params">(<span class="keyword">int</span> val)</span> </span>&#123;</span><br><span class="line">			sodium = val;</span><br><span class="line">			<span class="keyword">return</span> <span class="keyword">this</span>;</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="function"><span class="keyword">public</span> Builder <span class="title">carbohydrate</span><span class="params">(<span class="keyword">int</span> val)</span> </span>&#123;</span><br><span class="line">			carbohydrate = val;</span><br><span class="line">			<span class="keyword">return</span> <span class="keyword">this</span>;</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="function"><span class="keyword">public</span> NutritionFacts <span class="title">build</span><span class="params">()</span> </span>&#123;</span><br><span class="line">			<span class="keyword">return</span> <span class="keyword">new</span> NutritionFacts(<span class="keyword">this</span>);</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="function"><span class="keyword">private</span> <span class="title">NutritionFacts</span><span class="params">(Builder builder)</span> </span>&#123;</span><br><span class="line">		<span class="keyword">this</span>.servingSize = builder.servingSize;</span><br><span class="line">		<span class="keyword">this</span>.serving = builder.serving;</span><br><span class="line">		<span class="keyword">this</span>.calories = builder.serving;</span><br><span class="line">		<span class="keyword">this</span>.fat = builder.serving;</span><br><span class="line">		<span class="keyword">this</span>.sodium = builder.serving;</span><br><span class="line">		<span class="keyword">this</span>.carbohydrate = builder.carbohydrate;</span><br><span class="line"></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">		NutritionFacts cocacola = <span class="keyword">new</span> NutritionFacts.Builder(<span class="number">240</span>, <span class="number">8</span>).calories(<span class="number">100</span>).sodium(<span class="number">35</span>).carbohydrate(<span class="number">27</span>).build();</span><br><span class="line">		 </span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+</li>
+</ul>
+<p>builder模式代码比较冗长，但是当大部分参数都是可选的时候是一个不错的选择，拓展性强，比javaBean安全。</p>
+<ul>
+<li><p>其他技巧<br>避免创建不必要的对象，使用静态工厂方法。例如能使用Boolean.valueOf(String)时，就不要使用Boolean(String)。后者会多创建一个对象。</p>
+</li>
+<li><p>内存泄露<br>消除过期的对象引用：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//自己实现的容器如栈：</span></span><br><span class="line"><span class="keyword">private</span> Object[]elements;</span><br><span class="line"><span class="function"><span class="keyword">public</span> Object <span class="title">pop</span><span class="params">()</span><span class="comment">//此函数存在内存泄露</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">if</span>(size==<span class="number">0</span>)</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> EmptyStackException();</span><br><span class="line">    <span class="keyword">return</span> elements[--size];</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">//正确写法:</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> Object <span class="title">pop</span><span class="params">()</span><span class="comment">//此函数存在内存泄露</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">if</span>(size==<span class="number">0</span>)</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> EmptyStackException();</span><br><span class="line">    Object res=elements[--size];</span><br><span class="line">    elements[size]=<span class="keyword">null</span>;<span class="comment">//使废弃对象的引用数减至0.让GC回收。</span></span><br><span class="line">    <span class="keyword">return</span> res;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>其他可能出现内存泄露的来源：监听器、回调、缓存。</p>
+</li>
+</ul>
+<p>引用：<br>1.强引用<br>强引用就是普通的Java引用，代码：<br><code>StringBuffer buffer = new StringBuffer();</code><br>2.软引用（SoftReference）//用于缓存<br>    如果一个对象只具有软引用，则内存空间足够，垃圾回收器就不会回收它；如果内存空间不足了，就会回收这些对象的内存。只要垃圾回收器没有回收它，该对象就可以被程序使用。软引用可用来实现内存敏感的高速缓存（下文给出示例）。<br>    软引用可以和一个引用队列（ReferenceQueue）联合使用，如果软引用所引用的对象被垃圾回收器回收，Java虚拟机就会把这个软引用加入到与之关联的引用队列中。</p>
+<p>3.弱引用（WeakReference）<br>    弱引用与软引用的区别在于：弱引用的对象拥有更短暂的生命周期。在垃圾回收器线程扫描它所管辖的内存区域的过程中，一旦发现了只具有弱引用的对象，不管当前内存空间足够与否，都会回收它的内存。不过，由于垃圾回收器是一个优先级很低的线程，因此不一定会很快发现那些只具有弱引用的对象。<br>    &gt;当你想引用一个对象，但是这个对象有自己的生命周期，你不想介入这个对象的生命周期，这时候你就是用弱引用。<br>    <figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">String abc = <span class="keyword">new</span> String(<span class="string">"abcde"</span>);</span><br><span class="line">WeakReference&lt;String&gt; wf= <span class="keyword">new</span> WeakReference&lt;String&gt;(str, rq);</span><br><span class="line">String abc1 = wf.get()<span class="comment">//如果abcde这个对象没有被垃圾回收器回收，那么abc1就指向"abcde"对象</span></span><br></pre></td></tr></table></figure><br>4.虚引用（PhantomReference）//它允许你知道对象何时从内存中移除。<br>    “虚引用”顾名思义，就是形同虚设，与其他几种引用都不同，虚引用并不会决定对象的生命周期。如果一个对象仅持有虚引用，那么它就和没有任何引用一样，在任何时候都可能被垃圾回收器回收。<br>虚引用主要用来跟踪对象被垃圾回收器回收的活动。虚引用与软引用和弱引用的一个区别在于：虚引用必须和引用队列（ReferenceQueue）联合使用。当垃圾回收器准备回收一个对象时，如果发现它还有虚引用，就会在回收对象的内存之前，把这个虚引用加入到与之 关联的引用队列中。</p>
+<p>三种类型的引用定义了三种不同层次的可达性级别，由强到弱排列如下：</p>
+<p>　　SoftReference &gt; WeakReference &gt; PhantomReference</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2016/12/23/builder%E6%A8%A1%E5%BC%8F/" data-id="ck96ccgyy000qbhamgidn14xc" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/" rel="tag">设计模式</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-java内存" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2016/09/24/java%E5%86%85%E5%AD%98/" class="article-date">
+  <time datetime="2016-09-24T11:50:20.000Z" itemprop="datePublished">2016-09-24</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2016/09/24/java%E5%86%85%E5%AD%98/">java内存</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>#1. PC</p>
+<blockquote>
+<p>每个线程都有自己独立的程序计数器.<br>JVM规范中规定:<br>如果线程执行的是非native方法，则PC中保存的是当前需要执行的指令地址;<br>如果线程执行的是native方法，则PC中的值undefined。</p>
+</blockquote>
+<p>#2. Java虚拟机栈</p>
+<blockquote>
+<p>存放的是栈帧. 每个方法生成一个栈帧.<br>栈帧中包括：局部变量表、操作数栈、动态连接、方法返回地址、附加信息.<br>##(1) 局部变量表:<br>各种基本数据类型,对象引用.<br>这个区域的两种异常:stackOverFlowError,OutOfMemoryError<br>1.如果线程请求的栈深度大于虚拟机所允许的深度，将抛出StackOverflowError异常；<br>2.如果虚拟机栈可以动态扩展（当前大部分的Java虚拟机都可动态扩展，只不过Java虚拟机规范中也允许固定长度的虚拟机栈），如果扩展时无法申请到足够的内存，就会抛出OutOfMemoryError异常。</p>
+</blockquote>
+<p>##(2) 操作数栈<br>略.</p>
+<p>##(3) 动态连接</p>
+<blockquote>
+<p>每个栈帧都包含一个指向运行时常量池中该栈帧所属方法的引用（指向运行时常量池：在方法执行的过程中有可能需要用到类中的常量），持有这个引用是为了支持方法调用过程中的动态连接.</p>
+</blockquote>
+<p>##(4) 方法返回地址</p>
+<blockquote>
+<p>当一个方法执行完毕之后，要返回之前调用它的地方，因此在栈帧中必须保存一个方法返回地址。(PC)</p>
+</blockquote>
+<p>##(5) 附加信息</p>
+<blockquote>
+<p>取决于具体的虚拟机实现.在实际开发中，一般会把动态连接，方法返回地址与其它附加信息全部归为一类，称为栈帧信息。</p>
+</blockquote>
+<h1 id="3-本地方法栈"><a href="#3-本地方法栈" class="headerlink" title="3. 本地方法栈"></a>3. 本地方法栈</h1><blockquote>
+<p>执行非java代码. 其他类似,也抛stackoverflow和outOfMemory.</p>
+</blockquote>
+<h1 id="4-堆"><a href="#4-堆" class="headerlink" title="4. 堆"></a>4. 堆</h1><blockquote>
+<p>所有线程共享.<br>所有对象分配的地方. </p>
+</blockquote>
+<h1 id="5-方法区"><a href="#5-方法区" class="headerlink" title="5. 方法区"></a>5. 方法区</h1><blockquote>
+<p>所有线程共享.<br>存储已被虚拟机加载的类信息、常量、静态变量、以及编译器编译后的代码.</p>
+</blockquote>
+<h2 id="常量池"><a href="#常量池" class="headerlink" title="常量池"></a>常量池</h2><blockquote>
+<p>运行时常量池是方法区的一部分。<br>Class文件中除了有类的版本、字段、方法、接口等描述信息外，还有一项信息是常量池（Constant Pool Table），用于存放编译期生成的各种字面量和符号引用，这部分内容将在类加载后进入方法区的运行时常量池中存放。</p>
+</blockquote>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2016/09/24/java%E5%86%85%E5%AD%98/" data-id="ck96ccgzi002kbham0pta3evd" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-redis笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2016/04/03/redis%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2016-04-03T12:00:39.000Z" itemprop="datePublished">2016-04-03</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2016/04/03/redis%E7%AC%94%E8%AE%B0/">redis笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h2 id="1-安装"><a href="#1-安装" class="headerlink" title="1. 安装:"></a>1. 安装:</h2><p>mac下安装很简单:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">brew install redis</span><br></pre></td></tr></table></figure>
+<p>启动服务端:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">redis-server</span><br></pre></td></tr></table></figure>
+<p>启动客户端:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">redis-cli</span><br></pre></td></tr></table></figure>
+
+<h2 id="2-配置"><a href="#2-配置" class="headerlink" title="2. 配置"></a>2. 配置</h2><p>mac默认的配置文件在:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;usr&#x2F;local&#x2F;etc&#x2F;redis.conf</span><br></pre></td></tr></table></figure>
+<p>可以通过命令<code>brew info redis</code>查看到.<br>但具体的安装路径,找了一圈连接发现是在:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;usr&#x2F;local&#x2F;Cellar&#x2F;redis</span><br></pre></td></tr></table></figure>
+<p>cli会话下查询某项配置的值:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">CONFIG GET loglevel</span><br><span class="line">CONFIG GET * # 获取所有</span><br></pre></td></tr></table></figure>
+
+<h2 id="3-数据类型"><a href="#3-数据类型" class="headerlink" title="3. 数据类型"></a>3. 数据类型</h2><p>Redis支持五种数据类型：string（字符串），hash（哈希），list（列表），set（集合）及zset(sorted set：有序集合)。</p>
+<p>#1. string</p>
+<blockquote>
+<p>redis 127.0.0.1:6379&gt; SET name “runoob”<br>OK<br>redis 127.0.0.1:6379&gt; GET name<br>“runoob”</p>
+</blockquote>
+<p>#2. hash(k,v都是string)</p>
+<blockquote>
+<p>127.0.0.1:6379&gt; HMSET user:1 username runoob password runoob points 200<br>OK<br>127.0.0.1:6379&gt; HGETALL user:1</p>
+</blockquote>
+<p>1) “username”<br>2) “runoob”<br>3) “password”<br>4) “runoob”<br>5) “points”<br>6) “200”</p>
+<h1 id="3-list"><a href="#3-list" class="headerlink" title="3. list"></a>3. list</h1><p>Redis 列表是简单的字符串列表，按照插入顺序排序。你可以添加一个元素到列表的头部（左边）或者尾部（右边）。</p>
+<blockquote>
+<p>redis 127.0.0.1:6379&gt; lpush runoob redis<br>(integer) 1<br>redis 127.0.0.1:6379&gt; lpush runoob mongodb<br>(integer) 2<br>redis 127.0.0.1:6379&gt; lpush runoob rabitmq<br>(integer) 3<br>redis 127.0.0.1:6379&gt; lrange runoob 0 10</p>
+</blockquote>
+<p>1) “rabitmq”<br>2) “mongodb”<br>3) “redis”</p>
+<p>相关命令</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">lpush key value [value...]</span><br><span class="line">rpush key value [value...]</span><br><span class="line">lrange key start end #左闭右闭</span><br></pre></td></tr></table></figure>
+
+<h1 id="4-Set"><a href="#4-Set" class="headerlink" title="4. Set"></a>4. Set</h1><p>命令: <code>sadd key member</code></p>
+<blockquote>
+<p>redis 127.0.0.1:6379&gt; sadd new_set redis<br>(integer) 1<br>redis 127.0.0.1:6379&gt; sadd new_set mongodb<br>(integer) 1<br>redis 127.0.0.1:6379&gt; sadd new_set rabitmq<br>(integer) 1<br>redis 127.0.0.1:6379&gt; sadd new_set rabitmq<br>(integer) 0<br>redis 127.0.0.1:6379&gt; smembers new_set</p>
+</blockquote>
+<p>1) “rabitmq”<br>2) “mongodb”<br>3) “redis”</p>
+<h1 id="5-zset-排序的set-根据score排序从小到大"><a href="#5-zset-排序的set-根据score排序从小到大" class="headerlink" title="5. zset 排序的set,根据score排序从小到大"></a>5. zset 排序的set,根据score排序从小到大</h1><p>命令: <code>zadd key score member</code></p>
+<blockquote>
+<p>redis 127.0.0.1:6379&gt; zadd new_zset 0 redis<br>(integer) 1<br>redis 127.0.0.1:6379&gt; zadd new_zset 0 mongodb<br>(integer) 1<br>redis 127.0.0.1:6379&gt; zadd new_zset 0 rabitmq<br>(integer) 1<br>redis 127.0.0.1:6379&gt; zadd new_zset 0 rabitmq<br>(integer) 0<br>redis 127.0.0.1:6379&gt; ZRANGEBYSCORE new_zset 0 1000</p>
+</blockquote>
+<p>1) “redis”<br>2) “mongodb”<br>3) “rabitmq”</p>
+<h2 id="连接远端redis服务器"><a href="#连接远端redis服务器" class="headerlink" title="连接远端redis服务器"></a>连接远端redis服务器</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">redis-cli -h host -p port -a password</span><br></pre></td></tr></table></figure>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2016/04/03/redis%E7%AC%94%E8%AE%B0/" data-id="ck96cch00004kbhamh0ye2k2p" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-spark中的存储" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2016/03/26/spark%E4%B8%AD%E7%9A%84%E5%AD%98%E5%82%A8/" class="article-date">
+  <time datetime="2016-03-26T07:12:52.000Z" itemprop="datePublished">2016-03-26</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/spark/">spark</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2016/03/26/spark%E4%B8%AD%E7%9A%84%E5%AD%98%E5%82%A8/">spark中的存储</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <ul>
+<li>#存储架构<img src="/images/storage_in_spark(1).png" class="" width="400" height="600" title="存储架构">
+
+</li>
+</ul>
+<blockquote>
+<p>Spark是一种基于内存的运算框架。数据存储在worker节点中。对于每一个worker，worker Excutor有一个JVM，数据存储在JVM中。</p>
+</blockquote>
+<hr>
+<ul>
+<li>#故障恢复<img src="/images/storage_in_spark(2).png" class="" width="400" height="600" title="故障恢复">
+
+</li>
+</ul>
+<blockquote>
+<p>当计算引擎的进程损坏，Cache 丢失，Spark只能重新启动并计算恢复数据。</p>
+</blockquote>
+<hr>
+<ul>
+<li>#Lineage(世代)<img src="/images/storage_in_spark(3).png" class="" width="400" height="600" title="Lineage">
+
+</li>
+</ul>
+<blockquote>
+<p>Lineage保证数据的Reliability。</p>
+</blockquote>
+<ul>
+<li>当数据E丢失后：</li>
+</ul>
+<ol>
+<li>通过世代找到相应的之前数据，重新部署一个Job将数据重新计算。</li>
+<li>将数据在底层文件系统中备份。</li>
+</ol>
+<hr>
+<ul>
+<li>#数据流<img src="/images/storage_in_spark(4).png" class="" width="400" height="600" title="Lineage">
+
+</li>
+</ul>
+<blockquote>
+<p>计算数据在JVM的内存中存储一份，以保证较少的网络通信和读写。同时记录存储数据的世代(lineage)，当数据丢失时，基于世代将job重新运行，得到相应数据。</p>
+</blockquote>
+<hr>
+<ul>
+<li>#计算过程<img src="/images/storage_in_spark(5).png" class="" width="400" height="600" title="Lineage">
+
+</li>
+</ul>
+<blockquote>
+<p>Spark内部，单个executor进程内RDD的分片数据是用Iterator流式访问的。<br>Iterator的hasNext方法和next方法是由RDD lineage上各个transformation携带的闭包函数复合而成的。<br>该复合Iterator每访问一个元素，就对该元素应用相应的复合函数，得到的结果再流式地落地。空间复杂度为O(1)。</p>
+</blockquote>
+<hr>
+<ul>
+<li>#持久化</li>
+</ul>
+<blockquote>
+<p><code>spark.local.dir</code>：可以设置Spark的暂存目录，包括映射输出文件和需要存储在磁盘上的RDDs。这个磁盘目录在系统上面访问速度越快越好。可以用逗号隔开来设置多个目录。默认值为’/tmp’。<br><code>org.apache.spark.storage.StorageLevel</code>中5种持久化的级别.(<code>result.persist(StorageLevel.DISK_ONLY)</code>) 默认为<code>MEMORY_ONLY</code>。</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th align="center">级别</th>
+<th align="center">空间</th>
+<th align="center">时间</th>
+<th align="center">内存</th>
+<th align="center">磁盘</th>
+<th align="center">备注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">MEMORY_ONLY</td>
+<td align="center">多</td>
+<td align="center">少</td>
+<td align="center">使用</td>
+<td align="center">不使用</td>
+<td align="center">-</td>
+</tr>
+<tr>
+<td align="center">MEMORY_ONLY_SER</td>
+<td align="center">少</td>
+<td align="center">多</td>
+<td align="center">使用</td>
+<td align="center">不使用</td>
+<td align="center">-</td>
+</tr>
+<tr>
+<td align="center">MEMORY_AND_DISK</td>
+<td align="center">多</td>
+<td align="center">中等</td>
+<td align="center">部分</td>
+<td align="center">部分</td>
+<td align="center">如果数据在内存中放不下，则溢写到磁盘上</td>
+</tr>
+<tr>
+<td align="center">MEMORY_AND_DISK_SER</td>
+<td align="center">少</td>
+<td align="center">多</td>
+<td align="center">部分</td>
+<td align="center">部分</td>
+<td align="center">如果数据在内存中放不下，则溢写到磁盘上。在内存中存放序列化后的数据。</td>
+</tr>
+<tr>
+<td align="center">DISK_ONLY</td>
+<td align="center">少</td>
+<td align="center">多</td>
+<td align="center">部分</td>
+<td align="center">部分</td>
+<td align="center">-</td>
+</tr>
+</tbody></table>
+<hr>
+<ul>
+<li>#数据分享<img src="/images/storage_in_spark(6).png" class="" width="400" height="600" title="数据分享">
+
+</li>
+</ul>
+<blockquote>
+<p>在Spark中，如果job2需要Job1运算的数据，Job1首先需要将数据写入到HDFS的block中，会产生硬盘甚至跨网络的读写，同时在HDFS中默认数据需要写三份，因此造成性能的损失。</p>
+</blockquote>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2016/03/26/spark%E4%B8%AD%E7%9A%84%E5%AD%98%E5%82%A8/" data-id="ck96cch03004vbham8god5u7j" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spark/" rel="tag">spark</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/storage/" rel="tag">storage</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-jdk1-7中fork-join并发框架源码浅析及具体实例分析" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2016/02/26/jdk1-7%E4%B8%ADfork-join%E5%B9%B6%E5%8F%91%E6%A1%86%E6%9E%B6%E6%BA%90%E7%A0%81%E6%B5%85%E6%9E%90%E5%8F%8A%E5%85%B7%E4%BD%93%E5%AE%9E%E4%BE%8B%E5%88%86%E6%9E%90/" class="article-date">
+  <time datetime="2016-02-26T11:55:46.000Z" itemprop="datePublished">2016-02-26</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2016/02/26/jdk1-7%E4%B8%ADfork-join%E5%B9%B6%E5%8F%91%E6%A1%86%E6%9E%B6%E6%BA%90%E7%A0%81%E6%B5%85%E6%9E%90%E5%8F%8A%E5%85%B7%E4%BD%93%E5%AE%9E%E4%BE%8B%E5%88%86%E6%9E%90/">jdk1.7中fork-join并发框架源码浅析及具体实例分析</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>&emsp;&emsp;java7中的<code>fork-join</code>的基本思想就是创立线程池然后试图进行<code>Work Stealing</code>:</p>
+<blockquote>
+ <img src="/images/workStealing.png" class="" width="200" height="100" title="Work Stealing">
+</blockquote>
+<p>&emsp;&emsp;所以任务的创建和线程的触发顺序就显得比较微妙而需要额外小心线程同步的问题，若子任务无返回值，尽量使用<code>invorkAll</code>方法。也可以参考源码中<code>invokeAll</code>的使用方法学习<code>fork</code>、<code>invork</code>和<code>join</code>的使用规范:</p>
+<figure class="highlight plain"><figcaption><span>invorkAll</span><a href="http://xiaoyue26.github.io/">java.util.concurrent.ForkJoinTask.java</a></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"> &#x2F;**</span><br><span class="line">     * Forks the given tasks, returning when &#123;@code isDone&#125; holds for</span><br><span class="line">     * each task or an (unchecked) exception is encountered, in which</span><br><span class="line">     * case the exception is rethrown. If more than one task</span><br><span class="line">     * encounters an exception, then this method throws any one of</span><br><span class="line">     * these exceptions. If any task encounters an exception, others</span><br><span class="line">     * may be cancelled. However, the execution status of individual</span><br><span class="line">     * tasks is not guaranteed upon exceptional return. The status of</span><br><span class="line">     * each task may be obtained using &#123;@link #getException()&#125; and</span><br><span class="line">     * related methods to check if they have been cancelled, completed</span><br><span class="line">     * normally or exceptionally, or left unprocessed.</span><br><span class="line">     *</span><br><span class="line">     * @param tasks the tasks</span><br><span class="line">     * @throws NullPointerException if any task is null</span><br><span class="line">     *&#x2F;</span><br><span class="line">public static void invokeAll(ForkJoinTask&lt;?&gt;... tasks) &#123;</span><br><span class="line">    Throwable ex &#x3D; null;</span><br><span class="line">    int last &#x3D; tasks.length - 1;</span><br><span class="line">    for (int i &#x3D; last; i &gt;&#x3D; 0; --i) &#123;&#x2F;&#x2F;从last到1依次fork,而0则直接invork。</span><br><span class="line">        ForkJoinTask&lt;?&gt; t &#x3D; tasks[i];</span><br><span class="line">        if (t &#x3D;&#x3D; null) &#123;</span><br><span class="line">            if (ex &#x3D;&#x3D; null)</span><br><span class="line">                ex &#x3D; new NullPointerException();</span><br><span class="line">        &#125;</span><br><span class="line">        else if (i !&#x3D; 0)&#x2F;&#x2F;不为0则fork</span><br><span class="line">            t.fork();</span><br><span class="line">        else if (t.doInvoke() &lt; NORMAL &amp;&amp; ex &#x3D;&#x3D; null)&#x2F;&#x2F;为0则invork</span><br><span class="line">            ex &#x3D; t.getException();</span><br><span class="line">    &#125;</span><br><span class="line">    for (int i &#x3D; 1; i &lt;&#x3D; last; ++i) &#123;&#x2F;&#x2F;注意此处是从1开始, 依次join</span><br><span class="line">        ForkJoinTask&lt;?&gt; t &#x3D; tasks[i];</span><br><span class="line">        if (t !&#x3D; null) &#123;</span><br><span class="line">            if (ex !&#x3D; null)</span><br><span class="line">                t.cancel(false);</span><br><span class="line">            else if (t.doJoin() &lt; NORMAL &amp;&amp; ex &#x3D;&#x3D; null)</span><br><span class="line">                ex &#x3D; t.getException();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    if (ex !&#x3D; null)</span><br><span class="line">        UNSAFE.throwException(ex);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>输入为两个任务的源码例子:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment">  * Forks the given tasks, returning when &#123;<span class="doctag">@code</span> isDone&#125; holds for</span></span><br><span class="line"><span class="comment">  * each task or an (unchecked) exception is encountered, in which</span></span><br><span class="line"><span class="comment">  * case the exception is rethrown. If more than one task</span></span><br><span class="line"><span class="comment">  * encounters an exception, then this method throws any one of</span></span><br><span class="line"><span class="comment">  * these exceptions. If any task encounters an exception, the</span></span><br><span class="line"><span class="comment">  * other may be cancelled. However, the execution status of</span></span><br><span class="line"><span class="comment">  * individual tasks is not guaranteed upon exceptional return. The</span></span><br><span class="line"><span class="comment">  * status of each task may be obtained using &#123;<span class="doctag">@link</span></span></span><br><span class="line"><span class="comment">  * #getException()&#125; and related methods to check if they have been</span></span><br><span class="line"><span class="comment">  * cancelled, completed normally or exceptionally, or left</span></span><br><span class="line"><span class="comment">  * unprocessed.</span></span><br><span class="line"><span class="comment">  *</span></span><br><span class="line"><span class="comment">  * <span class="doctag">@param</span> t1 the first task</span></span><br><span class="line"><span class="comment">  * <span class="doctag">@param</span> t2 the second task</span></span><br><span class="line"><span class="comment">  * <span class="doctag">@throws</span> NullPointerException if any task is null</span></span><br><span class="line"><span class="comment">  */</span></span><br><span class="line"> <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">invokeAll</span><span class="params">(ForkJoinTask&lt;?&gt; t1, ForkJoinTask&lt;?&gt; t2)</span> </span>&#123;</span><br><span class="line">     <span class="keyword">int</span> s1, s2;</span><br><span class="line">     t2.fork();</span><br><span class="line">     <span class="keyword">if</span> ((s1 = t1.doInvoke() &amp; DONE_MASK) != NORMAL)</span><br><span class="line">         t1.reportException(s1);</span><br><span class="line">     <span class="keyword">if</span> ((s2 = t2.doJoin() &amp; DONE_MASK) != NORMAL)</span><br><span class="line">         t2.reportException(s2);</span><br><span class="line"> &#125;</span><br></pre></td></tr></table></figure>
+<p>两个任务的时候也是先<code>fork t2-&gt;invork t1-&gt;join t2</code>这样的流程。</p>
+<hr>
+<p>fork操作是把任务放入<code>workQueue</code>的尾部(<code>push</code>):</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">final</span> ForkJoinTask&lt;V&gt; <span class="title">fork</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        Thread t;</span><br><span class="line">        <span class="keyword">if</span> ((t = Thread.currentThread()) <span class="keyword">instanceof</span> ForkJoinWorkerThread)</span><br><span class="line">            ((ForkJoinWorkerThread)t).workQueue.push(<span class="keyword">this</span>);<span class="comment">//放入尾部</span></span><br><span class="line">        <span class="keyword">else</span></span><br><span class="line">            ForkJoinPool.common.externalPush(<span class="keyword">this</span>);</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">this</span>;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+<p>join操作:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment">    * Implementation for join, get, quietlyJoin. Directly handles</span></span><br><span class="line"><span class="comment">    * only cases of already-completed, external wait, and</span></span><br><span class="line"><span class="comment">    * unfork+exec.  Others are relayed to ForkJoinPool.awaitJoin.</span></span><br><span class="line"><span class="comment">    *</span></span><br><span class="line"><span class="comment">    * <span class="doctag">@return</span> status upon completion</span></span><br><span class="line"><span class="comment">    */</span></span><br><span class="line">   <span class="function"><span class="keyword">private</span> <span class="keyword">int</span> <span class="title">doJoin</span><span class="params">()</span> </span>&#123;</span><br><span class="line">       <span class="keyword">int</span> s; Thread t; ForkJoinWorkerThread wt; ForkJoinPool.WorkQueue w;</span><br><span class="line">       <span class="keyword">return</span> (s = status) &lt; <span class="number">0</span> ? s :</span><br><span class="line">           ((t = Thread.currentThread()) <span class="keyword">instanceof</span> ForkJoinWorkerThread) ?</span><br><span class="line">           (w = (wt = (ForkJoinWorkerThread)t).workQueue).</span><br><span class="line">           tryUnpush(<span class="keyword">this</span>) &amp;&amp; (s = doExec()) &lt; <span class="number">0</span> ? s :</span><br><span class="line">           wt.pool.awaitJoin(w, <span class="keyword">this</span>, <span class="number">0L</span>) :</span><br><span class="line">           externalAwaitDone();</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
+<p>综上所述，整个标准的调用流程应该是先反序<code>fork</code>(除了第一个任务),把任务(this)放入队列尾部，调用第一个任务，再顺序<code>join</code>(也除了第一个任务)。</p>
+<hr>
+<p>下面是一个比较复杂、具体的求<code>double</code>数组平方和的过程。恰当的组织可以让运算保持分而治之的理念，而不是仅仅只是递归。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line"><span class="keyword">import</span> java.util.concurrent.ForkJoinPool;</span><br><span class="line"><span class="keyword">import</span> java.util.concurrent.RecursiveAction;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">Applyer</span> <span class="keyword">extends</span> <span class="title">RecursiveAction</span> </span>&#123;</span><br><span class="line">	<span class="function"><span class="keyword">static</span> <span class="keyword">double</span> <span class="title">sumOfSquares</span><span class="params">(ForkJoinPool pool, <span class="keyword">double</span>[] array)</span> </span>&#123;</span><br><span class="line">		<span class="keyword">int</span> n = array.length;</span><br><span class="line">		Applyer a = <span class="keyword">new</span> Applyer(array, <span class="number">0</span>, n, <span class="keyword">null</span>);</span><br><span class="line">		pool.invoke(a);</span><br><span class="line">		<span class="keyword">return</span> a.result;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">final</span> <span class="keyword">double</span>[] array;</span><br><span class="line">	<span class="keyword">final</span> <span class="keyword">int</span> lo, hi;</span><br><span class="line">	<span class="keyword">double</span> result;</span><br><span class="line">	Applyer next; <span class="comment">// keeps track of right-hand-side tasks</span></span><br><span class="line"></span><br><span class="line">	Applyer(<span class="keyword">double</span>[] array, <span class="keyword">int</span> lo, <span class="keyword">int</span> hi, Applyer next) &#123;</span><br><span class="line">		<span class="keyword">this</span>.array = array;</span><br><span class="line">		<span class="keyword">this</span>.lo = lo;</span><br><span class="line">		<span class="keyword">this</span>.hi = hi;</span><br><span class="line">		<span class="keyword">this</span>.next = next;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="function"><span class="keyword">double</span> <span class="title">atLeaf</span><span class="params">(<span class="keyword">int</span> l, <span class="keyword">int</span> h)</span> </span>&#123;</span><br><span class="line">		<span class="keyword">double</span> sum = <span class="number">0</span>;</span><br><span class="line">		<span class="keyword">for</span> (<span class="keyword">int</span> i = l; i &lt; h; ++i) <span class="comment">// perform leftmost base step</span></span><br><span class="line">			sum += array[i] * array[i];</span><br><span class="line">		<span class="keyword">return</span> sum;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="function"><span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">compute</span><span class="params">()</span> </span>&#123;</span><br><span class="line">		<span class="keyword">int</span> l = lo;</span><br><span class="line">		<span class="keyword">int</span> h = hi;</span><br><span class="line">		Applyer right = <span class="keyword">null</span>;</span><br><span class="line">		<span class="keyword">while</span> (h - l &gt; <span class="number">1</span> &amp;&amp; getSurplusQueuedTaskCount() &lt;= <span class="number">3</span>) &#123;</span><br><span class="line">			<span class="keyword">int</span> mid = (l + h) &gt;&gt;&gt; <span class="number">1</span>;<span class="comment">//无符号右移(除以2)(若(l+h)为负数,mid就变成整数了)</span></span><br><span class="line">			right = <span class="keyword">new</span> Applyer(array, mid, h, right);</span><br><span class="line">			right.fork();</span><br><span class="line">			h = mid;</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="keyword">double</span> sum = atLeaf(l, h);</span><br><span class="line">		<span class="keyword">while</span> (right != <span class="keyword">null</span>) &#123;</span><br><span class="line">			<span class="keyword">if</span> (right.tryUnfork()) <span class="comment">// directly calculate if not stolen</span></span><br><span class="line">				sum += right.atLeaf(right.lo, right.hi);</span><br><span class="line">			<span class="keyword">else</span> &#123;</span><br><span class="line">				right.join();</span><br><span class="line">				sum += right.result;</span><br><span class="line">			&#125;</span><br><span class="line">			right = right.next;</span><br><span class="line">		&#125;</span><br><span class="line">		result = sum;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">		ForkJoinPool forkJoinPool = <span class="keyword">new</span> ForkJoinPool();</span><br><span class="line">		<span class="keyword">double</span>[] array = &#123; <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span> &#125;;</span><br><span class="line">		System.out.println(sumOfSquares(forkJoinPool, array));</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>Applyer</code>作为一个<code>RecursiveAction</code>，从最初的一个<code>Applyer(array, 0, n, null)</code>,分裂为多个任务，放置于任务列表中，空闲的工作线程从列表中取出任务运行<code>compute</code>方法，计算一个叶节点后， 优先再去寻找右边的叶节点进行计算，若靠右的叶节点们先结束运算，再去任务列表中窃取任务进行计算。</p>
+<p>其中<code>getSurplusQueuedTaskCount</code>方法用于判断当前过剩的任务数量，例如当工作线程数量为<code>10</code>，而划分的任务数量为<code>14</code>，则不会有空闲的线程来进行任务窃取，大家都很忙，所以就没必要继续划分任务了。反之，若有空闲的工作线程，而且任务足够大，则应该先把任务划分一下，以方便其他空闲线程窃取自己的任务，加快所有任务的完成。</p>
+<p><code>compute</code>函数第一个<code>while</code>循环先对任务数量和当前工作线程数量进行权衡，如果过剩的任务数量小于3，则进行二分。一直到任务数量足够了，跳出循环。使用<code>atLeaf()</code>函数直接计算<code>(l,f)</code>范围内的平方和。</p>
+<p>计算完当前叶节点的任务后，检查右边叶节点的任务是否被其他线程窃取。若被窃取了则等待其完成，反之则自己计算该任务。然后继续往右遍历任务。</p>
+<p>所有任务分布在树的叶节点上，并且以链表的形式串联起来，以便相互窃取任务。(注意到由于线程的工作速度不同，叶节点的深度很可能不是一致的。)</p>
+<p>参考:</p>
+<p>[1] <a href="http://www.molotang.com/articles/694.html" target="_blank" rel="noopener">http://www.molotang.com/articles/694.html</a><br>[2] <a href="http://www.iteye.com/topic/643724" target="_blank" rel="noopener">http://www.iteye.com/topic/643724</a> (其中fork和join用法不符合jdk源码使用规范)</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2016/02/26/jdk1-7%E4%B8%ADfork-join%E5%B9%B6%E5%8F%91%E6%A1%86%E6%9E%B6%E6%BA%90%E7%A0%81%E6%B5%85%E6%9E%90%E5%8F%8A%E5%85%B7%E4%BD%93%E5%AE%9E%E4%BE%8B%E5%88%86%E6%9E%90/" data-id="ck96ccgzo0038bham4zswcm9d" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-java异常" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2016/01/24/java%E5%BC%82%E5%B8%B8/" class="article-date">
+  <time datetime="2016-01-24T11:49:17.000Z" itemprop="datePublished">2016-01-24</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2016/01/24/java%E5%BC%82%E5%B8%B8/">java异常</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <blockquote>
+<p>类继承关系上:<br>Throwable分为Error和Exception.</p>
+</blockquote>
+<blockquote>
+<p>语义上:<br>异常分为受检异常和非检异常.<br>(checked和unchecked)</p>
+</blockquote>
+<p>#非检异常（unckecked exception）：</p>
+<blockquote>
+<p>Error 和 RuntimeException 以及他们的子类。</p>
+</blockquote>
+<p>编译器不提示和发现这种异常.不要求在程序处理这些异常.<br>因为一般是在代码写得有问题才会出现这种异常.<br>如除0:<code>ArithmeticException</code>;<br>类型转换: <code>ClassCastException</code>;<br>数组越界: <code>ArrayIndexOutOfBoundsException</code>;<br>空指针: <code>NullPointerException</code>. </p>
+<p>#受检异常<br>运行环境导致的.<br>如:<br><code>SQLException</code> , <code>IOException</code>,<code>ClassNotFoundException</code>.</p>
+<h1 id="自定义异常"><a href="#自定义异常" class="headerlink" title="自定义异常:"></a>自定义异常:</h1><p>按照国际惯例，自定义的异常应该总是包含如下的构造函数：<br>1.一个无参构造函数<br>2.一个带有String参数的构造函数，并传递给父类的构造函数。<br>3.一个带有String参数和Throwable参数，并都传递给父类构造函数<br>4.一个带有Throwable 参数的构造函数，并传递给父类的构造函数。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line">public class IOException extends Exception</span><br><span class="line">&#123;</span><br><span class="line">    static final long serialVersionUID &#x3D; 7818375828146090155L;</span><br><span class="line"> </span><br><span class="line">    public IOException()</span><br><span class="line">    &#123;</span><br><span class="line">        super();</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    public IOException(String message)</span><br><span class="line">    &#123;</span><br><span class="line">        super(message);</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    public IOException(String message, Throwable cause)</span><br><span class="line">    &#123;</span><br><span class="line">        super(message, cause);</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">     </span><br><span class="line">    public IOException(Throwable cause)</span><br><span class="line">    &#123;</span><br><span class="line">        super(cause);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h1 id="异常与线程"><a href="#异常与线程" class="headerlink" title="异常与线程"></a>异常与线程</h1><blockquote>
+<p>Java中的异常是线程独立的，线程的问题应该由线程自己来解决，而不要委托到外部，也不会直接影响到其它线程的执行。</p>
+</blockquote>
+<p>Java程序可以是多线程的。每一个线程都是一个独立的执行流，独立的函数调用栈。如果程序只有一个线程，那么没有被任何代码处理的异常 会导致程序终止。如果是多线程的，那么没有被任何代码处理的异常仅仅会导致异常所在的线程结束。</p>
+<h1 id="try-catch-finally"><a href="#try-catch-finally" class="headerlink" title="try,catch,finally"></a>try,catch,finally</h1><blockquote>
+<p>finally中的return 会覆盖 try 或者catch中的返回值。<br>实际上,当try或catch中的代码要离开方法或跳出之前,会暂且按下,去finally去完整执行一圈,因此finally中的控制流会优先表达.因此如果在finally里return 100;则方法的返回值就永远是100,而且不会抛出任何异常.(除非finally里抛了.)</p>
+</blockquote>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2016/01/24/java%E5%BC%82%E5%B8%B8/" data-id="ck96ccgzk002sbham8lkohqj3" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-hbase笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2016/01/08/hbase%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2016-01-08T11:23:46.000Z" itemprop="datePublished">2016-01-08</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/hadoop/">hadoop</a>►<a class="article-category-link" href="/categories/hadoop/hbase/">hbase</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2016/01/08/hbase%E7%AC%94%E8%AE%B0/">hbase笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p><a href="http://hbase.apache.org/1.1/book.html" target="_blank" rel="noopener">http://hbase.apache.org/1.1/book.html</a><br><a href="http://blog.csdn.net/u010270403/article/details/51648462" target="_blank" rel="noopener">http://blog.csdn.net/u010270403/article/details/51648462</a></p>
+<ul>
+<li>命令<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br></pre></td><td class="code"><pre><span class="line">-- cli启动</span><br><span class="line">hbase shell</span><br><span class="line">-- 列出表:</span><br><span class="line">list</span><br><span class="line">list &#39;pipe.*&#39; -- 可以使用正则,列出pipe开头的表.</span><br><span class="line">-- 建表mytable,族名是cf:</span><br><span class="line">create &#39;mytable&#39;,&#39;cf&#39; </span><br><span class="line">-- 写数据:</span><br><span class="line">put &#39;mytable&#39;, &#39;first&#39;,&#39;cf:message&#39;,&#39;hello HBase&#39;</span><br><span class="line"># 在mytable表的插入rowkey为first的数据,列族为cf,列名message,具体数据为hello HBase.</span><br><span class="line">put &#39;mytable&#39;, &#39;second&#39;,&#39;cf:foo&#39;,0x0</span><br><span class="line">put &#39;mytable&#39;, &#39;third&#39;,&#39;cf:bar&#39;,3.15159</span><br><span class="line">put &#39;mytable&#39;, &#39;forth&#39;,&#39;cf:kk&#39;,&#39;kk&#39;,3.15159 </span><br><span class="line">-- 最后一个kk的3.15159被识别成timestamp写入了.</span><br><span class="line">-- 看得出出来字符串需要单引号,数字则不需要</span><br><span class="line">-- 不加字符串,不会被识别为表名或者列名,会被识别为函数名</span><br><span class="line"></span><br><span class="line">-- 读数据:</span><br><span class="line">get &#39;mytable&#39;,&#39;first&#39;</span><br><span class="line">-- 读整表:</span><br><span class="line">scan &#39;mytable&#39;</span><br><span class="line">-- 输出:</span><br><span class="line">hbase(main):031:0&gt; scan &#39;MYTABLE&#39;</span><br><span class="line">ROW                             COLUMN+CELL</span><br><span class="line"> 112233bbbcccc                  column&#x3D;NEWCF:attr, timestamp&#x3D;1497410919789, value&#x3D;data</span><br><span class="line"> </span><br><span class="line">-- 表名不一定大写,行键112233bbbcccc,列族为NEWCF,列名(qualifier)为attr,值为data.</span><br><span class="line"></span><br><span class="line">-- 删除指定数据 </span><br><span class="line">delete ‘scores&#39;,&#39;Jim&#39;,&#39;grade&#39; </span><br><span class="line">delete ‘scores&#39;,&#39;Jim&#39; </span><br><span class="line">-- 删除整行:</span><br><span class="line">deleteall ‘scores&#39;,&#39;Jim&#39;</span><br><span class="line">-- 删除整个表: </span><br><span class="line">truncate ‘scores&#39;</span><br><span class="line">-- 更改表结构:</span><br><span class="line">disable ‘scores&#39; </span><br><span class="line">alter ‘scores&#39;,NAME&#x3D;&gt;&#39;info&#39; </span><br><span class="line">enable ‘scores&#39; </span><br><span class="line">-- 增加列族名  </span><br><span class="line">alter &#39;zmtest1&#39;, NAME &#x3D;&gt; &#39;cf&#39;</span><br><span class="line">-- 删除一个列族</span><br><span class="line">hbase&gt; alter ‘t1′, NAME &#x3D;&gt; ‘f1′, METHOD &#x3D;&gt; ‘delete&#39; </span><br><span class="line">hbase&gt; alter ‘t1′, ‘delete&#39; &#x3D;&gt; ‘f1′ </span><br><span class="line"></span><br><span class="line">-- 执行脚本</span><br><span class="line">hbase shell test.hbaseshell </span><br><span class="line"></span><br><span class="line"></span><br><span class="line">--</span><br></pre></td></tr></table></figure>
+
+</li>
+</ul>
+<blockquote>
+<p>HBASE写数据先写Memstore和WAL,最后由Memstore生成HFile.<br>每个列族可能有多个HFile,但每个HFile只能属于一个列族.<br>不清楚为什么WAL在Memstore前. 可能因为MemStore需要rpc,比较慢吧.<br>写操作生成:</p>
+</blockquote>
+<ol>
+<li>数据= Memstore+HFile(StoreFile)</li>
+<li>日志= WAL (HLog)</li>
+</ol>
+<blockquote>
+<p>读操作使用LRU算法,缓存名为BlockCache,与Memstore在一个JVM中.<br>HFile的物理存放形式是一个Block的序列外加这些Block的索引.<br>读路径包括:BlockCache,Memstore,HFile,将缓存的\未缓存未写入的\已写入的,三部分数据凑在一起返回客户端.</p>
+</blockquote>
+<p>#表设计:</p>
+<blockquote>
+<p>Row key行键 (Row key)可以是任意字符串(最大长度是 64KB，实际应用中长度一般为 10-100bytes)，在hbase内部，row key保存为字节数组。<br>存储时，数据按照Row key的字典序(byte order)排序存储。设计key时，要充分排序存储这个特性，将经常一起读取的行存储放到一起。(位置相关性)<br>注意：<br>字典序对int排序的结果是1,10,100,11,12,13,14,15,16,17,18,19,2,20,21,…,9,91,92,93,94,95,96,97,98,99。要保持整形的自然序，行键必须用0作左填充。<br>列名都以列族作为前缀,例如courses:history ， courses:math 都属于 courses 这个列族.</p>
+</blockquote>
+<h1 id="python-api-happybase"><a href="#python-api-happybase" class="headerlink" title="python api:happybase"></a>python api:happybase</h1><p>首先在master上启动thrfit接口,注意<code>happybase</code>只能访问thrift接口,因此不是start thrift2:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">.&#x2F;hbase-daemon.sh start thrift</span><br></pre></td></tr></table></figure>
+
+<p>python安装库:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">pip install happybase</span><br></pre></td></tr></table></figure>
+<p>python代码:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">#!/usr/bin/env python</span></span><br><span class="line"><span class="comment"># encoding: utf-8</span></span><br><span class="line"><span class="keyword">import</span> sys</span><br><span class="line"><span class="keyword">import</span> traceback</span><br><span class="line"><span class="keyword">from</span> happybase <span class="keyword">import</span> Connection</span><br><span class="line"></span><br><span class="line">reload(sys)</span><br><span class="line">sys.setdefaultencoding(<span class="string">'utf8'</span>)</span><br><span class="line"></span><br><span class="line">c = Connection(<span class="string">'master'</span>)</span><br><span class="line">t = c.table(<span class="string">'MYTABLE'</span>)</span><br><span class="line">count = <span class="number">0</span></span><br><span class="line"><span class="keyword">for</span> _ <span class="keyword">in</span> t.scan(filter=<span class="string">'FirstKeyOnlyFilter() AND KeyOnlyFilter()'</span>):<span class="comment">#filter='FirstKeyOnlyFilter() AND KeyOnlyFilter()'</span></span><br><span class="line">    count += <span class="number">1</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">print</span> count</span><br></pre></td></tr></table></figure>
+
+<p>#建立结构相同的表<br><code>habse</code>没有传统数据库中类似<code>create table like</code>的语句.<br>如果要建立一个与现有表结构相同的表,只能使用如下步骤:(假设要达到的目的是<code>create table &#39;pipe:zeb_log&#39; like &#39;pipe_day&#39;</code>)</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;&#x2F; 1. 获取原表结构:</span><br><span class="line">desc &#39;pipe_day&#39;</span><br><span class="line">&#x2F;&#x2F; 2.</span><br><span class="line">把从&#123;name&#x3D;&gt;...&#125;开始的部分做如下处理:</span><br><span class="line">(1)   TTL &#x3D;&gt; &#39;FOREVER&#39;   替换成  TTL &#x3D;&gt; org.apache.hadoop.hbase.HConstants::FOREVER</span><br><span class="line">(2)   &#123;name&#x3D;&gt;...&#125; 之间加上逗号</span><br><span class="line">(3)   整条语句变成一行,句首加上 create &#39;pipe:zeb_log&#39;</span><br><span class="line"></span><br><span class="line">&#x2F;&#x2F; 3.</span><br></pre></td></tr></table></figure>
+
+<h1 id="HBase导出数据"><a href="#HBase导出数据" class="headerlink" title="HBase导出数据"></a>HBase导出数据</h1><ol>
+<li>导出成<code>SequenceFile</code>:// 没啥用,无法解析.<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"> hbase org.apache.hadoop.hbase.mapreduce.Export pipe:zeb_log &#x2F;user&#x2F;fengmq01&#x2F;zeb_log</span><br><span class="line"># 把 pipe:zeb_log 导出到了 &#x2F;user&#x2F;fengmq01&#x2F;zeb_log 文件夹</span><br><span class="line"># 命令格式:</span><br><span class="line"># hbase org.apache.hadoop.hbase.mapreduce.Export &lt;tablename&gt; &lt;outputdir&gt; [&lt;versions&gt; [&lt;starttime&gt; [&lt;endtime&gt;]]]</span><br></pre></td></tr></table></figure>
+
+</li>
+</ol>
+<h1 id="数据结构"><a href="#数据结构" class="headerlink" title="数据结构"></a>数据结构</h1><p>使用上可以简单得想象成一个树形结构:<br>Table(Rows) –通过row key 索引到=&gt; Row ;<br>Row         –通过column family索引到CF;<br>CF – 通过column qualifier 索引到最新版本的Value.<br>不同timestamp的value组成Cell. </p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Table(Rows)-&gt;CF-&gt;Cell-&gt;Value.</span><br></pre></td></tr></table></figure>
+<p>每一级都是一个KV存取. </p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2016/01/08/hbase%E7%AC%94%E8%AE%B0/" data-id="ck96ccgz8001hbhamd39hdrzd" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/hbase/" rel="tag">hbase</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-初探apt-get工作机制" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2016/01/03/%E5%88%9D%E6%8E%A2apt-get%E5%B7%A5%E4%BD%9C%E6%9C%BA%E5%88%B6/" class="article-date">
+  <time datetime="2016-01-03T03:00:45.000Z" itemprop="datePublished">2016-01-03</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E9%85%8D%E7%BD%AE/">配置</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2016/01/03/%E5%88%9D%E6%8E%A2apt-get%E5%B7%A5%E4%BD%9C%E6%9C%BA%E5%88%B6/">初探apt-get工作机制</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>首先通过<code>apt-get update</code>命令，读取<code>/etc/apt/source.list</code>文件和<code>/etc/apt/source.list.d</code>文件夹下的<code>*.list</code>文件。文件中大部分是<code>http</code>服务器地址，以其中一个<code>archive</code>为例,安装<code>lrsz</code>时:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">get http://cn.archive.ubuntu.com/ubuntu/ precise/universe lrzsz amd64 0.12.21-5</span><br></pre></td></tr></table></figure>
+<p>通过读取服务器<code>http://cn.archive.ubuntu.com/ubuntu/dists/precise/universe/source/Sources.gz</code>文件，文件中书写了所有能下载的软件包的版本和依赖。<br>(<code>ubuntu12.04</code> 的即从<code>precise</code>目录下查找)<br>查找到包的实际路径是：<br><code>pool/universe/l/lrzsz/lrzsz_amd64_0.12.21-5.deb</code><br>即：<br><code>http://cn.archive.ubuntu.com/ubuntu/pool/universe/l/lrzsz/lrzsz_amd64_0.12.21-5.deb</code>。</p>
+<ul>
+<li>使用第三方源时经常遇到<code>gpg</code>证书认证通不过的情况,可以强行忽略危险：<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">apt-get --allow-unauthenticated update</span><br></pre></td></tr></table></figure>
+
+</li>
+</ul>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2016/01/03/%E5%88%9D%E6%8E%A2apt-get%E5%B7%A5%E4%BD%9C%E6%9C%BA%E5%88%B6/" data-id="ck96cch0g0062bham8b7qcida" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E9%85%8D%E7%BD%AE/" rel="tag">配置</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-apt-get本地源" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2016/01/03/apt-get%E6%9C%AC%E5%9C%B0%E6%BA%90/" class="article-date">
+  <time datetime="2016-01-03T02:59:01.000Z" itemprop="datePublished">2016-01-03</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E9%85%8D%E7%BD%AE/">配置</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2016/01/03/apt-get%E6%9C%AC%E5%9C%B0%E6%BA%90/">apt-get本地源</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <blockquote>
+<p>上次安装ambari，由于网速问题下载包下载了好久。如果反复这样的话太浪费时间了，又找不到能用的国内镜像源，决定自己建一个本地源。</p>
+</blockquote>
+<p>首先有一台服务器用官方的<code>ambari.list</code>源</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">sudo apt-get install ambari-server</span><br><span class="line">sudo apt-get install ambari-agent</span><br></pre></td></tr></table></figure>
+<p>下载好了相关的<code>deb</code>包。<br>接下来要做的工作就是想要复用这些文件。</p>
+<p>1.<code>apt-get</code>安装的软件都保存在<code>/var/cache/apt/archives/</code>目录下，所以先把它们拷贝到别的目录下：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">sudo mkdir ~/data/soft -p </span><br><span class="line">sudo cp -p /var/cache/apt/archives/*.deb  ~/data/soft/</span><br><span class="line">cd ~/data/soft/</span><br><span class="line"><span class="meta">#</span><span class="bash">修改一下拥有者和组，方便之后缩小权限:</span></span><br><span class="line">chown -R am-server ~/data/</span><br><span class="line">chgrp -R am-server ~/data/</span><br></pre></td></tr></table></figure>
+<p>2.安装一下依赖扫描工具：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo apt-get install  dpkg-dev -y</span><br></pre></td></tr></table></figure>
+<p>3.生成<code>Packages.gz</code></p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">dpkg-scanpackages soft/ |gzip &gt; soft/Packages.gz</span><br></pre></td></tr></table></figure>
+<p>4.nginx对于静态资源并发比较好：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 安装nginx:</span></span><br><span class="line">sudo apt-get install nginx</span><br><span class="line"><span class="meta">#</span><span class="bash"> 配置一下nginx的启动用户：</span></span><br><span class="line">vi /etc/nginx/nginx.conf</span><br><span class="line"><span class="meta">#</span><span class="bash"> 把user从www-data改为自己的用户am-server</span></span><br><span class="line">user am-server;</span><br><span class="line">:wq </span><br><span class="line">vi /etc/nginx/sites-available/default</span><br><span class="line"><span class="meta">#</span><span class="bash"> 更改根目录和location:</span></span><br><span class="line">server &#123;</span><br><span class="line">	listen   80; ## listen for ipv4; this line is default and implied</span><br><span class="line"><span class="meta">	#</span><span class="bash">listen   [::]:80 default ipv6only=on; <span class="comment">## listen for ipv6</span></span></span><br><span class="line"></span><br><span class="line">	root /home/am-server/data;</span><br><span class="line">	index index.html index.htm;</span><br><span class="line"></span><br><span class="line"><span class="meta">	#</span><span class="bash"> Make site accessible from http://localhost/</span></span><br><span class="line">	server_name localhost;</span><br><span class="line"></span><br><span class="line">	location / &#123;</span><br><span class="line"><span class="meta">		#</span><span class="bash"> First attempt to serve request as file, <span class="keyword">then</span></span></span><br><span class="line"><span class="meta">		#</span><span class="bash"> as directory, <span class="keyword">then</span> fall back to index.html</span></span><br><span class="line">		try_files $uri $uri/ /index.html;</span><br><span class="line">		</span><br><span class="line"><span class="meta">		#</span><span class="bash"> Uncomment to <span class="built_in">enable</span> naxsi on this location</span></span><br><span class="line"><span class="meta">		#</span><span class="bash"> include /etc/nginx/naxsi.rules</span></span><br><span class="line">	&#125;</span><br><span class="line">	location /soft&#123;</span><br><span class="line">		autoindex on;</span><br><span class="line">		allow all;</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br><span class="line">这里我顺手把index文件也拷进了data/</span><br><span class="line">cp /usr/share/nginx/www/index.html /data</span><br><span class="line"><span class="meta">#</span><span class="bash">保存之后重启nginx即可：</span></span><br><span class="line">service nginx restart</span><br></pre></td></tr></table></figure>
+<p>在浏览器上检查是否可以访问：<br><a href="http://10.2.14.120/" target="_blank" rel="noopener">http://10.2.14.120/</a><br><a href="http://10.2.14.120/soft" target="_blank" rel="noopener">http://10.2.14.120/soft</a></p>
+<p>如果出现问题的话，可以通过检查两个log文件寻找原因：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 访问日志：</span></span><br><span class="line">cat /var/log/nginx/access.log;</span><br><span class="line"><span class="meta">#</span><span class="bash"> 错误日志：</span></span><br><span class="line">cat /var/log/nginx/error.log;</span><br></pre></td></tr></table></figure>
+<p>有可能是权限等问题。</p>
+<p>5.配置后本地源的服务器后，可以在其他机器上测试一下apt-get能否正常识别：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">sudo vi &#x2F;etc&#x2F;apt&#x2F;source.list.d</span><br><span class="line">#添加以下内容：</span><br><span class="line">deb http:&#x2F;&#x2F;10.2.14.120 soft&#x2F;</span><br><span class="line"># 保存退出后执行</span><br><span class="line">sudo apt-get update</span><br><span class="line">sudo apt-get install ambari-server</span><br></pre></td></tr></table></figure>
+<p>这个时候应该可以看到飞驰的下载速度了。</p>
+<p>感动吧.XD</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2016/01/03/apt-get%E6%9C%AC%E5%9C%B0%E6%BA%90/" data-id="ck96ccgyv000ibhame1k1098a" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E9%85%8D%E7%BD%AE/" rel="tag">配置</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+
+
+  <nav id="page-nav">
+    <a class="extend prev" rel="prev" href="/page/16/">&amp;laquo; 上一页</a><a class="page-number" href="/">1</a><span class="space">&hellip;</span><a class="page-number" href="/page/15/">15</a><a class="page-number" href="/page/16/">16</a><span class="page-number current">17</span><a class="page-number" href="/page/18/">18</a><a class="page-number" href="/page/19/">19</a><a class="page-number" href="/page/20/">20</a><a class="extend next" rel="next" href="/page/18/">下一页&amp;raquo;</a>
+  </nav>
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+  
+    
+
+  
+    
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title recent-posts">最新文章</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2020/04/19/2020-04/spring%E6%8B%BE%E9%81%97/">spring拾遗</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/26/2020-03/%E5%88%A9%E7%94%A8UTF-8%E7%BC%96%E7%A0%81%E7%9A%84%E7%89%B9%E6%80%A7%E8%BF%9B%E8%A1%8C%E4%BC%98%E5%8C%96/">利用UTF-8编码的特性进行优化</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/24/2020-03/linux%E8%87%AA%E8%BF%9E%E6%8E%A5/">linux自连接</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/23/2020-03/redis%E5%A4%A7key%E9%97%AE%E9%A2%98/">redis大key问题</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/23/2020-03/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/">分布式事务</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

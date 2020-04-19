@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>长连接相关 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="WHAT: 什么是长连接长连接: TCP， 默认不断开，用keep alive心跳包保活;持久连接: HTTP 1.1+ keep alive, 默认断开。短连接: 普通HTTP WHY: 长连接有什么好处? 为什么要使用长连接 不同域名可以复用一个长连接; （HTTP不行） 不依赖DNS，节省DNS开销、避免DNS劫持;（HTTP不行） 减少握手时间开销； 可以push消息;   HOW: 如何">
+<meta property="og:type" content="article">
+<meta property="og:title" content="长连接相关">
+<meta property="og:url" content="http://xiaoyue26.github.io/2019/12/29/2019-12/%E9%95%BF%E8%BF%9E%E6%8E%A5%E7%9B%B8%E5%85%B3/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="WHAT: 什么是长连接长连接: TCP， 默认不断开，用keep alive心跳包保活;持久连接: HTTP 1.1+ keep alive, 默认断开。短连接: 普通HTTP WHY: 长连接有什么好处? 为什么要使用长连接 不同域名可以复用一个长连接; （HTTP不行） 不依赖DNS，节省DNS开销、避免DNS劫持;（HTTP不行） 减少握手时间开销； 可以push消息;   HOW: 如何">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-12/long_tcp.png">
+<meta property="article:published_time" content="2019-12-29T09:22:38.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.289Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="tcp">
+<meta property="article:tag" content="长连接">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://xiaoyue26.github.io/images/2019-12/long_tcp.png">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2019-12/长连接相关" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/12/29/2019-12/%E9%95%BF%E8%BF%9E%E6%8E%A5%E7%9B%B8%E5%85%B3/" class="article-date">
+  <time datetime="2019-12-29T09:22:38.000Z" itemprop="datePublished">2019-12-29</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/tcp/">tcp</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      长连接相关
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="WHAT-什么是长连接"><a href="#WHAT-什么是长连接" class="headerlink" title="WHAT: 什么是长连接"></a>WHAT: 什么是长连接</h1><p>长连接: TCP， 默认不断开，用keep alive心跳包保活;<br>持久连接: HTTP 1.1+ keep alive, 默认断开。<br>短连接: 普通HTTP</p>
+<h1 id="WHY-长连接有什么好处-为什么要使用长连接"><a href="#WHY-长连接有什么好处-为什么要使用长连接" class="headerlink" title="WHY: 长连接有什么好处? 为什么要使用长连接"></a>WHY: 长连接有什么好处? 为什么要使用长连接</h1><ol>
+<li>不同域名可以复用一个长连接; （HTTP不行）</li>
+<li>不依赖DNS，节省DNS开销、避免DNS劫持;（HTTP不行）</li>
+<li>减少握手时间开销；</li>
+<li>可以push消息; </li>
+</ol>
+<h1 id="HOW-如何实现一个好的长连接-难点何在"><a href="#HOW-如何实现一个好的长连接-难点何在" class="headerlink" title="HOW: 如何实现一个好的长连接? (难点何在)"></a>HOW: 如何实现一个好的长连接? (难点何在)</h1><h2 id="难点1-长连接断开"><a href="#难点1-长连接断开" class="headerlink" title="难点1 长连接断开"></a>难点1 长连接断开</h2><p>导致断开的原因:</p>
+<ol>
+<li>各个环节的超时时间不匹配; – 动态探测合适的超时时间；</li>
+<li>后台服务; – 或者服务主备切换</li>
+<li>app后台进程挂了;  – app保活课题</li>
+<li>切换网络;  </li>
+</ol>
+<h2 id="难点2-机器资源"><a href="#难点2-机器资源" class="headerlink" title="难点2 机器资源"></a>难点2 机器资源</h2><p>1亿长连接:<br>10w / 台 =&gt; 1000台机器<br>200w / 台 =&gt; 50台机器</p>
+<p>20%活跃度=&gt; 总共需要2kw连接;<br>2000w =&gt; 10台~200台; </p>
+<h3 id="连接限制"><a href="#连接限制" class="headerlink" title="连接限制:"></a>连接限制:</h3><ol>
+<li>网卡限制: 网卡带宽、每秒通信量; </li>
+<li>内核限制: 每个进程最大打开文件句柄数; (NR_OPEN =100w)</li>
+<li>内存限制: TCP的发送、输出缓冲;</li>
+</ol>
+<p>假设一台机器抗200w个连接，则网卡需要:<br>200w<em>1KB/s = 2000MB/s = 16 Gps<br>假设平均20%活跃，则</em>0.2 = 3.2 Gps<br>依此类推内存。</p>
+<h2 id="难点3-惊群效应"><a href="#难点3-惊群效应" class="headerlink" title="难点3 惊群效应"></a>难点3 惊群效应</h2><p>cpu: 100%<br><code>thundering herd</code>： 唤醒一群进程，只有一个进程工作，其他的又继续睡；反复这个流程。</p>
+<blockquote>
+<p>多进程（多线程）在同时阻塞等待同一个事件的时候（休眠状态），如果等待的这个事件发生，那么他就会唤醒等待的所有进程（或者线程），但是最终却只能有一个进程（线程）获得这个时间的“控制权”，对该事件进行处理，而其他进程（线程）获取“控制权”失败，只能重新进入休眠状态，这种现象和性能浪费就叫做惊群效应。</p>
+</blockquote>
+<h2 id="实现要点"><a href="#实现要点" class="headerlink" title="实现要点"></a>实现要点</h2><ol>
+<li>处理好上述长连接断开的4个原因，保证服务质量；</li>
+<li>进行断开重连： 监控+重连。</li>
+<li>架构容灾：<img src="/images/2019-12/long_tcp.png" class="" width="400" height="600" title="long_tcp">
+(1) 多地部署接入点;<br>(2) 长连接失败则降级到udp\http；</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/12/29/2019-12/%E9%95%BF%E8%BF%9E%E6%8E%A5%E7%9B%B8%E5%85%B3/" data-id="ck96cch4n00l1bham36za8qyk" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/tcp/" rel="tag">tcp</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E9%95%BF%E8%BF%9E%E6%8E%A5/" rel="tag">长连接</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2020/01/12/2020-01/ThreadLocal%E7%9A%84%E7%BA%BF%E6%80%A7%E6%8E%A2%E6%B5%8B/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          ThreadLocal的线性探测
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2019/12/28/2019-12/%E5%88%86%E5%B8%83%E5%BC%8F%E9%99%90%E6%B5%81-redis-%E4%BB%A4%E7%89%8C%E6%A1%B6/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">分布式限流: redis+令牌桶</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#WHAT-什么是长连接"><span class="toc-number">1.</span> <span class="toc-text">WHAT: 什么是长连接</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#WHY-长连接有什么好处-为什么要使用长连接"><span class="toc-number">2.</span> <span class="toc-text">WHY: 长连接有什么好处? 为什么要使用长连接</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#HOW-如何实现一个好的长连接-难点何在"><span class="toc-number">3.</span> <span class="toc-text">HOW: 如何实现一个好的长连接? (难点何在)</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#难点1-长连接断开"><span class="toc-number">3.1.</span> <span class="toc-text">难点1 长连接断开</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#难点2-机器资源"><span class="toc-number">3.2.</span> <span class="toc-text">难点2 机器资源</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#连接限制"><span class="toc-number">3.2.1.</span> <span class="toc-text">连接限制:</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#难点3-惊群效应"><span class="toc-number">3.3.</span> <span class="toc-text">难点3 惊群效应</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#实现要点"><span class="toc-number">3.4.</span> <span class="toc-text">实现要点</span></a></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>半小时真正理解记住paxos协议 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="摘要:  简单浏览一遍流程，然后看半小时视频: https:&#x2F;&#x2F;www.bilibili.com&#x2F;video&#x2F;av36134550就OK了。  paxos是分布式一致性协议，对于CAP的取舍是完全的C，较好的A，较好的P。（关于CAP: http:&#x2F;&#x2F;xiaoyue26.github.io&#x2F;2019&#x2F;02&#x2F;01&#x2F;2019-02&#x2F;简单解释CAP原理 ） paxos协商流程两个角色ProposerAc">
+<meta property="og:type" content="article">
+<meta property="og:title" content="半小时真正理解记住paxos协议">
+<meta property="og:url" content="http://xiaoyue26.github.io/2019/02/01/2019-02/%E5%8D%8A%E5%B0%8F%E6%97%B6%E7%9C%9F%E6%AD%A3%E7%90%86%E8%A7%A3%E8%AE%B0%E4%BD%8Fpaxos%E5%8D%8F%E8%AE%AE/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="摘要:  简单浏览一遍流程，然后看半小时视频: https:&#x2F;&#x2F;www.bilibili.com&#x2F;video&#x2F;av36134550就OK了。  paxos是分布式一致性协议，对于CAP的取舍是完全的C，较好的A，较好的P。（关于CAP: http:&#x2F;&#x2F;xiaoyue26.github.io&#x2F;2019&#x2F;02&#x2F;01&#x2F;2019-02&#x2F;简单解释CAP原理 ） paxos协商流程两个角色ProposerAc">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2019-02-01T01:45:14.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.281Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="分布式">
+<meta property="article:tag" content="paxos">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2019-02/半小时真正理解记住paxos协议" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/01/2019-02/%E5%8D%8A%E5%B0%8F%E6%97%B6%E7%9C%9F%E6%AD%A3%E7%90%86%E8%A7%A3%E8%AE%B0%E4%BD%8Fpaxos%E5%8D%8F%E8%AE%AE/" class="article-date">
+  <time datetime="2019-02-01T01:45:14.000Z" itemprop="datePublished">2019-02-01</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F/">分布式</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      半小时真正理解记住paxos协议
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>摘要:</p>
+<blockquote>
+<p>简单浏览一遍流程，然后看半小时视频: <a href="https://www.bilibili.com/video/av36134550" target="_blank" rel="noopener">https://www.bilibili.com/video/av36134550</a><br>就OK了。</p>
+</blockquote>
+<p>paxos是分布式一致性协议，对于CAP的取舍是完全的C，较好的A，较好的P。<br>（关于CAP: <a href="http://xiaoyue26.github.io/2019/02/01/2019-02/简单解释CAP原理">http://xiaoyue26.github.io/2019/02/01/2019-02/简单解释CAP原理</a> ）</p>
+<h1 id="paxos协商流程"><a href="#paxos协商流程" class="headerlink" title="paxos协商流程"></a>paxos协商流程</h1><h2 id="两个角色"><a href="#两个角色" class="headerlink" title="两个角色"></a>两个角色</h2><p>Proposer<br>Acceptor</p>
+<h2 id="流程"><a href="#流程" class="headerlink" title="流程"></a>流程</h2><p>首先大致扫一遍下叙流程，第一遍大概率是完全懵逼看不懂的，花1分钟在脑中留下一点点印象即可:</p>
+<h3 id="准备阶段（prepare）Proposer申请epoch"><a href="#准备阶段（prepare）Proposer申请epoch" class="headerlink" title="准备阶段（prepare）Proposer申请epoch"></a>准备阶段（prepare）Proposer申请epoch</h3><p>第一阶段A：Proposer选择一个提议编号n，向所有的Acceptor广播Prepare（n）请求。</p>
+<p>第一阶段B：若Acceptor接收到Prepare（n）请求，两个选择:<br>    (1)n&gt;接受过的n_old: 接受请求,返回<code>(n_old,value_old)</code>。<br>    (2)n&lt;接受过的n_old: 拒绝请求。</p>
+<h3 id="接受阶段（提交阶段）"><a href="#接受阶段（提交阶段）" class="headerlink" title="接受阶段（提交阶段）"></a>接受阶段（提交阶段）</h3><p>第二阶段A：Proposer得到了Acceptor响应:<br>1.如果未超过半数accpetor响应，直接转为提议失败；</p>
+<p>2.如果超过多数Acceptor的承诺，又分为不同情况：<br>(1)如果所有Acceptor返回的value都是<code>null</code>，那么向所有的Acceptor发送<code>(n,value_n)</code>;<br>(2)如果存在Acceptor返回的value不为<code>null</code>，那么从所有接受过的值中选择对应的n_old最大的作为提议的值value_old，提议编号仍然为n。但此时Proposer就不能提议自己的值，只能信任Acceptor通过的值，维护一但获得确定性取值就不能更改原则: 向所有Acceptor发送<code>(n,value_old of max n_old)</code>。</p>
+<p>第二阶段B：Acceptor接收到提议<code>(n,value)</code>后：<br>(1)n!=本地保存的last_n，拒绝。<br>(2)n=本地保存的last_n，写入本地值。</p>
+<h2 id="看教学视频"><a href="#看教学视频" class="headerlink" title="看教学视频:"></a>看教学视频:</h2><p><a href="https://www.bilibili.com/video/av36134550" target="_blank" rel="noopener">https://www.bilibili.com/video/av36134550</a></p>
+<p>由于之前花1分钟浏览了流程，视频看到15分钟的时候心里就会已经有数了。<br>看完30分钟就理解记住了。</p>
+<h2 id="温习要点"><a href="#温习要点" class="headerlink" title="温习要点"></a>温习要点</h2><ol>
+<li>类似于CAS，仅当，当前值为null时，才能提议值为value。</li>
+<li>类似于jdk里的hashmap扩容，当发现有人捷足先登的时候，放下陈见开始辅助n_old完成value_old的扩散。发送(n,value_old)，以自己的名义，但是以别人的值，帮助一致性尽快达成。</li>
+<li>Acceptor对于epoch: 喜新厌旧,总是接受最大的epoch，防止Proposor单点故障死等。</li>
+<li>Proposor对于value: 喜旧厌新,总是接受更旧的value，尽快达成一致性。</li>
+</ol>
+<p>以上就是Basic Paxos。其实依然会有活锁，需要引进leader缓解。leader挂了的时候退化到Basic Paxos，出现活锁几率提升。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/01/2019-02/%E5%8D%8A%E5%B0%8F%E6%97%B6%E7%9C%9F%E6%AD%A3%E7%90%86%E8%A7%A3%E8%AE%B0%E4%BD%8Fpaxos%E5%8D%8F%E8%AE%AE/" data-id="ck96cch3o00gzbham6csohvto" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/paxos/" rel="tag">paxos</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/" rel="tag">分布式</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2019/02/11/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC%E4%B8%83%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E9%AB%98%E7%BA%A7%E7%89%B9%E6%80%A7/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          高性能mysql第七章-笔记-高级特性
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2019/02/01/2019-02/%E7%AE%80%E5%8D%95%E8%A7%A3%E9%87%8ACAP%E5%8E%9F%E7%90%86/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">简单解释CAP原理</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#paxos协商流程"><span class="toc-number">1.</span> <span class="toc-text">paxos协商流程</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#两个角色"><span class="toc-number">1.1.</span> <span class="toc-text">两个角色</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#流程"><span class="toc-number">1.2.</span> <span class="toc-text">流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#准备阶段（prepare）Proposer申请epoch"><span class="toc-number">1.2.1.</span> <span class="toc-text">准备阶段（prepare）Proposer申请epoch</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#接受阶段（提交阶段）"><span class="toc-number">1.2.2.</span> <span class="toc-text">接受阶段（提交阶段）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#看教学视频"><span class="toc-number">1.3.</span> <span class="toc-text">看教学视频:</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#温习要点"><span class="toc-number">1.4.</span> <span class="toc-text">温习要点</span></a></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

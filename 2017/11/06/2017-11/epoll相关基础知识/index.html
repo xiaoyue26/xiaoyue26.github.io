@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>epoll相关基础知识 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="背景:C10K问题. 并发访问量&gt;&#x3D;10K &#x3D;&gt; 维持TCP连接的进程数超过上限.  远古解决方案:   用UDP. (腾讯QQ) select模式. 每个TCP连接占用一个文件描述符, 所以进程能处理的连接最大不能超过1024.  poll模式. 每次收到数据需要遍历每一个连接查看哪个连接有数据请求。  2002年左右开始的解决方案:  kqueue: FreeBSDepoll:">
+<meta property="og:type" content="article">
+<meta property="og:title" content="epoll相关基础知识">
+<meta property="og:url" content="http://xiaoyue26.github.io/2017/11/06/2017-11/epoll%E7%9B%B8%E5%85%B3%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="背景:C10K问题. 并发访问量&gt;&#x3D;10K &#x3D;&gt; 维持TCP连接的进程数超过上限.  远古解决方案:   用UDP. (腾讯QQ) select模式. 每个TCP连接占用一个文件描述符, 所以进程能处理的连接最大不能超过1024.  poll模式. 每次收到数据需要遍历每一个连接查看哪个连接有数据请求。  2002年左右开始的解决方案:  kqueue: FreeBSDepoll:">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2017-11-06T11:52:23.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.265Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="并发">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2017-11/epoll相关基础知识" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2017/11/06/2017-11/epoll%E7%9B%B8%E5%85%B3%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86/" class="article-date">
+  <time datetime="2017-11-06T11:52:23.000Z" itemprop="datePublished">2017-11-06</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      epoll相关基础知识
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="背景"><a href="#背景" class="headerlink" title="背景:"></a>背景:</h1><p>C10K问题. 并发访问量&gt;=10K =&gt; 维持TCP连接的进程数超过上限.</p>
+<ul>
+<li>远古解决方案:</li>
+</ul>
+<ol>
+<li>用<code>UDP</code>. (腾讯QQ)</li>
+<li><code>select</code>模式. 每个TCP连接占用一个文件描述符, 所以进程能处理的连接最大不能超过1024. </li>
+<li><code>poll</code>模式. 每次收到数据需要遍历每一个连接查看哪个连接有数据请求。</li>
+</ol>
+<p>2002年左右开始的解决方案:</p>
+<blockquote>
+<p><code>kqueue</code>: FreeBSD<br><code>epoll</code>:  Linux (2.5.44内核)<br><code>IOCP</code>: Windows</p>
+</blockquote>
+<ul>
+<li><p>epoll的编程模型:<br>异步非阻塞回调. <code>Reactor</code>,事件驱动,事件轮询(<code>EventLoop</code>).</p>
+</li>
+<li><p>新的问题<br><code>epoll</code>编程太繁琐,层层回调/嵌套.</p>
+</li>
+<li><p>解决方案:</p>
+</li>
+</ul>
+<ol>
+<li>默默忍受: 性能最优.</li>
+<li>协程,<code>coroutine</code>: 需要解决某个协程密集计算带来的问题.</li>
+</ol>
+<ul>
+<li>协程<br>封装了事件回调,底层库通过保存状态(代码行数,局部变量的值),替程序猿进行回调. 程序猿可以就像一切刚开始的时候那样只写仿佛同步阻塞的代码.</li>
+</ul>
+<p><code>go</code>语言中具体代码:</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">go</span> doSomething();</span><br><span class="line"><span class="comment">// 类似于 threadPool.submit(new Thread(new Runnable()&#123;run()&#123;doSomething();&#125;&#125;))的效果</span></span><br></pre></td></tr></table></figure>
+<p>会提交一个协程到go语言自带的协程池子里。由于go语言每个函数可以作为一个协程，所以语法显得非常简练方便，而且无需操心线程池。<br>此外<code>go</code>中<code>main</code>函数也是一个协程，而且不是守护的。（java中main函数是守护的,会等待所有其他线程运行结束）<br>协程的同步依然需要自己管理，一般是用channel(管道)进行。<br>语法上,协程提供了一个写非阻塞操作的非常简洁的关键字(<code>go</code>)。<br>实现上,协程提供了非常方便的协程池,而且由于是用户态线程,因此每个协程的开销足够小,小到可以将每个函数这么小的粒度作为协程。 </p>
+<p>缺陷:<br>由于实现上是使用用户态线程/进程,当某一个协程中有密集计算时,其他协程就不运行了. 每个线程上装配的协程的切换是需要在每次协程中发生中断时进行判断的。</p>
+<p>解决方案:</p>
+<ul>
+<li><code>GoLang</code>: 用户在密集计算的代码中自己<code>yield</code>. </li>
+<li><code>ErLang</code>: 无需关心. 由于底层有<code>ErLang</code>自己开发的VM,会自动检测并进行切换.(<code>rabbitmq</code>)</li>
+</ul>
+<h1 id="具体实现"><a href="#具体实现" class="headerlink" title="具体实现"></a>具体实现</h1><ul>
+<li>问题的本质:<br>一个进程处理一个连接, 导致进程开销太大.<br>因此解决思路就是一个进程处理多个连接.也就是:<br><code>IO多路复用</code>. </li>
+</ul>
+<p>实现1:</p>
+<blockquote>
+<p>每个进程循环处理多个连接.<br>缺点: 其中一个连接处理卡住会阻塞整个应用. </p>
+</blockquote>
+<h2 id="select模式"><a href="#select模式" class="headerlink" title="select模式"></a>select模式</h2><p>实现2: (<code>select</code>模式)</p>
+<blockquote>
+<p>维护一个fd_set状态结构体.<br>阻塞的原因是IO资源的争用,如某个文件句柄是否可读,可写.(锁)<br>告诉内核该进程关心的文件句柄, 让内核检查多个文件句柄.</p>
+</blockquote>
+<p>进程发送句柄列表=&gt;内核逐个检查状态是否可用. </p>
+<p>缺陷:</p>
+<blockquote>
+<ol>
+<li>每个进程有关注的文件句柄上限;</li>
+<li>需要重复初始化关心的文件句柄结构体;</li>
+<li>逐个排查连接效率低.</li>
+</ol>
+</blockquote>
+<h2 id="poll模式"><a href="#poll模式" class="headerlink" title="poll模式"></a>poll模式</h2><p>实现3:(<code>poll模式</code>)</p>
+<blockquote>
+<p>设计新的数据结构.<br>通过pollfd数组向内核传递需要关注的事件: 消除文件句柄上限;<br>不同字段区分关注事件和发生事件: 避免重复初始化.</p>
+</blockquote>
+<p>缺陷:</p>
+<blockquote>
+<ol>
+<li>逐个排查连接效率低.</li>
+</ol>
+</blockquote>
+<h2 id="epoll模式"><a href="#epoll模式" class="headerlink" title="epoll模式"></a>epoll模式</h2><p>实现4: (<code>epoll</code>模式)<br>内核升级到能对每个FD注册回调,进程能够直接知道是哪个句柄状态变化,而不用轮询,监听回调就行了.<br>(linux 2.5.44新增<code>api</code>)<br>事件模型.</p>
+<h2 id="epoll具体实现细节"><a href="#epoll具体实现细节" class="headerlink" title="epoll具体实现细节"></a>epoll具体实现细节</h2><p><strong>架构:</strong></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;&#x2F; 一堆事情(IO访问),需要切换到内核态访问相应地址空间.例如把数据从内核地址空间拷贝到用户地址空间. 拷贝完以后触发一个读可用事件.</span><br><span class="line">用户进程-&gt;内核(</span><br><span class="line">    readyList</span><br><span class="line">   ,红黑树&lt;文件描述符(如Socket)&gt;</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+<p><strong>工作流程:</strong></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">1. 用户进程调用epoll_create;</span><br><span class="line">2. 内核创建readyList,红黑树;</span><br><span class="line">3. 用户进程调用epoll_ctrl,传递监控的句柄(如Socket),以及在上面关注的事件;</span><br><span class="line">4. 内核将句柄插入红黑树;</span><br><span class="line">5. 内核的中断处理程序注册一个回调,如果红黑树中某个句柄的中断到了,</span><br><span class="line">把它对应的事件放到ReadyList. </span><br><span class="line"></span><br><span class="line">--- 另一个流程 --- </span><br><span class="line">1. 用户进程调用epoll_wait</span><br><span class="line">2. 内核从ReadyList返回可回调的事件.</span><br></pre></td></tr></table></figure>
+
+<p><strong>LT模式与ET模式</strong><br>LT模式: 水平触发(JAVA NIO默认),一个句柄上的事件一次没处理完,会再下次调用epoll_wait的时候依然返回它;<br>ET模式: 边缘触发,仅在第一次返回.</p>
+<p>LT模式:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. 用户进程调用epoll_wait;</span><br><span class="line">2. 内核从ReadyList返回数据;&#x2F;&#x2F; 就绪的Socket拷贝到用户态内存</span><br><span class="line">3. 清空ReadyList;</span><br><span class="line">4. 检查Socket句柄,如果有未处理完的事件(数据没读完),将句柄加入ReadyList.</span><br></pre></td></tr></table></figure>
+<p>ET模式没有上述的第四步.</p>
+<p><strong>LT模式注意事项</strong></p>
+<blockquote>
+<p>不需要写的话,不要关注写事件.<br>长期关注写事件会导致CPU100%问题. </p>
+</blockquote>
+<p><strong>ET模式注意事项</strong></p>
+<blockquote>
+<p>每次都要读到返回EWOULDBLOCK为止. (要读干净)</p>
+</blockquote>
+<p><strong>epoll为什么使用红黑树</strong><br>因为epoll要求快速找到某个句柄,因此首先是一个Map接口,候选实现:</p>
+<ol>
+<li>哈希表 O(1)</li>
+<li>红黑树 O(lgn)</li>
+<li>跳表 近似O(lgn)<br>据说老版本的内核和FreeBSD的Kqueue使用的是哈希表. </li>
+</ol>
+<p>个人理解现在内核使用红黑树的原因:</p>
+<ol>
+<li>哈希表. 空间因素,可伸缩性.<br>(1)频繁增删. 哈希表需要预估空间大小, 这个场景下无法做到.<br>间接影响响应时间,假如要resize,原来的数据还得移动.即使用了一致性哈希算法,<br>也难以满足非阻塞的timeout时间限制.(时间不稳定)<br>(2) 百万级连接,哈希表有镂空的空间,太浪费内存.</li>
+<li>跳表. 慢于红黑树. 空间也高. </li>
+<li>红黑树. 经验判断,内核的其他地方如防火墙也使用红黑树,实践上看性能最优.</li>
+</ol>
+<p><strong>数据结构:</strong></p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="keyword">union</span> epoll_data &#123;</span><br><span class="line">     <span class="keyword">void</span> *ptr;</span><br><span class="line">     <span class="keyword">int</span> fd; </span><br><span class="line">     <span class="keyword">__uint32_t</span> u32;</span><br><span class="line">     <span class="keyword">__uint64_t</span> u64; </span><br><span class="line">&#125;<span class="keyword">epoll_data_t</span>;  <span class="comment">// &lt;=</span></span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">epoll_event</span> &#123;</span> </span><br><span class="line">    <span class="keyword">__uint32_t</span> events; <span class="comment">/* Epoll events */</span> </span><br><span class="line">    <span class="keyword">epoll_data_t</span> data;<span class="comment">/* User data variable */</span></span><br><span class="line"> &#125;;</span><br></pre></td></tr></table></figure>
+<p>C库的API:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">epoll_create</span><span class="params">(<span class="keyword">int</span> <span class="built_in">size</span>)</span></span>; <span class="comment">// size: 最大句柄数</span></span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">epoll_ctl</span><span class="params">(<span class="keyword">int</span> epfd, <span class="keyword">int</span> op, <span class="keyword">int</span> fd, struct epoll_event *event)</span></span>;  </span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">epoll_wait</span><span class="params">(<span class="keyword">int</span> epfd, struct epoll_event *events,<span class="keyword">int</span> maxevents, <span class="keyword">int</span> timeout)</span></span>;</span><br></pre></td></tr></table></figure>
+<p>具体语义:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">epoll_create: 让内核创建一个epoll item;</span><br><span class="line">epoll_ctl: 修改epoll item: 增加socket句柄,或删除socket句柄,注册回调事件;</span><br><span class="line">epoll_wait: 等待注册的事件发生. </span><br><span class="line">传入的参数epoll_event会从内核那捞回结果.(被回调的事件)</span><br></pre></td></tr></table></figure>
+
+
+<h2 id="实现5-libevent库"><a href="#实现5-libevent库" class="headerlink" title="实现5: libevent库"></a>实现5: libevent库</h2><p>封装<code>epoll</code>. 统一不同平台api.<br>使用方式:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">1. 初始化事件event,定义回调函数f;</span><br><span class="line">2. 将事件加入系统监控事件列表;</span><br><span class="line">3. 监听事件及分发.</span><br></pre></td></tr></table></figure>
+
+<p><strong>NIO的epoll bug</strong><br>部分Linux的2.6的kernel中，poll和epoll对于突然中断的连接socket会对返回的eventSet事件集合置为POLLHUP，也可能是POLLERR，eventSet事件集合发生了变化，这就可能导致Selector会被唤醒。<br>进一步导致jdk中NIO实现中某段代码的死循环.</p>
+<p>Netty的解决方案:</p>
+<ol>
+<li>将select返回值为0进行计数,直到大于阈值<code>EPOLL_BUG_WORKAROUND</code>;</li>
+<li>重建Selector. </li>
+</ol>
+<h1 id="C10M问题"><a href="#C10M问题" class="headerlink" title="C10M问题"></a>C10M问题</h1><ol>
+<li><p>数据包经过linux内核协议栈导致性能巨大下降.<br>解决方案:<br>(1)intel的DPDK框架. 直接接管网卡收到的数据包传递到业务代码中进行处理.</p>
+</li>
+<li><p>存储访问时间消耗. 切换消耗:<br>解决方案:<br>(1) 重新设计操作系统, 包括内存池,cache,内存分页,cpu管理等等.</p>
+</li>
+</ol>
+<h1 id="术语-概念"><a href="#术语-概念" class="headerlink" title="术语/概念"></a>术语/概念</h1><h2 id="缓存IO"><a href="#缓存IO" class="headerlink" title="缓存IO"></a>缓存IO</h2><p>标准IO. 操作系统先将IO数据缓存到文件系统的页缓存(page cache)中,然后再从操作系统内核的缓冲区拷贝到应用程序的地址空间.<br>缺点:<br>重复拷贝带来很大的CPU/内存开销. </p>
+<ul>
+<li><p>阻塞/非阻塞: </p>
+<blockquote>
+<p>内核会不会立即回答;</p>
+</blockquote>
+</li>
+<li><p>同步/异步: </p>
+<blockquote>
+<p>进程会不会等内核回答. </p>
+</blockquote>
+</li>
+</ul>
+<h2 id="IO模式"><a href="#IO模式" class="headerlink" title="IO模式"></a>IO模式</h2><ol>
+<li>阻塞IO</li>
+<li>非阻塞IO</li>
+<li>IO多路复用</li>
+<li>信号驱动IO</li>
+<li>异步IO</li>
+</ol>
+<h2 id="阻塞IO"><a href="#阻塞IO" class="headerlink" title="阻塞IO"></a>阻塞IO</h2><ol>
+<li>进程请求IO数据;</li>
+<li>进程阻塞;</li>
+<li>内核准备数据,拷贝到内核空间;</li>
+<li>拷贝到进程地址;</li>
+<li>解除阻塞.</li>
+</ol>
+<h2 id="非阻塞IO"><a href="#非阻塞IO" class="headerlink" title="非阻塞IO"></a>非阻塞IO</h2><ul>
+<li>轮询</li>
+</ul>
+<ol>
+<li>进程请求IO数据;</li>
+<li>内核回答不OK;</li>
+<li>进程不断轮询;</li>
+<li>内核终于准备好了数据,回答OK. </li>
+</ol>
+<h2 id="IO多路复用"><a href="#IO多路复用" class="headerlink" title="IO多路复用"></a>IO多路复用</h2><p>包括: select,poll,epoll</p>
+<blockquote>
+<p>一次轮询多个socket,任何一个socket数据搞定的话,内核都会回复一次. </p>
+</blockquote>
+<h2 id="异步非阻塞IO"><a href="#异步非阻塞IO" class="headerlink" title="异步非阻塞IO"></a>异步非阻塞IO</h2><p>类似于非阻塞, 取消了轮询.<br>进程不等待内核的回复.<br>内核完成准备数据后会通知进程.</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2017/11/06/2017-11/epoll%E7%9B%B8%E5%85%B3%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86/" data-id="ck96cch1n008pbham3mau05vt" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%B9%B6%E5%8F%91/" rel="tag">并发</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2017/11/28/2017-11/grep%E7%AC%94%E8%AE%B0/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          grep笔记
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2017/11/01/2017-11/%E5%BA%93%E5%B8%A6%E6%9D%A5%E7%9A%84%E6%99%BA%E5%AD%90%E6%94%BB%E5%87%BB/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">库带来的智子攻击</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#背景"><span class="toc-number">1.</span> <span class="toc-text">背景:</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#具体实现"><span class="toc-number">2.</span> <span class="toc-text">具体实现</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#select模式"><span class="toc-number">2.1.</span> <span class="toc-text">select模式</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#poll模式"><span class="toc-number">2.2.</span> <span class="toc-text">poll模式</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#epoll模式"><span class="toc-number">2.3.</span> <span class="toc-text">epoll模式</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#epoll具体实现细节"><span class="toc-number">2.4.</span> <span class="toc-text">epoll具体实现细节</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#实现5-libevent库"><span class="toc-number">2.5.</span> <span class="toc-text">实现5: libevent库</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#C10M问题"><span class="toc-number">3.</span> <span class="toc-text">C10M问题</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#术语-概念"><span class="toc-number">4.</span> <span class="toc-text">术语&#x2F;概念</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#缓存IO"><span class="toc-number">4.1.</span> <span class="toc-text">缓存IO</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#IO模式"><span class="toc-number">4.2.</span> <span class="toc-text">IO模式</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#阻塞IO"><span class="toc-number">4.3.</span> <span class="toc-text">阻塞IO</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#非阻塞IO"><span class="toc-number">4.4.</span> <span class="toc-text">非阻塞IO</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#IO多路复用"><span class="toc-number">4.5.</span> <span class="toc-text">IO多路复用</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#异步非阻塞IO"><span class="toc-number">4.6.</span> <span class="toc-text">异步非阻塞IO</span></a></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta property="og:type" content="website">
+<meta property="og:title" content="笔记本">
+<meta property="og:url" content="http://xiaoyue26.github.io/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:author" content="风梦七">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main">
+  
+    <article id="post-2020-04/spring拾遗" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/04/19/2020-04/spring%E6%8B%BE%E9%81%97/" class="article-date">
+  <time datetime="2020-04-19T00:58:37.000Z" itemprop="datePublished">2020-04-19</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/spring/">spring</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2020/04/19/2020-04/spring%E6%8B%BE%E9%81%97/">spring拾遗</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h2 id="初始化顺序"><a href="#初始化顺序" class="headerlink" title="初始化顺序"></a>初始化顺序</h2><p>如果有多个init方法,执行顺序:</p>
+<ol>
+<li><code>@PostContrust</code>注解标注的方法; </li>
+<li>继承<code>InitialBean</code>后自己实现的<code>afterPropertiesSet</code>方法;</li>
+<li><code>@Bean(initMethod=&quot;xxx&quot;)</code>注解标注的方法;</li>
+</ol>
+<h2 id="销毁顺序"><a href="#销毁顺序" class="headerlink" title="销毁顺序"></a>销毁顺序</h2><p>如果有多个销毁方法,执行顺序:(与上面类似)</p>
+<ol>
+<li><code>@PreDestory</code>注解标注的方法; </li>
+<li>继承<code>DisposableBean</code>后自己实现的<code>destory</code>方法;</li>
+<li><code>@Bean(destoryMethod=&quot;xxx&quot;)</code>注解标注的方法;</li>
+</ol>
+<h2 id="spring异常风格"><a href="#spring异常风格" class="headerlink" title="spring异常风格"></a>spring异常风格</h2><p>全都用非受检(<code>runtimeException</code>),代码变得简洁,不需要到处声明异常、或<code>try catch</code>;<br>副作用: 使用者需要自己意识到会抛各种<code>BeanException</code>。</p>
+<h2 id="spring偏向锁"><a href="#spring偏向锁" class="headerlink" title="spring偏向锁"></a>spring偏向锁</h2><p>由于需要使用兼容java5,使用了<code>synchronized</code>；<br>因此有偏向锁;<br>因此最好在main线程中初始化<code>applicationContext</code>，避免锁竞争，提高性能。</p>
+<h2 id="依赖注入"><a href="#依赖注入" class="headerlink" title="依赖注入"></a>依赖注入</h2><p><code>@Autowired</code> 忽略静态字段;<br>接口回调注入: <code>implement xxxAware接口后</code>,会获得一个方法，可以从中得到、保存注入的对象。</p>
+<p>强制的依赖: 构造器注入;<br>可选的依赖: setter注入; 字段注入; （时机、顺序不定、可循环）<br>配置类(声明类): 方法注入; <code>@Bean</code></p>
+<p><code>@Autowired</code>的三个步骤:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">1. 元信息解析: dependencyDescription;</span><br><span class="line">2. 依赖查找: beanFactory</span><br><span class="line">3. 依赖注入: 通过反射，注入到原字段。(所以很多都要求有setter)</span><br></pre></td></tr></table></figure>
+
+<h2 id="提前注入"><a href="#提前注入" class="headerlink" title="提前注入"></a>提前注入</h2><p><code>@Bean</code>注解<code>static</code>方法时，会提前注入、加载。</p>
+<h2 id="依赖注入和依赖查找来源区别"><a href="#依赖注入和依赖查找来源区别" class="headerlink" title="依赖注入和依赖查找来源区别"></a>依赖注入和依赖查找来源区别</h2><p>依赖注入的来源默认会多4个，多4个spring自己默认注册的:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">beanFactory</span><br><span class="line">applicationContext</span><br><span class="line">applicationEvenListener</span><br><span class="line">ResourceLoader</span><br></pre></td></tr></table></figure>
+<p>这4个可以注入，但不能用<code>getBean</code>查找。<br>(只注册，不存到concurrentHashMap`)</p>
+<p>大方向上，依赖注入4个来源：</p>
+<ol>
+<li>托管的bean; <code>definitionBean</code>, 启动以后不能注册; </li>
+<li>单例对象; 启动以后还能注册;</li>
+<li>手动注册的<code>resolvedDependency</code>;</li>
+<li>外部化配置;</li>
+</ol>
+<h1 id="prototype"><a href="#prototype" class="headerlink" title="prototype"></a>prototype</h1><p>spring不完全管<code>prototype</code>生命周期;<br>只管单例;<br><code>prototype</code>销毁回调不执行,官方提到可以用<code>BeanPostProcessor</code>，但其实只能加初始化完成后的操作(此时大概率不需要销毁)，所以更合理的方式是用一个单例对象管理所有<code>prototype</code>(类似于领域里的<code>agg root</code>),在单例销毁时(实现<code>disposableBean</code>接口)，回调prototype的销毁;</p>
+<p>单例和<code>prototype</code>均执行初始化回调。</p>
+<h1 id="scope-request"><a href="#scope-request" class="headerlink" title="scope request"></a>scope request</h1><p><code>@RequestScope</code>：<br>request scope对象: Ioc里是单例，但是返回给前端时是不同的。(快速销毁)<br><code>@SessionScope</code>:<br>比request多一个锁。(避免同一个会话的并发)<br>同cookie时（同sessionid），返回前端的对象是相同的。(很长时间以后才销毁)<br>//tomcat默认session超时时间为30分钟，会序列化</p>
+<p>jsp搜索范围：page-&gt; request -&gt; session -&gt; servletContext</p>
+<p>可以<code>implements Scope</code>自定义scope.</p>
+<h1 id="IocBean初始化"><a href="#IocBean初始化" class="headerlink" title="IocBean初始化"></a>IocBean初始化</h1><ol>
+<li>beanDefinition加载;</li>
+<li>合并父类元信息;</li>
+<li>加载类; classLoader;</li>
+<li>实例化; <code>instantiation</code> , 赋值: <code>populate</code></li>
+<li>返回前可以拦截替换代理对象;</li>
+<li>初始化</li>
+</ol>
+<p>赋值前可以通过<code>postProcessProperties</code>增加需要赋值的字段。虽然名字是<code>post</code>但其实是<code>before</code>.</p>
+<h2 id="Aware接口回调顺序"><a href="#Aware接口回调顺序" class="headerlink" title="Aware接口回调顺序"></a>Aware接口回调顺序</h2><ol>
+<li>beanNameAware</li>
+<li>beanClassLoaderAware</li>
+<li>beanfactoryAware</li>
+<li>environmentAware</li>
+<li>EmbeddedValueResolveAware</li>
+<li>ResourceLoaderAware</li>
+<li>ApplicationEventPublisherAware</li>
+<li>MessageSourceAware</li>
+<li>ApplicationcontextAware</li>
+</ol>
+<p>4-9是applicationContext有的。</p>
+<h1 id="bean销毁"><a href="#bean销毁" class="headerlink" title="bean销毁"></a>bean销毁</h1><p>只是容器内销毁，并不意味着gc；</p>
+<h1 id="beanPostProcesser"><a href="#beanPostProcesser" class="headerlink" title="beanPostProcesser"></a>beanPostProcesser</h1><p>可以有多个，spring用list存储，所以先添加的先执行(FIFO)。</p>
+<h1 id="生命周期末期"><a href="#生命周期末期" class="headerlink" title="生命周期末期"></a>生命周期末期</h1><p>applicationContext关闭<br>gc<br>调用finalized方法</p>
+<h1 id="生命周期完整"><a href="#生命周期完整" class="headerlink" title="生命周期完整"></a>生命周期完整</h1><p>注册<br>合并<br>实例化 前中后<br>赋值   前中后<br>aware回调<br>初始化 前中后<br>销毁  前中后<br>gc<br>finalize</p>
+<h2 id="工具类"><a href="#工具类" class="headerlink" title="工具类"></a>工具类</h2><p><code>ObjectUtils.nullsafeEquals</code><br><code>StringUtils.xxx</code><br><code>NamedThreadLocal</code></p>
+<h2 id="debug技巧"><a href="#debug技巧" class="headerlink" title="debug技巧"></a>debug技巧</h2><p>在底层打断点后，可以看方法调用栈。</p>
+<h2 id="spring事务回滚"><a href="#spring事务回滚" class="headerlink" title="spring事务回滚"></a>spring事务回滚</h2><p>受检异常：不回滚；<br>非受检：例如<code>RuntimeException</code>回滚。</p>
+<p>类内调用: 无事务(因为不经过代理加强)<br>类外调用：有事务</p>
+<p>事务中新开线程： 新线程不能复用原连接(查不到未提交的数据)<br>解决方案：使用事务同步管理器:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">TransactionSynchronizationManager.registerSynchronization(<span class="keyword">new</span> TransactionSynchronizationAdapter() &#123;</span><br></pre></td></tr></table></figure>
+
+
+<h2 id="mysql中立刻触发事务提交的语句"><a href="#mysql中立刻触发事务提交的语句" class="headerlink" title="mysql中立刻触发事务提交的语句"></a>mysql中立刻触发事务提交的语句</h2><p>除了一些元数据操作，得注意新开一个事务也会触发原来的事务立即提交。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">ALTER</span> <span class="keyword">FUNCTION</span>    </span><br><span class="line"><span class="keyword">ALTER</span> <span class="keyword">PROCEDURE</span>    </span><br><span class="line"><span class="keyword">ALTER</span> <span class="keyword">TABLE</span>    </span><br><span class="line"><span class="keyword">BEGIN</span>    </span><br><span class="line"><span class="keyword">CREATE</span> <span class="keyword">DATABASE</span>    </span><br><span class="line"><span class="keyword">CREATE</span> <span class="keyword">FUNCTION</span>    </span><br><span class="line"><span class="keyword">CREATE</span> <span class="keyword">INDEX</span>    </span><br><span class="line"><span class="keyword">CREATE</span> <span class="keyword">PROCEDURE</span>    </span><br><span class="line"><span class="keyword">CREATE</span> <span class="keyword">TABLE</span>    </span><br><span class="line"><span class="keyword">DROP</span> <span class="keyword">DATABASE</span>    </span><br><span class="line"><span class="keyword">DROP</span> <span class="keyword">FUNCTION</span>    </span><br><span class="line"><span class="keyword">DROP</span> <span class="keyword">INDEX</span>    </span><br><span class="line"><span class="keyword">DROP</span> <span class="keyword">PROCEDURE</span>    </span><br><span class="line"><span class="keyword">DROP</span> <span class="keyword">TABLE</span>    </span><br><span class="line"><span class="keyword">UNLOCK</span> <span class="keyword">TABLES</span>    </span><br><span class="line"><span class="keyword">LOAD</span> <span class="keyword">MASTER</span> <span class="keyword">DATA</span>    </span><br><span class="line"><span class="keyword">LOCK</span> <span class="keyword">TABLES</span>    </span><br><span class="line"><span class="keyword">RENAME</span> <span class="keyword">TABLE</span>    </span><br><span class="line"><span class="keyword">TRUNCATE</span> <span class="keyword">TABLE</span>    </span><br><span class="line"><span class="keyword">SET</span> AUTOCOMMIT=<span class="number">1</span>    </span><br><span class="line"><span class="keyword">START</span> <span class="keyword">TRANSACTION</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="BeanFactory初始化"><a href="#BeanFactory初始化" class="headerlink" title="BeanFactory初始化"></a>BeanFactory初始化</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">ResouceLoader加载配置信息</span><br><span class="line">BeanDefintionReader解析配置信息，生成一个一个的BeanDefintion</span><br><span class="line">BeanDefintion由BeanDefintionRegistry管理起来</span><br><span class="line">BeanFactoryPostProcessor对配置信息进行加工(也就是处理配置的信息，一般通过PropertyPlaceholderConfigurer来实现)</span><br><span class="line">实例化Bean</span><br><span class="line">如果该Bean配置&#x2F;实现了InstantiationAwareBean，则调用对应的方法</span><br><span class="line">使用BeanWarpper来完成对象之间的属性配置(依赖)</span><br><span class="line">如果该Bean配置&#x2F;实现了Aware接口，则调用对应的方法</span><br><span class="line">如果该Bean配置了BeanPostProcessor的before方法，则调用</span><br><span class="line">如果该Bean配置了init-method或者实现InstantiationBean，则调用对应的方法</span><br><span class="line">如果该Bean配置了BeanPostProcessor的after方法，则调用</span><br><span class="line">将对象放入到HashMap中</span><br><span class="line">最后如果配置了destroy或者DisposableBean的方法，则执行销毁操作</span><br></pre></td></tr></table></figure>
+
+
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2020/04/19/2020-04/spring%E6%8B%BE%E9%81%97/" data-id="ck96chqyr0000fdam7jgf5vpj" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spring/" rel="tag">spring</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2020-03/利用UTF-8编码的特性进行优化" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/03/26/2020-03/%E5%88%A9%E7%94%A8UTF-8%E7%BC%96%E7%A0%81%E7%9A%84%E7%89%B9%E6%80%A7%E8%BF%9B%E8%A1%8C%E4%BC%98%E5%8C%96/" class="article-date">
+  <time datetime="2020-03-26T08:29:11.000Z" itemprop="datePublished">2020-03-26</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2020/03/26/2020-03/%E5%88%A9%E7%94%A8UTF-8%E7%BC%96%E7%A0%81%E7%9A%84%E7%89%B9%E6%80%A7%E8%BF%9B%E8%A1%8C%E4%BC%98%E5%8C%96/">利用UTF-8编码的特性进行优化</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="引子"><a href="#引子" class="headerlink" title="引子"></a>引子</h1><p>做性能优化的时候，画出火焰图（<code>async-profiler</code>）来看，发现耗时很多花在了<code>utf-8</code>的编码解码上了,所以需要思考一下如何优化这部分。<br>(采样30秒:<code>./profiler.sh -d 30 -f profile.svg [pid]</code>)</p>
+<img src="/images/2020-03/fire1.png" class="" width="800" height="1200" title="fire1">
+<img src="/images/2020-03/fire2.png" class="" width="800" height="1200" title="fire2">
+
+<h1 id="What-什么是UTF-8编码"><a href="#What-什么是UTF-8编码" class="headerlink" title="What: 什么是UTF-8编码"></a>What: 什么是UTF-8编码</h1><p>UTF-8编码就是对于字节流(一串二进制)的解释，解释成字符串。<br>类似的还有: ASCII编码，就是把1B字节解释成128种字符。(范围是0-127,包括英文字母、数字)</p>
+<p>UTF-8编码下，一个字符可以由1B~4B二进制组成。</p>
+<h2 id="UTF-8格式"><a href="#UTF-8格式" class="headerlink" title="UTF-8格式"></a>UTF-8格式</h2><p>合法的格式包括4种:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">0xxxxxxx 				                0-127 (ASCII)</span><br><span class="line">110xxxxx 10xxxxxx 			            128-2047</span><br><span class="line">1110xxxx 10xxxxxx 10xxxxxx              2048-65535</span><br><span class="line">11110xxx 10xxxxxx 10xxxxxx 10xxxxxx 	65536-0x10ffff</span><br></pre></td></tr></table></figure>
+<p>它的首字节的前缀码会指出这个字符会占用多少字节。<br>合法的前缀码有4种:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">0X:    占1B;</span><br><span class="line">110X:  占2B;</span><br><span class="line">1110:  占3B;</span><br><span class="line">11110: 占4B;</span><br></pre></td></tr></table></figure>
+<p>显然还有一种<code>10X</code>不在其中。这是因为<code>10X</code>不属于合法的首字节的前缀码，只能在第2、3、4个字节中出现。如果我们随机选择<code>utf-8</code>二进制流中的一个字节来看的话，可能的情况有5种:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">0X:     首字节,这个字符总长1B</span><br><span class="line">10X:    非首字节.</span><br><span class="line">110X:   首字节,这个字符总长2B</span><br><span class="line">1110X:  首字节,这个字符总长3B</span><br><span class="line">11110X: 首字节,这个字符总长4B</span><br></pre></td></tr></table></figure>
+
+<h3 id="utf-8特性"><a href="#utf-8特性" class="headerlink" title="utf-8特性"></a>utf-8特性</h3><ol>
+<li>兼容性:  0-127和<code>ascii</code>码是一样的,而且在其他字节不可能出现,因此和<code>ascii</code>完全兼容;</li>
+<li>自同步性: 基于上面讨论的前缀码特性,从任意位置开始读,可以定位到合法位置开始解码。</li>
+</ol>
+<h3 id="优化方案"><a href="#优化方案" class="headerlink" title="优化方案"></a>优化方案</h3><p>基于上述两点洞察，再考虑到我此次工作只需要解析字母数字部分，再直接分发二进制流即可。因此可以做两点优化:</p>
+<ol>
+<li>读取时: 不解码,直接理解二进制的每个字节;</li>
+<li>利用自同步性: 并发解析; 原先只能顺序解码,并发解析可以从任意位置开始;</li>
+<li>输出时: 不编码,直接输出二进制;</li>
+</ol>
+<h3 id="结果"><a href="#结果" class="headerlink" title="结果"></a>结果</h3><p>取消编码、解码后这部分耗时下降了12%;<br>并发处理则大幅提速,提速了一倍以上。</p>
+<img src="/images/2020-03/res.png" class="" width="800" height="1200" title="res">
+
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2020/03/26/2020-03/%E5%88%A9%E7%94%A8UTF-8%E7%BC%96%E7%A0%81%E7%9A%84%E7%89%B9%E6%80%A7%E8%BF%9B%E8%A1%8C%E4%BC%98%E5%8C%96/" data-id="ck96cch4r00lmbham4qy10i97" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/utf8/" rel="tag">utf8</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E7%BC%96%E7%A0%81/" rel="tag">编码</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2020-03/linux自连接" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/03/24/2020-03/linux%E8%87%AA%E8%BF%9E%E6%8E%A5/" class="article-date">
+  <time datetime="2020-03-24T02:02:26.000Z" itemprop="datePublished">2020-03-24</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E7%BD%91%E7%BB%9C/">网络</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2020/03/24/2020-03/linux%E8%87%AA%E8%BF%9E%E6%8E%A5/">linux自连接</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>linux支持自连接，也就是同一个ip，同一个机器，自己起一个server、client互相连接。<br>例如使用命令:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">nc localhost $port -p $port</span><br></pre></td></tr></table></figure>
+<p>对应TCP协议中的合法设定，同时打开:</p>
+<img src="/images/2020-03/open_now.png" class="" width="800" height="1200" title="open_now">
+
+<h2 id="误触可能"><a href="#误触可能" class="headerlink" title="误触可能"></a>误触可能</h2><p>虽然这是linux的一个feature，但是我们平时遇到这种情况一般是因为bug，也就是误触。</p>
+<p>一种可能：<br>进程1: listen端口A，然后挂掉，释放端口A；<br>进程2: 源端口A, 连接端口A。</p>
+<h2 id="触发bug条件"><a href="#触发bug条件" class="headerlink" title="触发bug条件"></a>触发bug条件</h2><p>listen端口选择了<code>net.ipv4.ip_local_port_range</code>范围；</p>
+<p><code>net.ipv4.ip_local_port_range</code>范围里的端口是linux连接目标端口时，选择源端口的范围。可以通过修改<code>/etc/sysctl.conf</code>调整。（如果要调大connect并发度）</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">// 查看:</span><br><span class="line">cat /proc/sys/net/ipv4/ip_local_port_range</span><br><span class="line">// 生效:</span><br><span class="line">sysctl -p /etc/sysctl.conf</span><br></pre></td></tr></table></figure>
+<p>因为connect使用的端口会从这个范围取，所以如果listen也用了这个范围，就很可能冲突，形成自连接。</p>
+<h3 id="并发度"><a href="#并发度" class="headerlink" title="并发度"></a>并发度</h3><p>内核3.2以前:  需保证<code>源ip,源端口</code>2元组不同,并发度更低; (随机选择端口)<br>内核3.2以后:  需保证<code>源ip,源端口,目标ip,目标端口</code>4元组不同即可,并发度更大； (顺序选择端口)</p>
+<h3 id="恶化bug条件"><a href="#恶化bug条件" class="headerlink" title="恶化bug条件"></a>恶化bug条件</h3><ol>
+<li>使用连接池，自连接无法释放；</li>
+<li>Linux内核&gt;=3.10: 2.6是随机选择端口,3.10是顺序递增选择；</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2020/03/24/2020-03/linux%E8%87%AA%E8%BF%9E%E6%8E%A5/" data-id="ck96cch4o00l6bham61r4fz17" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/tcp/" rel="tag">tcp</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2020-03/redis大key问题" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/03/23/2020-03/redis%E5%A4%A7key%E9%97%AE%E9%A2%98/" class="article-date">
+  <time datetime="2020-03-23T06:22:37.000Z" itemprop="datePublished">2020-03-23</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2020/03/23/2020-03/redis%E5%A4%A7key%E9%97%AE%E9%A2%98/">redis大key问题</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <ol start="0">
+<li>为啥不能有大key;</li>
+<li>有一些方法，避免大key;</li>
+<li>有大key，安全删除大key;</li>
+</ol>
+<h1 id="what：-什么是大key问题"><a href="#what：-什么是大key问题" class="headerlink" title="what： 什么是大key问题"></a>what： 什么是大key问题</h1><p>就是一个key的value特别大，比如一个hashmap中存了超多k,v;<br>或者一个列表key中存了超长列表，等等；<br>多大算大： hashmap中有100w的k,v =&gt; 1s延迟；<br>删除大Key的时间复杂度: O(N), N代表大key里的值数量，因为redis是单线程一个个删。<br>所以删大key也会卡qps。</p>
+<h2 id="开发规范"><a href="#开发规范" class="headerlink" title="开发规范"></a>开发规范</h2><h3 id="单key大小"><a href="#单key大小" class="headerlink" title="单key大小"></a>单key大小</h3><p>Redis限制每个String类型value大小不超过512MB， 实际开发中，不要超过10KB，否则会对CPU和网卡造成极大负载。 hash、list、set、zset元素个数不要超过5000。</p>
+<p>理论上限: 每个hashset里头元素数量&lt; 2^32. </p>
+<h3 id="key的数量"><a href="#key的数量" class="headerlink" title="key的数量"></a>key的数量</h3><p>官方评测： 单实例2.5亿<br>理论上限: 32位，2^32。约40亿</p>
+<h2 id="测试删除大key"><a href="#测试删除大key" class="headerlink" title="测试删除大key"></a>测试删除大key</h2><p>可以用<code>slowlog</code>命令来查看删除耗时:</p>
+<figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">DEL big_key1</span><br><span class="line">SLOWLOG GET <span class="number">2</span></span><br></pre></td></tr></table></figure>
+
+
+<h1 id="why-为啥不能有大key"><a href="#why-为啥不能有大key" class="headerlink" title="why: 为啥不能有大key"></a>why: 为啥不能有大key</h1><p>redis的基础假设是每个操作都很快，所以设计成单线程处理；<br>所以如果有大key，基础设计就不成立了，会阻塞；</p>
+<p>问题： </p>
+<ol>
+<li>数据倾斜，部分redis分片节点存储占用很高；</li>
+<li>查询突然很慢，qps降低；</li>
+</ol>
+<h1 id="How-如何避免大key"><a href="#How-如何避免大key" class="headerlink" title="How: 如何避免大key"></a>How: 如何避免大key</h1><p>分治法，加一些key前缀\后置分解（如时间、哈希前缀、用户id后缀）;</p>
+<h1 id="安全删除大key"><a href="#安全删除大key" class="headerlink" title="安全删除大key"></a>安全删除大key</h1><ol>
+<li>首先要找到大key才能删除;</li>
+<li>如何删除；</li>
+</ol>
+<h2 id="找到大key、删除大Key"><a href="#找到大key、删除大Key" class="headerlink" title="找到大key、删除大Key"></a>找到大key、删除大Key</h2><h3 id="当版本-lt-4-0"><a href="#当版本-lt-4-0" class="headerlink" title="当版本&lt;4.0"></a>当版本&lt;4.0</h3><p> 1、导出rdb文件分析: <code>bgsave</code>, <code>redis-rdb-tool</code>;<br> 2、命令: <code>redis-cli --bigkeys</code>,找出最大的key；<br> 3、自己写脚本扫描;<br> 4、单个key查看: <code>debug object key</code>： 查看某个key序列化后的长度，每次看1个key的信息,比较没效率。</p>
+<h3 id="删除大Key"><a href="#删除大Key" class="headerlink" title="删除大Key:"></a>删除大Key:</h3><p>分解删除操作：<br>list: 逐步ltrim;<br>zset: 逐步zremrangebyscore;<br>hset: hscan出500个，然后hdel删除；<br>set: sscan扫描出500个，然后srem删除；<br>依次类推；</p>
+<h3 id="当版本-gt-4-0"><a href="#当版本-gt-4-0" class="headerlink" title="当版本&gt;=4.0"></a>当版本&gt;=4.0</h3><h4 id="寻找大key"><a href="#寻找大key" class="headerlink" title="寻找大key"></a>寻找大key</h4><p>命令: <code>memory usage</code></p>
+<h4 id="删除大key：-lazyfree机制"><a href="#删除大key：-lazyfree机制" class="headerlink" title="删除大key： lazyfree机制"></a>删除大key： lazyfree机制</h4><p><code>unlink</code>命令：代替DEL命令；<br>会把对应的大key放到<code>BIO_LAZY_FREE</code>后台线程任务队列，然后在后台异步删除；</p>
+<p>类似的异步删除命令:</p>
+<figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">flushdb async: 异步清空数据库</span><br><span class="line">flushall async: 异步清空所有数据库</span><br></pre></td></tr></table></figure>
+<p>异步删除配置:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">slave-lazy-flush: slave接受完rdb文件后，异步清空数据库；</span><br><span class="line">lazyfree-lazy-eviction: 异步淘汰key;</span><br><span class="line">lazyfree-lazy-expire:   异步key过期;</span><br><span class="line">lazyfree-lazy-server-del: 异步内部删除key；生效于rename命令</span><br><span class="line">## rename命令: RENAME mykey new_name </span><br><span class="line">## 如果new_name已经存在，会先删除new_name，此时触发上述lazy机制</span><br></pre></td></tr></table></figure>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2020/03/23/2020-03/redis%E5%A4%A7key%E9%97%AE%E9%A2%98/" data-id="ck96cch4q00lhbhamguw12lwv" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2020-03/分布式事务" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/03/23/2020-03/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/" class="article-date">
+  <time datetime="2020-03-23T06:20:40.000Z" itemprop="datePublished">2020-03-23</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2020/03/23/2020-03/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/">分布式事务</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <blockquote>
+<p>参考:<br><a href="https://segmentfault.com/a/1190000016397619#item-1-1" target="_blank" rel="noopener">https://segmentfault.com/a/1190000016397619#item-1-1</a><br><a href="https://www.cnblogs.com/duanxz/p/5226316.html" target="_blank" rel="noopener">https://www.cnblogs.com/duanxz/p/5226316.html</a></p>
+</blockquote>
+<p>文中提到的主要是微信支付数据库层面的分布式事务优化。</p>
+<h2 id="优化前"><a href="#优化前" class="headerlink" title="优化前"></a>优化前</h2><p>架构上分为:<br>客户端;<br>CN: Coordinator,协调节点, 类似于对外的服务接口、代理，帮忙协调锁资源;<br>GTM： Global Transaction Manager, 类似于全局锁，全局事务管理器<br>DN: 具体数据节点; </p>
+<p>逻辑很简单，就是CN每次向GTM申请锁，确保分布式事务的安全；<br>CN估计有多个，可能是react模式。<br>这种锁就像直接synchronized了全局，并发纯靠GTM单点纵向拓展。</p>
+<h2 id="优化后"><a href="#优化后" class="headerlink" title="优化后"></a>优化后</h2><p>锁下放到DN层。</p>
+<h1 id="分布式事务"><a href="#分布式事务" class="headerlink" title="分布式事务"></a>分布式事务</h1><p>分布式事务： 多个子系统一致成功、或一致失败回滚。</p>
+<p>4种类型: </p>
+<ol>
+<li>优先考虑避免分布式事务：可以将两个子系统的数据库表放在同一个从库下时：直接使用mysql事务，避免分布式事务;</li>
+<li>无法放在同一个从库下时: 使用TCC;</li>
+<li>特殊限制下: TCC+MQ;</li>
+<li>只要求最终一致性时: 使用MQ异步处理，反复重试。</li>
+</ol>
+<p>2PC和TCC的区别:<br>2PC: 数据库层，性能差(数据库锁)；<br>TCC: 应用层，性能高，开发成本高(需要保证幂等性)。</p>
+<h1 id="TCC"><a href="#TCC" class="headerlink" title="TCC"></a>TCC</h1><p>TCC： Try-Cancel-Commit<br>开源实现: <code>ByteTCC</code></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">1、Try：尝试执行业务。</span><br><span class="line">完成所有业务检查(一致性)</span><br><span class="line">预留必须业务资源(准隔离性)</span><br><span class="line"></span><br><span class="line">2、Confirm：确认执行业务。</span><br><span class="line">真正执行业务</span><br><span class="line">不做任何业务检查</span><br><span class="line">只使用Try阶段预留的业务资源</span><br><span class="line"></span><br><span class="line">3、Cancel：取消执行业务</span><br><span class="line">释放Try阶段预留的业务资源</span><br></pre></td></tr></table></figure>
+<p>其中Confirm和cancel接口需要是幂等的。</p>
+<img src="/images/2020-03/tcc.png" class="" width="800" height="1200" title="tcc">
+<p>每个子事务实现TCC的几个幂等接口。</p>
+<ol>
+<li>使用try锁定资源;</li>
+<li>所有子事务: 写redo日志(持久化)\undo日志(回滚), 执行操作;</li>
+<li>所有子事务: commit提交;</li>
+<li>失败则cancel取消。</li>
+</ol>
+<h2 id="特例"><a href="#特例" class="headerlink" title="特例"></a>特例</h2><p>最后一个子事务可以只实现TryCommit合并:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">IF(代金券.Try) &#123;</span><br><span class="line">    IF(现金支付.TryAndCommit) &#123;</span><br><span class="line">        代金券.Commit</span><br><span class="line">    &#125;  &#123;</span><br><span class="line">        代金券.Cancel</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<h1 id="特殊限制下"><a href="#特殊限制下" class="headerlink" title="特殊限制下"></a>特殊限制下</h1><p>超强一致性：两个从库之间转账。<br>特殊限制： </p>
+<p>加钱: 可以try\commit\cancel;<br>减钱: 不能try，只能tryCommit(也就是一步到位,不能打日志反复重试(不让记录redo log(什么？你想记录用户的密码？))，不能cancel(有undo日志也无法回滚)),能失败。</p>
+<h3 id="方案"><a href="#方案" class="headerlink" title="方案"></a>方案</h3><p>方案1： 从库A先+100，然后从库B-100，最后都提交。<br>方案2： 从库B先-100，然后从库A+100，最后都提交。</p>
+<p>方案1, 需要平台先垫钱，肯定是不行的。<br>方案2, 如果-100的操作是无法try的(比如依赖银行系统)，只能直接tryCommit，也就是只能位于末尾，否则就无法符合TCC的模式了。</p>
+<p>方案3：<br>从库A+100:  Try;<br>从库B-100： TryCommit;<br>从库A+100:  Commit;</p>
+<p>方案3可行，略麻烦。<br>方案3的简化：<br>从库B-100: TryCommit;<br>发布事件到MQ;<br>从库A订阅事件，反复重试+100。 </p>
+<h1 id="最终一致性"><a href="#最终一致性" class="headerlink" title="最终一致性"></a>最终一致性</h1><p>将只需要最终一致性的子事务全部放在MQ中。<br>(类似发通知之类的事件)<br>发布事件到MQ，反复异步重试直到成功（削峰、错峰重试(随机探测)）</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2020/03/23/2020-03/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/" data-id="ck96cch4p00lebhamc7vi6myc" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/" rel="tag">分布式事务</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%B9%B6%E5%8F%91/" rel="tag">并发</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2020-01/ThreadLocal的线性探测" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/01/12/2020-01/ThreadLocal%E7%9A%84%E7%BA%BF%E6%80%A7%E6%8E%A2%E6%B5%8B/" class="article-date">
+  <time datetime="2020-01-12T10:01:31.000Z" itemprop="datePublished">2020-01-12</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2020/01/12/2020-01/ThreadLocal%E7%9A%84%E7%BA%BF%E6%80%A7%E6%8E%A2%E6%B5%8B/">ThreadLocal的线性探测</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>参考:<br><a href="https://www.liaoxuefeng.com/wiki/1252599548343744/1306581251653666" target="_blank" rel="noopener">https://www.liaoxuefeng.com/wiki/1252599548343744/1306581251653666</a><br><a href="http://songkun.me/2019/10/26/2019-10-26-java-threadlocal-hash-clash/" target="_blank" rel="noopener">http://songkun.me/2019/10/26/2019-10-26-java-threadlocal-hash-clash/</a><br><a href="https://juejin.im/post/5d43e415e51d4561db5e39ed" target="_blank" rel="noopener">https://juejin.im/post/5d43e415e51d4561db5e39ed</a></p>
+<h1 id="避免ThreadLocal的内存泄露"><a href="#避免ThreadLocal的内存泄露" class="headerlink" title="避免ThreadLocal的内存泄露"></a>避免ThreadLocal的内存泄露</h1><p>参考上述资料,ThreadLocal是存在线程自己的变量,只不过用threadLocalMap把这个线程所有的ThreadLocal变量都集中存储了,key用的是ThreadLocal对象,value用的是对象T,也就是实际的数据。<br>由于key用的是弱引用,因此使用ThreadLocal时,使用结束时一定要进行<code>remove()</code>,否则会导致内存泄露。</p>
+<p>这里的内存泄露有3重含义:</p>
+<h2 id="局部ThreadLocal变量"><a href="#局部ThreadLocal变量" class="headerlink" title="局部ThreadLocal变量"></a>局部ThreadLocal变量</h2><p>这个数据语义上已经不用了,而且语法上ThreadLocal变量也已经离开作用域，也回收了,key变成了null;但由于ThreadLocal设计实现上的缺陷,ThreadLocalMap中的key变成null,value却不是null,依然强引用了数据,所以不能自动回收,需要程序员手动处理:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">try</span> &#123;</span><br><span class="line">    threadLocalUser.set(user);</span><br><span class="line">    ...</span><br><span class="line">&#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">    threadLocalUser.remove();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="static-ThreadLocal变量"><a href="#static-ThreadLocal变量" class="headerlink" title="static ThreadLocal变量"></a>static ThreadLocal变量</h2><p>这个数据语义上已经不用了,但语法上这个ThreadLocal是static，没有离开作用域,<br>因此理论上还能访问到,设计上的生命周期太过于长了。 这种属于设计缺陷。也需要程序员手动处理,代码同上,也是调用<code>remove()</code>方法。</p>
+<h2 id="搭配线程池的ThreadLocal变量"><a href="#搭配线程池的ThreadLocal变量" class="headerlink" title="搭配线程池的ThreadLocal变量"></a>搭配线程池的ThreadLocal变量</h2><p>这个数据本意上已经不用了,  如果不是线程池的线程，如果只是上述两种情况，也只会内存泄露一段时间，等到线程销毁的时候，就会释放相应的threadlocalMap和内存。<br>但如果搭配线程池使用，这里的ThreadLocalMap和ThreadLocal变量都会继续使用,永不释放内存。<br>因此程序语义变为不同任务都共享这个threadLocal变量，很可能有语义错误。<br>保险起见,也是同上,调用<code>remove()</code>方法即可。</p>
+<h1 id="remove方法背后-ThreadLocalMap的实现机制"><a href="#remove方法背后-ThreadLocalMap的实现机制" class="headerlink" title="remove方法背后: ThreadLocalMap的实现机制"></a>remove方法背后: ThreadLocalMap的实现机制</h1><p>remove方法的语义很简单,就是将ThreadLocalMap的对应key/value都删除。<br>实际底层实现却并不简单,涉及到性能考虑=&gt;线性探测法=&gt;删除时rehash的连锁反应,导致实现较为特殊。</p>
+<h2 id="斐波那契哈希"><a href="#斐波那契哈希" class="headerlink" title="斐波那契哈希"></a>斐波那契哈希</h2><p>ThreadLocalMap希望尽可能提高性能,因此使用斐波那契哈希,使用魔法数0x61c88647,为每一个ThreadLocal变量涉及了尽可能均匀、理论无碰撞的完美哈希，同时辅助以rehash扩容，来保证碰撞和线性探测死循环尽可能不发生。</p>
+<h2 id="线性探测与删除"><a href="#线性探测与删除" class="headerlink" title="线性探测与删除"></a>线性探测与删除</h2><p>ThreadLocalMap处理哈希冲突时使用的是线性探测法,因此删除key的时候不能直接简单把entry置为null; 它采用的方法是把后续每个不为null的entry进行rehash, 放在合适的位置,保证不会因为删除导致线性探测失效中断。这里会把整个哈希表的数组看作循环队列,一直rehash到null的entry,因为当前的entry一定是null,而且负载因子不会太高,而且是单线程,因此一定不会死循环,有终止条件。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">int</span> <span class="title">expungeStaleEntry</span><span class="params">(<span class="keyword">int</span> staleSlot)</span> </span>&#123;</span><br><span class="line">  Entry[] tab = table;</span><br><span class="line">  <span class="keyword">int</span> len = tab.length;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 删除对应位置的entry</span></span><br><span class="line">  tab[staleSlot].value = <span class="keyword">null</span>;</span><br><span class="line">  tab[staleSlot] = <span class="keyword">null</span>;</span><br><span class="line">  size--;</span><br><span class="line"></span><br><span class="line">  Entry e;</span><br><span class="line">  <span class="keyword">int</span> i;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// rehash过程,直到entry为null</span></span><br><span class="line">  <span class="keyword">for</span> (i = nextIndex(staleSlot, len);(e = tab[i]) != <span class="keyword">null</span>; i = nextIndex(i, len)) &#123;</span><br><span class="line">    ThreadLocal&lt;?&gt; k = e.get();</span><br><span class="line">    <span class="comment">// k为空,证明已经被垃圾回收了</span></span><br><span class="line">    <span class="keyword">if</span> (k == <span class="keyword">null</span>) &#123;</span><br><span class="line">        e.value = <span class="keyword">null</span>;</span><br><span class="line">        tab[i] = <span class="keyword">null</span>;</span><br><span class="line">        size--;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="keyword">int</span> h = k.threadLocalHashCode &amp; (len - <span class="number">1</span>);</span><br><span class="line">        <span class="comment">// 判断当前元素是否处于"真正"应该待的位置</span></span><br><span class="line">        <span class="keyword">if</span> (h != i) &#123;</span><br><span class="line">            tab[i] = <span class="keyword">null</span>;</span><br><span class="line">            <span class="comment">// 线性探测</span></span><br><span class="line">            <span class="keyword">while</span> (tab[h] != <span class="keyword">null</span>)</span><br><span class="line">                h = nextIndex(h, len);</span><br><span class="line">            tab[h] = e;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">return</span> i;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>综上, 理论上每次删除都会进行局部链的rehash,但是由于斐波那契哈希设计上是绝对均匀，因此这个”局部链”的长度理论上是非常短甚至是0.<br>此外, 除了这种rehash的方法,还可以对entry进行delete标记来确保线性探测不会中断。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2020/01/12/2020-01/ThreadLocal%E7%9A%84%E7%BA%BF%E6%80%A7%E6%8E%A2%E6%B5%8B/" data-id="ck96cch4o00l9bham1f90b8mx" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-12/长连接相关" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/12/29/2019-12/%E9%95%BF%E8%BF%9E%E6%8E%A5%E7%9B%B8%E5%85%B3/" class="article-date">
+  <time datetime="2019-12-29T09:22:38.000Z" itemprop="datePublished">2019-12-29</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/tcp/">tcp</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/12/29/2019-12/%E9%95%BF%E8%BF%9E%E6%8E%A5%E7%9B%B8%E5%85%B3/">长连接相关</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="WHAT-什么是长连接"><a href="#WHAT-什么是长连接" class="headerlink" title="WHAT: 什么是长连接"></a>WHAT: 什么是长连接</h1><p>长连接: TCP， 默认不断开，用keep alive心跳包保活;<br>持久连接: HTTP 1.1+ keep alive, 默认断开。<br>短连接: 普通HTTP</p>
+<h1 id="WHY-长连接有什么好处-为什么要使用长连接"><a href="#WHY-长连接有什么好处-为什么要使用长连接" class="headerlink" title="WHY: 长连接有什么好处? 为什么要使用长连接"></a>WHY: 长连接有什么好处? 为什么要使用长连接</h1><ol>
+<li>不同域名可以复用一个长连接; （HTTP不行）</li>
+<li>不依赖DNS，节省DNS开销、避免DNS劫持;（HTTP不行）</li>
+<li>减少握手时间开销；</li>
+<li>可以push消息; </li>
+</ol>
+<h1 id="HOW-如何实现一个好的长连接-难点何在"><a href="#HOW-如何实现一个好的长连接-难点何在" class="headerlink" title="HOW: 如何实现一个好的长连接? (难点何在)"></a>HOW: 如何实现一个好的长连接? (难点何在)</h1><h2 id="难点1-长连接断开"><a href="#难点1-长连接断开" class="headerlink" title="难点1 长连接断开"></a>难点1 长连接断开</h2><p>导致断开的原因:</p>
+<ol>
+<li>各个环节的超时时间不匹配; – 动态探测合适的超时时间；</li>
+<li>后台服务; – 或者服务主备切换</li>
+<li>app后台进程挂了;  – app保活课题</li>
+<li>切换网络;  </li>
+</ol>
+<h2 id="难点2-机器资源"><a href="#难点2-机器资源" class="headerlink" title="难点2 机器资源"></a>难点2 机器资源</h2><p>1亿长连接:<br>10w / 台 =&gt; 1000台机器<br>200w / 台 =&gt; 50台机器</p>
+<p>20%活跃度=&gt; 总共需要2kw连接;<br>2000w =&gt; 10台~200台; </p>
+<h3 id="连接限制"><a href="#连接限制" class="headerlink" title="连接限制:"></a>连接限制:</h3><ol>
+<li>网卡限制: 网卡带宽、每秒通信量; </li>
+<li>内核限制: 每个进程最大打开文件句柄数; (NR_OPEN =100w)</li>
+<li>内存限制: TCP的发送、输出缓冲;</li>
+</ol>
+<p>假设一台机器抗200w个连接，则网卡需要:<br>200w<em>1KB/s = 2000MB/s = 16 Gps<br>假设平均20%活跃，则</em>0.2 = 3.2 Gps<br>依此类推内存。</p>
+<h2 id="难点3-惊群效应"><a href="#难点3-惊群效应" class="headerlink" title="难点3 惊群效应"></a>难点3 惊群效应</h2><p>cpu: 100%<br><code>thundering herd</code>： 唤醒一群进程，只有一个进程工作，其他的又继续睡；反复这个流程。</p>
+<blockquote>
+<p>多进程（多线程）在同时阻塞等待同一个事件的时候（休眠状态），如果等待的这个事件发生，那么他就会唤醒等待的所有进程（或者线程），但是最终却只能有一个进程（线程）获得这个时间的“控制权”，对该事件进行处理，而其他进程（线程）获取“控制权”失败，只能重新进入休眠状态，这种现象和性能浪费就叫做惊群效应。</p>
+</blockquote>
+<h2 id="实现要点"><a href="#实现要点" class="headerlink" title="实现要点"></a>实现要点</h2><ol>
+<li>处理好上述长连接断开的4个原因，保证服务质量；</li>
+<li>进行断开重连： 监控+重连。</li>
+<li>架构容灾：<img src="/images/2019-12/long_tcp.png" class="" width="400" height="600" title="long_tcp">
+(1) 多地部署接入点;<br>(2) 长连接失败则降级到udp\http；</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/12/29/2019-12/%E9%95%BF%E8%BF%9E%E6%8E%A5%E7%9B%B8%E5%85%B3/" data-id="ck96cch4n00l1bham36za8qyk" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/tcp/" rel="tag">tcp</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E9%95%BF%E8%BF%9E%E6%8E%A5/" rel="tag">长连接</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-12/分布式限流-redis-令牌桶" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/12/28/2019-12/%E5%88%86%E5%B8%83%E5%BC%8F%E9%99%90%E6%B5%81-redis-%E4%BB%A4%E7%89%8C%E6%A1%B6/" class="article-date">
+  <time datetime="2019-12-28T13:34:45.000Z" itemprop="datePublished">2019-12-28</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/12/28/2019-12/%E5%88%86%E5%B8%83%E5%BC%8F%E9%99%90%E6%B5%81-redis-%E4%BB%A4%E7%89%8C%E6%A1%B6/">分布式限流: redis+令牌桶</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>限流一般有漏桶和令牌桶两种实现，详情网上很多资料。<br>一般都会选用令牌桶算法，比较灵活，可以支持预热、容忍一定突发流量、预支一部分流量的弹性。</p>
+<h1 id="单进程限流"><a href="#单进程限流" class="headerlink" title="单进程限流"></a>单进程限流</h1><p>单个jvm限流有现成的库，谷歌的guava库提供了<code>RateLimiter</code>,底层实现上有两个，一个是能容忍突发的实现，一个是能提供预热功能的实现；通过create时提供不同的参数来获得。</p>
+<h2 id="实现原理"><a href="#实现原理" class="headerlink" title="实现原理"></a>实现原理</h2><h3 id="朴素解法"><a href="#朴素解法" class="headerlink" title="朴素解法"></a>朴素解法</h3><p>如果按照令牌桶算法朴素的定义来实现的话，一个很自然的思路就是增加一个定时线程、进程，然后不断生成新的token; </p>
+<h4 id="朴素解法的缺点"><a href="#朴素解法的缺点" class="headerlink" title="朴素解法的缺点"></a>朴素解法的缺点</h4><p>重度依赖这个定时线程，如果定时程序挂了，所有工作线程就被卡住了，风险较大。<br>如果给定时线程加监控，又会需要监控的监控，那就变成俄罗斯套娃了。</p>
+<h3 id="guava库中的解法"><a href="#guava库中的解法" class="headerlink" title="guava库中的解法"></a>guava库中的解法</h3><p>需要访问者多输入一个参数: 当前时钟。<br><code>lazy eval</code>: 每次取token的时候才计算当前”应该”有多少token。<br>基于时钟来计算: 当前时钟下, 过去了多久没有生成token，应该生成多少新的token。<br>核心代码:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment">   * Updates &#123;<span class="doctag">@code</span> storedPermits&#125; and &#123;<span class="doctag">@code</span> nextFreeTicketMicros&#125; based on the current time.</span></span><br><span class="line"><span class="comment">   */</span></span><br><span class="line">  <span class="function"><span class="keyword">void</span> <span class="title">resync</span><span class="params">(<span class="keyword">long</span> nowMicros)</span> </span>&#123;</span><br><span class="line">    <span class="comment">// if nextFreeTicket is in the past, resync to now</span></span><br><span class="line">    <span class="keyword">if</span> (nowMicros &gt; nextFreeTicketMicros) &#123;</span><br><span class="line">      storedPermits = min(maxPermits,</span><br><span class="line">          storedPermits</span><br><span class="line">            + (nowMicros - nextFreeTicketMicros) / coolDownIntervalMicros());</span><br><span class="line">      nextFreeTicketMicros = nowMicros;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
+<h3 id="guava库中解法的优点"><a href="#guava库中解法的优点" class="headerlink" title="guava库中解法的优点"></a>guava库中解法的优点</h3><p>开销更低: 去掉了定时线程的开销;<br>健壮性更高: 每个线程都可以承担生成新token的任务;</p>
+<h3 id="guava库中解法的缺点"><a href="#guava库中解法的缺点" class="headerlink" title="guava库中解法的缺点"></a>guava库中解法的缺点</h3><p>每个线程的时钟得对齐。但这一点在单进程场景下很好保证。</p>
+<h2 id="使用"><a href="#使用" class="headerlink" title="使用"></a>使用</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> com.google.common.util.concurrent.RateLimiter;</span><br><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">run1</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        RateLimiter limiter = RateLimiter.create(<span class="number">5</span>);<span class="comment">// 令牌桶</span></span><br><span class="line">        <span class="keyword">while</span> (<span class="keyword">true</span>) &#123;</span><br><span class="line">            System.out.println(<span class="string">"get 1 tokens: "</span> + limiter.acquire() + <span class="string">"s"</span></span><br><span class="line">            );</span><br><span class="line"></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 3秒预热期: 预热期内限频较严格: 1.3s , 0.9s , 0.6s // 线性提速</span></span><br><span class="line"><span class="comment">     * 预热期后: 正式达到1秒2个的额定速度.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">run2</span><span class="params">()</span> </span>&#123;<span class="comment">// 预热测试</span></span><br><span class="line">        RateLimiter r = RateLimiter.create(<span class="number">2</span>, <span class="number">3</span>, TimeUnit.SECONDS);</span><br><span class="line">        <span class="keyword">while</span> (<span class="keyword">true</span>) &#123;</span><br><span class="line">            System.out.println(<span class="string">"get 1 tokens: "</span> + r.acquire(<span class="number">1</span>) + <span class="string">"s"</span>);</span><br><span class="line">            System.out.println(<span class="string">"get 1 tokens: "</span> + r.acquire(<span class="number">1</span>) + <span class="string">"s"</span>);</span><br><span class="line">            System.out.println(<span class="string">"get 1 tokens: "</span> + r.acquire(<span class="number">1</span>) + <span class="string">"s"</span>);</span><br><span class="line">            System.out.println(<span class="string">"get 1 tokens: "</span> + r.acquire(<span class="number">1</span>) + <span class="string">"s"</span>);</span><br><span class="line">            System.out.println(<span class="string">"end"</span>);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">run3</span><span class="params">()</span> </span>&#123;<span class="comment">// 突发测试</span></span><br><span class="line">        RateLimiter r = RateLimiter.create(<span class="number">5</span>);</span><br><span class="line">        <span class="keyword">while</span> (<span class="keyword">true</span>) &#123;</span><br><span class="line">            System.out.println(<span class="string">"get 5 tokens: "</span> + r.acquire(<span class="number">5</span>) + <span class="string">"s"</span>);</span><br><span class="line">            System.out.println(<span class="string">"get 1 tokens: "</span> + r.acquire(<span class="number">1</span>) + <span class="string">"s"</span>);<span class="comment">// 每次都负责还债</span></span><br><span class="line">            System.out.println(<span class="string">"get 1 tokens: "</span> + r.acquire(<span class="number">1</span>) + <span class="string">"s"</span>);</span><br><span class="line">            System.out.println(<span class="string">"get 1 tokens: "</span> + r.acquire(<span class="number">1</span>) + <span class="string">"s"</span>);</span><br><span class="line">            System.out.println(<span class="string">"end"</span>);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<h1 id="分布式限流"><a href="#分布式限流" class="headerlink" title="分布式限流"></a>分布式限流</h1><p>如果是多实例的情况下,下游处理能力有上限时(例如物料有限),需要对整体有一个限流。<br>可以参考guava的实现,实现一个基于redis的，有一定弹性的令牌桶实现:<br>(由于是借鉴guava的实现，所以有相同的依赖: 所有进程、机器的时钟对齐)</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">tokenLimitDemo</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        DefaultRedisScript&lt;Long&gt; lua = <span class="keyword">new</span> DefaultRedisScript&lt;&gt;();</span><br><span class="line">        lua.setResultType(Long<span class="class">.<span class="keyword">class</span>)</span>;</span><br><span class="line">        lua.setScriptSource(<span class="keyword">new</span> ResourceScriptSource(<span class="keyword">new</span></span><br><span class="line">                ClassPathResource(<span class="string">"tokenLimiter.lua"</span>)));</span><br><span class="line">        List&lt;String&gt; keys = <span class="keyword">new</span> ArrayList&lt;&gt;();</span><br><span class="line">        keys.add(<span class="string">"test_ip"</span>);</span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; <span class="number">100</span>; i++) &#123;</span><br><span class="line">            Long res = (Long) redisTemplate.execute(lua, keys</span><br><span class="line">                    , <span class="string">"1"</span></span><br><span class="line">                    , String.valueOf(System.currentTimeMillis())</span><br><span class="line">            );</span><br><span class="line">            <span class="keyword">if</span> (res != <span class="number">1</span>) &#123;</span><br><span class="line">                <span class="keyword">try</span> &#123;</span><br><span class="line">                    System.out.println(<span class="string">"waiting"</span>);</span><br><span class="line">                    Thread.sleep(<span class="number">100</span>);</span><br><span class="line">                    i--;</span><br><span class="line">                &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                    e.printStackTrace();</span><br><span class="line">                &#125;</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                System.out.println(res);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>相应的lua脚本: </p>
+<figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- 令牌桶算法:</span></span><br><span class="line"><span class="comment">-- 1. 校验输入:</span></span><br><span class="line"><span class="keyword">local</span> need_token = <span class="built_in">tonumber</span>(ARGV[<span class="number">1</span>])</span><br><span class="line"><span class="keyword">local</span> req_time = <span class="built_in">tonumber</span>(ARGV[<span class="number">2</span>])</span><br><span class="line"><span class="keyword">if</span> <span class="built_in">type</span>(need_token) ~= <span class="string">"number"</span> <span class="keyword">or</span> <span class="built_in">type</span>(req_time) ~= <span class="string">"number"</span> <span class="keyword">then</span></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span></span><br><span class="line"><span class="keyword">end</span></span><br><span class="line"></span><br><span class="line"><span class="comment">-- 2. 校验redis:</span></span><br><span class="line"><span class="keyword">local</span> key = KEYS[<span class="number">1</span>]</span><br><span class="line"><span class="keyword">local</span> info = redis.<span class="built_in">pcall</span>(<span class="string">"HMGET"</span>, key, <span class="string">"last_time"</span>, <span class="string">"cur_token_num"</span>, <span class="string">"max_token"</span>, <span class="string">"rate"</span>)</span><br><span class="line"><span class="keyword">local</span> last_time = <span class="built_in">tonumber</span>(info[<span class="number">1</span>])</span><br><span class="line"><span class="keyword">local</span> cur_token_num = <span class="built_in">tonumber</span>(info[<span class="number">2</span>])</span><br><span class="line"><span class="keyword">local</span> max_token = <span class="built_in">tonumber</span>(info[<span class="number">3</span>])</span><br><span class="line"><span class="keyword">local</span> rate = <span class="built_in">tonumber</span>(info[<span class="number">4</span>])</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> <span class="built_in">type</span>(last_time) ~= <span class="string">"number"</span> <span class="keyword">then</span> <span class="comment">-- init</span></span><br><span class="line">    last_time = req_time</span><br><span class="line">    max_token = <span class="number">2</span> <span class="comment">-- 最大token弹性</span></span><br><span class="line">    cur_token_num = max_token <span class="comment">-- 假设已经预热完毕</span></span><br><span class="line">    rate = <span class="number">1</span></span><br><span class="line">    <span class="comment">-- 初始化redis:</span></span><br><span class="line">    redis.<span class="built_in">pcall</span>(<span class="string">"HMSET"</span>, key, <span class="string">"last_time"</span>, req_time, <span class="string">"cur_token_num"</span>, cur_token_num)</span><br><span class="line">    redis.<span class="built_in">pcall</span>(<span class="string">"HMSET"</span>, key, <span class="string">"max_token"</span>, max_token, <span class="string">"rate"</span>, rate)</span><br><span class="line"><span class="keyword">end</span></span><br><span class="line"></span><br><span class="line"><span class="comment">-- 3. 处理请求:</span></span><br><span class="line"><span class="keyword">local</span> result = <span class="number">0</span></span><br><span class="line"><span class="keyword">if</span> <span class="built_in">tonumber</span>(need_token) &gt; <span class="built_in">tonumber</span>(max_token) <span class="keyword">then</span></span><br><span class="line">    result = <span class="number">0</span></span><br><span class="line"><span class="keyword">end</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">local</span> new_gen_token = <span class="built_in">math</span>.<span class="built_in">floor</span>((req_time - last_time) / <span class="number">1000</span>) * rate</span><br><span class="line"><span class="keyword">local</span> cur_token_num = <span class="built_in">math</span>.<span class="built_in">min</span>(cur_token_num + new_gen_token, max_token)</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> <span class="built_in">tonumber</span>(need_token) &gt; <span class="built_in">tonumber</span>(cur_token_num) <span class="keyword">then</span></span><br><span class="line">    result = <span class="number">0</span></span><br><span class="line"><span class="keyword">else</span> <span class="comment">-- do consume token</span></span><br><span class="line">    cur_token_num = cur_token_num - need_token</span><br><span class="line">    result = <span class="number">1</span></span><br><span class="line">    <span class="comment">-- 保存进度:</span></span><br><span class="line">    redis.<span class="built_in">pcall</span>(<span class="string">"HMSET"</span>, key, <span class="string">"last_time"</span>, req_time, <span class="string">"cur_token_num"</span>, cur_token_num)</span><br><span class="line"><span class="keyword">end</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">return</span> result</span><br></pre></td></tr></table></figure>
+
+
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/12/28/2019-12/%E5%88%86%E5%B8%83%E5%BC%8F%E9%99%90%E6%B5%81-redis-%E4%BB%A4%E7%89%8C%E6%A1%B6/" data-id="ck96cch4m00kybham41ag5h89" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-12/RTP-RTCP协议" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/12/02/2019-12/RTP-RTCP%E5%8D%8F%E8%AE%AE/" class="article-date">
+  <time datetime="2019-12-02T02:09:59.000Z" itemprop="datePublished">2019-12-02</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E7%BD%91%E7%BB%9C/">网络</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/12/02/2019-12/RTP-RTCP%E5%8D%8F%E8%AE%AE/">RTP/RTCP协议</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="实时传输协议RTP-RTCP"><a href="#实时传输协议RTP-RTCP" class="headerlink" title="实时传输协议RTP/RTCP"></a>实时传输协议RTP/RTCP</h1><p>参考:<br><a href="https://www.jianshu.com/p/631273bc9847" target="_blank" rel="noopener">https://www.jianshu.com/p/631273bc9847</a></p>
+<p>底层理论上也不一定用tcp/udp,实际上为了性能大多用udp。</p>
+<p>RTP:  <code>Real-time Transport Protocol</code><br>RTCP: <code>RTP Control Protocol</code></p>
+<img src="/images/2019-12/RTCP.jpg" class="" width="800" height="1200" title="RTCP">
+
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">RTP: 用udp来传数据；      (偶数端口)</span><br><span class="line">RTCP: 用udp来传控制信息； (奇数端口, 一般是RTP的端口+1) 服务质量的监视与反馈、媒体间的同步，以及多播组中成员的标识</span><br></pre></td></tr></table></figure>
+
+<h2 id="计算机网络"><a href="#计算机网络" class="headerlink" title="计算机网络"></a>计算机网络</h2><p>交换机级别： 组播协议，一对多<br>多对多可以转换成一对多。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/12/02/2019-12/RTP-RTCP%E5%8D%8F%E8%AE%AE/" data-id="ck96cch4k00kqbham3ssk3mhk" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/RTP/" rel="tag">RTP</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-11/利用序列样本超越A-B-Test-interleaving和多臂老虎机" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/11/13/2019-11/%E5%88%A9%E7%94%A8%E5%BA%8F%E5%88%97%E6%A0%B7%E6%9C%AC%E8%B6%85%E8%B6%8AA-B-Test-interleaving%E5%92%8C%E5%A4%9A%E8%87%82%E8%80%81%E8%99%8E%E6%9C%BA/" class="article-date">
+  <time datetime="2019-11-13T06:13:15.000Z" itemprop="datePublished">2019-11-13</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E8%AE%BA%E6%96%87/">论文</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/11/13/2019-11/%E5%88%A9%E7%94%A8%E5%BA%8F%E5%88%97%E6%A0%B7%E6%9C%AC%E8%B6%85%E8%B6%8AA-B-Test-interleaving%E5%92%8C%E5%A4%9A%E8%87%82%E8%80%81%E8%99%8E%E6%9C%BA/">利用序列样本超越A/B Test: interleaving和多臂老虎机</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <blockquote>
+<p>interleaving实验: 快速找到最优解;<br>多臂老虎机: 降低实验成本;</p>
+</blockquote>
+<h1 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h1><p>经典统计分析的样本: 农业统计中样本是同时产生的。<br>在线服务中的样本: 序列样本,在线服务中样本是依次到达的;</p>
+<p>利用这个特性,可以有比传统统计分析方法成本更小、更灵活的实验方法。<br>序列样本环境下的假设检验,在相同显著性和检验力下,经典t检验结束更早,需要样本更少。</p>
+<h1 id="Interleaving实验"><a href="#Interleaving实验" class="headerlink" title="Interleaving实验"></a>Interleaving实验</h1><p><code>交错实验</code><br>优先确定哪个方案更好,而不是统计出具体效果好多少.<br>参考: <a href="https://zhuanlan.zhihu.com/p/31770319" target="_blank" rel="noopener">https://zhuanlan.zhihu.com/p/31770319</a><br><code>优点</code>: 更少的样本达到与Abtest相同的偏向结果；<br><code>缺点</code>： 无法知道究竟有多好的效果；（比如A组究竟能提高多少阅读时长）</p>
+<h2 id="解决方案"><a href="#解决方案" class="headerlink" title="解决方案"></a>解决方案</h2><p>用<code>Interleaving</code>+<code>ABtest</code>两阶段完成整个评估。</p>
+<p><code>要点</code>：抛硬币交错，保证公平。<br><code>灵敏度</code>： 高于AB；<br><code>准确度</code>： 与AB有很强的相关性；<br><code>场景</code>： 排名算法</p>
+<img src="/images/2019-11/right.jpg" class="" width="800" height="1200" title="right">
+
+
+<h2 id="案例-Netflix的方法"><a href="#案例-Netflix的方法" class="headerlink" title="案例: Netflix的方法"></a>案例: Netflix的方法</h2><p>第一阶段: 快速筛选,从众多算法中挑选出最有前途的排名算法;<br>第二阶段，进行传统的A/B测试,以测量长期效应;</p>
+<img src="/images/2019-11/interleaving.jpg" class="" width="800" height="1200" title="interleaving">
+
+<h2 id="使用条件"><a href="#使用条件" class="headerlink" title="使用条件"></a>使用条件</h2><ol>
+<li>指标对排序算法的质量非常敏感;</li>
+<li>对第二阶段进行准确预测：第一阶段衡量的指标与A/B 评估的指标正相关；</li>
+</ol>
+<h3 id="指标示例"><a href="#指标示例" class="headerlink" title="指标示例"></a>指标示例</h3><p>传统AB指标: 留存、观看时长；<br>交错测试指标: 观看时长比例；</p>
+<h1 id="MAB-多臂老虎机"><a href="#MAB-多臂老虎机" class="headerlink" title="MAB: 多臂老虎机"></a>MAB: 多臂老虎机</h1><p>参考: <a href="http://www.fengjunchen.com/%E9%80%82%E7%94%A8%E4%BA%8E%E5%9C%A8%E7%BA%BF%E6%9C%8D%E5%8A%A1%E7%9A%84ab%E6%B5%8B%E8%AF%95%E6%96%B9%E6%B3%95%E8%AE%BA/" target="_blank" rel="noopener">http://www.fengjunchen.com/%E9%80%82%E7%94%A8%E4%BA%8E%E5%9C%A8%E7%BA%BF%E6%9C%8D%E5%8A%A1%E7%9A%84ab%E6%B5%8B%E8%AF%95%E6%96%B9%E6%B3%95%E8%AE%BA/</a></p>
+<h2 id="What-什么是多臂老虎机"><a href="#What-什么是多臂老虎机" class="headerlink" title="What: 什么是多臂老虎机"></a>What: 什么是多臂老虎机</h2><p>一种在线实验的方法，特点是兼顾实验结果和实验成本，不会让差劲的方案暴露给用户太久。</p>
+<p>在线上进行大规模实验的时候，可能会影响用户体验，从而影响用户留存等关键业务指标。因此我们希望在实验过程中，尽可能降低差方案曝光的频率。为了达到这个目的,大致有两种思路:<br>思路1: 动态结束;一旦A方案胜出,立即停止实验,采用A方案;<br>思路2: 非均衡分组;在优势方案下多分配用户.(多臂老虎机)</p>
+<p>使用场景: 序列样本/在线服务</p>
+<h3 id="背景-1"><a href="#背景-1" class="headerlink" title="背景"></a>背景</h3><blockquote>
+<p>Bandit: 老虎机</p>
+</blockquote>
+<img src="/images/2019-11/mab.jpg" class="" width="400" height="600" title="mab">
+<p>多臂老虎机问题:<br>老虎机有N个摇杆,每个得到奖励的概率为p1~pN;<br>假设可以拉很多次摇杆，使用什么策略可以使总收益最大化?</p>
+<h4 id="一种可能的思路"><a href="#一种可能的思路" class="headerlink" title="一种可能的思路"></a>一种可能的思路</h4><p>先抽样统计收益较好的摇杆,然后利用统计解决快速调整策略。<br>也就是分两个阶段:</p>
+<ol>
+<li>探索规律;</li>
+<li>利用规律;</li>
+</ol>
+<h3 id="汤普森抽样"><a href="#汤普森抽样" class="headerlink" title="汤普森抽样"></a>汤普森抽样</h3><p>在每个周期计算”摇杆i是最优摇杆”的后验概率,作为下一个周期随机分配摇杆的依据。</p>
+<p>优点: 灵活性、扩展性、保证实验过程坑用户比例最小;<br>缺点: 没有人公开发表过简单靠谱的停止条件。</p>
+<h4 id="PVR-停止条件的解决方案"><a href="#PVR-停止条件的解决方案" class="headerlink" title="PVR: 停止条件的解决方案"></a>PVR: 停止条件的解决方案</h4><p><code>google analytics</code>: PVR(潜在剩余价值)。<br>定义分界线为a,分界概率为b:</p>
+<blockquote>
+<p>P(潜在最优收益&gt;(1+a%)*目前最优收益) &lt; b</p>
+</blockquote>
+<p>google analytics的参数设置是<code>a=0.01,b=0.05</code>,即潜在最优收益比目前最优收益大1%的概率不到5%。</p>
+<h3 id="PVR方案的缺点"><a href="#PVR方案的缺点" class="headerlink" title="PVR方案的缺点"></a>PVR方案的缺点</h3><p>即使A/B方案没有任何区别,PVR也会导致相当一部分实验在有限时间内终止。<br>第一类错误的概率随时间延长增加。</p>
+<img src="/images/2019-11/error2.jpg" class="" width="800" height="1200" title="error2">
+<p>scott: 线上实验不需要考虑第一类错误，因为代价极小；而第二类错误是致命的。</p>
+<h2 id="案例"><a href="#案例" class="headerlink" title="案例"></a>案例</h2><p>谷歌analytics/yahoo/bing: 汤普森抽样的贝叶斯解法<br>论文: <a href="http://quinonero.net/Publications/AdPredictorICML2010-final.pdf" target="_blank" rel="noopener">http://quinonero.net/Publications/AdPredictorICML2010-final.pdf</a><br>数学要求: 超精深<br>相关图灵书: 《Bandit Algorithms for Website Optimization》</p>
+<img src="/images/2019-11/mab_book.jpg" class="" width="400" height="600" title="mab_book">
+<p>相关论文： <a href="http://www.economics.uci.edu/~ivan/asmb.874.pdf" target="_blank" rel="noopener">http://www.economics.uci.edu/~ivan/asmb.874.pdf</a></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/11/13/2019-11/%E5%88%A9%E7%94%A8%E5%BA%8F%E5%88%97%E6%A0%B7%E6%9C%AC%E8%B6%85%E8%B6%8AA-B-Test-interleaving%E5%92%8C%E5%A4%9A%E8%87%82%E8%80%81%E8%99%8E%E6%9C%BA/" data-id="ck96cch4i00kibhamcw3ufgnq" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E8%AE%BA%E6%96%87/" rel="tag">论文</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+
+
+  <nav id="page-nav">
+    <span class="page-number current">1</span><a class="page-number" href="/page/2/">2</a><a class="page-number" href="/page/3/">3</a><span class="space">&hellip;</span><a class="page-number" href="/page/20/">20</a><a class="extend next" rel="next" href="/page/2/">下一页&amp;raquo;</a>
+  </nav>
+</section>
+           
+    <aside id="sidebar">
+  
+    
+  <div class="widget-wrap">
+     
+        <h3 class="follow-title ">Follow me</h3>
+     
+    <div class="widget follow">
+      
+              <a class="github" aria-hidden="true" href="https://github.com/xiaoyue26" target="_blank" title="Github"></a>
+      
+      
+            <a class="weibo" aria-hidden="true"  href="http://weibo.com/3004306764" target="_blank" title="微博"></a>
+      
+      
+      
+            <a class="email" aria-hidden="true"  href="mailto:296671657@qq.com" target="_blank" title="邮箱"></a>
+      
+    </div>
+  </div>
+
+
+  
+    
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title categories">分类</h3>
+    <div class="widget" id="categories">
+      <ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/clickhouse/">clickhouse</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/git/">git</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/gradle/">gradle</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/hadoop/">hadoop</a><span class="category-list-count">15</span><ul class="category-list-child"><li class="category-list-item"><a class="category-list-link" href="/categories/hadoop/hbase/">hbase</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/hadoop/hive/">hive</a><span class="category-list-count">8</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/hadoop/pig/">pig</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/hadoop/sqoop/">sqoop</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/hadoop/%E8%BF%90%E7%BB%B4/">运维</a><span class="category-list-count">1</span></li></ul></li><li class="category-list-item"><a class="category-list-link" href="/categories/http/">http</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/java/">java</a><span class="category-list-count">75</span><ul class="category-list-child"><li class="category-list-item"><a class="category-list-link" href="/categories/java/Netty/">Netty</a><span class="category-list-count">14</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/java/jvm/">jvm</a><span class="category-list-count">8</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/java/spring/">spring</a><span class="category-list-count">5</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a><span class="category-list-count">21</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/java/%E6%80%A7%E8%83%BD/">性能</a><span class="category-list-count">5</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/java/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/">设计模式</a><span class="category-list-count">7</span></li></ul></li><li class="category-list-item"><a class="category-list-link" href="/categories/mysql/">mysql</a><span class="category-list-count">22</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/nginx/">nginx</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/orm/">orm</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/redis/">redis</a><span class="category-list-count">18</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/rust/">rust</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/shell/">shell</a><span class="category-list-count">4</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/spark/">spark</a><span class="category-list-count">11</span><ul class="category-list-child"><li class="category-list-item"><a class="category-list-link" href="/categories/spark/streaming/">streaming</a><span class="category-list-count">1</span></li></ul></li><li class="category-list-item"><a class="category-list-link" href="/categories/tcp/">tcp</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F/">分布式</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/">数据结构与算法</a><span class="category-list-count">3</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E6%97%A5%E5%BF%97/">日志</a><span class="category-list-count">4</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/">消息队列</a><span class="category-list-count">4</span><ul class="category-list-child"><li class="category-list-item"><a class="category-list-link" href="/categories/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/disruptor/">disruptor</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/kafka/">kafka</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/rabbitmq/">rabbitmq</a><span class="category-list-count">1</span></li></ul></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E7%BD%91%E7%BB%9C/">网络</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E8%AE%BA%E6%96%87/">论文</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E9%85%8D%E7%BD%AE/">配置</a><span class="category-list-count">23</span></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title tagcloud">标签云</h3>
+    <div class="widget tagcloud">
+      <a href="/tags/2-3%E6%A0%91/" style="font-size: 14px; color: #00f">2-3树</a> <a href="/tags/AES/" style="font-size: 14px; color: #00f">AES</a> <a href="/tags/DDD/" style="font-size: 15.1px; color: #180dfd">DDD</a> <a href="/tags/HMAC/" style="font-size: 14px; color: #00f">HMAC</a> <a href="/tags/HTTP/" style="font-size: 14px; color: #00f">HTTP</a> <a href="/tags/JMX/" style="font-size: 14px; color: #00f">JMX</a> <a href="/tags/JNI/" style="font-size: 17.3px; color: #4727fa">JNI</a> <a href="/tags/NIO/" style="font-size: 14px; color: #00f">NIO</a> <a href="/tags/Netty/" style="font-size: 21.7px; color: #a75bf3">Netty</a> <a href="/tags/RSA/" style="font-size: 14px; color: #00f">RSA</a> <a href="/tags/RTP/" style="font-size: 14px; color: #00f">RTP</a> <a href="/tags/SIMD/" style="font-size: 14px; color: #00f">SIMD</a> <a href="/tags/SSL/" style="font-size: 14px; color: #00f">SSL</a> <a href="/tags/TLS/" style="font-size: 14px; color: #00f">TLS</a> <a href="/tags/awk/" style="font-size: 14px; color: #00f">awk</a> <a href="/tags/clickhouse/" style="font-size: 15.1px; color: #180dfd">clickhouse</a> <a href="/tags/disruptor/" style="font-size: 14px; color: #00f">disruptor</a> <a href="/tags/flask/" style="font-size: 14px; color: #00f">flask</a> <a href="/tags/gc/" style="font-size: 14px; color: #00f">gc</a> <a href="/tags/git/" style="font-size: 14px; color: #00f">git</a> <a href="/tags/gradle/" style="font-size: 15.1px; color: #180dfd">gradle</a> <a href="/tags/groovy/" style="font-size: 14px; color: #00f">groovy</a> <a href="/tags/hadoop/" style="font-size: 17.3px; color: #4727fa">hadoop</a> <a href="/tags/hbase/" style="font-size: 14px; color: #00f">hbase</a> <a href="/tags/hdfs/" style="font-size: 15.1px; color: #180dfd">hdfs</a> <a href="/tags/hive/" style="font-size: 18.4px; color: #5f34f8">hive</a> <a href="/tags/hll/" style="font-size: 14px; color: #00f">hll</a> <a href="/tags/http/" style="font-size: 14px; color: #00f">http</a> <a href="/tags/https/" style="font-size: 14px; color: #00f">https</a> <a href="/tags/hyperloglog/" style="font-size: 14px; color: #00f">hyperloglog</a> <a href="/tags/io/" style="font-size: 14px; color: #00f">io</a> <a href="/tags/java/" style="font-size: 25px; color: #ee82ee">java</a> <a href="/tags/jvm/" style="font-size: 18.4px; color: #5f34f8">jvm</a> <a href="/tags/kafka/" style="font-size: 16.2px; color: #301afc">kafka</a> <a href="/tags/kylin/" style="font-size: 14px; color: #00f">kylin</a> <a href="/tags/log4j2/" style="font-size: 14px; color: #00f">log4j2</a> <a href="/tags/maven/" style="font-size: 14px; color: #00f">maven</a> <a href="/tags/monad/" style="font-size: 14px; color: #00f">monad</a> <a href="/tags/mybatis/" style="font-size: 15.1px; color: #180dfd">mybatis</a> <a href="/tags/mysql/" style="font-size: 23.9px; color: #d675f0">mysql</a> <a href="/tags/nginx/" style="font-size: 16.2px; color: #301afc">nginx</a> <a href="/tags/paxos/" style="font-size: 14px; color: #00f">paxos</a> <a href="/tags/pig/" style="font-size: 14px; color: #00f">pig</a> <a href="/tags/python/" style="font-size: 14px; color: #00f">python</a> <a href="/tags/rabbitmq/" style="font-size: 14px; color: #00f">rabbitmq</a> <a href="/tags/redis/" style="font-size: 22.8px; color: #be68f1">redis</a> <a href="/tags/restful/" style="font-size: 14px; color: #00f">restful</a> <a href="/tags/rust/" style="font-size: 15.1px; color: #180dfd">rust</a> <a href="/tags/scala/" style="font-size: 17.3px; color: #4727fa">scala</a> <a href="/tags/shell/" style="font-size: 17.3px; color: #4727fa">shell</a> <a href="/tags/spark/" style="font-size: 19.5px; color: #7741f7">spark</a> <a href="/tags/spring/" style="font-size: 17.3px; color: #4727fa">spring</a> <a href="/tags/springboot/" style="font-size: 14px; color: #00f">springboot</a> <a href="/tags/springmvc/" style="font-size: 14px; color: #00f">springmvc</a> <a href="/tags/sql%E6%B3%A8%E5%85%A5/" style="font-size: 14px; color: #00f">sql注入</a> <a href="/tags/sqoop/" style="font-size: 15.1px; color: #180dfd">sqoop</a> <a href="/tags/ssl/" style="font-size: 14px; color: #00f">ssl</a> <a href="/tags/storage/" style="font-size: 14px; color: #00f">storage</a> <a href="/tags/streaming/" style="font-size: 14px; color: #00f">streaming</a> <a href="/tags/tcp/" style="font-size: 15.1px; color: #180dfd">tcp</a> <a href="/tags/utf8/" style="font-size: 14px; color: #00f">utf8</a> <a href="/tags/%E4%B8%80%E8%87%B4%E6%80%A7%E5%93%88%E5%B8%8C/" style="font-size: 14px; color: #00f">一致性哈希</a> <a href="/tags/%E5%87%BD%E6%95%B0%E5%BC%8F/" style="font-size: 14px; color: #00f">函数式</a> <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/" style="font-size: 15.1px; color: #180dfd">分布式</a> <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/" style="font-size: 14px; color: #00f">分布式事务</a> <a href="/tags/%E5%AE%9A%E6%97%B6%E4%BB%BB%E5%8A%A1/" style="font-size: 14px; color: #00f">定时任务</a> <a href="/tags/%E5%B9%B6%E5%8F%91/" style="font-size: 20.6px; color: #8f4ef5">并发</a> <a href="/tags/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/" style="font-size: 14px; color: #00f">数据结构与算法</a> <a href="/tags/%E6%97%A5%E5%BF%97/" style="font-size: 15.1px; color: #180dfd">日志</a> <a href="/tags/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/" style="font-size: 15.1px; color: #180dfd">消息队列</a> <a href="/tags/%E7%AE%97%E6%B3%95/" style="font-size: 15.1px; color: #180dfd">算法</a> <a href="/tags/%E7%BA%A2%E9%BB%91%E6%A0%91/" style="font-size: 14px; color: #00f">红黑树</a> <a href="/tags/%E7%BA%BF%E7%A8%8B/" style="font-size: 14px; color: #00f">线程</a> <a href="/tags/%E7%BC%96%E7%A0%81/" style="font-size: 14px; color: #00f">编码</a> <a href="/tags/%E8%AE%BA%E6%96%87/" style="font-size: 15.1px; color: #180dfd">论文</a> <a href="/tags/%E8%AE%BE%E8%AE%A1/" style="font-size: 15.1px; color: #180dfd">设计</a> <a href="/tags/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/" style="font-size: 17.3px; color: #4727fa">设计模式</a> <a href="/tags/%E9%85%8D%E7%BD%AE/" style="font-size: 23.9px; color: #d675f0">配置</a> <a href="/tags/%E9%95%BF%E8%BF%9E%E6%8E%A5/" style="font-size: 14px; color: #00f">长连接</a>
+    </div>
+  </div>
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title recent-posts">最新文章</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2020/04/19/2020-04/spring%E6%8B%BE%E9%81%97/">spring拾遗</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/26/2020-03/%E5%88%A9%E7%94%A8UTF-8%E7%BC%96%E7%A0%81%E7%9A%84%E7%89%B9%E6%80%A7%E8%BF%9B%E8%A1%8C%E4%BC%98%E5%8C%96/">利用UTF-8编码的特性进行优化</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/24/2020-03/linux%E8%87%AA%E8%BF%9E%E6%8E%A5/">linux自连接</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/23/2020-03/redis%E5%A4%A7key%E9%97%AE%E9%A2%98/">redis大key问题</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/23/2020-03/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/">分布式事务</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title archive">归档</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/04/">四月 2020</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/03/">三月 2020</a><span class="archive-list-count">4</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/01/">一月 2020</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/12/">十二月 2019</a><span class="archive-list-count">3</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/11/">十一月 2019</a><span class="archive-list-count">3</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/10/">十月 2019</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/09/">九月 2019</a><span class="archive-list-count">7</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/08/">八月 2019</a><span class="archive-list-count">2</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/07/">七月 2019</a><span class="archive-list-count">4</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/06/">六月 2019</a><span class="archive-list-count">2</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/05/">五月 2019</a><span class="archive-list-count">3</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/04/">四月 2019</a><span class="archive-list-count">3</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/03/">三月 2019</a><span class="archive-list-count">6</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/02/">二月 2019</a><span class="archive-list-count">16</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/01/">一月 2019</a><span class="archive-list-count">5</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/12/">十二月 2018</a><span class="archive-list-count">5</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/11/">十一月 2018</a><span class="archive-list-count">5</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/10/">十月 2018</a><span class="archive-list-count">6</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/09/">九月 2018</a><span class="archive-list-count">7</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/08/">八月 2018</a><span class="archive-list-count">6</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/07/">七月 2018</a><span class="archive-list-count">4</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/06/">六月 2018</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/05/">五月 2018</a><span class="archive-list-count">2</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/04/">四月 2018</a><span class="archive-list-count">3</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/03/">三月 2018</a><span class="archive-list-count">7</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/02/">二月 2018</a><span class="archive-list-count">4</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/01/">一月 2018</a><span class="archive-list-count">13</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/12/">十二月 2017</a><span class="archive-list-count">5</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/11/">十一月 2017</a><span class="archive-list-count">5</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/10/">十月 2017</a><span class="archive-list-count">3</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/09/">九月 2017</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/05/">五月 2017</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/04/">四月 2017</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/03/">三月 2017</a><span class="archive-list-count">6</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/02/">二月 2017</a><span class="archive-list-count">6</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/01/">一月 2017</a><span class="archive-list-count">6</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/12/">十二月 2016</a><span class="archive-list-count">4</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/09/">九月 2016</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/04/">四月 2016</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/03/">三月 2016</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/02/">二月 2016</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/01/">一月 2016</a><span class="archive-list-count">5</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2015/10/">十月 2015</a><span class="archive-list-count">12</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2015/09/">九月 2015</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2015/07/">七月 2015</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2015/03/">三月 2015</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2015/01/">一月 2015</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2014/12/">十二月 2014</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2014/11/">十一月 2014</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2014/10/">十月 2014</a><span class="archive-list-count">6</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2014/03/">三月 2014</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2013/11/">十一月 2013</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2013/09/">九月 2013</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2013/08/">八月 2013</a><span class="archive-list-count">2</span></li></ul>
+    </div>
+  </div>
+
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

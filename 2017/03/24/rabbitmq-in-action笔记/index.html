@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>rabbitmq in action笔记 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="管理面板:(好用)http:&#x2F;&#x2F;localhost:15672&#x2F;基本功能可以在网页上进行,创建vhost等高级功能需要命令行. Channel : 信道.一个连接多个Channel. 节省开销.Exchange: 交换器.Queue: 队列. 带名字的邮箱.Binding: 绑定.&#x2F;&#x2F; 路由规则 基本工作流程:   配置类:创建exchange,queue;为某个exchange创建binding">
+<meta property="og:type" content="article">
+<meta property="og:title" content="rabbitmq in action笔记">
+<meta property="og:url" content="http://xiaoyue26.github.io/2017/03/24/rabbitmq-in-action%E7%AC%94%E8%AE%B0/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="管理面板:(好用)http:&#x2F;&#x2F;localhost:15672&#x2F;基本功能可以在网页上进行,创建vhost等高级功能需要命令行. Channel : 信道.一个连接多个Channel. 节省开销.Exchange: 交换器.Queue: 队列. 带名字的邮箱.Binding: 绑定.&#x2F;&#x2F; 路由规则 基本工作流程:   配置类:创建exchange,queue;为某个exchange创建binding">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2017-03-24T11:57:10.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.297Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="rabbitmq">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-rabbitmq-in-action笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2017/03/24/rabbitmq-in-action%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2017-03-24T11:57:10.000Z" itemprop="datePublished">2017-03-24</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/">消息队列</a>►<a class="article-category-link" href="/categories/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/rabbitmq/">rabbitmq</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      rabbitmq in action笔记
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>管理面板:(好用)<br><a href="http://localhost:15672/" target="_blank" rel="noopener">http://localhost:15672/</a><br>基本功能可以在网页上进行,创建vhost等高级功能需要命令行.</p>
+<p><code>Channel</code> : 信道.一个连接多个Channel. 节省开销.<br><code>Exchange</code>: 交换器.<br><code>Queue</code>: 队列. 带名字的邮箱.<br><code>Binding</code>: 绑定.// 路由规则</p>
+<p>基本工作流程:</p>
+<blockquote>
+<ol>
+<li>配置类:<br>创建exchange,queue;<br>为某个exchange创建binding(路由规则).<br>比如为exchange1创建规则:<br><code>routing key 为info的,转发到 queue1中.</code></li>
+</ol>
+</blockquote>
+<p>2.生产者: </p>
+<blockquote>
+<p>将消息打上routing key,发送到某个exchange中.<br>如果不指定exchange,默认发送到名为””的exchange中.</p>
+</blockquote>
+<p>3.消费者:</p>
+<blockquote>
+<p>从某个queue提取消息.</p>
+</blockquote>
+<p>4.exchange:</p>
+<blockquote>
+<p>根据配置好的路由规则,转发收到的消息到符合的queue.</p>
+</blockquote>
+<p>basic.cosume: 订阅<br>basic.get : 先订阅,然后获取一条,然后取消订阅.</p>
+<p>同一个队列多个消费者的话,1个消费者取了消息(ack),消息被删除,别的消费者就取不到了. 因此这种情况应该使用多个队列.(每人有自己的邮箱)</p>
+<p><code>exclusive</code>: 声明队列为私有的.(单消费者)<br><code>durable</code>: 适用于交换器和队列,重启后是否消失.</p>
+<p>msg–&gt;<code>Exchange</code>-&gt;<code>Queue</code></p>
+<p>生产者:<br>msg–&gt;<code>Exchange</code><br>消费者:<br><code>Queue</code>-&gt;msg<br>RabbitMQ:<br><code>Exchange</code>–<code>binding</code>–&gt;<code>Queue</code><br>e.g:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">binding:</span><br><span class="line">&quot;hello-queue&quot;--&quot;routingkey&quot;--&gt;&quot;hello-exchange&quot;</span><br></pre></td></tr></table></figure>
+
+
+<h1 id="Exchange"><a href="#Exchange" class="headerlink" title="Exchange"></a>Exchange</h1><ul>
+<li>direct 直连</li>
+<li>fanout 一个消息到多个队列</li>
+<li>topic  多个消息到一个队列 </li>
+<li>header // 不实用,即将弃用</li>
+</ul>
+<p>默认<code>Exchange</code>名字为空字符串<code>&quot;&quot;</code>,连接到所有队列.</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> String DEFAULT_EXCHANGE = <span class="string">""</span>;</span><br><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> String DEFAULT_ROUTING_KEY = <span class="string">""</span>;</span><br></pre></td></tr></table></figure>
+
+
+<p>topic的routing key格式:</p>
+<ul>
+<li><code>*</code>: 通配符,<code>.</code>以外的任何字符任意个</li>
+<li><code>.</code>: 分隔符</li>
+<li><code>#</code>: 所有队列. </li>
+</ul>
+<h1 id="vhost-多租户"><a href="#vhost-多租户" class="headerlink" title="vhost (多租户)"></a>vhost (多租户)</h1><p>默认vhost是<code>/</code>.<br>每个vhost里可以有自己的<code>Exchange</code>,<code>Queue</code>,用户,权限等等.<br>彼此隔离.</p>
+<h1 id="持久化消息"><a href="#持久化消息" class="headerlink" title="持久化消息"></a>持久化消息</h1><ol>
+<li>投递时指定</li>
+<li>投递到持久交换器</li>
+<li>投递到持久队列</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2017/03/24/rabbitmq-in-action%E7%AC%94%E8%AE%B0/" data-id="ck96ccgzz004fbhamb8bg8dc0" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/rabbitmq/" rel="tag">rabbitmq</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2017/04/24/spark%E7%AC%94%E8%AE%B0/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          spark笔记
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2017/03/21/pig%E7%AC%94%E8%AE%B0/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">pig笔记</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Exchange"><span class="toc-number">1.</span> <span class="toc-text">Exchange</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#vhost-多租户"><span class="toc-number">2.</span> <span class="toc-text">vhost (多租户)</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#持久化消息"><span class="toc-number">3.</span> <span class="toc-text">持久化消息</span></a></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

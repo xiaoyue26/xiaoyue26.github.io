@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>redis设计与实现笔记9-cluster模式 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="cluster功能是3.0及以后才有的。需要开启cluster模式才能让redis-server以cluster模式启动，这种模式下只有一个数据库（0号数据库）。 启动集群模式的redis客户端: 12# 加上-c参数: redis-cli -c  集群纳入新成员过程 节点A接到Cluster meet B命令，节点A和B进行握手； 节点A会将节点B的信息通过Gossip协议传播给集群中的其他节点">
+<meta property="og:type" content="article">
+<meta property="og:title" content="redis设计与实现笔记9-cluster模式">
+<meta property="og:url" content="http://xiaoyue26.github.io/2019/03/03/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B09-cluster%E6%A8%A1%E5%BC%8F/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="cluster功能是3.0及以后才有的。需要开启cluster模式才能让redis-server以cluster模式启动，这种模式下只有一个数据库（0号数据库）。 启动集群模式的redis客户端: 12# 加上-c参数: redis-cli -c  集群纳入新成员过程 节点A接到Cluster meet B命令，节点A和B进行握手； 节点A会将节点B的信息通过Gossip协议传播给集群中的其他节点">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-03/cluster_migrate.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-03/ask_error.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-03/ask_query.png">
+<meta property="article:published_time" content="2019-03-03T13:05:48.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.283Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="redis">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://xiaoyue26.github.io/images/2019-03/cluster_migrate.png">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2019-03/redis设计与实现笔记9-cluster模式" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/03/03/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B09-cluster%E6%A8%A1%E5%BC%8F/" class="article-date">
+  <time datetime="2019-03-03T13:05:48.000Z" itemprop="datePublished">2019-03-03</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      redis设计与实现笔记9-cluster模式
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>cluster功能是3.0及以后才有的。需要开启cluster模式才能让redis-server以cluster模式启动，这种模式下只有一个数据库（0号数据库）。</p>
+<p>启动集群模式的redis客户端:</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 加上-c参数: </span></span><br><span class="line">redis-cli -c</span><br></pre></td></tr></table></figure>
+
+<h2 id="集群纳入新成员过程"><a href="#集群纳入新成员过程" class="headerlink" title="集群纳入新成员过程"></a>集群纳入新成员过程</h2><ol>
+<li>节点A接到Cluster meet B命令，节点A和B进行握手；</li>
+<li>节点A会将节点B的信息通过<code>Gossip</code>协议传播给集群中的其他节点；</li>
+<li>最终节点B被集群完全认识、接受。</li>
+</ol>
+<h2 id="Gossip协议消息类型"><a href="#Gossip协议消息类型" class="headerlink" title="Gossip协议消息类型"></a>Gossip协议消息类型</h2><ol>
+<li>Meet;</li>
+<li>Ping;</li>
+<li>Pong。</li>
+</ol>
+<h2 id="slot-槽指派"><a href="#slot-槽指派" class="headerlink" title="slot: 槽指派"></a>slot: 槽指派</h2><p>某个节点负责哪些slot:</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">127.0.0.1&gt; cluster ADDslots &lt;slot&gt; [slot ...]</span><br></pre></td></tr></table></figure>
+
+<h2 id="Cluster-Nodes命令"><a href="#Cluster-Nodes命令" class="headerlink" title="Cluster Nodes命令"></a>Cluster Nodes命令</h2><p>用redis-cli客户端可以查看当前集群的节点情况、id，以及slot的分派情况：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Cluster Nodes</span><br></pre></td></tr></table></figure>
+
+<h2 id="clusterState信息"><a href="#clusterState信息" class="headerlink" title="clusterState信息"></a>clusterState信息</h2><p>clusterState信息中有一项是<code>slots_to_keys</code>跳表(类似一个有序hashmap)，保存slot和key之间的关联。<br>key=&gt;跳表中的key;<br>slot号码=&gt;跳表中的score。</p>
+<p>key查节点、节点查key都可以快速完成:</p>
+<ol>
+<li>每个节点可以根据key，查到对应的slot(crc算法)，然后可以查到对应存在哪个节点（存在跳表）；</li>
+<li>可以查自己节点负责的slot:<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">clusterNode</span>&#123;</span></span><br><span class="line">    <span class="comment">// 总共16384(也就是2^14)位，每一位的1,0代表是否负责</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> slots[<span class="number">16384</span>/<span class="number">8</span>];</span><br><span class="line">    <span class="keyword">int</span> numslots;<span class="comment">// 该节点总共负责多少个slot(1的数量)</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+</li>
+</ol>
+<p><code>clusterState</code>中存储了所有slots的指派情况:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">clusterState</span>&#123;</span></span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">    clusterNode* slots[<span class="number">16384</span>];</span><br><span class="line">&#125;clusterState;</span><br></pre></td></tr></table></figure>
+
+<p>如果集群中所有的slot都有人负责，cluster进入上线状态。</p>
+<h2 id="Moved错误"><a href="#Moved错误" class="headerlink" title="Moved错误"></a>Moved错误</h2><p>客户端访问了错误的节点，需要的key在别的节点负责的slot里头：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">MOVED &lt;slot&gt; &lt;ip&gt;:&lt;port&gt;</span><br></pre></td></tr></table></figure>
+<p>cluster模式的redis客户端能自动处理<code>MOVED</code>错误。</p>
+<h2 id="ASK错误"><a href="#ASK错误" class="headerlink" title="ASK错误"></a>ASK错误</h2><h3 id="重新指派"><a href="#重新指派" class="headerlink" title="重新指派"></a>重新指派</h3><img src="/images/2019-03/cluster_migrate.png" class="" width="800" height="1200" title="cluster_migrate">
+<p>集群可以将slot重新分派给另一个节点。<br>也就是: 源节点=迁移到=&gt;目标节点。<br>其中节点id可以通过<code>cluster nodes</code>获得。<br>通过redis-trib工具：<br>1.在target_id节点上发送: (准备好导入)</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Cluster setslot &lt;slot&gt; Importing &lt;source_id&gt;</span><br></pre></td></tr></table></figure>
+<p>2.向source_id发送:（准备好导出）</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Cluster SetSlot &lt;slot&gt; Migrating &lt;target_id&gt;</span><br></pre></td></tr></table></figure>
+<p>3.向source_id发送:</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Cluster GETkeysInSlot &lt;slot&gt; &lt;count&gt;</span><br></pre></td></tr></table></figure>
+<p>获得最多count个属于slot的key；<br>4.对于第3步中的每个key，redis-trib向source_id发送一个命令:</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Migrate &lt;target_ip&gt; &lt;target_port&gt; &lt;key_name&gt; 0 &lt;timeout&gt;</span><br></pre></td></tr></table></figure>
+<p>实际进行迁移每一个key。<br>5.完成迁移，发布:</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Cluster SetSlot &lt;slot&gt; Node &lt;target_id&gt;</span><br></pre></td></tr></table></figure>
+<p>任意节点收到后传播给整个集群。</p>
+<h3 id="ASK错误-1"><a href="#ASK错误-1" class="headerlink" title="ASK错误"></a>ASK错误</h3><img src="/images/2019-03/ask_error.png" class="" width="800" height="1200" title="ask_error">
+<p>迁移过程中，源节点遇到缺少的key会向客户端返回ASK错误:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ASK 16198 127.0.0.1:7003</span><br></pre></td></tr></table></figure>
+<p>表示这个key正在将16198号slot迁移到<code>127.0.0.1:7003</code>。</p>
+<img src="/images/2019-03/ask_query.png" class="" width="800" height="1200" title="ask_query">
+<p>cluster模式的客户端获得ASK错误后，带着ASK标记去访问目标节点，才能获得数据。</p>
+<h3 id="故障恢复"><a href="#故障恢复" class="headerlink" title="故障恢复"></a>故障恢复</h3><p>节点状态：<br><code>在线</code>==&gt;<code>疑似下线</code>==&gt;<code>下线</code><br>(类似于之前<code>sentinel</code>模式中的<code>主观下线</code>和<code>客观下线</code>)。</p>
+<p>cluster模式的各个主节点之间都有连接，相当于一张完全图了。<br>这个网络内，它们每隔一段时间就互相ping，看看对方是否活着（返回pong）。</p>
+<p><code>疑似下线</code>： 不返回pong，标记为<code>疑似下线</code>；<br><code>下线</code>    ： 节点之间交流看法(集群状态)，超过半数认为<code>疑似下线</code>则认为确实是<code>下线</code>，开始故障恢复。</p>
+<p>如果离线的节点有从节点，则可以开始选举了。<br>从节点们发现主节点下线了，就开始向集群存活的主节点们请求投票，获得超过半数的票则当选。</p>
+<h2 id="Publish命令实现"><a href="#Publish命令实现" class="headerlink" title="Publish命令实现"></a>Publish命令实现</h2><p>订阅频道：      subscribe<br>发布消息到频道：publish</p>
+<p>客户端发布消息的流程：</p>
+<ol>
+<li>客户端=&gt;某个节点: publish命令: 发布xx消息到xxx频道;</li>
+<li>该节点=&gt;其他节点: publish的具体消息。</li>
+</ol>
+<p>第2步中为什么不是直接转发命令到其他节点，而是转发消息呢？<br>这个主要是设计理念上，希望节点之间不是命令交互，而是消息交互。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/03/03/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B09-cluster%E6%A8%A1%E5%BC%8F/" data-id="ck96cch3w00i1bhamgoz8hch5" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2019/03/10/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B010-%E8%AE%A2%E9%98%85-%E4%BA%8B%E7%89%A9-lua/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          redis设计与实现笔记10-订阅,事物,lua
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E9%89%B4%E6%9D%83%E5%8F%8A%E8%BD%AC%E5%8F%91%E9%85%8D%E7%BD%AE/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">nginx笔记-鉴权及转发配置</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#集群纳入新成员过程"><span class="toc-number">1.</span> <span class="toc-text">集群纳入新成员过程</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Gossip协议消息类型"><span class="toc-number">2.</span> <span class="toc-text">Gossip协议消息类型</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#slot-槽指派"><span class="toc-number">3.</span> <span class="toc-text">slot: 槽指派</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Cluster-Nodes命令"><span class="toc-number">4.</span> <span class="toc-text">Cluster Nodes命令</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#clusterState信息"><span class="toc-number">5.</span> <span class="toc-text">clusterState信息</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Moved错误"><span class="toc-number">6.</span> <span class="toc-text">Moved错误</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ASK错误"><span class="toc-number">7.</span> <span class="toc-text">ASK错误</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#重新指派"><span class="toc-number">7.1.</span> <span class="toc-text">重新指派</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ASK错误-1"><span class="toc-number">7.2.</span> <span class="toc-text">ASK错误</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#故障恢复"><span class="toc-number">7.3.</span> <span class="toc-text">故障恢复</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Publish命令实现"><span class="toc-number">8.</span> <span class="toc-text">Publish命令实现</span></a></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

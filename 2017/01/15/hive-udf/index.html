@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>hive udf | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="中位数算法:https:&#x2F;&#x2F;segmentfault.com&#x2F;a&#x2F;1190000008322873http:&#x2F;&#x2F;www.voidcn.com&#x2F;article&#x2F;p-yzrnuwwi-bdv.html hive类型和java类型 Hive column type    UDF types string         java.lang.String, org.apache.hadoop.io.Tex">
+<meta property="og:type" content="article">
+<meta property="og:title" content="hive udf">
+<meta property="og:url" content="http://xiaoyue26.github.io/2017/01/15/hive-udf/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="中位数算法:https:&#x2F;&#x2F;segmentfault.com&#x2F;a&#x2F;1190000008322873http:&#x2F;&#x2F;www.voidcn.com&#x2F;article&#x2F;p-yzrnuwwi-bdv.html hive类型和java类型 Hive column type    UDF types string         java.lang.String, org.apache.hadoop.io.Tex">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2017-01-15T11:29:01.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.293Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="java">
+<meta property="article:tag" content="hive">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-hive-udf" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2017/01/15/hive-udf/" class="article-date">
+  <time datetime="2017-01-15T11:29:01.000Z" itemprop="datePublished">2017-01-15</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/hadoop/">hadoop</a>►<a class="article-category-link" href="/categories/hadoop/hive/">hive</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      hive udf
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>中位数算法:<br><a href="https://segmentfault.com/a/1190000008322873" target="_blank" rel="noopener">https://segmentfault.com/a/1190000008322873</a><br><a href="http://www.voidcn.com/article/p-yzrnuwwi-bdv.html" target="_blank" rel="noopener">http://www.voidcn.com/article/p-yzrnuwwi-bdv.html</a></p>
+<h1 id="hive类型和java类型"><a href="#hive类型和java类型" class="headerlink" title="hive类型和java类型"></a>hive类型和java类型</h1><table>
+<tr><td>Hive column type</td>    <td>UDF types</td></tr>
+<tr><td>string    </td>    
+<td>java.lang.String, org.apache.hadoop.io.Text</td></tr>
+<tr><td>int    </td>    
+<td>int, java.lang.Integer, org.apache.hadoop.io.IntWritable</td></tr>
+<tr><td>boolean    </td>    
+<td>bool, java.lang.Boolean, org.apache.hadoop.io.BooleanWritable</td></tr>
+<tr><td>array<type>    </td>    <td>java.util.List<Java type></td></tr>
+<tr><td>map<ktype, vtype>    </td>    
+<td>java.util.Map<Java type for K, Java type for V></td></tr>
+<tr><td>struct    </td>    <td>Don't use Simple UDF, use GenericUDF</td></tr>
+</table>
+
+
+<h1 id="UDAF"><a href="#UDAF" class="headerlink" title="UDAF"></a>UDAF</h1><p><a href="http://www.cnblogs.com/ggjucheng/archive/2013/02/01/2888051.html" target="_blank" rel="noopener">http://www.cnblogs.com/ggjucheng/archive/2013/02/01/2888051.html</a><br><code>GenericUDAFEvaluator</code>的几种<code>MODE</code>定义如下:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">public static enum Mode &#123;</span><br><span class="line">    &#x2F;**</span><br><span class="line">     * PARTIAL1: 这个是mapreduce的map阶段:从原始数据到部分数据聚合</span><br><span class="line">     * 将会调用iterate()和terminatePartial()</span><br><span class="line">     *&#x2F;</span><br><span class="line">    PARTIAL1,</span><br><span class="line">        &#x2F;**</span><br><span class="line">     * PARTIAL2: 这个是mapreduce的map端的Combiner阶段，负责在map端合并map的数据::从部分数据聚合到部分数据聚合:</span><br><span class="line">     * 将会调用merge() 和 terminatePartial() </span><br><span class="line">     *&#x2F;</span><br><span class="line">    PARTIAL2,</span><br><span class="line">        &#x2F;**</span><br><span class="line">     * FINAL: mapreduce的reduce阶段:从部分数据的聚合到完全聚合 </span><br><span class="line">     * 将会调用merge()和terminate()</span><br><span class="line">     *&#x2F;</span><br><span class="line">    FINAL,</span><br><span class="line">        &#x2F;**</span><br><span class="line">     * COMPLETE: 如果出现了这个阶段，表示mapreduce只有map，没有reduce，所以map端就直接出结果了:从原始数据直接到完全聚合</span><br><span class="line">      * 将会调用 iterate()和terminate()</span><br><span class="line">     *&#x2F;</span><br><span class="line">    COMPLETE</span><br><span class="line">  &#125;;</span><br></pre></td></tr></table></figure>
+
+<p>特别提醒：<br>Merge函数的输入参数是(State other),因为other对象会被复用,因此other里的成员的使用不能是浅拷贝,(比如直接塞到当前state里),可以用深拷贝.(对于List,Map等容器)</p>
+<p>系统内置的UDAF函数可以从:<code>FunctionRegistry</code>类中查看.<br>流程控制更为精细的UDAF,AVG:<br><code>org.apache.hadoop.hive.ql.udf.generic.GenericUDAFAverage</code></p>
+<p>hive调用java方法:<br>select java_method(“java.lang.Math”,”max”,1,2);</p>
+<h1 id="UDF数据类型相关"><a href="#UDF数据类型相关" class="headerlink" title="UDF数据类型相关"></a>UDF数据类型相关</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">select array(1,2,3) -- &#x3D;&gt; [1,2,3]</span><br><span class="line">select array(1,&#39;2&#39;,3) -- &#x3D;&gt; [&#39;1&#39;,&#39;2&#39;,&#39;3&#39;] 只要有一个string,就全是string</span><br><span class="line">select array(1,NULL,3) -- &#x3D;&gt; [1,NULL,3] NULL则不影响类型转换.</span><br></pre></td></tr></table></figure>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2017/01/15/hive-udf/" data-id="ck96ccgze0021bham78i4727i" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/hive/" rel="tag">hive</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2017/01/22/hive%E7%AC%94%E8%AE%B0/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          hive笔记
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2017/01/14/Hive-Serde/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">Hive Serde</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#hive类型和java类型"><span class="toc-number">1.</span> <span class="toc-text">hive类型和java类型</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#UDAF"><span class="toc-number">2.</span> <span class="toc-text">UDAF</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#UDF数据类型相关"><span class="toc-number">3.</span> <span class="toc-text">UDF数据类型相关</span></a></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

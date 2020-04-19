@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>redis的quicklist | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="列表对象: REDIS_LIST 列表对象以前有两种编码: linkedlist和zipList：linkedList: 双向链表,灵活扩展,存取效率低。zipList: 连续存储,存取效率高，对缓存友好，扩展性差，修改插入需要级联移动.甚至可以粗略看做数组。小数据量的时候会使用zipList,大数据量的时候会使用linkedList。但它们其实是两个极端，各有优缺点。因此之后的版本就把它们混血了">
+<meta property="og:type" content="article">
+<meta property="og:title" content="redis的quicklist">
+<meta property="og:url" content="http://xiaoyue26.github.io/2019/01/19/2019-01/redis%E7%9A%84quicklist/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="列表对象: REDIS_LIST 列表对象以前有两种编码: linkedlist和zipList：linkedList: 双向链表,灵活扩展,存取效率低。zipList: 连续存储,存取效率高，对缓存友好，扩展性差，修改插入需要级联移动.甚至可以粗略看做数组。小数据量的时候会使用zipList,大数据量的时候会使用linkedList。但它们其实是两个极端，各有优缺点。因此之后的版本就把它们混血了">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2019-01-19T12:29:18.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.280Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="redis">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2019-01/redis的quicklist" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/01/19/2019-01/redis%E7%9A%84quicklist/" class="article-date">
+  <time datetime="2019-01-19T12:29:18.000Z" itemprop="datePublished">2019-01-19</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      redis的quicklist
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>列表对象: <code>REDIS_LIST</code></p>
+<p>列表对象以前有两种编码: <code>linkedlist</code>和<code>zipList</code>：<br><code>linkedList</code>: 双向链表,灵活扩展,存取效率低。<br><code>zipList</code>: 连续存储,存取效率高，对缓存友好，扩展性差，修改插入需要级联移动.甚至可以粗略看做数组。<br>小数据量的时候会使用<code>zipList</code>,大数据量的时候会使用<code>linkedList</code>。<br>但它们其实是两个极端，各有优缺点。因此之后的版本就把它们混血了一下，出了一个<code>quickList</code>，平衡优缺点。</p>
+<h2 id="quickList设计"><a href="#quickList设计" class="headerlink" title="quickList设计"></a>quickList设计</h2><p>粗略地看，把双向链表的每一个节点变成<code>zipList</code>，就是<code>quickList</code>了。<br>在原来的两个数据结构之间做一个折中，量化折中的参数:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"># 负数表示存储容量等级,每个节点上的ziplist大小不能超过8Kb（也就是2^3KB，以此类推）</span><br><span class="line">list-max-ziplist-size -2</span><br><span class="line"># 正数表示存储个数，每个节点上的zipList内元素不能超过5个:</span><br><span class="line">list-max-ziplist-size 5</span><br></pre></td></tr></table></figure>
+
+<p>还有一个压缩参数:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"># 不进行压缩:</span><br><span class="line">list-compress-depth 0 </span><br><span class="line"># 除了首尾1个，中间的压缩:</span><br><span class="line">list-compress-depth 1</span><br></pre></td></tr></table></figure>
+<p>由于双向链表一般用<code>LPush</code>,<code>Rpush</code>，两端的数据访问比较频繁，</p>
+<h2 id="quickList源码"><a href="#quickList源码" class="headerlink" title="quickList源码"></a>quickList源码</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">quicklist</span> &#123;</span></span><br><span class="line">    quicklistNode *head;    <span class="comment">// 头结点</span></span><br><span class="line">    quicklistNode *tail;    <span class="comment">// 尾节点</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> count;    <span class="comment">// 所有数据的数量</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> len;       <span class="comment">// quicklist节点数量</span></span><br><span class="line">    <span class="keyword">int</span> <span class="built_in">fill</span>:<span class="number">16</span>;          <span class="comment">// 单个ziplist的大小限制</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> compress:<span class="number">16</span>;   <span class="comment">// 压缩深度</span></span><br><span class="line">&#125; quicklist;</span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">quicklistNode</span> &#123;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">quicklistNode</span> *<span class="title">prev</span>;</span> <span class="comment">// 前一个节点</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">quicklistNode</span> *<span class="title">next</span>;</span> <span class="comment">// 后一个节点</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> *zl;  <span class="comment">// ziplist</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> sz;             <span class="comment">// ziplist的内存大小</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> count:<span class="number">16</span>;     <span class="comment">// zpilist中数据项的个数</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> encoding:<span class="number">2</span>;   <span class="comment">// 1为ziplist 2是LZF压缩存储方式</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> container:<span class="number">2</span>;  </span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> recompress:<span class="number">1</span>;   <span class="comment">// 压缩标志, 为1 是压缩</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> attempted_compress:<span class="number">1</span>; <span class="comment">// 节点是否能够被压缩,只用在测试</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> extra:<span class="number">10</span>; <span class="comment">/* more bits to steal for future usage */</span></span><br><span class="line">&#125; quicklistNode;</span><br></pre></td></tr></table></figure>
+
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/01/19/2019-01/redis%E7%9A%84quicklist/" data-id="ck96cch3e00fubham1yny7bg0" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2019/02/01/2019-02/%E7%AE%80%E5%8D%95%E8%A7%A3%E9%87%8ACAP%E5%8E%9F%E7%90%86/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          简单解释CAP原理
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2019/01/19/2019-01/redis%E7%9A%84embstr%E4%B8%BA%E4%BB%80%E4%B9%88%E6%98%AF39B/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">redis的embstr为什么是39B</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#quickList设计"><span class="toc-number">1.</span> <span class="toc-text">quickList设计</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#quickList源码"><span class="toc-number">2.</span> <span class="toc-text">quickList源码</span></a></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

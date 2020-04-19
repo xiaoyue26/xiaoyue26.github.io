@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>spark中的存储 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="#存储架构     Spark是一种基于内存的运算框架。数据存储在worker节点中。对于每一个worker，worker Excutor有一个JVM，数据存储在JVM中。    #故障恢复     当计算引擎的进程损坏，Cache 丢失，Spark只能重新启动并计算恢复数据。    #Lineage(世代)     Lineage保证数据的Reliability。   当数据E丢失后：   通">
+<meta property="og:type" content="article">
+<meta property="og:title" content="spark中的存储">
+<meta property="og:url" content="http://xiaoyue26.github.io/2016/03/26/spark%E4%B8%AD%E7%9A%84%E5%AD%98%E5%82%A8/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="#存储架构     Spark是一种基于内存的运算框架。数据存储在worker节点中。对于每一个worker，worker Excutor有一个JVM，数据存储在JVM中。    #故障恢复     当计算引擎的进程损坏，Cache 丢失，Spark只能重新启动并计算恢复数据。    #Lineage(世代)     Lineage保证数据的Reliability。   当数据E丢失后：   通">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/storage_in_spark(1).png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/storage_in_spark(2).png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/storage_in_spark(3).png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/storage_in_spark(4).png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/storage_in_spark(5).png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/storage_in_spark(6).png">
+<meta property="article:published_time" content="2016-03-26T07:12:52.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.298Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="spark">
+<meta property="article:tag" content="storage">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://xiaoyue26.github.io/images/storage_in_spark(1).png">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-spark中的存储" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2016/03/26/spark%E4%B8%AD%E7%9A%84%E5%AD%98%E5%82%A8/" class="article-date">
+  <time datetime="2016-03-26T07:12:52.000Z" itemprop="datePublished">2016-03-26</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/spark/">spark</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      spark中的存储
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <ul>
+<li>#存储架构<img src="/images/storage_in_spark(1).png" class="" width="400" height="600" title="存储架构">
+
+</li>
+</ul>
+<blockquote>
+<p>Spark是一种基于内存的运算框架。数据存储在worker节点中。对于每一个worker，worker Excutor有一个JVM，数据存储在JVM中。</p>
+</blockquote>
+<hr>
+<ul>
+<li>#故障恢复<img src="/images/storage_in_spark(2).png" class="" width="400" height="600" title="故障恢复">
+
+</li>
+</ul>
+<blockquote>
+<p>当计算引擎的进程损坏，Cache 丢失，Spark只能重新启动并计算恢复数据。</p>
+</blockquote>
+<hr>
+<ul>
+<li>#Lineage(世代)<img src="/images/storage_in_spark(3).png" class="" width="400" height="600" title="Lineage">
+
+</li>
+</ul>
+<blockquote>
+<p>Lineage保证数据的Reliability。</p>
+</blockquote>
+<ul>
+<li>当数据E丢失后：</li>
+</ul>
+<ol>
+<li>通过世代找到相应的之前数据，重新部署一个Job将数据重新计算。</li>
+<li>将数据在底层文件系统中备份。</li>
+</ol>
+<hr>
+<ul>
+<li>#数据流<img src="/images/storage_in_spark(4).png" class="" width="400" height="600" title="Lineage">
+
+</li>
+</ul>
+<blockquote>
+<p>计算数据在JVM的内存中存储一份，以保证较少的网络通信和读写。同时记录存储数据的世代(lineage)，当数据丢失时，基于世代将job重新运行，得到相应数据。</p>
+</blockquote>
+<hr>
+<ul>
+<li>#计算过程<img src="/images/storage_in_spark(5).png" class="" width="400" height="600" title="Lineage">
+
+</li>
+</ul>
+<blockquote>
+<p>Spark内部，单个executor进程内RDD的分片数据是用Iterator流式访问的。<br>Iterator的hasNext方法和next方法是由RDD lineage上各个transformation携带的闭包函数复合而成的。<br>该复合Iterator每访问一个元素，就对该元素应用相应的复合函数，得到的结果再流式地落地。空间复杂度为O(1)。</p>
+</blockquote>
+<hr>
+<ul>
+<li>#持久化</li>
+</ul>
+<blockquote>
+<p><code>spark.local.dir</code>：可以设置Spark的暂存目录，包括映射输出文件和需要存储在磁盘上的RDDs。这个磁盘目录在系统上面访问速度越快越好。可以用逗号隔开来设置多个目录。默认值为’/tmp’。<br><code>org.apache.spark.storage.StorageLevel</code>中5种持久化的级别.(<code>result.persist(StorageLevel.DISK_ONLY)</code>) 默认为<code>MEMORY_ONLY</code>。</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th align="center">级别</th>
+<th align="center">空间</th>
+<th align="center">时间</th>
+<th align="center">内存</th>
+<th align="center">磁盘</th>
+<th align="center">备注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">MEMORY_ONLY</td>
+<td align="center">多</td>
+<td align="center">少</td>
+<td align="center">使用</td>
+<td align="center">不使用</td>
+<td align="center">-</td>
+</tr>
+<tr>
+<td align="center">MEMORY_ONLY_SER</td>
+<td align="center">少</td>
+<td align="center">多</td>
+<td align="center">使用</td>
+<td align="center">不使用</td>
+<td align="center">-</td>
+</tr>
+<tr>
+<td align="center">MEMORY_AND_DISK</td>
+<td align="center">多</td>
+<td align="center">中等</td>
+<td align="center">部分</td>
+<td align="center">部分</td>
+<td align="center">如果数据在内存中放不下，则溢写到磁盘上</td>
+</tr>
+<tr>
+<td align="center">MEMORY_AND_DISK_SER</td>
+<td align="center">少</td>
+<td align="center">多</td>
+<td align="center">部分</td>
+<td align="center">部分</td>
+<td align="center">如果数据在内存中放不下，则溢写到磁盘上。在内存中存放序列化后的数据。</td>
+</tr>
+<tr>
+<td align="center">DISK_ONLY</td>
+<td align="center">少</td>
+<td align="center">多</td>
+<td align="center">部分</td>
+<td align="center">部分</td>
+<td align="center">-</td>
+</tr>
+</tbody></table>
+<hr>
+<ul>
+<li>#数据分享<img src="/images/storage_in_spark(6).png" class="" width="400" height="600" title="数据分享">
+
+</li>
+</ul>
+<blockquote>
+<p>在Spark中，如果job2需要Job1运算的数据，Job1首先需要将数据写入到HDFS的block中，会产生硬盘甚至跨网络的读写，同时在HDFS中默认数据需要写三份，因此造成性能的损失。</p>
+</blockquote>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2016/03/26/spark%E4%B8%AD%E7%9A%84%E5%AD%98%E5%82%A8/" data-id="ck96cch03004vbham8god5u7j" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spark/" rel="tag">spark</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/storage/" rel="tag">storage</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2016/04/03/redis%E7%AC%94%E8%AE%B0/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          redis笔记
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2016/02/26/jdk1-7%E4%B8%ADfork-join%E5%B9%B6%E5%8F%91%E6%A1%86%E6%9E%B6%E6%BA%90%E7%A0%81%E6%B5%85%E6%9E%90%E5%8F%8A%E5%85%B7%E4%BD%93%E5%AE%9E%E4%BE%8B%E5%88%86%E6%9E%90/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">jdk1.7中fork-join并发框架源码浅析及具体实例分析</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+  
+    
+
+  
+    
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title recent-posts">最新文章</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2020/04/19/2020-04/spring%E6%8B%BE%E9%81%97/">spring拾遗</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/26/2020-03/%E5%88%A9%E7%94%A8UTF-8%E7%BC%96%E7%A0%81%E7%9A%84%E7%89%B9%E6%80%A7%E8%BF%9B%E8%A1%8C%E4%BC%98%E5%8C%96/">利用UTF-8编码的特性进行优化</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/24/2020-03/linux%E8%87%AA%E8%BF%9E%E6%8E%A5/">linux自连接</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/23/2020-03/redis%E5%A4%A7key%E9%97%AE%E9%A2%98/">redis大key问题</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/23/2020-03/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/">分布式事务</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

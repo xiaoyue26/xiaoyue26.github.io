@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>Hive Serde | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="Serde相关https:&#x2F;&#x2F;www.coder4.com&#x2F;archives&#x2F;4031反序列化原理(Deserialize): 1HDFS files –&gt; InputFileFormat –&gt; &lt;key, value&gt; –&gt; Deserializer –&gt; Row object 序列化原理(Serialize): 1Row object –&gt; Seria">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Hive Serde">
+<meta property="og:url" content="http://xiaoyue26.github.io/2017/01/14/Hive-Serde/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="Serde相关https:&#x2F;&#x2F;www.coder4.com&#x2F;archives&#x2F;4031反序列化原理(Deserialize): 1HDFS files –&gt; InputFileFormat –&gt; &lt;key, value&gt; –&gt; Deserializer –&gt; Row object 序列化原理(Serialize): 1Row object –&gt; Seria">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2017-01-14T11:26:56.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.291Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="hive">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-Hive-Serde" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2017/01/14/Hive-Serde/" class="article-date">
+  <time datetime="2017-01-14T11:26:56.000Z" itemprop="datePublished">2017-01-14</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/hadoop/">hadoop</a>►<a class="article-category-link" href="/categories/hadoop/hive/">hive</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      Hive Serde
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="Serde相关"><a href="#Serde相关" class="headerlink" title="Serde相关"></a>Serde相关</h1><p><a href="https://www.coder4.com/archives/4031" target="_blank" rel="noopener">https://www.coder4.com/archives/4031</a><br>反序列化原理(<code>Deserialize</code>):</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">HDFS files –&gt; InputFileFormat –&gt; &lt;key, value&gt; –&gt; Deserializer –&gt; Row object</span><br></pre></td></tr></table></figure>
+<p>序列化原理(<code>Serialize</code>):</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Row object –&gt; Serializer –&gt; &lt;key, value&gt; –&gt; OutputFileFormat –&gt; HDFS files</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>hive的serde内置:<br>Avro<br>ORC<br>RegEx<br>Thrift<br>Parquet<br>CSV<br>JsonSerDe</p>
+</blockquote>
+<h3 id="自定义Serde"><a href="#自定义Serde" class="headerlink" title="自定义Serde:"></a>自定义Serde:</h3><blockquote>
+<p>需要extends AbstractSerDe, 实现6个方法:<br>initialize<br>,deserialize,getSerializedClass,serialize<br>,getSerDeStats,getObjectInspector<br>参见Hive1.2.1的openCSV实现,可以总结各个方法的作用.</p>
+</blockquote>
+<p>1.<code>initialize</code>方法:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">读取hadoop配置和表配置(建表语句中的),准备一些和元数据有关的数据.</span><br><span class="line">比如所有列的类型,输出列的size,分隔符等等.将这些信息存到对象里备用.</span><br></pre></td></tr></table></figure>
+
+<p>2.<code>serialize</code>方法:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">序列化. </span><br><span class="line">由原理可知,输入是一个Row对象,输出是一些Key,value对,以便被OutputFileFormat解析.</span><br><span class="line">由于OpenCSV使用的OutputFileFormat是</span><br><span class="line">org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat</span><br><span class="line">因此,这个方法的输出要与之吻合.</span><br><span class="line">    &#x2F;**</span><br><span class="line">     * 输入: 行对象 (行数据Obj,行类型ObjOI)</span><br><span class="line">     * 输出: Key,value.  要和hive默认的outputFileFormat吻合.</span><br><span class="line">     * 即要和 org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat</span><br><span class="line">     * 的输入相同. 而这个类是忽略Key的,因此这个方法的实际输出只有Value.</span><br><span class="line">     * *&#x2F;</span><br><span class="line">OpenCSV里的大致内容就是把行类型ObjOI转成StructOI,</span><br><span class="line">然后把每一列的类型取出来,再用类型把数据取出来,再把数据全转成String,</span><br><span class="line">传给CSVWriter,写到一个StringWriter里,然后转成一个Text返回.</span><br></pre></td></tr></table></figure>
+
+<p>3.<code>deserialize</code>方法:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">反序列化.</span><br><span class="line">由原理可知,输入是一个Key,Value,输出是一个行对象.</span><br><span class="line">其中Key,Value由InputFileFormat生成,对于OpenCSV来说就是默认的Hive设定:</span><br><span class="line">org.apache.hadoop.mapred.TextInputFormat</span><br><span class="line">输出实际上是一个List&lt;String&gt;. </span><br><span class="line"></span><br><span class="line">OpenCSV里的大致内容就是把输入转成Text再转成String然后用CSVReader读出来,</span><br><span class="line">写到一个String[]里,再存到一个List&lt;String&gt;里(补一些缺的,确保列数一样),然后返回.</span><br></pre></td></tr></table></figure>
+
+<p>4.<code>getObjectInspector</code>方法:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">返回整个表的结构类型OI.</span><br><span class="line">从内容上看返回了StructOI.(包括列名和列数,每一列的类型)</span><br><span class="line">对于OpenCSV来说每一列都是String.</span><br></pre></td></tr></table></figure>
+
+<p>5.<code>getSerializedClass</code>方法:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">获取写的时候返回的类.</span><br><span class="line">对于OpenCSV来说,返回Text.class.</span><br><span class="line">因为它的Serialize方法的下游是hive的</span><br><span class="line">org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat</span><br><span class="line">而且Serialize的实现实际上也返回了一个Text.(声明的只是Writable)</span><br></pre></td></tr></table></figure>
+
+<p>6.<code>getSerDeStats</code>方法:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">返回序列化类的写入状态信息,具体包括RawDataSize和RowCount. 也就是原始数据大小和行数.</span><br><span class="line">Hive1.2.1实现的不是很健全.自己用得也很少.</span><br><span class="line">只在两处提取了这个信息:</span><br><span class="line">1. FileSinkOperator. 写入数据的时候获取了一下RawDataSize.</span><br><span class="line">2. MapOperator. 读取数据的时候获取了一下RawDataSize.</span><br><span class="line"></span><br><span class="line">甚至对于openCSV,它直接返回了一个null.</span><br><span class="line">对于Hive1.2.1,我们自定义实现Serde的时候,也可以返回null,因为Hive1.2.1的源码中对于这个返回值都是有null判定的. 但如果要对性能做进一步研究,要记录这两个数据,可以参考</span><br><span class="line">LazySimpleSerDe中的实现.</span><br></pre></td></tr></table></figure>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2017/01/14/Hive-Serde/" data-id="ck96ccgyq0007bham8umqec3r" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/hive/" rel="tag">hive</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2017/01/15/hive-udf/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          hive udf
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2017/01/07/HDFS-namenode/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">HDFS namenode</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Serde相关"><span class="toc-number">1.</span> <span class="toc-text">Serde相关</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#自定义Serde"><span class="toc-number">1.0.1.</span> <span class="toc-text">自定义Serde:</span></a></li></ol></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

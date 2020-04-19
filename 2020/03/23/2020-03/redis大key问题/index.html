@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>redis大key问题 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="为啥不能有大key; 有一些方法，避免大key; 有大key，安全删除大key;  what： 什么是大key问题就是一个key的value特别大，比如一个hashmap中存了超多k,v;或者一个列表key中存了超长列表，等等；多大算大： hashmap中有100w的k,v &#x3D;&gt; 1s延迟；删除大Key的时间复杂度: O(N), N代表大key里的值数量，因为redis是单线程一个个删。所">
+<meta property="og:type" content="article">
+<meta property="og:title" content="redis大key问题">
+<meta property="og:url" content="http://xiaoyue26.github.io/2020/03/23/2020-03/redis%E5%A4%A7key%E9%97%AE%E9%A2%98/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="为啥不能有大key; 有一些方法，避免大key; 有大key，安全删除大key;  what： 什么是大key问题就是一个key的value特别大，比如一个hashmap中存了超多k,v;或者一个列表key中存了超长列表，等等；多大算大： hashmap中有100w的k,v &#x3D;&gt; 1s延迟；删除大Key的时间复杂度: O(N), N代表大key里的值数量，因为redis是单线程一个个删。所">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2020-03-23T06:22:37.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.289Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="redis">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2020-03/redis大key问题" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/03/23/2020-03/redis%E5%A4%A7key%E9%97%AE%E9%A2%98/" class="article-date">
+  <time datetime="2020-03-23T06:22:37.000Z" itemprop="datePublished">2020-03-23</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      redis大key问题
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <ol start="0">
+<li>为啥不能有大key;</li>
+<li>有一些方法，避免大key;</li>
+<li>有大key，安全删除大key;</li>
+</ol>
+<h1 id="what：-什么是大key问题"><a href="#what：-什么是大key问题" class="headerlink" title="what： 什么是大key问题"></a>what： 什么是大key问题</h1><p>就是一个key的value特别大，比如一个hashmap中存了超多k,v;<br>或者一个列表key中存了超长列表，等等；<br>多大算大： hashmap中有100w的k,v =&gt; 1s延迟；<br>删除大Key的时间复杂度: O(N), N代表大key里的值数量，因为redis是单线程一个个删。<br>所以删大key也会卡qps。</p>
+<h2 id="开发规范"><a href="#开发规范" class="headerlink" title="开发规范"></a>开发规范</h2><h3 id="单key大小"><a href="#单key大小" class="headerlink" title="单key大小"></a>单key大小</h3><p>Redis限制每个String类型value大小不超过512MB， 实际开发中，不要超过10KB，否则会对CPU和网卡造成极大负载。 hash、list、set、zset元素个数不要超过5000。</p>
+<p>理论上限: 每个hashset里头元素数量&lt; 2^32. </p>
+<h3 id="key的数量"><a href="#key的数量" class="headerlink" title="key的数量"></a>key的数量</h3><p>官方评测： 单实例2.5亿<br>理论上限: 32位，2^32。约40亿</p>
+<h2 id="测试删除大key"><a href="#测试删除大key" class="headerlink" title="测试删除大key"></a>测试删除大key</h2><p>可以用<code>slowlog</code>命令来查看删除耗时:</p>
+<figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">DEL big_key1</span><br><span class="line">SLOWLOG GET <span class="number">2</span></span><br></pre></td></tr></table></figure>
+
+
+<h1 id="why-为啥不能有大key"><a href="#why-为啥不能有大key" class="headerlink" title="why: 为啥不能有大key"></a>why: 为啥不能有大key</h1><p>redis的基础假设是每个操作都很快，所以设计成单线程处理；<br>所以如果有大key，基础设计就不成立了，会阻塞；</p>
+<p>问题： </p>
+<ol>
+<li>数据倾斜，部分redis分片节点存储占用很高；</li>
+<li>查询突然很慢，qps降低；</li>
+</ol>
+<h1 id="How-如何避免大key"><a href="#How-如何避免大key" class="headerlink" title="How: 如何避免大key"></a>How: 如何避免大key</h1><p>分治法，加一些key前缀\后置分解（如时间、哈希前缀、用户id后缀）;</p>
+<h1 id="安全删除大key"><a href="#安全删除大key" class="headerlink" title="安全删除大key"></a>安全删除大key</h1><ol>
+<li>首先要找到大key才能删除;</li>
+<li>如何删除；</li>
+</ol>
+<h2 id="找到大key、删除大Key"><a href="#找到大key、删除大Key" class="headerlink" title="找到大key、删除大Key"></a>找到大key、删除大Key</h2><h3 id="当版本-lt-4-0"><a href="#当版本-lt-4-0" class="headerlink" title="当版本&lt;4.0"></a>当版本&lt;4.0</h3><p> 1、导出rdb文件分析: <code>bgsave</code>, <code>redis-rdb-tool</code>;<br> 2、命令: <code>redis-cli --bigkeys</code>,找出最大的key；<br> 3、自己写脚本扫描;<br> 4、单个key查看: <code>debug object key</code>： 查看某个key序列化后的长度，每次看1个key的信息,比较没效率。</p>
+<h3 id="删除大Key"><a href="#删除大Key" class="headerlink" title="删除大Key:"></a>删除大Key:</h3><p>分解删除操作：<br>list: 逐步ltrim;<br>zset: 逐步zremrangebyscore;<br>hset: hscan出500个，然后hdel删除；<br>set: sscan扫描出500个，然后srem删除；<br>依次类推；</p>
+<h3 id="当版本-gt-4-0"><a href="#当版本-gt-4-0" class="headerlink" title="当版本&gt;=4.0"></a>当版本&gt;=4.0</h3><h4 id="寻找大key"><a href="#寻找大key" class="headerlink" title="寻找大key"></a>寻找大key</h4><p>命令: <code>memory usage</code></p>
+<h4 id="删除大key：-lazyfree机制"><a href="#删除大key：-lazyfree机制" class="headerlink" title="删除大key： lazyfree机制"></a>删除大key： lazyfree机制</h4><p><code>unlink</code>命令：代替DEL命令；<br>会把对应的大key放到<code>BIO_LAZY_FREE</code>后台线程任务队列，然后在后台异步删除；</p>
+<p>类似的异步删除命令:</p>
+<figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">flushdb async: 异步清空数据库</span><br><span class="line">flushall async: 异步清空所有数据库</span><br></pre></td></tr></table></figure>
+<p>异步删除配置:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">slave-lazy-flush: slave接受完rdb文件后，异步清空数据库；</span><br><span class="line">lazyfree-lazy-eviction: 异步淘汰key;</span><br><span class="line">lazyfree-lazy-expire:   异步key过期;</span><br><span class="line">lazyfree-lazy-server-del: 异步内部删除key；生效于rename命令</span><br><span class="line">## rename命令: RENAME mykey new_name </span><br><span class="line">## 如果new_name已经存在，会先删除new_name，此时触发上述lazy机制</span><br></pre></td></tr></table></figure>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2020/03/23/2020-03/redis%E5%A4%A7key%E9%97%AE%E9%A2%98/" data-id="ck96cch4q00lhbhamguw12lwv" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2020/03/24/2020-03/linux%E8%87%AA%E8%BF%9E%E6%8E%A5/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          linux自连接
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2020/03/23/2020-03/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">分布式事务</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#what：-什么是大key问题"><span class="toc-number">1.</span> <span class="toc-text">what： 什么是大key问题</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#开发规范"><span class="toc-number">1.1.</span> <span class="toc-text">开发规范</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#单key大小"><span class="toc-number">1.1.1.</span> <span class="toc-text">单key大小</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#key的数量"><span class="toc-number">1.1.2.</span> <span class="toc-text">key的数量</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#测试删除大key"><span class="toc-number">1.2.</span> <span class="toc-text">测试删除大key</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#why-为啥不能有大key"><span class="toc-number">2.</span> <span class="toc-text">why: 为啥不能有大key</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#How-如何避免大key"><span class="toc-number">3.</span> <span class="toc-text">How: 如何避免大key</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#安全删除大key"><span class="toc-number">4.</span> <span class="toc-text">安全删除大key</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#找到大key、删除大Key"><span class="toc-number">4.1.</span> <span class="toc-text">找到大key、删除大Key</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#当版本-lt-4-0"><span class="toc-number">4.1.1.</span> <span class="toc-text">当版本&lt;4.0</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#删除大Key"><span class="toc-number">4.1.2.</span> <span class="toc-text">删除大Key:</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#当版本-gt-4-0"><span class="toc-number">4.1.3.</span> <span class="toc-text">当版本&gt;&#x3D;4.0</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#寻找大key"><span class="toc-number">4.1.3.1.</span> <span class="toc-text">寻找大key</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#删除大key：-lazyfree机制"><span class="toc-number">4.1.3.2.</span> <span class="toc-text">删除大key： lazyfree机制</span></a></li></ol></li></ol></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

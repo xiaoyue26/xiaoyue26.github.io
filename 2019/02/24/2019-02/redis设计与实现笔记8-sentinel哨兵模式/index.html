@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>redis设计与实现笔记8-sentinel哨兵模式 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="使用场景:用几个节点开启sentinel组成一个哨兵集群，负责监控另外一些redis的master&#x2F;slave集群的健康状态，协助进行故障恢复(master挂了的时候，升级某个slave为新master)。 思考:如果有1个master,10个slave，数据均已经完全同步。这个时候，连续挂两次master，是不是所有数据就都没了？第1次: 除新master以外的节点，执行新slaveof命令，清">
+<meta property="og:type" content="article">
+<meta property="og:title" content="redis设计与实现笔记8-sentinel哨兵模式">
+<meta property="og:url" content="http://xiaoyue26.github.io/2019/02/24/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B08-sentinel%E5%93%A8%E5%85%B5%E6%A8%A1%E5%BC%8F/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="使用场景:用几个节点开启sentinel组成一个哨兵集群，负责监控另外一些redis的master&#x2F;slave集群的健康状态，协助进行故障恢复(master挂了的时候，升级某个slave为新master)。 思考:如果有1个master,10个slave，数据均已经完全同步。这个时候，连续挂两次master，是不是所有数据就都没了？第1次: 除新master以外的节点，执行新slaveof命令，清">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-02/sentinel.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-02/sentinel-master.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-02/sentinel-slave.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-02/sentinel-sentinel.png">
+<meta property="article:published_time" content="2019-02-24T12:46:55.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.281Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="redis">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://xiaoyue26.github.io/images/2019-02/sentinel.png">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2019-02/redis设计与实现笔记8-sentinel哨兵模式" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/24/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B08-sentinel%E5%93%A8%E5%85%B5%E6%A8%A1%E5%BC%8F/" class="article-date">
+  <time datetime="2019-02-24T12:46:55.000Z" itemprop="datePublished">2019-02-24</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      redis设计与实现笔记8-sentinel哨兵模式
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h2 id="使用场景"><a href="#使用场景" class="headerlink" title="使用场景:"></a>使用场景:</h2><p>用几个节点开启sentinel组成一个哨兵集群，负责监控另外一些redis的master/slave集群的健康状态，协助进行故障恢复(master挂了的时候，升级某个slave为新master)。</p>
+<h2 id="思考"><a href="#思考" class="headerlink" title="思考:"></a>思考:</h2><p>如果有1个master,10个slave，数据均已经完全同步。<br>这个时候，连续挂两次master，是不是所有数据就都没了？<br>第1次: 除新master以外的节点，执行新slaveof命令，清空数据准备同步新master;<br>第2次: 新master挂了，其他节点是空的。</p>
+<h2 id="答案："><a href="#答案：" class="headerlink" title="答案："></a>答案：</h2><p>不会这么脆弱。<br>两个机制提升了这个过程的可靠性：<br>(1)确认接受到完整rdb后，从库才清空旧数据库;<br>(2)确认所有从库完成同步后，才更新master的地址和端口，完成故障恢复流程。（master/slave换代操作会在故障恢复完全完成后进行。）</p>
+<p>第1次： 除候选master以外的节点，执行slaveof命令，但清空数据会在确认接收到完整rdb文件后进行。（详见代码<a href="https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/replication.c的1036行。）" target="_blank" rel="noopener">https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/replication.c的1036行。）</a><br>第2次：候选master挂了，重新推举候选master，换代没有完全完成，则不会更新master字段，因此其他slave都还在候选集中。</p>
+<p>相关参数: </p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 执行故障转移操作时，可以同时对新master进行同步的从库数量:</span></span><br><span class="line">SENTINEL parallel-syncs &lt;master-name&gt; &lt;number&gt;</span><br></pre></td></tr></table></figure>
+
+<h1 id="哨兵模式-Sentinel"><a href="#哨兵模式-Sentinel" class="headerlink" title="哨兵模式:Sentinel"></a>哨兵模式:Sentinel</h1><img src="/images/2019-02/sentinel.png" class="" width="800" height="1200" title="sentinel">
+<p>redis的高可用模式，一主多从+sentinel集群进行监控和故障恢复，主挂的时间达到设置，则选取一个从库升级为主库。</p>
+<h2 id="sentinel启动命令"><a href="#sentinel启动命令" class="headerlink" title="sentinel启动命令"></a>sentinel启动命令</h2><p>一个节点用redis代码可以用3种身份(模式)启动：</p>
+<ol>
+<li>master: 负责写命令；</li>
+<li>slave: 负责同步、从库，可以执行读命令；</li>
+<li>sentinel：负责监控上述两者，进行故障恢复。<br>使用哨兵模式：<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">redis-sentinel sentinel.conf</span><br><span class="line"><span class="comment"># 或:</span></span><br><span class="line">redis-server sentinel.conf --sentinel</span><br></pre></td></tr></table></figure>
+之后发生的事情:</li>
+<li>初始化服务器：不载入rdb,aof;（因为不需要负责实际数据）</li>
+<li>redis服务器切换成Sentinel专用代码;（默认端口26379，只载入部分命令表,客户端只能执行7个命令: <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">PING</span><br><span class="line">SENTINEL</span><br><span class="line">INFO</span><br><span class="line">Subscribe</span><br><span class="line">unSubscribe</span><br><span class="line">PSubscribe</span><br><span class="line">PUnSubscribe</span><br></pre></td></tr></table></figure></li>
+<li>初始化sentinel状态；</li>
+<li>根据配置文件，初始化Sentinel的主库列表；</li>
+<li>创建与主库的网络连接。</li>
+</ol>
+<h2 id="sentinel相关的网络连接图"><a href="#sentinel相关的网络连接图" class="headerlink" title="sentinel相关的网络连接图"></a>sentinel相关的网络连接图</h2><p>引入sentinel后的redis主从架构网络连接较多：</p>
+<ol>
+<li>sentinel节点与master: 命令连接+订阅连接;</li>
+<li>sentinel节点与slave:  命令连接+订阅连接;</li>
+<li>sentinel节点与sentinel: 命令连接。<br>相关的连接图如下:<img src="/images/2019-02/sentinel-master.png" class="" width="800" height="1200" title="sentinel-master"></li>
+</ol>
+<p><strong>master地址与端口</strong>：<code>需要配置</code><br>sentinel需要订阅master的心跳，同时在需要的时候向master发送命令，因此需要两种连接：订阅连接+命令连接。</p>
+<img src="/images/2019-02/sentinel-slave.png" class="" width="800" height="1200" title="sentinel-slave">
+<p><strong>slave地址与端口</strong>：<code>不需要配置</code><br>sentinel通过master获取到slave的地址与端口，因此不需要给sentinel配置slavel信息了。<br>sentinel需要订阅slave的心跳，同时在需要的时候向slave发送命令，因此需要两种连接：订阅连接+命令连接。（同master类似）</p>
+<img src="/images/2019-02/sentinel-sentinel.png" class="" width="800" height="1200" title="sentinel-sentinel">
+<p><strong>其他sentinel的地址与端口</strong>: <code>不需要配置</code><br>sentinel通过master获取到其他sentinel的地址与端口，因此不需要给sentinel配置信息了。sentinel订阅频道的信息里有连接到同一个master的sentinel信息。</p>
+<p>由于心跳消息由master帮sentinel完成了，不需要再订阅其他sentinel的心跳了。<br>每两个sentinel之间都有双向的命令连接（完全图），方便互相发送命令。（客观下线、主观下线、选举leader等命令）</p>
+<h2 id="一份可能的sentinel配置文件"><a href="#一份可能的sentinel配置文件" class="headerlink" title="一份可能的sentinel配置文件"></a>一份可能的sentinel配置文件</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">## master1 conf:</span><br><span class="line">sentinel monitor master1 127.0.0.1 6379 2 # 需要2票(quorum)才能客观下线</span><br><span class="line">sentinel down-after-milliseconds master1 30000 # 30秒才算主观下线(包括master&#x2F;slave和其他sentinel)</span><br><span class="line">sentinel parallel-syncs master1 1  # 同时可以有1个从库进行同步</span><br><span class="line">sentinel failover-timeout master1 90000 # 刷新故障迁移状态的最大时限</span><br><span class="line">## master2 conf:</span><br><span class="line">sentinel monitor master2 127.0.0.1 12345 5 # 需要5票才能客观下线</span><br><span class="line">sentinel down-after-milliseconds master2 50000</span><br><span class="line">sentinel parallel-syncs master2 5 </span><br><span class="line">sentinel failover-timeout master2 450000</span><br></pre></td></tr></table></figure>
+
+<h3 id="初始化sentinel状态"><a href="#初始化sentinel状态" class="headerlink" title="初始化sentinel状态"></a>初始化sentinel状态</h3><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">sentinelState</span>&#123;</span></span><br><span class="line">    <span class="comment">// 当前纪元</span></span><br><span class="line">    <span class="keyword">uint64_t</span> current_epoch;</span><br><span class="line">    <span class="comment">// 保存所有被这个sentinel监视的master:</span></span><br><span class="line">    dict *master;<span class="comment">// &lt;master_name,sentinelRedisInstance&gt;</span></span><br><span class="line">&#125;sentinel;</span><br></pre></td></tr></table></figure>
+<p>其中master值<code>sentinelRedisInstance</code>的结构如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">sentinelRedisInstance</span>&#123;</span></span><br><span class="line">    <span class="comment">// 实例类型、状态:</span></span><br><span class="line">    <span class="keyword">int</span> flags;</span><br><span class="line">    <span class="keyword">char</span> * name; <span class="comment">// "127.0.0.1:26379"</span></span><br><span class="line">    <span class="keyword">char</span> * runid; </span><br><span class="line">    <span class="keyword">uint64_t</span> config_epoch;</span><br><span class="line">    <span class="comment">// 实例的地址:</span></span><br><span class="line">    sentinelAddr *addr;<span class="comment">// ip,port</span></span><br><span class="line">    <span class="comment">// 无响应多少毫秒后判断为主观下线:</span></span><br><span class="line">    <span class="keyword">mstime_t</span> down_after_period;</span><br><span class="line">    <span class="comment">// 判断客观下线所需的支持票数:</span></span><br><span class="line">    <span class="keyword">int</span> quorum;</span><br><span class="line">    <span class="comment">// 故障转移时,可以同时对新主服务器进行同步的从服务器数量:</span></span><br><span class="line">    <span class="keyword">int</span> parallel_syncs;</span><br><span class="line">    <span class="comment">// 刷新故障迁移状态的最大时限:</span></span><br><span class="line">    <span class="keyword">mstime_t</span> failover_timeout;</span><br><span class="line">&#125;sentinelRedisInstance;</span><br></pre></td></tr></table></figure>
+
+<h3 id="创建网络连接"><a href="#创建网络连接" class="headerlink" title="创建网络连接"></a>创建网络连接</h3><p>sentinel向<strong>每个</strong>监视的master创建两个连接:</p>
+<ol>
+<li>命令连接: 用于向master发送、接受命令;</li>
+<li>订阅连接: 订阅master的<strong>sentinel</strong>:hello消息。</li>
+</ol>
+<h2 id="命令连接与订阅连接"><a href="#命令连接与订阅连接" class="headerlink" title="命令连接与订阅连接"></a>命令连接与订阅连接</h2><h3 id="连向master-slave的命令连接：-4种命令："><a href="#连向master-slave的命令连接：-4种命令：" class="headerlink" title="连向master/slave的命令连接： 4种命令："></a>连向master/slave的命令连接： 4种命令：</h3><ol>
+<li>每10秒一次的INFO命令：获取master和slave的最新配置信息；</li>
+<li>每2秒一次的订阅命令: 获取<strong>sentinel</strong>:hello频道信息，得到其他sentinel的信息。</li>
+<li>每1秒一次的PING命令:<br>获取master/slave/sentinel的心跳信息。</li>
+<li>故障恢复的时候的slaveof命令。</li>
+</ol>
+<h3 id="订阅连接"><a href="#订阅连接" class="headerlink" title="订阅连接:"></a>订阅连接:</h3><p>master/slave向所有sentinel发送它们订阅的<strong>sentinel</strong>:hello频道信息。</p>
+<h3 id="sentinel之间的命令连接"><a href="#sentinel之间的命令连接" class="headerlink" title="sentinel之间的命令连接"></a>sentinel之间的命令连接</h3><p>用于检查客观下线、选举leader、故障恢复。<br>故障恢复流程：</p>
+<ol>
+<li><code>主观下线</code>: 某个sentinel用ping命令检查master: 超过<code>down-after-milliseconds</code>配置没有回复，该sentinel主观地认为：这个master挂了——它把这个master标记为主观下线状态；</li>
+<li><code>客观下线</code>: 这个sentinel通过<code>is-master-down-by-addr</code>命令询问其他sentinel的意见。超过<code>quorum</code>数量sentinel同意，则进入客观下线状态；</li>
+<li><code>选举leader</code>: leader负责接下来的故障恢复。每次选举结束后(无论成败)，<code>epoch</code>纪元都会+1。进入客观下线分支的sentinel会要求其他人选自己，同时它会投第一个向自己要求选票的sentinel一票。所有sentinel会回复其他sentinel自己的选择，因此大家都能确定有谁的票数过半，或者都没有过半，也就是leader选举的成败是确定可知的。（奇数个sentinel的raft算法）</li>
+<li><code>leader</code>选取新候选master:<br>（1）下线原master；（但master结构中依然记录旧地址、端口，不急着更新）<br>（2）断开候选者slaveof;<br>（3）其他slave执行slaveof候选者；（同步并行度由参数决定）<br>（4）当其他slave完成同步，正式任命候选者为master，更新信息到内存。见代码<a href="https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/sentinel.c中`sentinelHandleDictOfRedisInstances`函数和`sentinelFailoverSwitchToPromotedSlave`函数。" target="_blank" rel="noopener">https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/sentinel.c中`sentinelHandleDictOfRedisInstances`函数和`sentinelFailoverSwitchToPromotedSlave`函数。</a><br>这个过程中如果候选者挂了，会重新选一个候选者。</li>
+</ol>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">sentinelHandleDictOfRedisInstances</span><span class="params">(dict *instances)</span> </span>&#123;</span><br><span class="line">    dictIterator *di;</span><br><span class="line">    dictEntry *de;</span><br><span class="line">    sentinelRedisInstance *switch_to_promoted = <span class="literal">NULL</span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* There are a number of things we need to perform against every master. */</span></span><br><span class="line">    <span class="comment">// 遍历多个实例，这些实例可以是多个主服务器、多个从服务器或者多个 sentinel</span></span><br><span class="line">    di = dictGetIterator(instances);</span><br><span class="line">    <span class="keyword">while</span>((de = dictNext(di)) != <span class="literal">NULL</span>) &#123;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 取出实例对应的实例结构</span></span><br><span class="line">        sentinelRedisInstance *ri = dictGetVal(de);</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 执行调度操作</span></span><br><span class="line">        sentinelHandleRedisInstance(ri);</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 如果被遍历的是主服务器，那么递归地遍历该主服务器的所有从服务器</span></span><br><span class="line">        <span class="comment">// 以及所有 sentinel</span></span><br><span class="line">        <span class="keyword">if</span> (ri-&gt;flags &amp; SRI_MASTER) &#123;</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 所有从服务器</span></span><br><span class="line">            sentinelHandleDictOfRedisInstances(ri-&gt;slaves);</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 所有 sentinel</span></span><br><span class="line">            sentinelHandleDictOfRedisInstances(ri-&gt;sentinels);</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 对已下线主服务器（ri）的故障迁移已经完成</span></span><br><span class="line">            <span class="comment">// ri 的所有从服务器都已经同步到新主服务器</span></span><br><span class="line">            <span class="keyword">if</span> (ri-&gt;failover_state == SENTINEL_FAILOVER_STATE_UPDATE_CONFIG) &#123;</span><br><span class="line">                <span class="comment">// 已选出新的主服务器</span></span><br><span class="line">                switch_to_promoted = ri;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 将原主服务器（已下线）从主服务器表格中移除，并使用新主服务器代替它</span></span><br><span class="line">    <span class="keyword">if</span> (switch_to_promoted)</span><br><span class="line">        sentinelFailoverSwitchToPromotedSlave(switch_to_promoted);</span><br><span class="line"></span><br><span class="line">    dictReleaseIterator(di);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<p>选取候选者的大致逻辑：</p>
+<ol>
+<li>删除网络条件差的；</li>
+<li>考虑因素的顺序：优先级、复制偏移量、运行ID小的。<br>详见<a href="https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/sentinel.c代码中的`sentinelSelectSlave`函数。" target="_blank" rel="noopener">https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/sentinel.c代码中的`sentinelSelectSlave`函数。</a></li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/24/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B08-sentinel%E5%93%A8%E5%85%B5%E6%A8%A1%E5%BC%8F/" data-id="ck96cch3p00h6bhamb4y208yg" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E7%BC%96%E8%AF%91%E5%AE%89%E8%A3%85/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          nginx笔记-编译安装
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2019/02/24/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B07-%E5%A4%8D%E5%88%B6/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">redis设计与实现笔记7-复制</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#使用场景"><span class="toc-number">1.</span> <span class="toc-text">使用场景:</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#思考"><span class="toc-number">2.</span> <span class="toc-text">思考:</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#答案："><span class="toc-number">3.</span> <span class="toc-text">答案：</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#哨兵模式-Sentinel"><span class="toc-number"></span> <span class="toc-text">哨兵模式:Sentinel</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#sentinel启动命令"><span class="toc-number">1.</span> <span class="toc-text">sentinel启动命令</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#sentinel相关的网络连接图"><span class="toc-number">2.</span> <span class="toc-text">sentinel相关的网络连接图</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#一份可能的sentinel配置文件"><span class="toc-number">3.</span> <span class="toc-text">一份可能的sentinel配置文件</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#初始化sentinel状态"><span class="toc-number">3.1.</span> <span class="toc-text">初始化sentinel状态</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#创建网络连接"><span class="toc-number">3.2.</span> <span class="toc-text">创建网络连接</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#命令连接与订阅连接"><span class="toc-number">4.</span> <span class="toc-text">命令连接与订阅连接</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#连向master-slave的命令连接：-4种命令："><span class="toc-number">4.1.</span> <span class="toc-text">连向master&#x2F;slave的命令连接： 4种命令：</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#订阅连接"><span class="toc-number">4.2.</span> <span class="toc-text">订阅连接:</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#sentinel之间的命令连接"><span class="toc-number">4.3.</span> <span class="toc-text">sentinel之间的命令连接</span></a></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

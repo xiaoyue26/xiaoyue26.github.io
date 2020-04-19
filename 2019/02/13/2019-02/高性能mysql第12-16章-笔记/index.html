@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>高性能mysql第12-16章-笔记 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="这一章主要讲了一些概念和一些Mysql Cluster变种，略。 高可用概念5个9: 99.999%，每年允许5分钟宕机时间。 宕机原因 运行环境: 磁盘耗尽； 性能问题：糟糕sql，schema索引设计; 复制问题：主备不一致； 数据丢失：如误操作。  tips 禁用查询缓存 禁用复制过滤器、触发器。  高性能mysql第13章-笔记-云端mysqlIaaS:基础设施虚拟化；DaaS:数据库虚拟">
+<meta property="og:type" content="article">
+<meta property="og:title" content="高性能mysql第12-16章-笔记">
+<meta property="og:url" content="http://xiaoyue26.github.io/2019/02/13/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC12-16%E7%AB%A0-%E7%AC%94%E8%AE%B0/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="这一章主要讲了一些概念和一些Mysql Cluster变种，略。 高可用概念5个9: 99.999%，每年允许5分钟宕机时间。 宕机原因 运行环境: 磁盘耗尽； 性能问题：糟糕sql，schema索引设计; 复制问题：主备不一致； 数据丢失：如误操作。  tips 禁用查询缓存 禁用复制过滤器、触发器。  高性能mysql第13章-笔记-云端mysqlIaaS:基础设施虚拟化；DaaS:数据库虚拟">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2019-02-13T01:34:54.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.282Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="mysql">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2019-02/高性能mysql第12-16章-笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/13/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC12-16%E7%AB%A0-%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2019-02-13T01:34:54.000Z" itemprop="datePublished">2019-02-13</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      高性能mysql第12-16章-笔记
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>这一章主要讲了一些概念和一些Mysql Cluster变种，略。</p>
+<h2 id="高可用概念"><a href="#高可用概念" class="headerlink" title="高可用概念"></a>高可用概念</h2><p>5个9: 99.999%，每年允许5分钟宕机时间。</p>
+<h2 id="宕机原因"><a href="#宕机原因" class="headerlink" title="宕机原因"></a>宕机原因</h2><ol>
+<li>运行环境: 磁盘耗尽；</li>
+<li>性能问题：糟糕sql，schema索引设计;</li>
+<li>复制问题：主备不一致；</li>
+<li>数据丢失：如误操作。</li>
+</ol>
+<h3 id="tips"><a href="#tips" class="headerlink" title="tips"></a>tips</h3><ol>
+<li>禁用查询缓存</li>
+<li>禁用复制过滤器、触发器。</li>
+</ol>
+<h1 id="高性能mysql第13章-笔记-云端mysql"><a href="#高性能mysql第13章-笔记-云端mysql" class="headerlink" title="高性能mysql第13章-笔记-云端mysql"></a>高性能mysql第13章-笔记-云端mysql</h1><p>IaaS:基础设施虚拟化；<br>DaaS:数据库虚拟化。</p>
+<h2 id="Iaas"><a href="#Iaas" class="headerlink" title="Iaas:"></a>Iaas:</h2><p>mysql需要的4种资源:</p>
+<ol>
+<li>cpu: 云cpu一般较慢；</li>
+<li>内存: 最好能到512GB~1TB；</li>
+<li>IO： ms级，虚拟化后一般慢100倍； </li>
+<li>网络： 一般不成为瓶颈。</li>
+</ol>
+<h2 id="Daas："><a href="#Daas：" class="headerlink" title="Daas："></a>Daas：</h2><p>稍微讲了一下亚马逊RDS，略过。</p>
+<h1 id="高性能mysql第14章-笔记-应用层优化"><a href="#高性能mysql第14章-笔记-应用层优化" class="headerlink" title="高性能mysql第14章-笔记-应用层优化"></a>高性能mysql第14章-笔记-应用层优化</h1><h2 id="思考的角度"><a href="#思考的角度" class="headerlink" title="思考的角度"></a>思考的角度</h2><ol>
+<li>应用和数据库正确分工；</li>
+<li>ORM的循环SQL和嵌套查询的性能优劣；</li>
+<li>缓存(redis)；</li>
+<li>连接池。</li>
+</ol>
+<h2 id="web服务器问题"><a href="#web服务器问题" class="headerlink" title="web服务器问题"></a>web服务器问题</h2><p>静态资源： 用nginx代替apache<br>移除无用的apache模块</p>
+<h2 id="缓存问题"><a href="#缓存问题" class="headerlink" title="缓存问题"></a>缓存问题</h2><p>不同等级层次的缓存:</p>
+<ol>
+<li>进程缓存;</li>
+<li>本地共享内存缓存;</li>
+<li>分布式内存缓存;(memcached)</li>
+<li>磁盘缓存。</li>
+</ol>
+<h3 id="缓存失效策略"><a href="#缓存失效策略" class="headerlink" title="缓存失效策略"></a>缓存失效策略</h3><ol>
+<li>TTL;</li>
+<li>显式失效:更新数据时候更新缓存或者标记缓存为脏数据;</li>
+<li>读时失效:读的时候再判断缓存是否已经过期； （加快写，减慢了读）</li>
+</ol>
+<h1 id="高性能mysql第15章-笔记-备份与恢复"><a href="#高性能mysql第15章-笔记-备份与恢复" class="headerlink" title="高性能mysql第15章-笔记-备份与恢复"></a>高性能mysql第15章-笔记-备份与恢复</h1><p>备份建议：</p>
+<ol>
+<li>使用Percona XtraBackup、Mysql Enterprise Backup；</li>
+<li>生产服务器和备份服务器分开，以免同时挂掉。</li>
+<li>定期进行恢复测试。</li>
+</ol>
+<h2 id="逻辑备份"><a href="#逻辑备份" class="headerlink" title="逻辑备份"></a>逻辑备份</h2><p>(SQL,mysqldump)<br>缺点: </p>
+<ol>
+<li>恢复起来慢</li>
+</ol>
+<h2 id="物理备份"><a href="#物理备份" class="headerlink" title="物理备份"></a>物理备份</h2><p>(文件)<br>缺点：</p>
+<ol>
+<li>受版本、兼容性影响，bug概率高。</li>
+<li>文件很大。</li>
+</ol>
+<p>建议：<br>0. 全局使用<code>utf-8</code>;</p>
+<ol>
+<li>逻辑：使用<code>mysqldump</code>备份结构；</li>
+<li>物理: 使用<code>select into outfile</code>导出数据为分隔符文件。</li>
+<li>恢复结构：执行1中的sql;</li>
+<li>恢复数据：<code>load data infile</code>。<br>其中2，4两步对字符集有要求。（不能单独设置某列字符集）</li>
+</ol>
+<h2 id="增量备份和全量备份"><a href="#增量备份和全量备份" class="headerlink" title="增量备份和全量备份"></a>增量备份和全量备份</h2><p>尽量做全备，增量bug多；</p>
+<h2 id="数据一致性"><a href="#数据一致性" class="headerlink" title="数据一致性"></a>数据一致性</h2><p><code>mysqldump --single-transaction</code><br>可能会导致非常长的事务，从而失败。</p>
+<h2 id="binlog清理"><a href="#binlog清理" class="headerlink" title="binlog清理"></a>binlog清理</h2><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">purge</span> <span class="keyword">master</span> <span class="keyword">logs</span> <span class="keyword">before</span> <span class="keyword">current_date</span> - <span class="built_in">Interval</span> N <span class="keyword">day</span></span><br></pre></td></tr></table></figure>
+<p>或者设置<code>expire_logs_days</code>。</p>
+<h2 id="innodb损坏恢复"><a href="#innodb损坏恢复" class="headerlink" title="innodb损坏恢复"></a>innodb损坏恢复</h2><h3 id="1-二级索引损坏"><a href="#1-二级索引损坏" class="headerlink" title="1. 二级索引损坏"></a>1. 二级索引损坏</h3><p>3种办法：</p>
+<ol>
+<li><code>optimize table</code>语句;</li>
+<li>删除重建表;</li>
+<li>表引擎改为<code>myisam</code>，再改回来。</li>
+</ol>
+<h3 id="2-聚簇索引损坏"><a href="#2-聚簇索引损坏" class="headerlink" title="2. 聚簇索引损坏"></a>2. 聚簇索引损坏</h3><p><strong>优先使用备份还原</strong><br>否则：<br>(大概率只能修复未受损坏影响的行。)<br>通过<code>innodb_force_recover</code>选项导出表，如果导出过程崩溃，需要跳过受损行。</p>
+<h3 id="3-损坏系统结构"><a href="#3-损坏系统结构" class="headerlink" title="3. 损坏系统结构"></a>3. 损坏系统结构</h3><p>损坏： innodb事务日志(redo log),表空间撤销日志(undo log),数据字典。</p>
+<p><strong>优先使用备份还原</strong><br>否则：<br>可能需要做整个数据库的导出和还原。<br>innodb内部绝大部分工作可能受影响。</p>
+<p>上述2，3两种损坏最好从备份还原数据。</p>
+<h1 id="高性能mysql第16章-笔记-用户工具"><a href="#高性能mysql第16章-笔记-用户工具" class="headerlink" title="高性能mysql第16章-笔记-用户工具"></a>高性能mysql第16章-笔记-用户工具</h1><p>这章主要介绍一些工具：</p>
+<h3 id="UI工具"><a href="#UI工具" class="headerlink" title="UI工具:"></a>UI工具:</h3><ol>
+<li>MysqlWorkbench;</li>
+<li>SQLyog: 同workbench,windows专用；</li>
+</ol>
+<h3 id="命令行工具"><a href="#命令行工具" class="headerlink" title="命令行工具:"></a>命令行工具:</h3><ol>
+<li>Percona Toolkit: 管理员必备；</li>
+<li>The openark kit：一些管理任务的python脚本。</li>
+</ol>
+<h3 id="监控工具"><a href="#监控工具" class="headerlink" title="监控工具"></a>监控工具</h3><ol>
+<li>Nagios;<br>2-6等其余很多略过。</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/13/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC12-16%E7%AB%A0-%E7%AC%94%E8%AE%B0/" data-id="ck96cch3o00h2bhamfi8z6n93" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2019/02/13/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E9%99%84%E5%BD%95A-E-%E7%AC%94%E8%AE%B0/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          高性能mysql附录A-E-笔记
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2019/02/12/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql-%E7%AC%AC%E5%8D%81%E4%B8%80%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E5%8F%AF%E6%89%A9%E5%B1%95/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">高性能mysql-第十一章-笔记-可扩展</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#高可用概念"><span class="toc-number">1.</span> <span class="toc-text">高可用概念</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#宕机原因"><span class="toc-number">2.</span> <span class="toc-text">宕机原因</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#tips"><span class="toc-number">2.1.</span> <span class="toc-text">tips</span></a></li></ol></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#高性能mysql第13章-笔记-云端mysql"><span class="toc-number"></span> <span class="toc-text">高性能mysql第13章-笔记-云端mysql</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#Iaas"><span class="toc-number">1.</span> <span class="toc-text">Iaas:</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Daas："><span class="toc-number">2.</span> <span class="toc-text">Daas：</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#高性能mysql第14章-笔记-应用层优化"><span class="toc-number"></span> <span class="toc-text">高性能mysql第14章-笔记-应用层优化</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#思考的角度"><span class="toc-number">1.</span> <span class="toc-text">思考的角度</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#web服务器问题"><span class="toc-number">2.</span> <span class="toc-text">web服务器问题</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#缓存问题"><span class="toc-number">3.</span> <span class="toc-text">缓存问题</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#缓存失效策略"><span class="toc-number">3.1.</span> <span class="toc-text">缓存失效策略</span></a></li></ol></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#高性能mysql第15章-笔记-备份与恢复"><span class="toc-number"></span> <span class="toc-text">高性能mysql第15章-笔记-备份与恢复</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#逻辑备份"><span class="toc-number">1.</span> <span class="toc-text">逻辑备份</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#物理备份"><span class="toc-number">2.</span> <span class="toc-text">物理备份</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#增量备份和全量备份"><span class="toc-number">3.</span> <span class="toc-text">增量备份和全量备份</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#数据一致性"><span class="toc-number">4.</span> <span class="toc-text">数据一致性</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#binlog清理"><span class="toc-number">5.</span> <span class="toc-text">binlog清理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#innodb损坏恢复"><span class="toc-number">6.</span> <span class="toc-text">innodb损坏恢复</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-二级索引损坏"><span class="toc-number">6.1.</span> <span class="toc-text">1. 二级索引损坏</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-聚簇索引损坏"><span class="toc-number">6.2.</span> <span class="toc-text">2. 聚簇索引损坏</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-损坏系统结构"><span class="toc-number">6.3.</span> <span class="toc-text">3. 损坏系统结构</span></a></li></ol></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#高性能mysql第16章-笔记-用户工具"><span class="toc-number"></span> <span class="toc-text">高性能mysql第16章-笔记-用户工具</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#UI工具"><span class="toc-number">0.1.</span> <span class="toc-text">UI工具:</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#命令行工具"><span class="toc-number">0.2.</span> <span class="toc-text">命令行工具:</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#监控工具"><span class="toc-number">0.3.</span> <span class="toc-text">监控工具</span></a></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

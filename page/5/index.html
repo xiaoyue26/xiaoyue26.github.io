@@ -1,0 +1,1300 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta property="og:type" content="website">
+<meta property="og:title" content="笔记本">
+<meta property="og:url" content="http://xiaoyue26.github.io/page/5/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:author" content="风梦七">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main">
+  
+    <article id="post-2019-02/nginx笔记-鉴权及转发配置" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E9%89%B4%E6%9D%83%E5%8F%8A%E8%BD%AC%E5%8F%91%E9%85%8D%E7%BD%AE/" class="article-date">
+  <time datetime="2019-02-28T07:10:31.000Z" itemprop="datePublished">2019-02-28</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/nginx/">nginx</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E9%89%B4%E6%9D%83%E5%8F%8A%E8%BD%AC%E5%8F%91%E9%85%8D%E7%BD%AE/">nginx笔记-鉴权及转发配置</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>学习资料:<br><a href="http://blog.jobbole.com/tag/nginx/" target="_blank" rel="noopener">http://blog.jobbole.com/tag/nginx/</a><br><a href="https://segmentfault.com/a/1190000013267839#articleHeader0" target="_blank" rel="noopener">https://segmentfault.com/a/1190000013267839#articleHeader0</a></p>
+<p>鉴权模块的官方文档:<br><a href="http://nginx.org/en/docs/http/ngx_http_auth_request_module.html" target="_blank" rel="noopener">http://nginx.org/en/docs/http/ngx_http_auth_request_module.html</a></p>
+<h2 id="易混淆点"><a href="#易混淆点" class="headerlink" title="易混淆点"></a>易混淆点</h2><p><strong>URL尾部的<code>/</code>区别</strong><br>url分为<code>location</code>配置中的<code>url</code>和实际用户访问的<code>url</code>：</p>
+<h3 id="1-location中的url"><a href="#1-location中的url" class="headerlink" title="1. location中的url"></a>1. location中的url</h3><p>无区别。末尾是否有<code>/</code>,含义一样。</p>
+<h3 id="2-实际用户访问的url"><a href="#2-实际用户访问的url" class="headerlink" title="2. 实际用户访问的url"></a>2. 实际用户访问的url</h3><p>也就是浏览器地址栏中的。</p>
+<p>首先实际访问url的话：<br>(1)末尾有<code>/</code>: 表示目录，如<code>localhost/dir/</code>，服务器就会匹配目录下的默认文件（比如<code>index.html</code>）;<br>(2)末尾无<code>/</code>: 表示文件，如<code>localhost/file</code>.</p>
+<p><strong>特殊情况:</strong><br>根目录。<br>直接访问域名，如访问<a href="http://www.xxx.com" target="_blank" rel="noopener">http://www.xxx.com</a><br>，这个时候浏览器知道用户访问的肯定不是文件，而且服务器一般会配置<code>location /</code>这个配置项，所以访问根目录有没有<code>/</code>都一样。<br><strong>也就是以下两种访问url等效:</strong> </p>
+<ol>
+<li>访问<a href="http://www.xxx.com" target="_blank" rel="noopener">http://www.xxx.com</a></li>
+<li>访问<a href="http://www.xxx.com/" target="_blank" rel="noopener">http://www.xxx.com/</a><br>浏览器请求的时候自动给第1种加上<code>/</code>变成第2种。</li>
+</ol>
+<h2 id="nginx配置的逻辑"><a href="#nginx配置的逻辑" class="headerlink" title="nginx配置的逻辑"></a>nginx配置的逻辑</h2><ul>
+<li>特点:</li>
+</ul>
+<ol>
+<li><p>声明式<br>nginx的配置文件是声明式的,因此不能用过程式语言来理解它。<br>换句话说:<br>并不是写在前面的就先执行.</p>
+</li>
+<li><p>第三方模块<br>nginx有核心模块和第三方模块（插件）。<br>不同模块的配置可能写在一块儿,但执行顺序可能无关联,甚至互相影响。</p>
+</li>
+</ol>
+<p>举例一些模块的功能：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">--with-http_dav_module: http文件管理;</span><br><span class="line">--with-http_flv_module: flv流媒体支持;</span><br><span class="line">--with-mail: 邮件支持;</span><br><span class="line">--with-mail_ssl_module: 邮件加密;</span><br><span class="line">--with-debug: debug日志支持;</span><br><span class="line">--with-http_auth_request_module: 鉴权转发支持。</span><br></pre></td></tr></table></figure>
+
+<h2 id="一种可能的鉴权转发配置："><a href="#一种可能的鉴权转发配置：" class="headerlink" title="一种可能的鉴权转发配置："></a>一种可能的鉴权转发配置：</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br></pre></td><td class="code"><pre><span class="line">#user  nobody;</span><br><span class="line">worker_processes  3;</span><br><span class="line"></span><br><span class="line">error_log  logs&#x2F;error.log;</span><br><span class="line">#error_log  logs&#x2F;error.log  notice;</span><br><span class="line">#error_log  logs&#x2F;error.log  info;</span><br><span class="line"></span><br><span class="line"># pid        logs&#x2F;nginx.pid; # 这个必须停服改</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">events &#123;</span><br><span class="line">    worker_connections  2048;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">http &#123;</span><br><span class="line">    include       mime.types;</span><br><span class="line">    default_type  application&#x2F;octet-stream;</span><br><span class="line"></span><br><span class="line">    log_format  main  &#39;$remote_addr - $remote_user [$time_local] &quot;$request&quot; &#39;</span><br><span class="line">                      &#39;$status $body_bytes_sent &quot;$http_referer&quot; &#39;</span><br><span class="line">                      &#39;&quot;$http_user_agent&quot; &quot;$http_x_forwarded_for&quot;&#39;;</span><br><span class="line"></span><br><span class="line">    access_log  logs&#x2F;access.log  main;</span><br><span class="line"></span><br><span class="line">    sendfile        on;</span><br><span class="line">    #tcp_nopush     on;</span><br><span class="line"></span><br><span class="line">    #keepalive_timeout  0;</span><br><span class="line">    keepalive_timeout  65;</span><br><span class="line"></span><br><span class="line">    #gzip  on;</span><br><span class="line">    gzip  on;</span><br><span class="line">    gzip_min_length 1k;</span><br><span class="line">    gzip_buffers    4 16k;</span><br><span class="line">    gzip_http_version 1.0;</span><br><span class="line">    gzip_comp_level 6;</span><br><span class="line">    gzip_types text&#x2F;plain text&#x2F;css text&#x2F;javascript application&#x2F;json application&#x2F;javascript application&#x2F;x-javascript application&#x2F;xml;</span><br><span class="line">    gzip_vary on;</span><br><span class="line"></span><br><span class="line">    # http_proxy 设置</span><br><span class="line">    client_max_body_size   10m;</span><br><span class="line">    client_body_buffer_size   128k;</span><br><span class="line">    proxy_connect_timeout   75;</span><br><span class="line">    proxy_send_timeout   75;</span><br><span class="line">    proxy_read_timeout   75;</span><br><span class="line">    proxy_buffer_size   4k;</span><br><span class="line">    proxy_buffers   4 32k;</span><br><span class="line">    proxy_busy_buffers_size   64k;</span><br><span class="line">    proxy_temp_file_write_size  64k;</span><br><span class="line">    proxy_temp_path   &#x2F;usr&#x2F;local&#x2F;nginx&#x2F;proxy_temp 1 2;</span><br><span class="line"></span><br><span class="line">    upstream backend_hexo &#123;</span><br><span class="line">	    server localhost:8081 max_fails&#x3D;2 fail_timeout&#x3D;30s ;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    server &#123;</span><br><span class="line">        listen       80;</span><br><span class="line">        server_name  localhost;</span><br><span class="line"></span><br><span class="line">        #charset koi8-r;</span><br><span class="line"></span><br><span class="line">        access_log  logs&#x2F;host.access.log  main;</span><br><span class="line"></span><br><span class="line">        location &#x2F; &#123;</span><br><span class="line">            auth_request &#x2F;auth;</span><br><span class="line">            add_header Cache-Control no-store;</span><br><span class="line">            proxy_set_header Host $host;</span><br><span class="line"></span><br><span class="line">            proxy_pass        http:&#x2F;&#x2F;backend_hexo;</span><br><span class="line">            proxy_redirect off;</span><br><span class="line">            # 后端的Web服务器可以通过X-Forwarded-For获取用户真实IP</span><br><span class="line">            proxy_set_header  Host  $host;</span><br><span class="line">            proxy_set_header  X-Real-IP  $remote_addr;</span><br><span class="line">            proxy_set_header  X-Forwarded-For  $proxy_add_x_forwarded_for;</span><br><span class="line">            proxy_next_upstream error timeout invalid_header http_500 http_502 http_503 http_504;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        location &#x3D; &#x2F;auth &#123;</span><br><span class="line">            proxy_pass http:&#x2F;&#x2F;auth_server:8080&#x2F;api&#x2F;hexo_permission;</span><br><span class="line">            proxy_pass_request_body off;</span><br><span class="line">            proxy_set_header Content-Length &quot;&quot;;</span><br><span class="line">            proxy_set_header X-Original-URI $request_uri;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">        #error_page  404              &#x2F;404.html;</span><br><span class="line"></span><br><span class="line">        # redirect server error pages to the static page &#x2F;50x.html</span><br><span class="line">        #</span><br><span class="line">        error_page   500 502 503 504  &#x2F;50x.html;</span><br><span class="line">        location &#x3D; &#x2F;50x.html &#123;</span><br><span class="line">            root   html;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E9%89%B4%E6%9D%83%E5%8F%8A%E8%BD%AC%E5%8F%91%E9%85%8D%E7%BD%AE/" data-id="ck96cch3g00g5bham69fybb7l" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/nginx/" rel="tag">nginx</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-02/nginx笔记-编译安装" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E7%BC%96%E8%AF%91%E5%AE%89%E8%A3%85/" class="article-date">
+  <time datetime="2019-02-28T07:08:23.000Z" itemprop="datePublished">2019-02-28</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/nginx/">nginx</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E7%BC%96%E8%AF%91%E5%AE%89%E8%A3%85/">nginx笔记-编译安装</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>参考资料：<br><a href="https://www.jianshu.com/p/5eab0f83e3b4" target="_blank" rel="noopener">https://www.jianshu.com/p/5eab0f83e3b4</a></p>
+<h1 id="架构"><a href="#架构" class="headerlink" title="架构"></a>架构</h1><img src="/images/2019-02/master-worker.png" class="" width="800" height="1200" title="master-worker">
+<p>master+worker架构。</p>
+<p>master: 管理<code>nginx.conf</code>,同步到worker;<br>worker: 单线程绑定cpu，实际处理/转发请求;</p>
+<p>master咋同步配置到worker呢？<br>直接用新conf起新worker,旧worker处理完手头的活就kill掉。</p>
+<h1 id="常用命令"><a href="#常用命令" class="headerlink" title="常用命令"></a>常用命令</h1><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 启动:</span></span><br><span class="line">nginx -c nginx配置文件地址   </span><br><span class="line"><span class="meta">#</span><span class="bash"> 重新载入配置:</span></span><br><span class="line">nginx -s reload</span><br><span class="line"><span class="meta">#</span><span class="bash"> 检查配置（或查看配置地址）：</span></span><br><span class="line">nginx -t</span><br><span class="line"><span class="meta">#</span><span class="bash"> 停止：</span></span><br><span class="line">nginx -s stop</span><br></pre></td></tr></table></figure>
+<p>比如如果想知道当前nginx的配置文件在哪里，可以运行<code>nginx -t</code>,就能看到了。</p>
+<h1 id="编译安装"><a href="#编译安装" class="headerlink" title="编译安装"></a>编译安装</h1><p>下载解压缩:<br><a href="http://nginx.org/en/download.html" target="_blank" rel="noopener">http://nginx.org/en/download.html</a><br><strong>配置</strong></p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> KERNEL_BITS=64</span><br><span class="line">./configure --user=mengqifeng \</span><br><span class="line">--group=staff \</span><br><span class="line">--prefix=/usr/<span class="built_in">local</span>/nginx \</span><br><span class="line">--pid-path=/var/run/nginx.pid \</span><br><span class="line">--lock-path=/var/lock/nginx.lock \</span><br><span class="line">--with-http_ssl_module \</span><br><span class="line">--with-http_dav_module \</span><br><span class="line">--with-http_flv_module \</span><br><span class="line">--with-http_realip_module \</span><br><span class="line">--with-http_gzip_static_module \</span><br><span class="line">--with-http_stub_status_module \</span><br><span class="line">--with-mail --with-mail_ssl_module \</span><br><span class="line">--with-debug \</span><br><span class="line">--with-http_auth_request_module \</span><br><span class="line">--http-client-body-temp-path=/var/tmp/nginx/client \</span><br><span class="line">--http-proxy-temp-path=/var/tmp/nginx/proxy \</span><br><span class="line">--http-fastcgi-temp-path=/var/tmp/nginx/fastcgi \</span><br><span class="line">--http-uwsgi-temp-path=/var/tmp/nginx/uwsgi \</span><br><span class="line">--http-scgi-temp-path=/var/tmp/nginx/scgi \</span><br><span class="line">--with-pcre=/Users/mengqifeng/Public/build_home/pcre-8.42 \</span><br><span class="line">--with-openssl=/Users/mengqifeng/Public/build_home/openssl \</span><br><span class="line">--with-zlib=/Users/mengqifeng/Public/build_home/zlib-1.2.11</span><br></pre></td></tr></table></figure>
+<p>其中最后3行要看情况,先不加。<br>报错以后下载pcre和openssl,加上参数提供给nginx.<br><strong>编译</strong></p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">make</span><br></pre></td></tr></table></figure>
+<p><strong>安装</strong></p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo make install</span><br></pre></td></tr></table></figure>
+
+<p>最后设置一下环境变量: (<code>/etc/profile.d/nginx.sh</code>)</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> NGINX_HOME=/usr/<span class="built_in">local</span>/nginx</span><br><span class="line"><span class="built_in">export</span> PATH=<span class="variable">$PATH</span>:<span class="variable">$NGINX_HOME</span>/sbin</span><br></pre></td></tr></table></figure>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E7%BC%96%E8%AF%91%E5%AE%89%E8%A3%85/" data-id="ck96cch3e00fxbham0bsh7u15" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/nginx/" rel="tag">nginx</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-02/redis设计与实现笔记8-sentinel哨兵模式" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/24/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B08-sentinel%E5%93%A8%E5%85%B5%E6%A8%A1%E5%BC%8F/" class="article-date">
+  <time datetime="2019-02-24T12:46:55.000Z" itemprop="datePublished">2019-02-24</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/02/24/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B08-sentinel%E5%93%A8%E5%85%B5%E6%A8%A1%E5%BC%8F/">redis设计与实现笔记8-sentinel哨兵模式</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h2 id="使用场景"><a href="#使用场景" class="headerlink" title="使用场景:"></a>使用场景:</h2><p>用几个节点开启sentinel组成一个哨兵集群，负责监控另外一些redis的master/slave集群的健康状态，协助进行故障恢复(master挂了的时候，升级某个slave为新master)。</p>
+<h2 id="思考"><a href="#思考" class="headerlink" title="思考:"></a>思考:</h2><p>如果有1个master,10个slave，数据均已经完全同步。<br>这个时候，连续挂两次master，是不是所有数据就都没了？<br>第1次: 除新master以外的节点，执行新slaveof命令，清空数据准备同步新master;<br>第2次: 新master挂了，其他节点是空的。</p>
+<h2 id="答案："><a href="#答案：" class="headerlink" title="答案："></a>答案：</h2><p>不会这么脆弱。<br>两个机制提升了这个过程的可靠性：<br>(1)确认接受到完整rdb后，从库才清空旧数据库;<br>(2)确认所有从库完成同步后，才更新master的地址和端口，完成故障恢复流程。（master/slave换代操作会在故障恢复完全完成后进行。）</p>
+<p>第1次： 除候选master以外的节点，执行slaveof命令，但清空数据会在确认接收到完整rdb文件后进行。（详见代码<a href="https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/replication.c的1036行。）" target="_blank" rel="noopener">https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/replication.c的1036行。）</a><br>第2次：候选master挂了，重新推举候选master，换代没有完全完成，则不会更新master字段，因此其他slave都还在候选集中。</p>
+<p>相关参数: </p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 执行故障转移操作时，可以同时对新master进行同步的从库数量:</span></span><br><span class="line">SENTINEL parallel-syncs &lt;master-name&gt; &lt;number&gt;</span><br></pre></td></tr></table></figure>
+
+<h1 id="哨兵模式-Sentinel"><a href="#哨兵模式-Sentinel" class="headerlink" title="哨兵模式:Sentinel"></a>哨兵模式:Sentinel</h1><img src="/images/2019-02/sentinel.png" class="" width="800" height="1200" title="sentinel">
+<p>redis的高可用模式，一主多从+sentinel集群进行监控和故障恢复，主挂的时间达到设置，则选取一个从库升级为主库。</p>
+<h2 id="sentinel启动命令"><a href="#sentinel启动命令" class="headerlink" title="sentinel启动命令"></a>sentinel启动命令</h2><p>一个节点用redis代码可以用3种身份(模式)启动：</p>
+<ol>
+<li>master: 负责写命令；</li>
+<li>slave: 负责同步、从库，可以执行读命令；</li>
+<li>sentinel：负责监控上述两者，进行故障恢复。<br>使用哨兵模式：<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">redis-sentinel sentinel.conf</span><br><span class="line"><span class="comment"># 或:</span></span><br><span class="line">redis-server sentinel.conf --sentinel</span><br></pre></td></tr></table></figure>
+之后发生的事情:</li>
+<li>初始化服务器：不载入rdb,aof;（因为不需要负责实际数据）</li>
+<li>redis服务器切换成Sentinel专用代码;（默认端口26379，只载入部分命令表,客户端只能执行7个命令: <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">PING</span><br><span class="line">SENTINEL</span><br><span class="line">INFO</span><br><span class="line">Subscribe</span><br><span class="line">unSubscribe</span><br><span class="line">PSubscribe</span><br><span class="line">PUnSubscribe</span><br></pre></td></tr></table></figure></li>
+<li>初始化sentinel状态；</li>
+<li>根据配置文件，初始化Sentinel的主库列表；</li>
+<li>创建与主库的网络连接。</li>
+</ol>
+<h2 id="sentinel相关的网络连接图"><a href="#sentinel相关的网络连接图" class="headerlink" title="sentinel相关的网络连接图"></a>sentinel相关的网络连接图</h2><p>引入sentinel后的redis主从架构网络连接较多：</p>
+<ol>
+<li>sentinel节点与master: 命令连接+订阅连接;</li>
+<li>sentinel节点与slave:  命令连接+订阅连接;</li>
+<li>sentinel节点与sentinel: 命令连接。<br>相关的连接图如下:<img src="/images/2019-02/sentinel-master.png" class="" width="800" height="1200" title="sentinel-master"></li>
+</ol>
+<p><strong>master地址与端口</strong>：<code>需要配置</code><br>sentinel需要订阅master的心跳，同时在需要的时候向master发送命令，因此需要两种连接：订阅连接+命令连接。</p>
+<img src="/images/2019-02/sentinel-slave.png" class="" width="800" height="1200" title="sentinel-slave">
+<p><strong>slave地址与端口</strong>：<code>不需要配置</code><br>sentinel通过master获取到slave的地址与端口，因此不需要给sentinel配置slavel信息了。<br>sentinel需要订阅slave的心跳，同时在需要的时候向slave发送命令，因此需要两种连接：订阅连接+命令连接。（同master类似）</p>
+<img src="/images/2019-02/sentinel-sentinel.png" class="" width="800" height="1200" title="sentinel-sentinel">
+<p><strong>其他sentinel的地址与端口</strong>: <code>不需要配置</code><br>sentinel通过master获取到其他sentinel的地址与端口，因此不需要给sentinel配置信息了。sentinel订阅频道的信息里有连接到同一个master的sentinel信息。</p>
+<p>由于心跳消息由master帮sentinel完成了，不需要再订阅其他sentinel的心跳了。<br>每两个sentinel之间都有双向的命令连接（完全图），方便互相发送命令。（客观下线、主观下线、选举leader等命令）</p>
+<h2 id="一份可能的sentinel配置文件"><a href="#一份可能的sentinel配置文件" class="headerlink" title="一份可能的sentinel配置文件"></a>一份可能的sentinel配置文件</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">## master1 conf:</span><br><span class="line">sentinel monitor master1 127.0.0.1 6379 2 # 需要2票(quorum)才能客观下线</span><br><span class="line">sentinel down-after-milliseconds master1 30000 # 30秒才算主观下线(包括master&#x2F;slave和其他sentinel)</span><br><span class="line">sentinel parallel-syncs master1 1  # 同时可以有1个从库进行同步</span><br><span class="line">sentinel failover-timeout master1 90000 # 刷新故障迁移状态的最大时限</span><br><span class="line">## master2 conf:</span><br><span class="line">sentinel monitor master2 127.0.0.1 12345 5 # 需要5票才能客观下线</span><br><span class="line">sentinel down-after-milliseconds master2 50000</span><br><span class="line">sentinel parallel-syncs master2 5 </span><br><span class="line">sentinel failover-timeout master2 450000</span><br></pre></td></tr></table></figure>
+
+<h3 id="初始化sentinel状态"><a href="#初始化sentinel状态" class="headerlink" title="初始化sentinel状态"></a>初始化sentinel状态</h3><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">sentinelState</span>&#123;</span></span><br><span class="line">    <span class="comment">// 当前纪元</span></span><br><span class="line">    <span class="keyword">uint64_t</span> current_epoch;</span><br><span class="line">    <span class="comment">// 保存所有被这个sentinel监视的master:</span></span><br><span class="line">    dict *master;<span class="comment">// &lt;master_name,sentinelRedisInstance&gt;</span></span><br><span class="line">&#125;sentinel;</span><br></pre></td></tr></table></figure>
+<p>其中master值<code>sentinelRedisInstance</code>的结构如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">sentinelRedisInstance</span>&#123;</span></span><br><span class="line">    <span class="comment">// 实例类型、状态:</span></span><br><span class="line">    <span class="keyword">int</span> flags;</span><br><span class="line">    <span class="keyword">char</span> * name; <span class="comment">// "127.0.0.1:26379"</span></span><br><span class="line">    <span class="keyword">char</span> * runid; </span><br><span class="line">    <span class="keyword">uint64_t</span> config_epoch;</span><br><span class="line">    <span class="comment">// 实例的地址:</span></span><br><span class="line">    sentinelAddr *addr;<span class="comment">// ip,port</span></span><br><span class="line">    <span class="comment">// 无响应多少毫秒后判断为主观下线:</span></span><br><span class="line">    <span class="keyword">mstime_t</span> down_after_period;</span><br><span class="line">    <span class="comment">// 判断客观下线所需的支持票数:</span></span><br><span class="line">    <span class="keyword">int</span> quorum;</span><br><span class="line">    <span class="comment">// 故障转移时,可以同时对新主服务器进行同步的从服务器数量:</span></span><br><span class="line">    <span class="keyword">int</span> parallel_syncs;</span><br><span class="line">    <span class="comment">// 刷新故障迁移状态的最大时限:</span></span><br><span class="line">    <span class="keyword">mstime_t</span> failover_timeout;</span><br><span class="line">&#125;sentinelRedisInstance;</span><br></pre></td></tr></table></figure>
+
+<h3 id="创建网络连接"><a href="#创建网络连接" class="headerlink" title="创建网络连接"></a>创建网络连接</h3><p>sentinel向<strong>每个</strong>监视的master创建两个连接:</p>
+<ol>
+<li>命令连接: 用于向master发送、接受命令;</li>
+<li>订阅连接: 订阅master的<strong>sentinel</strong>:hello消息。</li>
+</ol>
+<h2 id="命令连接与订阅连接"><a href="#命令连接与订阅连接" class="headerlink" title="命令连接与订阅连接"></a>命令连接与订阅连接</h2><h3 id="连向master-slave的命令连接：-4种命令："><a href="#连向master-slave的命令连接：-4种命令：" class="headerlink" title="连向master/slave的命令连接： 4种命令："></a>连向master/slave的命令连接： 4种命令：</h3><ol>
+<li>每10秒一次的INFO命令：获取master和slave的最新配置信息；</li>
+<li>每2秒一次的订阅命令: 获取<strong>sentinel</strong>:hello频道信息，得到其他sentinel的信息。</li>
+<li>每1秒一次的PING命令:<br>获取master/slave/sentinel的心跳信息。</li>
+<li>故障恢复的时候的slaveof命令。</li>
+</ol>
+<h3 id="订阅连接"><a href="#订阅连接" class="headerlink" title="订阅连接:"></a>订阅连接:</h3><p>master/slave向所有sentinel发送它们订阅的<strong>sentinel</strong>:hello频道信息。</p>
+<h3 id="sentinel之间的命令连接"><a href="#sentinel之间的命令连接" class="headerlink" title="sentinel之间的命令连接"></a>sentinel之间的命令连接</h3><p>用于检查客观下线、选举leader、故障恢复。<br>故障恢复流程：</p>
+<ol>
+<li><code>主观下线</code>: 某个sentinel用ping命令检查master: 超过<code>down-after-milliseconds</code>配置没有回复，该sentinel主观地认为：这个master挂了——它把这个master标记为主观下线状态；</li>
+<li><code>客观下线</code>: 这个sentinel通过<code>is-master-down-by-addr</code>命令询问其他sentinel的意见。超过<code>quorum</code>数量sentinel同意，则进入客观下线状态；</li>
+<li><code>选举leader</code>: leader负责接下来的故障恢复。每次选举结束后(无论成败)，<code>epoch</code>纪元都会+1。进入客观下线分支的sentinel会要求其他人选自己，同时它会投第一个向自己要求选票的sentinel一票。所有sentinel会回复其他sentinel自己的选择，因此大家都能确定有谁的票数过半，或者都没有过半，也就是leader选举的成败是确定可知的。（奇数个sentinel的raft算法）</li>
+<li><code>leader</code>选取新候选master:<br>（1）下线原master；（但master结构中依然记录旧地址、端口，不急着更新）<br>（2）断开候选者slaveof;<br>（3）其他slave执行slaveof候选者；（同步并行度由参数决定）<br>（4）当其他slave完成同步，正式任命候选者为master，更新信息到内存。见代码<a href="https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/sentinel.c中`sentinelHandleDictOfRedisInstances`函数和`sentinelFailoverSwitchToPromotedSlave`函数。" target="_blank" rel="noopener">https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/sentinel.c中`sentinelHandleDictOfRedisInstances`函数和`sentinelFailoverSwitchToPromotedSlave`函数。</a><br>这个过程中如果候选者挂了，会重新选一个候选者。</li>
+</ol>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">sentinelHandleDictOfRedisInstances</span><span class="params">(dict *instances)</span> </span>&#123;</span><br><span class="line">    dictIterator *di;</span><br><span class="line">    dictEntry *de;</span><br><span class="line">    sentinelRedisInstance *switch_to_promoted = <span class="literal">NULL</span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* There are a number of things we need to perform against every master. */</span></span><br><span class="line">    <span class="comment">// 遍历多个实例，这些实例可以是多个主服务器、多个从服务器或者多个 sentinel</span></span><br><span class="line">    di = dictGetIterator(instances);</span><br><span class="line">    <span class="keyword">while</span>((de = dictNext(di)) != <span class="literal">NULL</span>) &#123;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 取出实例对应的实例结构</span></span><br><span class="line">        sentinelRedisInstance *ri = dictGetVal(de);</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 执行调度操作</span></span><br><span class="line">        sentinelHandleRedisInstance(ri);</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 如果被遍历的是主服务器，那么递归地遍历该主服务器的所有从服务器</span></span><br><span class="line">        <span class="comment">// 以及所有 sentinel</span></span><br><span class="line">        <span class="keyword">if</span> (ri-&gt;flags &amp; SRI_MASTER) &#123;</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 所有从服务器</span></span><br><span class="line">            sentinelHandleDictOfRedisInstances(ri-&gt;slaves);</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 所有 sentinel</span></span><br><span class="line">            sentinelHandleDictOfRedisInstances(ri-&gt;sentinels);</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 对已下线主服务器（ri）的故障迁移已经完成</span></span><br><span class="line">            <span class="comment">// ri 的所有从服务器都已经同步到新主服务器</span></span><br><span class="line">            <span class="keyword">if</span> (ri-&gt;failover_state == SENTINEL_FAILOVER_STATE_UPDATE_CONFIG) &#123;</span><br><span class="line">                <span class="comment">// 已选出新的主服务器</span></span><br><span class="line">                switch_to_promoted = ri;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 将原主服务器（已下线）从主服务器表格中移除，并使用新主服务器代替它</span></span><br><span class="line">    <span class="keyword">if</span> (switch_to_promoted)</span><br><span class="line">        sentinelFailoverSwitchToPromotedSlave(switch_to_promoted);</span><br><span class="line"></span><br><span class="line">    dictReleaseIterator(di);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<p>选取候选者的大致逻辑：</p>
+<ol>
+<li>删除网络条件差的；</li>
+<li>考虑因素的顺序：优先级、复制偏移量、运行ID小的。<br>详见<a href="https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/sentinel.c代码中的`sentinelSelectSlave`函数。" target="_blank" rel="noopener">https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/sentinel.c代码中的`sentinelSelectSlave`函数。</a></li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/24/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B08-sentinel%E5%93%A8%E5%85%B5%E6%A8%A1%E5%BC%8F/" data-id="ck96cch3p00h6bhamb4y208yg" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-02/redis设计与实现笔记7-复制" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/24/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B07-%E5%A4%8D%E5%88%B6/" class="article-date">
+  <time datetime="2019-02-24T12:46:10.000Z" itemprop="datePublished">2019-02-24</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/02/24/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B07-%E5%A4%8D%E5%88%B6/">redis设计与实现笔记7-复制</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="第15章-复制"><a href="#第15章-复制" class="headerlink" title="第15章 复制"></a>第15章 复制</h1><p>redis服务器B执行slave of命令后可变成另一台服务器的从库：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">127.0.0.1:12345&gt; SLAVEOF 127.0.0.1 6379</span><br><span class="line"><span class="comment"># 12345端口就变成6379的从库了。</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="旧版复制功能的实现"><a href="#旧版复制功能的实现" class="headerlink" title="旧版复制功能的实现"></a>旧版复制功能的实现</h2><ol>
+<li>同步(<code>sync</code>): 更新从库状态；</li>
+<li>传播(<code>propagate</code>): 持续维持一致性。</li>
+</ol>
+<h3 id="同步"><a href="#同步" class="headerlink" title="同步"></a>同步</h3><p>主库发RDB文件给从库，从库载入一下。</p>
+<p>旧版缺点：<br>每次断线后，重新同步，也就是重新生成RDB文件，重新全量载入。</p>
+<h2 id="新版复制功能的实现-2-8-版本"><a href="#新版复制功能的实现-2-8-版本" class="headerlink" title="新版复制功能的实现(2.8+版本)"></a>新版复制功能的实现(2.8+版本)</h2><p>引入<code>PSYNC</code>命令，它有两种模式:</p>
+<ol>
+<li>完整重同步: 初次复制；</li>
+<li>部分重同步：断线重连。</li>
+</ol>
+<h3 id="部分重同步："><a href="#部分重同步：" class="headerlink" title="部分重同步："></a>部分重同步：</h3><ol>
+<li>主从库的复制偏移量;(replication offset)</li>
+<li>主库的复制积压缓冲区;(replication backlog):默认1MB，FIFO队列。</li>
+<li>服务器的运行id(run ID)。</li>
+</ol>
+<p>如果重连时，需要的数据还在缓冲区，就部分同步；<br>如果重连时，需要的数据已经被删除，就完全同步。</p>
+<p>所以缓冲区设置稍微大一些最好。</p>
+<h3 id="复制流程"><a href="#复制流程" class="headerlink" title="复制流程"></a>复制流程</h3><ol>
+<li>从库:记录主库地址端口等信息到内存；</li>
+<li>建立套接字连接；</li>
+<li>从库: PING 主库: PONG，确认连接健康；</li>
+<li>身份验证：(是否需要认证，密码)，两个维度都需要相同才能继续；</li>
+<li>从库=&gt;主库: 请用xxx端口联系从库;</li>
+<li>同步： 主库从库互为客户端：<br>完全同步： 主库=&gt;从库: 保存在缓冲区的写命令;<br>部分同步： 主库=&gt;从库: 保存在复制积压缓冲区的写命令。</li>
+<li>命令传播： 主库=&gt;从库: 新的写命令。</li>
+</ol>
+<h3 id="心跳检测"><a href="#心跳检测" class="headerlink" title="心跳检测"></a>心跳检测</h3><p>从库=&gt;主库: </p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">REPLCONF ACK &lt;replication_offset&gt; <span class="comment"># 从库当前复制偏移量</span></span><br></pre></td></tr></table></figure>
+<p>三个作用：</p>
+<ol>
+<li>主库确定各个从库的健康状态；</li>
+<li>检测命令丢失：主库检测从库有没有漏的复制，漏则重发；</li>
+<li><code>min_slave_to_write</code>参数：如果配置了这个，主库可以在从库太少的时候拒绝写命令。</li>
+</ol>
+<h1 id="slaveof命令源码细节"><a href="#slaveof命令源码细节" class="headerlink" title="slaveof命令源码细节"></a>slaveof命令源码细节</h1><p>从库确认收到主库的完整rdb文件后，才清空旧数据库。<br>(而不是说不分青红皂白上来就把自己清空了，那就太傻了。)<br>相关代码(<a href="https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/replication.c" target="_blank" rel="noopener">https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/replication.c</a>):</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* Check if the transfer is now complete */</span></span><br><span class="line">    <span class="comment">// 检查 RDB 是否已经传送完毕</span></span><br><span class="line">    <span class="comment">// 1036行: </span></span><br><span class="line">    <span class="keyword">if</span> (server.repl_transfer_read == server.repl_transfer_size) &#123;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 完毕，将临时文件改名为 dump.rdb</span></span><br><span class="line">        <span class="keyword">if</span> (rename(server.repl_transfer_tmpfile,server.rdb_filename) == <span class="number">-1</span>) &#123;</span><br><span class="line">            redisLog(REDIS_WARNING,<span class="string">"Failed trying to rename the temp DB into dump.rdb in MASTER &lt;-&gt; SLAVE synchronization: %s"</span>, strerror(errno));</span><br><span class="line">            replicationAbortSyncTransfer();</span><br><span class="line">            <span class="keyword">return</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 先清空旧数据库</span></span><br><span class="line">        redisLog(REDIS_NOTICE, <span class="string">"MASTER &lt;-&gt; SLAVE sync: Flushing old data"</span>);</span><br><span class="line">        signalFlushedDb(<span class="number">-1</span>);</span><br><span class="line">        emptyDb(replicationEmptyDbCallback);</span><br></pre></td></tr></table></figure>
+
+
+
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/24/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B07-%E5%A4%8D%E5%88%B6/" data-id="ck96cch3m00grbhamaf326snd" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-02/redis设计与实现笔记6-客户端与服务器" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/21/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B06-%E5%AE%A2%E6%88%B7%E7%AB%AF%E4%B8%8E%E6%9C%8D%E5%8A%A1%E5%99%A8/" class="article-date">
+  <time datetime="2019-02-21T13:55:54.000Z" itemprop="datePublished">2019-02-21</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/02/21/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B06-%E5%AE%A2%E6%88%B7%E7%AB%AF%E4%B8%8E%E6%9C%8D%E5%8A%A1%E5%99%A8/">redis设计与实现笔记6-客户端与服务器</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="客户端"><a href="#客户端" class="headerlink" title="客户端"></a>客户端</h1><p>服务端保存的客户端状态:(<code>redisClient</code>)</p>
+<ol>
+<li>套接字;</li>
+<li>客户端名字</li>
+<li>标志值flag;</li>
+<li>正在使用的数据库指针\号码;</li>
+<li>客户端当前要执行的命令、参数..;</li>
+<li>客户端输入、输出缓冲区；</li>
+<li>复制状态信息；</li>
+<li>事务状态；</li>
+<li>身份验证标志：0未通过；1：已经通过身份验证；</li>
+<li>创建时间、最后一次通信时间；</li>
+<li>其他。</li>
+</ol>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">redisServer</span>&#123;</span></span><br><span class="line">    <span class="comment">// 所有客户端状态的链表</span></span><br><span class="line">    <span class="built_in">list</span> *clients;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="相关命令"><a href="#相关命令" class="headerlink" title="相关命令"></a>相关命令</h2><p>列出客户端:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">127.0.0.1:6379&gt; client list</span><br><span class="line">id=489 addr=127.0.0.1:57480 fd=5 name= age=6151 idle=582 flags=N db=0 sub=0 psub=0 multi=-1 qbuf=0 qbuf-free=0 obl=0 oll=0 omem=0 events=r cmd=get</span><br><span class="line">id=490 addr=127.0.0.1:38584 fd=6 name= age=15 idle=0 flags=N db=0 sub=0 psub=0 multi=-1 qbuf=0 qbuf-free=32768 obl=0 oll=0 omem=0 events=r cmd=client</span><br></pre></td></tr></table></figure>
+
+<h2 id="套接字fd"><a href="#套接字fd" class="headerlink" title="套接字fd"></a>套接字fd</h2><p>fd=-1: 伪客户端:加载AOF或执行Lua脚本；<br>fd&gt;-1: 普通客户端。</p>
+<h2 id="名字-name"><a href="#名字-name" class="headerlink" title="名字(name)"></a>名字(name)</h2><p>默认都没有名字，可以使用<code>client setname</code>命令设置。</p>
+<h2 id="客户端关闭"><a href="#客户端关闭" class="headerlink" title="客户端关闭"></a>客户端关闭</h2><p>关闭的原因：</p>
+<ol>
+<li>客户端进程退出、被杀死(<code>Client kill</code>)，网络连接断开；</li>
+<li>客户端发送了不符合协议格式的命令，被关闭；</li>
+<li>空转时间超过<code>timeout</code>配置;</li>
+<li>发送命令大小超过输入缓冲区限制；</li>
+<li>回复命令大小超过输出缓冲区限制。</li>
+</ol>
+<p>输出缓冲区需满足的两个限制：</p>
+<ol>
+<li>硬性限制：超出硬性限制大小，立即关闭；</li>
+<li>软性限制：最多可以超出软性限制持续时长xxx秒。</li>
+</ol>
+<p>示例配置：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 普通客户端硬性限制和软性限制都不限制:</span></span><br><span class="line">client-output-buffer-limit normal 0 0 0</span><br><span class="line"><span class="meta">#</span><span class="bash"> 从服务器客户端硬性限制为256MB,软性限制为64MB、60秒：</span></span><br><span class="line">client-output-buffer-limit slave 256mb 64mb 60</span><br><span class="line"><span class="meta">#</span><span class="bash"> 执行发布与订阅功能的客户端：硬性限制32mb,软性限制8mb 60秒:</span></span><br><span class="line">client-output-buffer-limit 32mb 8mb 60</span><br></pre></td></tr></table></figure>
+
+<h1 id="服务端"><a href="#服务端" class="headerlink" title="服务端"></a>服务端</h1><h2 id="命令的执行流程"><a href="#命令的执行流程" class="headerlink" title="命令的执行流程"></a>命令的执行流程</h2><ol>
+<li>用户=&gt;客户端: 输入命令；</li>
+<li>客户端=&gt;服务端: 命令按通信协议传输到服务器输入缓冲区；</li>
+<li>服务端: 等待可读事件发生后，读输入缓冲区，解析命令；</li>
+<li>服务端：执行命令，将回复写入输出缓冲区；</li>
+<li>服务端=&gt;客户端：等待可写事件发生后，从输出缓冲区传输给客户端。</li>
+<li>客户端=&gt;用户: 回显命令结果。</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/21/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B06-%E5%AE%A2%E6%88%B7%E7%AB%AF%E4%B8%8E%E6%9C%8D%E5%8A%A1%E5%99%A8/" data-id="ck96cch3j00ggbhamhqn0b8ir" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-02/redis设计与实现笔记5-事件" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/21/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B05-%E4%BA%8B%E4%BB%B6/" class="article-date">
+  <time datetime="2019-02-21T13:53:58.000Z" itemprop="datePublished">2019-02-21</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/02/21/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B05-%E4%BA%8B%E4%BB%B6/">redis设计与实现笔记5-事件</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>redis服务器需要处理的事件可以分为两类：</p>
+<ol>
+<li>文件事件(file event): 套接字的抽象。服务器通过套接字与客户端或其他服务端连接、通信；</li>
+<li>时间事件(time event): 定时任务。</li>
+</ol>
+<h2 id="文件事件"><a href="#文件事件" class="headerlink" title="文件事件"></a>文件事件</h2><p>事件模型是基于Reactor开发的:</p>
+<img src="/images/2019-02/file_event_handler.png" class="" width="800" height="1200" title="file_event_handler">
+<ol>
+<li>套接字;</li>
+<li>IO多路复用程序；</li>
+<li>事件分派器;(dispatcher)</li>
+<li>事件处理器。</li>
+</ol>
+<p>每当一个套接字准备好执行：<br>连接应答(accept)、<br>写入、<br>读取、<br>关闭<br>等操作时，就会产生一个事件（可能并发）。</p>
+<img src="/images/2019-02/force_single.png" class="" width="800" height="1200" title="force_single">
+<p><code>IO多路复用程序</code>：把上游并发的事件组织成一个队列（方便下游单线程地使用）。<br>当上一个套接字事件被处理完以后，IO多路复用程序才会向事件分派器传送下一个套接字事件。</p>
+<h3 id="IO多路复用"><a href="#IO多路复用" class="headerlink" title="IO多路复用"></a>IO多路复用</h3><p>具体啥是IO多路复用？就是一个进程处理多个连接。<br>方案有很多：(详见:<a href="http://xiaoyue26.github.io/2017/11/06/2017-11/epoll%E7%9B%B8%E5%85%B3%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86/">http://xiaoyue26.github.io/2017/11/06/2017-11/epoll%E7%9B%B8%E5%85%B3%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86/</a>)</p>
+<ol>
+<li>循环、轮询；</li>
+<li>Select;</li>
+<li>poll;</li>
+<li>epoll(红黑树)/kqueue(哈希表);</li>
+<li>libevent库。</li>
+</ol>
+<h3 id="事件优先级"><a href="#事件优先级" class="headerlink" title="事件优先级"></a>事件优先级</h3><p>先处理可读，再处理可写。</p>
+<h3 id="API接口"><a href="#API接口" class="headerlink" title="API接口"></a>API接口</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">1. createFileEvent(套接字描述符,事件类型,事件处理器):开始监听;</span><br><span class="line">2. deleteFileEvent(套接字描述符,事件类型): 取消监听;</span><br><span class="line">3. getFileEvents(套接字描述符): 返回被监听的事件类型;</span><br><span class="line">4. wait(套接字描述符,事件类型,超时时长(ms)): 等待事件;</span><br><span class="line">5. apiPoll(超时时长): 等待所有被监听事件直至至少一个发生；</span><br><span class="line">6. processEvent():等待事件,然后分派;</span><br><span class="line">7. getApiName: 返回底层使用的IO库(epoll,poll或select等)</span><br></pre></td></tr></table></figure>
+
+<h2 id="时间事件"><a href="#时间事件" class="headerlink" title="时间事件"></a>时间事件</h2><ol>
+<li>定时事件：指定时间后执行1次；</li>
+<li>周期事件：每隔指定时间就执行1次（总N次)。</li>
+</ol>
+<h3 id="时间事件属性："><a href="#时间事件属性：" class="headerlink" title="时间事件属性："></a>时间事件属性：</h3><ol>
+<li>id: 全局唯一，递增；</li>
+<li>when: 毫秒，事件到达时间；</li>
+<li>timeProc: 函数，到期执行。</li>
+</ol>
+<p>定时事件和周期事件区分：</p>
+<ol>
+<li>timeProc返回<code>AE_NOMORE</code>: no more事件，不再调用；</li>
+<li>timeProc返回30： 周期事件，30ms后再次调用。</li>
+</ol>
+<p>TODO: 全局唯一id=&gt;服务器内唯一？</p>
+<h3 id="实现"><a href="#实现" class="headerlink" title="实现"></a>实现</h3><img src="/images/2019-02/time_event.png" class="" width="800" height="1200" title="time_event">
+<p>所有时间事件放在一个无序链表中，每次遍历整个链表，查找所有已到达的时间事件。</p>
+<h3 id="性能"><a href="#性能" class="headerlink" title="性能"></a>性能</h3><p>由于时间事件很少（1，2个），所以虽然实现很naive，性能也还行。</p>
+<h3 id="现有时间事件"><a href="#现有时间事件" class="headerlink" title="现有时间事件"></a>现有时间事件</h3><p><code>serverCron</code>:（每100ms）</p>
+<ol>
+<li>更新统计信息：时间、内存、数据库占用；</li>
+<li>清理过期KV；</li>
+<li>关闭清理失效客户端；</li>
+<li>AOF\RDB持久化；</li>
+<li>主从同步；</li>
+<li>集群模式：定期同步、连接测试。</li>
+</ol>
+<h2 id="事件循环"><a href="#事件循环" class="headerlink" title="事件循环"></a>事件循环</h2><img src="/images/2019-02/all_event.png" class="" width="800" height="1200" title="all_event">
+<p>事件无抢占。<br>先文件事件后时间事件，因此时间事件一般会滞后一点。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/21/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B05-%E4%BA%8B%E4%BB%B6/" data-id="ck96cch3i00gcbham4ja37crz" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-02/redis设计与实现笔记4-持久化" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/17/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B04-%E6%8C%81%E4%B9%85%E5%8C%96/" class="article-date">
+  <time datetime="2019-02-17T13:31:49.000Z" itemprop="datePublished">2019-02-17</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/02/17/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B04-%E6%8C%81%E4%B9%85%E5%8C%96/">redis设计与实现笔记4-持久化</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <ol>
+<li>RDB: 定期(比如五分钟)做一次快照。 (<code>Redis DataBase</code>)压缩的二进制文件;</li>
+<li>AOF: 类似于WAL，存每条操作指令日志。(<code>Append only file</code>)</li>
+</ol>
+<p>题外:<br><code>mmkv</code>: 内存映射文件(<code>MMF</code>)，场景是频繁刷盘，对丢失敏感前提下的尽量高性能。</p>
+<h2 id="相关命令"><a href="#相关命令" class="headerlink" title="相关命令"></a>相关命令</h2><ol>
+<li><code>SAVE</code>: 直接停服保存；</li>
+<li><code>BGSAVE</code>: 开一个子进程在后台保存。<br>检测到<code>RDB</code>或<code>AOF</code>文件后,redis进程会自动载入文件。(优先<code>AOF</code>,因为<code>AOF</code>一般更新更频繁)<img src="/images/2019-02/load_aof.png" class="" width="800" height="1200" title="load_aof">
+
+</li>
+</ol>
+<p><code>BGSAVE</code>执行期间，不接受类似指令如<code>SAVE</code>,<code>BGSAVE</code>,<code>BGWRITEAOF</code>。<br>载入文件期间，服务器阻塞不接受任何指令。</p>
+<h3 id="自动BGSAVE"><a href="#自动BGSAVE" class="headerlink" title="自动BGSAVE"></a>自动BGSAVE</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">save 900 1 # 900秒内至少1次修改</span><br><span class="line">save 300 10 # 300秒内至少10次修改</span><br><span class="line">save 60 10000 # 60秒内至少10000次修改</span><br></pre></td></tr></table></figure>
+
+<h2 id="实现"><a href="#实现" class="headerlink" title="实现"></a>实现</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">redisServer</span>&#123;</span></span><br><span class="line">    <span class="comment">// 记录自动bgsave的条件</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">saveparam</span> *<span class="title">saveparams</span>;</span></span><br><span class="line">    <span class="comment">// 修改计数器:</span></span><br><span class="line">    <span class="keyword">long</span> <span class="keyword">long</span> dirty;</span><br><span class="line">    <span class="comment">// 上一次执行保存的时间(unixtimestamp):</span></span><br><span class="line">    <span class="keyword">time_t</span> lastsave;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>有了上述3个变量，可以保存需要的状态；<br>再加上每100ms执行的<code>serverCron</code>函数，就能完成自动保存的工作了。</p>
+<h1 id="RDB持久化"><a href="#RDB持久化" class="headerlink" title="RDB持久化"></a>RDB持久化</h1><h2 id="RDB文件结构-第6版RDB格式"><a href="#RDB文件结构-第6版RDB格式" class="headerlink" title="RDB文件结构(第6版RDB格式)"></a>RDB文件结构(第6版RDB格式)</h2><img src="/images/2019-02/rdb_struct.png" class="" width="800" height="1200" title="rdb_struct">
+<ol>
+<li><code>&quot;REDIS&quot;</code>: 常量字符;</li>
+<li><code>db_version</code>:  4B,版本号；</li>
+<li><code>database</code>:所有保存的数据库（kv数据）,长度不定;</li>
+<li><code>EOF</code>: 1B，表示数据结束；(<code>377</code>)</li>
+<li><code>check_suim</code>: 8B，前4个部分校验和。</li>
+</ol>
+<h3 id="database部分结构"><a href="#database部分结构" class="headerlink" title="database部分结构"></a>database部分结构</h3><img src="/images/2019-02/rdb_database.png" class="" width="800" height="1200" title="rdb_database">
+<ol>
+<li><code>SELECTDB</code>: 1B,常量，区别于EOF；</li>
+<li><code>db_number</code>: 1B,2B,5B不等，具体的数据库号；</li>
+<li><code>key_value_pairs</code>: kv数据、过期时间，长度不等。</li>
+</ol>
+<h3 id="key-value-pairs部分结构"><a href="#key-value-pairs部分结构" class="headerlink" title="key_value_pairs部分结构"></a>key_value_pairs部分结构</h3><ol>
+<li>EXPIRETIME_MS(可选)：1B,过期时间标记，常量;</li>
+<li><code>ms</code>(可选): 8B,具体过期时间(毫秒);</li>
+<li><code>TYPE</code>: 1B,类型，标记value的具体类型;</li>
+<li><code>key</code>: 总是字符串编码；</li>
+<li><code>value</code>: 值的编码根据<code>TYPE</code>字段判断。</li>
+</ol>
+<p>其中<code>TYPE</code>的取值,一种对象类型或底层编码：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">string,list,set,zset,hash</span><br><span class="line">,list_ziplist,set_intset,zset_ziplist</span><br><span class="line">,hash_ziplist</span><br></pre></td></tr></table></figure>
+<p>服务器根据这个<code>TYPE</code>字段决定如何解析<code>value</code>字段的编码。</p>
+<h3 id="实例"><a href="#实例" class="headerlink" title="实例"></a>实例</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 以ascii码查看:</span></span><br><span class="line">od -c ./home/dump.rdb</span><br><span class="line"></span><br><span class="line">0000000   R   E   D   I   S   0   0   0   6 377 334 263   C 360   Z 334</span><br><span class="line">0000020 362   V</span><br></pre></td></tr></table></figure>
+<p>其中377表示EOF，<code>redis</code>5B,版本4B，<code>EOF</code>1B,校验和8B，总共18B.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"># 以16进制查看:</span><br><span class="line">od -x .&#x2F;home&#x2F;dump.rdb</span><br><span class="line"></span><br><span class="line">0000000 4552 4944 3053 3030 ff36 b3dc f043 dc5a</span><br><span class="line">0000020 56f2</span><br></pre></td></tr></table></figure>
+
+
+<h1 id="第11章AOF持久化"><a href="#第11章AOF持久化" class="headerlink" title="第11章AOF持久化"></a>第11章AOF持久化</h1><p>三个步骤：</p>
+<ol>
+<li>append：命令追加到redis的内存缓冲区;</li>
+<li>文件写入（不刷盘）:从redis的内存缓冲区到操作系统的内存页缓存;</li>
+<li>fsync: 文件同步（实际刷盘）；<h2 id="写入和同步"><a href="#写入和同步" class="headerlink" title="写入和同步"></a>写入和同步</h2>写入文件：实际上操作系统不会立即刷盘，而且处于性能先放内存缓冲区，后续再一起刷盘；<br>同步：调用<code>fsync</code>或<code>fdatasync</code>函数刷盘。</li>
+</ol>
+<h2 id="实现-1"><a href="#实现-1" class="headerlink" title="实现"></a>实现</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">redisServer</span>&#123;</span></span><br><span class="line">    <span class="comment">// AOF缓冲区</span></span><br><span class="line">    sds aof_buf;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<ol>
+<li>执行写命令;</li>
+<li>将写命令追加到aof_buf缓冲区的末尾；</li>
+<li>每次结束一个事件循环前，考虑是否将aof_buf内容写入同步到aof文件；（根据<code>appendfsync</code>选项）</li>
+</ol>
+<h3 id="appendfsync选项"><a href="#appendfsync选项" class="headerlink" title="appendfsync选项"></a>appendfsync选项</h3><table>
+<thead>
+<tr>
+<th align="center">appendfsync选项</th>
+<th align="left">操作</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">always</td>
+<td align="left">将aof_buf内容写入且同步到AOF文件</td>
+</tr>
+<tr>
+<td align="center">everysec(默认值)</td>
+<td align="left">将aof_buf内容写入AOF文件，每秒同步一次</td>
+</tr>
+<tr>
+<td align="center">no</td>
+<td align="left">将aof_buf内容写入AOF文件，同步由操作系统决定</td>
+</tr>
+</tbody></table>
+<h2 id="AOF载入还原"><a href="#AOF载入还原" class="headerlink" title="AOF载入还原"></a>AOF载入还原</h2><img src="/images/2019-02/read_aof.png" class="" width="800" height="1200" title="read_aof">
+<p>用一个伪客户端执行所有aof命令即可。</p>
+<h2 id="AOF重写-AOF文件压缩"><a href="#AOF重写-AOF文件压缩" class="headerlink" title="AOF重写(AOF文件压缩)"></a>AOF重写(AOF文件压缩)</h2><p>由于AOF文件记录的是命令而不是实际数据，可能会非常膨胀。<br>为了减少空间，同时加快载入恢复速度，可以根据实际数据进行压缩，跳过合并多余的命令。<br>方法类似于RDB，通过读取实际的数据库状态，生成AOF命令。</p>
+<h3 id="性能优化"><a href="#性能优化" class="headerlink" title="性能优化"></a>性能优化</h3><p>出于对缓冲区的保护，如果遇到数据库中数据量太多的集合、有序集合、列表、哈希表，会让每条命令插入的数据量&lt;=<code>REDIS_AOF_REWRITE_ITEMS_PER_CMD</code>(默认为64)。</p>
+<h3 id="BGREWRITEAOF细节-尽量不停服"><a href="#BGREWRITEAOF细节-尽量不停服" class="headerlink" title="BGREWRITEAOF细节(尽量不停服)"></a>BGREWRITEAOF细节(尽量不停服)</h3><img src="/images/2019-02/bg_rewrite.png" class="" width="800" height="1200" title="bg_rewrite">
+<p>调用子进程进程AOF重写期间，并不停服，为了保证一致性，会把这期间的命令追加到两个缓冲区：AOF缓冲区、AOF重写缓冲区。</p>
+<p>重写完成后，stop the world:</p>
+<ol>
+<li>AOF重写缓冲区=&gt;AOF重写文件;</li>
+<li>AOF重写文件替换旧AOF文件；(利用文件系统的改名原子性)</li>
+<li>恢复服务。</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/17/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B04-%E6%8C%81%E4%B9%85%E5%8C%96/" data-id="ck96cch3k00gkbham4i0uaplx" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-02/redis设计与实现笔记3-数据库" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/13/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B03-%E6%95%B0%E6%8D%AE%E5%BA%93/" class="article-date">
+  <time datetime="2019-02-13T01:50:59.000Z" itemprop="datePublished">2019-02-13</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/02/13/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B03-%E6%95%B0%E6%8D%AE%E5%BA%93/">redis设计与实现笔记3-数据库</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h2 id="架构"><a href="#架构" class="headerlink" title="架构:"></a>架构:</h2><p>server-&gt; db* -&gt; dict*(k/v)</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">redisServer</span> &#123;</span></span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">    redisDb *db;</span><br><span class="line">    <span class="keyword">int</span> dbnum;    </span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">&#125; redisDb;</span><br></pre></td></tr></table></figure>
+
+<h1 id="数据库键空间"><a href="#数据库键空间" class="headerlink" title="数据库键空间"></a>数据库键空间</h1><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">redisDb</span> &#123;</span></span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">    <span class="comment">// 数据库键空间，保存着数据库中的所有键值对</span></span><br><span class="line">    dict *dict;</span><br><span class="line">    <span class="comment">// 过期时间:</span></span><br><span class="line">    dict *expires;</span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">&#125; redisDb;</span><br></pre></td></tr></table></figure>
+
+<p>db默认有16,客户端可以通过<code>select 1</code>命令来选择1号数据库。<br>每个client会保存当前在哪个db的状态变量。</p>
+<h1 id="键-Key"><a href="#键-Key" class="headerlink" title="键:Key"></a>键:Key</h1><p>key只能为字符串。<br>整个架构最多三层: db-&gt;hashtable-&gt;value</p>
+<img src="/images/2019-02/db_kv.png" class="" width="800" height="1200" title="db_kv">
+
+<h1 id="key过期"><a href="#key过期" class="headerlink" title="key过期"></a>key过期</h1><h2 id="过期删除策略"><a href="#过期删除策略" class="headerlink" title="过期删除策略"></a>过期删除策略</h2><ol>
+<li>定时统一删除 (一般不用，卡太久)</li>
+<li>惰性删除(默认使用,访问时发现过期才删除)</li>
+<li>定期删除(默认使用,类似于增量删除,每次删除最近过期的)</li>
+</ol>
+<h2 id="redis持久化策略"><a href="#redis持久化策略" class="headerlink" title="redis持久化策略"></a>redis持久化策略</h2><ol>
+<li>RDB: 定期(比如五分钟)做一次快照; (<code>Redis DataBase</code>)</li>
+<li>AOF: 类似于WAL，存每条操作指令日志。(<code>Append only file</code>)</li>
+</ol>
+<h2 id="RDB和AOF下的过期删除"><a href="#RDB和AOF下的过期删除" class="headerlink" title="RDB和AOF下的过期删除"></a>RDB和AOF下的过期删除</h2><ol>
+<li>RDB:  主服务器生成快照时删除过期key; 从库则保留。从库只有收到主库DEL指令时候才会删除过期key。</li>
+<li>AOF:  保存DEL指令即可。</li>
+</ol>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">从库如果没有收到主库的DEL指令，即使已经key已经过期，也会返回给客户端。</span><br></pre></td></tr></table></figure>
+<p>主从复制要点：（中心化，一致性）<br><code>从库</code>只接受<code>主库</code>的<code>写</code>指令，自己只执行<code>读</code>。</p>
+<h1 id="通知机制"><a href="#通知机制" class="headerlink" title="通知机制"></a>通知机制</h1><p>两个功能:</p>
+<ol>
+<li>订阅某个key的所有操作; (只能知道发生了什么类型的操作,不知道操作数)</li>
+<li>订阅某个库下的所有DEL操作.(或者别的什么操作)<br>换句话说就是订阅某个库下key，或者订阅指令。</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/13/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B03-%E6%95%B0%E6%8D%AE%E5%BA%93/" data-id="ck96cch3f00g0bhamdl0vg720" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-02/高性能mysql附录A-E-笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/13/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E9%99%84%E5%BD%95A-E-%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2019-02-13T01:36:10.000Z" itemprop="datePublished">2019-02-13</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/02/13/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E9%99%84%E5%BD%95A-E-%E7%AC%94%E8%AE%B0/">高性能mysql附录A-E-笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="高性能mysql附录A-笔记-mysql分支"><a href="#高性能mysql附录A-笔记-mysql分支" class="headerlink" title="高性能mysql附录A-笔记-mysql分支"></a>高性能mysql附录A-笔记-mysql分支</h1><p>mysql的三个分支(变种):</p>
+<ol>
+<li>Percona Server: 透明、性能、灵活，用XtraDB引擎代替innodb；</li>
+<li>MariaDB: mysql原作者。面向客户、补丁插件扩展更多；</li>
+<li>Drizzle：sql语法不兼容mysql, 修正bug，最开源。</li>
+</ol>
+<p>官方mysql: 最接近于Percona Server。</p>
+<h1 id="高性能mysql附录B-笔记-服务器状态"><a href="#高性能mysql附录B-笔记-服务器状态" class="headerlink" title="高性能mysql附录B-笔记-服务器状态"></a>高性能mysql附录B-笔记-服务器状态</h1><p>系统变量: <code>show variables like &#39;%xxx%&#39;</code>;<br>只读状态: <code>show status like &#39;%xxx%&#39;</code>; 或<code>infomation_schema.global_status</code>表和<code>information_schama.session_status</code>表;<br>其他信息:<code>infomation_schema</code>库中</p>
+<h2 id="线程和连接统计"><a href="#线程和连接统计" class="headerlink" title="线程和连接统计"></a>线程和连接统计</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">connections,max_used_connections,threads_connected</span><br><span class="line">bytes_received,bytes_sent</span><br><span class="line">slow_launch_threads,threads_cached,threads_created,threads_running</span><br></pre></td></tr></table></figure>
+
+<h2 id="二进制日志状态"><a href="#二进制日志状态" class="headerlink" title="二进制日志状态"></a>二进制日志状态</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">binlog_cache_use,binlog_cache_disk_use</span><br></pre></td></tr></table></figure>
+
+<h2 id="命令计数器"><a href="#命令计数器" class="headerlink" title="命令计数器"></a>命令计数器</h2><p><code>Com_*</code>变量统计每种类型的SQL或C API命令发起过的次数。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Com_select: select语句的数量;</span><br><span class="line">Com_change_db: 更改默认数据库的次数(use xxx);</span><br></pre></td></tr></table></figure>
+
+<h2 id="临时文件和表"><a href="#临时文件和表" class="headerlink" title="临时文件和表"></a>临时文件和表</h2><p>隐式表和文件:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">global</span> <span class="keyword">status</span> <span class="keyword">like</span> <span class="string">'Created_tmp%'</span></span><br></pre></td></tr></table></figure>
+<p>显式临时表:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">global</span> <span class="keyword">temporary</span> <span class="keyword">tables</span>;</span><br></pre></td></tr></table></figure>
+
+<h2 id="查看select查询类型统计"><a href="#查看select查询类型统计" class="headerlink" title="查看select查询类型统计"></a>查看select查询类型统计</h2><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">global</span> <span class="keyword">status</span> <span class="keyword">like</span> <span class="string">'Select%'</span>;</span><br><span class="line">+<span class="comment">------------------------+----------+</span></span><br><span class="line">| Variable_name          | Value    |</span><br><span class="line">+<span class="comment">------------------------+----------+</span></span><br><span class="line">| Select_full_join       | 677      |</span><br><span class="line">| Select_full_range_join | 0        |</span><br><span class="line">| Select_range           | 135124   |</span><br><span class="line">| Select_range_check     | 0        |</span><br><span class="line">| Select_scan            | 16623726 |</span><br><span class="line">+<span class="comment">------------------------+----------+</span></span><br></pre></td></tr></table></figure>
+<p>按预期次数从多到少/开销从少到多的顺序:<br>Select_range: 在第一个表上扫描一个索引区间的连接数目；<br>Select_scan: 扫描整个第一个表；<br>Select_full_range_join: 开销多于Select_scan；<br>Select_range_check: 开销非常高；<br>Select_full_join: 开销最高。</p>
+<h2 id="表锁"><a href="#表锁" class="headerlink" title="表锁"></a>表锁</h2><p>Table_locks_immediate: 立即授权的表锁次数；<br>Table_locks_waited:    需要等待的表锁次数。</p>
+<h2 id="innodb状态"><a href="#innodb状态" class="headerlink" title="innodb状态"></a>innodb状态</h2><p>查看innodb相关的状态开销很大，会创建一个全局锁。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">1. 通过<span class="keyword">show</span> <span class="keyword">engine</span> <span class="keyword">innodb</span> <span class="keyword">status</span>;</span><br><span class="line">2. 通过information_schema表;</span><br><span class="line">3. 通过<span class="keyword">show</span> <span class="keyword">status</span>,<span class="keyword">show</span> <span class="keyword">variables</span>。</span><br></pre></td></tr></table></figure>
+<p>因此不能频繁查看这些变量。</p>
+<p>输出信息包括:</p>
+<ol>
+<li>fsync()平均每秒调用次数；</li>
+<li>头部信息: 时间；</li>
+<li>Semaphores: 操作系统等待数组，等待互斥量的innodb线程；(如果有等待，可以看出热点是什么)<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">waited at buf0buf.ic for 0 second: 等待缓冲区</span><br><span class="line">waiters flag 0: 0个线程在等待；</span><br><span class="line">waiting is ending: 等待结束。</span><br></pre></td></tr></table></figure>
+
+</li>
+</ol>
+<p><code>innodb_sync_spin_loops</code>变量:<br>空转多少次后停止spin，挂起进入真正等待。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">variables</span> <span class="keyword">like</span> <span class="string">'%spin%'</span>;</span><br><span class="line">+<span class="comment">------------------------+-------+</span></span><br><span class="line">| Variable_name          | Value |</span><br><span class="line">+<span class="comment">------------------------+-------+</span></span><br><span class="line">| innodb_spin_wait_delay | 6     |</span><br><span class="line">| innodb_sync_spin_loops | 30    |</span><br><span class="line">+<span class="comment">------------------------+-------+</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="死锁"><a href="#死锁" class="headerlink" title="死锁"></a>死锁</h3><p><code>SHOW ENGINE INNODB STATUS\G</code>的输出还有一部分是上两次死锁的情况。(包括进程id和sql、等待的是什么锁)</p>
+<p>死锁类型：</p>
+<ol>
+<li>循环等待；</li>
+<li>等待关系图太深：<br>(1)检查超过100W个锁;<br>(2)重做超过200个事务。<br>错误信息：”TOO DEEP OR LONG SEARCH IN THE LOCK TABLE WAITS-FOR GRAPH”.</li>
+</ol>
+<h4 id="减少死锁的TIPS"><a href="#减少死锁的TIPS" class="headerlink" title="减少死锁的TIPS"></a>减少死锁的TIPS</h4><p>在事务里更新数据时，先按主键排序，这样扫描索引的顺序就都是一致的；</p>
+<h3 id="事务信息"><a href="#事务信息" class="headerlink" title="事务信息"></a>事务信息</h3><p><code>SHOW ENGINE INNODB STATUS\G</code>的输出里还有一部分是事务总结信息和当前活跃事务信息。</p>
+<h4 id="事务总结信息"><a href="#事务总结信息" class="headerlink" title="事务总结信息"></a>事务总结信息</h4><ol>
+<li>当前事务ID;</li>
+<li>已经清理MVCC行的事务ID;(可以知道有多少老版本数据没被清理)</li>
+<li>历史记录的长度；</li>
+<li>锁结构的数目（可能包含多个行锁）。</li>
+</ol>
+<h4 id="活跃事务信息"><a href="#活跃事务信息" class="headerlink" title="活跃事务信息"></a>活跃事务信息</h4><ol>
+<li>进程id(与<code>show processlist</code>中id通用)</li>
+<li>内部查询号;</li>
+<li>连接信息</li>
+<li>查询的sql。</li>
+</ol>
+<h3 id="File-I-O"><a href="#File-I-O" class="headerlink" title="File I/O"></a>File I/O</h3><p><code>SHOW ENGINE INNODB STATUS\G</code>的输出里还有一部分是IO辅助线程的状态和性能计数器的状态。<br>其中:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">insert</span> buffer <span class="keyword">thread</span>: 插入缓冲合并到表空间；</span><br><span class="line"><span class="keyword">log</span> <span class="keyword">thread</span>: 异步刷日志；</span><br><span class="line"><span class="keyword">read</span> <span class="keyword">thread</span>: 预读操作；</span><br><span class="line">write <span class="keyword">thread</span>: 刷脏缓冲。</span><br></pre></td></tr></table></figure>
+
+<h3 id="redo-log统计"><a href="#redo-log统计" class="headerlink" title="redo log统计"></a>redo log统计</h3><p><code>SHOW ENGINE INNODB STATUS\G</code>的输出里还有一部分是事务日志(redo log)的统计。</p>
+<ol>
+<li>sequence number: 当前日志序号；</li>
+<li>flushed up to  : 当前刷到哪里；  </li>
+<li>last checkpoint: 上一个检测点的位置。</li>
+<li>pending和done的日志操作数量。</li>
+</ol>
+<h3 id="缓冲池和内存"><a href="#缓冲池和内存" class="headerlink" title="缓冲池和内存"></a>缓冲池和内存</h3><p><code>SHOW ENGINE INNODB STATUS\G</code>的输出里还有一部分是BufferPool和内存统计。<br>包括信息：</p>
+<ol>
+<li>分配了多少字节；</li>
+<li>pool总共多少页，其中free多少页；</li>
+<li>database用了多少页，多少页已经修改；</li>
+<li>命中率等统计信息。<br>多个缓冲池的话后头还有各个buffer pool各自的统计信息。</li>
+</ol>
+<h3 id="ROW-OPERATIONS"><a href="#ROW-OPERATIONS" class="headerlink" title="ROW OPERATIONS"></a>ROW OPERATIONS</h3><p><code>SHOW ENGINE INNODB STATUS\G</code>的输出里最后一部分是行操作统计。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">--------------</span><br><span class="line">ROW OPERATIONS</span><br><span class="line">--------------</span><br><span class="line">0 queries inside InnoDB, 0 queries in queue</span><br><span class="line">15 read views open inside InnoDB</span><br><span class="line">Main thread process no. 9004, id 139699662354176, state: sleeping</span><br><span class="line">Number of rows inserted 1111442430, updated 2610575313, deleted 42594651, read 8977633484</span><br><span class="line">98.47 inserts&#x2F;s, 1108.97 updates&#x2F;s, 0.00 deletes&#x2F;s, 1671.23 reads&#x2F;s</span><br><span class="line">----------------------------</span><br></pre></td></tr></table></figure>
+<p>包括信息：</p>
+<ol>
+<li>多少线程在innodb内核内，多少在等待队列;</li>
+<li>累积增删改查;</li>
+<li>增删改查的瞬时速度。</li>
+</ol>
+<h2 id="主备相关查看命令"><a href="#主备相关查看命令" class="headerlink" title="主备相关查看命令"></a>主备相关查看命令</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">show master status \G</span><br><span class="line">show binary logs;</span><br><span class="line">show binlog events ... </span><br><span class="line">show relaylog events</span><br><span class="line">show slave status</span><br></pre></td></tr></table></figure>
+
+<h2 id="Information-schema中的innodb信息表"><a href="#Information-schema中的innodb信息表" class="headerlink" title="Information_schema中的innodb信息表"></a>Information_schema中的innodb信息表</h2><h2 id="innodb-trx-innodb-locks"><a href="#innodb-trx-innodb-locks" class="headerlink" title="innodb_trx,innodb_locks"></a>innodb_trx,innodb_locks</h2><p>事务、拥有和等待锁的事务。</p>
+<h2 id="performance-schema"><a href="#performance-schema" class="headerlink" title="performance_schema"></a>performance_schema</h2><p>略</p>
+<h1 id="高性能mysql附录C-笔记-大文件传输"><a href="#高性能mysql附录C-笔记-大文件传输" class="headerlink" title="高性能mysql附录C-笔记-大文件传输"></a>高性能mysql附录C-笔记-大文件传输</h1><p>大概是ssh,tar,gz,rsync命令的运用，略。</p>
+<h1 id="高性能mysql附录E-笔记-explain"><a href="#高性能mysql附录E-笔记-explain" class="headerlink" title="高性能mysql附录E-笔记-explain"></a>高性能mysql附录E-笔记-explain</h1><p>explain语句：</p>
+<ol>
+<li><code>explain select xxx</code>: 近似的执行计划信息；</li>
+<li>近似的执行计划信息+等效sql:<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">explain</span> <span class="keyword">extended</span> <span class="keyword">select</span> xxx;</span><br><span class="line"><span class="keyword">show</span> <span class="keyword">warnings</span>; <span class="comment">-- 这里得到的sql是从执行计划反向翻译过来的sql</span></span><br></pre></td></tr></table></figure></li>
+<li><code>explain partitions select xxx</code>: 显示查询的分区。（仅对分区表有效）</li>
+</ol>
+<p>mysql5.6前，explain的时候会执行子查询创建临时表，以便进行外层优化。</p>
+<h2 id="explain各列的含义"><a href="#explain各列的含义" class="headerlink" title="explain各列的含义"></a>explain各列的含义</h2><h2 id="id"><a href="#id" class="headerlink" title="id"></a>id</h2><p>select语句顺序编号，对应在原始语句中的位置;（从外到内）</p>
+<p>select的三种类型：</p>
+<ol>
+<li>简单子查询；</li>
+<li>复杂子查询（派生表）；</li>
+<li>union查询。</li>
+</ol>
+<p>其中union查询的id列为null，select_type列为<code>union result</code>。</p>
+<h2 id="select-type列"><a href="#select-type列" class="headerlink" title="select_type列"></a>select_type列</h2><p>取值含义：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">simple:  简单查询;</span><br><span class="line">primary: 复杂查询的最外层;</span><br><span class="line">subquery: select列表中的子查询;(不在from子句中);</span><br><span class="line">derived:  from子句中的子查询;</span><br><span class="line">union:  union语句中第二个和随后的select;</span><br><span class="line">union result: 从匿名临时表检索结果的select.</span><br></pre></td></tr></table></figure>
+
+<h2 id="table列"><a href="#table列" class="headerlink" title="table列"></a>table列</h2><p>访问的表或别名。<br>或者&lt; derivedN&gt;,其中N是子查询的id。<br>union行中table列出现的&lt; union2,3&gt;其中2，3也是子查询的id。</p>
+<h2 id="type列"><a href="#type列" class="headerlink" title="type列"></a>type列</h2><p>访问类型：从差到好：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">all: 扫全表</span><br><span class="line">index: 按索引顺序扫全表(避免排序) <span class="comment">-- extra列的using index表示覆盖索引</span></span><br><span class="line">range: 有范围限制的索引扫描</span><br><span class="line">ref:   索引查找，查找某个索引值；</span><br><span class="line">eq_ref: 唯一索引查找，结果只有一行；</span><br><span class="line">const,system: 可以优化成常量替换；</span><br><span class="line">NULL: 可以优化到无需访问表和索引。</span><br></pre></td></tr></table></figure>
+
+<h2 id="possible-keys列"><a href="#possible-keys列" class="headerlink" title="possible_keys列"></a>possible_keys列</h2><p>优化早期尝试的索引，可能无用。</p>
+<h2 id="key列"><a href="#key列" class="headerlink" title="key列"></a>key列</h2><p>决定采用的索引。</p>
+<h2 id="key-len列"><a href="#key-len列" class="headerlink" title="key_len列"></a>key_len列</h2><p>采用索引的可能最大长度。</p>
+<h2 id="ref列"><a href="#ref列" class="headerlink" title="ref列"></a>ref列</h2><p>在索引查找值时使用的列或常量。</p>
+<h2 id="rows列"><a href="#rows列" class="headerlink" title="rows列"></a>rows列</h2><p>估算大概要读取的行数。</p>
+<h2 id="filtered列"><a href="#filtered列" class="headerlink" title="filtered列"></a>filtered列</h2><p><code>explain extended select xxx</code>时有的列。<br>符合条件行数的悲观估计。</p>
+<h2 id="Extra列"><a href="#Extra列" class="headerlink" title="Extra列"></a>Extra列</h2><p>包括的值：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">using index: 使用覆盖索引；</span><br><span class="line">using where: 从存储引擎返回后，需要在服务器再过滤一次;(可能暗示查询可以加更多索引)</span><br><span class="line">using temporary: 查询结果排序时会使用临时表；</span><br><span class="line">using filesort: 排序时会使用外部索引排序，而不是按索引顺序扫描；</span><br><span class="line">range checked for each record: 没有理想的索引，对于连接后的每一行重新检查使用哪个索引(很慢)。</span><br></pre></td></tr></table></figure>
+
+<p>可以用<code>Percona Toolkit</code>的<code>pt-visual-explain</code>获得树形执行计划。</p>
+<h1 id="高性能mysql附录E-笔记-锁的调试"><a href="#高性能mysql附录E-笔记-锁的调试" class="headerlink" title="高性能mysql附录E-笔记-锁的调试"></a>高性能mysql附录E-笔记-锁的调试</h1><p>锁的类型：</p>
+<ol>
+<li>表锁；</li>
+<li>全局锁： <code>flush tables with read lock</code>或设置<code>read_only=1</code></li>
+<li>命名锁：表锁的一种，重命名或者删除表时创建；</li>
+<li>字符锁：可以用<code>get_lock</code>等函数在服务器级别锁住/释放单个字符。</li>
+</ol>
+<h2 id="表锁-1"><a href="#表锁-1" class="headerlink" title="表锁"></a>表锁</h2><h3 id="显式"><a href="#显式" class="headerlink" title="显式"></a>显式</h3><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">lock</span> <span class="keyword">tables</span> film <span class="keyword">read</span>;</span><br><span class="line"><span class="keyword">lock</span> <span class="keyword">tables</span> film write;</span><br><span class="line"><span class="keyword">unlock</span> <span class="keyword">tables</span> ...;</span><br></pre></td></tr></table></figure>
+<h3 id="隐式"><a href="#隐式" class="headerlink" title="隐式"></a>隐式</h3><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> <span class="keyword">sleep</span>(<span class="number">30</span>) <span class="keyword">from</span> film <span class="keyword">limit</span> <span class="number">1</span></span><br><span class="line"><span class="comment">-- 相当于lock tables film read;</span></span><br></pre></td></tr></table></figure>
+<p>可以用<code>mysqladmin debug</code>命令检测锁的持有信息。（输出的末尾）</p>
+<h2 id="全局读锁"><a href="#全局读锁" class="headerlink" title="全局读锁"></a>全局读锁</h2><p><code>show processlist</code>中<code>status</code>是<code>waiting for release of readlock</code>时，就是等待全局读锁了。</p>
+<h2 id="命名锁"><a href="#命名锁" class="headerlink" title="命名锁"></a>命名锁</h2><p><code>show processlist</code>中<code>status</code>是<code>waiting for table</code>时，就是等待命名锁了。<br>还可以在<code>show open tables</code>中看到命名锁的影响。</p>
+<h2 id="用户锁"><a href="#用户锁" class="headerlink" title="用户锁"></a>用户锁</h2><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- 试图获得名为`my_lock`的锁，超时时间100秒。</span></span><br><span class="line"><span class="keyword">select</span> <span class="keyword">get_lock</span>(<span class="string">'my_lock'</span>,<span class="number">100</span>);</span><br></pre></td></tr></table></figure>
+
+<h2 id="使用information-schema查看锁"><a href="#使用information-schema查看锁" class="headerlink" title="使用information_schema查看锁"></a>使用information_schema查看锁</h2><p><a href="https://dev.mysql.com/doc/refman/5.6/en/innodb-information-schema-examples.html" target="_blank" rel="noopener">https://dev.mysql.com/doc/refman/5.6/en/innodb-information-schema-examples.html</a><br>哪个事务在等待锁，哪个事务持有锁：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span></span><br><span class="line">  r.trx_id waiting_trx_id,</span><br><span class="line">  r.trx_mysql_thread_id waiting_thread,</span><br><span class="line">  r.trx_query waiting_query,</span><br><span class="line">  b.trx_id blocking_trx_id,</span><br><span class="line">  b.trx_mysql_thread_id blocking_thread,</span><br><span class="line">  b.trx_query blocking_query</span><br><span class="line"><span class="keyword">FROM</span>       information_schema.innodb_lock_waits w</span><br><span class="line"><span class="keyword">INNER</span> <span class="keyword">JOIN</span> information_schema.innodb_trx b</span><br><span class="line">  <span class="keyword">ON</span> b.trx_id = w.blocking_trx_id</span><br><span class="line"><span class="keyword">INNER</span> <span class="keyword">JOIN</span> information_schema.innodb_trx r</span><br><span class="line">  <span class="keyword">ON</span> r.trx_id = w.requesting_trx_id;</span><br></pre></td></tr></table></figure>
+
+<p>查看阻塞查询的线程元凶:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span></span><br><span class="line">	<span class="keyword">CONCAT</span>(<span class="string">'thread '</span>, b.trx_mysql_thread_id, <span class="string">' from '</span>, p.host) <span class="keyword">AS</span> who_blocks,</span><br><span class="line">	<span class="keyword">IF</span>(p.command = <span class="string">"Sleep"</span>, p.time, <span class="number">0</span>) <span class="keyword">AS</span> idle_in_trx,</span><br><span class="line">	<span class="keyword">MAX</span>(<span class="keyword">TIMESTAMPDIFF</span>(<span class="keyword">SECOND</span>, r.trx_wait_started, <span class="keyword">CURRENT_TIMESTAMP</span>)) <span class="keyword">AS</span> max_wait_time,</span><br><span class="line">	<span class="keyword">COUNT</span>(*) <span class="keyword">AS</span> num_waiters</span><br><span class="line">   <span class="keyword">FROM</span> INFORMATION_SCHEMA.INNODB_LOCK_WAITS <span class="keyword">AS</span> w</span><br><span class="line">   <span class="keyword">INNER</span> <span class="keyword">JOIN</span> INFORMATION_SCHEMA.INNODB_TRX <span class="keyword">AS</span> b <span class="keyword">ON</span> b.trx_id = w.blocking_trx_id</span><br><span class="line">   <span class="keyword">INNER</span> <span class="keyword">JOIN</span> INFORMATION_SCHEMA.INNODB_TRX <span class="keyword">AS</span> r <span class="keyword">ON</span> r.trx_id = w.requesting_trx_id</span><br><span class="line">   <span class="keyword">LEFT</span> <span class="keyword">JOIN</span> INFORMATION_SCHEMA.PROCESSLIST <span class="keyword">AS</span> p <span class="keyword">ON</span> p.id = b.trx_mysql_thread_id</span><br><span class="line">   <span class="keyword">GROUP</span> <span class="keyword">BY</span> who_blocks <span class="keyword">ORDER</span> <span class="keyword">BY</span> num_waiters <span class="keyword">DESC</span>;</span><br><span class="line">   </span><br><span class="line">+<span class="comment">-------------------------+-------------+---------------+-------------+</span></span><br><span class="line">| who_blocks              | idle_in_trx | max_wait_time | num_waiters |</span><br><span class="line">+<span class="comment">-------------------------+-------------+---------------+-------------+</span></span><br><span class="line">| thread 4 from localhost |          98 |            12 |           1 |</span><br><span class="line">+<span class="comment">-------------------------+-------------+---------------+-------------+</span></span><br></pre></td></tr></table></figure>
+
+<p>结果看线程4空闲了98秒，至少有一个线程等了它12秒，有1个线程在等待它。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/13/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E9%99%84%E5%BD%95A-E-%E7%AC%94%E8%AE%B0/" data-id="ck96cch3s00hkbham7y851n87" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-02/高性能mysql第12-16章-笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/13/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC12-16%E7%AB%A0-%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2019-02-13T01:34:54.000Z" itemprop="datePublished">2019-02-13</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/02/13/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC12-16%E7%AB%A0-%E7%AC%94%E8%AE%B0/">高性能mysql第12-16章-笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>这一章主要讲了一些概念和一些Mysql Cluster变种，略。</p>
+<h2 id="高可用概念"><a href="#高可用概念" class="headerlink" title="高可用概念"></a>高可用概念</h2><p>5个9: 99.999%，每年允许5分钟宕机时间。</p>
+<h2 id="宕机原因"><a href="#宕机原因" class="headerlink" title="宕机原因"></a>宕机原因</h2><ol>
+<li>运行环境: 磁盘耗尽；</li>
+<li>性能问题：糟糕sql，schema索引设计;</li>
+<li>复制问题：主备不一致；</li>
+<li>数据丢失：如误操作。</li>
+</ol>
+<h3 id="tips"><a href="#tips" class="headerlink" title="tips"></a>tips</h3><ol>
+<li>禁用查询缓存</li>
+<li>禁用复制过滤器、触发器。</li>
+</ol>
+<h1 id="高性能mysql第13章-笔记-云端mysql"><a href="#高性能mysql第13章-笔记-云端mysql" class="headerlink" title="高性能mysql第13章-笔记-云端mysql"></a>高性能mysql第13章-笔记-云端mysql</h1><p>IaaS:基础设施虚拟化；<br>DaaS:数据库虚拟化。</p>
+<h2 id="Iaas"><a href="#Iaas" class="headerlink" title="Iaas:"></a>Iaas:</h2><p>mysql需要的4种资源:</p>
+<ol>
+<li>cpu: 云cpu一般较慢；</li>
+<li>内存: 最好能到512GB~1TB；</li>
+<li>IO： ms级，虚拟化后一般慢100倍； </li>
+<li>网络： 一般不成为瓶颈。</li>
+</ol>
+<h2 id="Daas："><a href="#Daas：" class="headerlink" title="Daas："></a>Daas：</h2><p>稍微讲了一下亚马逊RDS，略过。</p>
+<h1 id="高性能mysql第14章-笔记-应用层优化"><a href="#高性能mysql第14章-笔记-应用层优化" class="headerlink" title="高性能mysql第14章-笔记-应用层优化"></a>高性能mysql第14章-笔记-应用层优化</h1><h2 id="思考的角度"><a href="#思考的角度" class="headerlink" title="思考的角度"></a>思考的角度</h2><ol>
+<li>应用和数据库正确分工；</li>
+<li>ORM的循环SQL和嵌套查询的性能优劣；</li>
+<li>缓存(redis)；</li>
+<li>连接池。</li>
+</ol>
+<h2 id="web服务器问题"><a href="#web服务器问题" class="headerlink" title="web服务器问题"></a>web服务器问题</h2><p>静态资源： 用nginx代替apache<br>移除无用的apache模块</p>
+<h2 id="缓存问题"><a href="#缓存问题" class="headerlink" title="缓存问题"></a>缓存问题</h2><p>不同等级层次的缓存:</p>
+<ol>
+<li>进程缓存;</li>
+<li>本地共享内存缓存;</li>
+<li>分布式内存缓存;(memcached)</li>
+<li>磁盘缓存。</li>
+</ol>
+<h3 id="缓存失效策略"><a href="#缓存失效策略" class="headerlink" title="缓存失效策略"></a>缓存失效策略</h3><ol>
+<li>TTL;</li>
+<li>显式失效:更新数据时候更新缓存或者标记缓存为脏数据;</li>
+<li>读时失效:读的时候再判断缓存是否已经过期； （加快写，减慢了读）</li>
+</ol>
+<h1 id="高性能mysql第15章-笔记-备份与恢复"><a href="#高性能mysql第15章-笔记-备份与恢复" class="headerlink" title="高性能mysql第15章-笔记-备份与恢复"></a>高性能mysql第15章-笔记-备份与恢复</h1><p>备份建议：</p>
+<ol>
+<li>使用Percona XtraBackup、Mysql Enterprise Backup；</li>
+<li>生产服务器和备份服务器分开，以免同时挂掉。</li>
+<li>定期进行恢复测试。</li>
+</ol>
+<h2 id="逻辑备份"><a href="#逻辑备份" class="headerlink" title="逻辑备份"></a>逻辑备份</h2><p>(SQL,mysqldump)<br>缺点: </p>
+<ol>
+<li>恢复起来慢</li>
+</ol>
+<h2 id="物理备份"><a href="#物理备份" class="headerlink" title="物理备份"></a>物理备份</h2><p>(文件)<br>缺点：</p>
+<ol>
+<li>受版本、兼容性影响，bug概率高。</li>
+<li>文件很大。</li>
+</ol>
+<p>建议：<br>0. 全局使用<code>utf-8</code>;</p>
+<ol>
+<li>逻辑：使用<code>mysqldump</code>备份结构；</li>
+<li>物理: 使用<code>select into outfile</code>导出数据为分隔符文件。</li>
+<li>恢复结构：执行1中的sql;</li>
+<li>恢复数据：<code>load data infile</code>。<br>其中2，4两步对字符集有要求。（不能单独设置某列字符集）</li>
+</ol>
+<h2 id="增量备份和全量备份"><a href="#增量备份和全量备份" class="headerlink" title="增量备份和全量备份"></a>增量备份和全量备份</h2><p>尽量做全备，增量bug多；</p>
+<h2 id="数据一致性"><a href="#数据一致性" class="headerlink" title="数据一致性"></a>数据一致性</h2><p><code>mysqldump --single-transaction</code><br>可能会导致非常长的事务，从而失败。</p>
+<h2 id="binlog清理"><a href="#binlog清理" class="headerlink" title="binlog清理"></a>binlog清理</h2><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">purge</span> <span class="keyword">master</span> <span class="keyword">logs</span> <span class="keyword">before</span> <span class="keyword">current_date</span> - <span class="built_in">Interval</span> N <span class="keyword">day</span></span><br></pre></td></tr></table></figure>
+<p>或者设置<code>expire_logs_days</code>。</p>
+<h2 id="innodb损坏恢复"><a href="#innodb损坏恢复" class="headerlink" title="innodb损坏恢复"></a>innodb损坏恢复</h2><h3 id="1-二级索引损坏"><a href="#1-二级索引损坏" class="headerlink" title="1. 二级索引损坏"></a>1. 二级索引损坏</h3><p>3种办法：</p>
+<ol>
+<li><code>optimize table</code>语句;</li>
+<li>删除重建表;</li>
+<li>表引擎改为<code>myisam</code>，再改回来。</li>
+</ol>
+<h3 id="2-聚簇索引损坏"><a href="#2-聚簇索引损坏" class="headerlink" title="2. 聚簇索引损坏"></a>2. 聚簇索引损坏</h3><p><strong>优先使用备份还原</strong><br>否则：<br>(大概率只能修复未受损坏影响的行。)<br>通过<code>innodb_force_recover</code>选项导出表，如果导出过程崩溃，需要跳过受损行。</p>
+<h3 id="3-损坏系统结构"><a href="#3-损坏系统结构" class="headerlink" title="3. 损坏系统结构"></a>3. 损坏系统结构</h3><p>损坏： innodb事务日志(redo log),表空间撤销日志(undo log),数据字典。</p>
+<p><strong>优先使用备份还原</strong><br>否则：<br>可能需要做整个数据库的导出和还原。<br>innodb内部绝大部分工作可能受影响。</p>
+<p>上述2，3两种损坏最好从备份还原数据。</p>
+<h1 id="高性能mysql第16章-笔记-用户工具"><a href="#高性能mysql第16章-笔记-用户工具" class="headerlink" title="高性能mysql第16章-笔记-用户工具"></a>高性能mysql第16章-笔记-用户工具</h1><p>这章主要介绍一些工具：</p>
+<h3 id="UI工具"><a href="#UI工具" class="headerlink" title="UI工具:"></a>UI工具:</h3><ol>
+<li>MysqlWorkbench;</li>
+<li>SQLyog: 同workbench,windows专用；</li>
+</ol>
+<h3 id="命令行工具"><a href="#命令行工具" class="headerlink" title="命令行工具:"></a>命令行工具:</h3><ol>
+<li>Percona Toolkit: 管理员必备；</li>
+<li>The openark kit：一些管理任务的python脚本。</li>
+</ol>
+<h3 id="监控工具"><a href="#监控工具" class="headerlink" title="监控工具"></a>监控工具</h3><ol>
+<li>Nagios;<br>2-6等其余很多略过。</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/13/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC12-16%E7%AB%A0-%E7%AC%94%E8%AE%B0/" data-id="ck96cch3o00h2bhamfi8z6n93" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+
+
+  <nav id="page-nav">
+    <a class="extend prev" rel="prev" href="/page/4/">&amp;laquo; 上一页</a><a class="page-number" href="/">1</a><span class="space">&hellip;</span><a class="page-number" href="/page/3/">3</a><a class="page-number" href="/page/4/">4</a><span class="page-number current">5</span><a class="page-number" href="/page/6/">6</a><a class="page-number" href="/page/7/">7</a><span class="space">&hellip;</span><a class="page-number" href="/page/20/">20</a><a class="extend next" rel="next" href="/page/6/">下一页&amp;raquo;</a>
+  </nav>
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+  
+    
+
+  
+    
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title recent-posts">最新文章</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2020/04/19/2020-04/spring%E6%8B%BE%E9%81%97/">spring拾遗</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/26/2020-03/%E5%88%A9%E7%94%A8UTF-8%E7%BC%96%E7%A0%81%E7%9A%84%E7%89%B9%E6%80%A7%E8%BF%9B%E8%A1%8C%E4%BC%98%E5%8C%96/">利用UTF-8编码的特性进行优化</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/24/2020-03/linux%E8%87%AA%E8%BF%9E%E6%8E%A5/">linux自连接</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/23/2020-03/redis%E5%A4%A7key%E9%97%AE%E9%A2%98/">redis大key问题</a>
+          </li>
+        
+          <li>
+            <a href="/2020/03/23/2020-03/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/">分布式事务</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

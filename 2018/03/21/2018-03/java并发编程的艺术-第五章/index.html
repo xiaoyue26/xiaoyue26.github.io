@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>java并发编程的艺术-第五章(1) | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="第五章 java中的锁这章主要写java并发包中与锁相关的api.先是使用，然后是实现。 5.1 Lock接口Lock接口由Java SE 5新增，对飙的是旧java中的synchronized内置锁。主要新增了三个api:  非阻塞获取锁（tryLock）; 能被中断地获取锁(lockInterruptbly); 超时获取锁(tryLock(long time,TimeUnit unit)).此">
+<meta property="og:type" content="article">
+<meta property="og:title" content="java并发编程的艺术-第五章(1)">
+<meta property="og:url" content="http://xiaoyue26.github.io/2018/03/21/2018-03/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC%E4%BA%94%E7%AB%A0/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="第五章 java中的锁这章主要写java并发包中与锁相关的api.先是使用，然后是实现。 5.1 Lock接口Lock接口由Java SE 5新增，对飙的是旧java中的synchronized内置锁。主要新增了三个api:  非阻塞获取锁（tryLock）; 能被中断地获取锁(lockInterruptbly); 超时获取锁(tryLock(long time,TimeUnit unit)).此">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/syncqueue.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/waitingqueue.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/spin.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/shareandmutex.png">
+<meta property="article:published_time" content="2018-03-21T13:45:20.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.271Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="java">
+<meta property="article:tag" content="并发">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://xiaoyue26.github.io/images/syncqueue.png">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2018-03/java并发编程的艺术-第五章" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/03/21/2018-03/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC%E4%BA%94%E7%AB%A0/" class="article-date">
+  <time datetime="2018-03-21T13:45:20.000Z" itemprop="datePublished">2018-03-21</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      java并发编程的艺术-第五章(1)
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="第五章-java中的锁"><a href="#第五章-java中的锁" class="headerlink" title="第五章 java中的锁"></a>第五章 java中的锁</h1><p>这章主要写java并发包中与锁相关的<code>api</code>.<br>先是<code>使用</code>，然后是<code>实现</code>。</p>
+<h1 id="5-1-Lock接口"><a href="#5-1-Lock接口" class="headerlink" title="5.1 Lock接口"></a>5.1 Lock接口</h1><p><code>Lock</code>接口由Java SE 5新增，对飙的是旧java中的<code>synchronized</code>内置锁。<br>主要新增了三个api:</p>
+<ol>
+<li>非阻塞获取锁（<code>tryLock</code>）;</li>
+<li>能被中断地获取锁(<code>lockInterruptbly</code>);</li>
+<li>超时获取锁(<code>tryLock(long time,TimeUnit unit)</code>).<br>此外还增加了<code>Condition</code>接口，增加了等待队列的数量及相关特性。<br>（<code>Condition</code>使用<code>await()</code>，对飙的是原来的<code>obj.wait()</code>）</li>
+</ol>
+<p>示例代码：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">Lock lock=<span class="keyword">new</span> ReentrantLock();</span><br><span class="line">lock.lock();<span class="comment">// 没获取到锁的话抛异常</span></span><br><span class="line"><span class="keyword">try</span>&#123;</span><br><span class="line">    <span class="comment">// do something</span></span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">finally</span>&#123;</span><br><span class="line">    lock.unlock();</span><br><span class="line">    <span class="comment">// 如果lock.lock()放try里，这里就可能会出错。</span></span><br><span class="line">    <span class="comment">// 因为没获取到锁时，不能unlock。</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<table>
+<thead>
+<tr>
+<th align="center">主要Api</th>
+<th align="right">备注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">lock()</td>
+<td align="right">阻塞式地获取锁。只有在获取到锁后才处理interrupt信息。</td>
+</tr>
+<tr>
+<td align="center">lockInterruptibly()</td>
+<td align="right">获取锁。(可中断)</td>
+</tr>
+<tr>
+<td align="center">tryLock()</td>
+<td align="right">非阻塞地获取锁。不论成败立即返回。</td>
+</tr>
+<tr>
+<td align="center">tryLock(long time,TimeUnit unit)</td>
+<td align="right">超时获取锁，接受中断</td>
+</tr>
+<tr>
+<td align="center">unlock()</td>
+<td align="right">释放锁。</td>
+</tr>
+<tr>
+<td align="center">Condition newCondition()</td>
+<td align="right">获取等待通知组件。</td>
+</tr>
+</tbody></table>
+<p>回顾之前的线程状态,lock方法会让线程进入<code>Blocked</code>状态。<br>线程状态与可中断的关系：</p>
+<ol>
+<li>new: ???</li>
+<li>Runnable: 不可中断（除非主动检查）</li>
+<li>Terminated: 不可中断;</li>
+<li>Blocked: 不可中断; (在<code>synchronized</code>时阻塞住不会响应中断)</li>
+<li>Waiting: 可中断；(sleep方法，wait方法都会抛异常)</li>
+<li>Time_waiting： 可中断；</li>
+</ol>
+<p>简单得说，就只有<code>Waiting</code>和<code>Time_waiting</code>状态可以中断，或者自己在代码里手动检查中断状态。</p>
+<p><strong>本章的内容有点乱，不太通顺，下面的内容按照个人理解重排。</strong></p>
+<h1 id="5-6-Condition接口"><a href="#5-6-Condition接口" class="headerlink" title="5.6 Condition接口"></a>5.6 Condition接口</h1><p><code>Condition</code>接口对飙的是原来的<code>wait/notify</code>机制，新推出的是<code>await/signal</code>机制。<br><code>wait/notify</code>依赖<code>synchronized</code>获得锁，而<code>Condition</code>依赖<code>Lock</code>获得锁。<br>原来的<code>wait/notify</code>:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// A:</span></span><br><span class="line">synchronize(obj)&#123;</span><br><span class="line">    obj.wait();</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// B:</span></span><br><span class="line">synchronize(obj)&#123;</span><br><span class="line">    obj.notify();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>使用<code>Condition</code>的<code>await/signal</code>:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">Lock lock=<span class="keyword">new</span> ReentrantLock();</span><br><span class="line">Condition condition=lock.newCondition();</span><br><span class="line"></span><br><span class="line"><span class="comment">// A:</span></span><br><span class="line">lock.lock();</span><br><span class="line"><span class="keyword">try</span>&#123;</span><br><span class="line">    condition.await();</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">finally</span>&#123;</span><br><span class="line">    lock.unlock();</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// B:</span></span><br><span class="line">lock.lock();</span><br><span class="line"><span class="keyword">try</span>&#123;</span><br><span class="line">    condition.signal();</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">finally</span>&#123;</span><br><span class="line">    lock.unlock();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>功能上：<br>两种实现都是使用一个对象进行同步操作（加锁解锁）。消费者在获得锁后，在该对象上进行等待（释放锁等待）；生产者获得锁后，通知在该对象上等待的其他线程。<br>区别在于<code>synchronized</code>不需要关心锁的释放，而<code>Lock</code>接口需要在finally中手动确保锁的释放。<br><code>wait</code>只有一个等待队列，而由于一个<code>Lock</code>可以生成多个<code>Condition</code>，因此<code>await</code>可以有多个等待队列。</li>
+</ul>
+<p><strong>案例之有界队列</strong></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line"><span class="keyword">import</span> java.util.concurrent.locks.Condition;</span><br><span class="line"><span class="keyword">import</span> java.util.concurrent.locks.Lock;</span><br><span class="line"><span class="keyword">import</span> java.util.concurrent.locks.ReentrantLock;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">BoundedQueue</span>&lt;<span class="title">T</span>&gt; </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> Object[] items;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">int</span> addIndex, removeIndex, count;</span><br><span class="line">    <span class="keyword">private</span> Lock lock = <span class="keyword">new</span> ReentrantLock();</span><br><span class="line">    <span class="keyword">private</span> Condition notEmpty = lock.newCondition();</span><br><span class="line">    <span class="keyword">private</span> Condition notFull = lock.newCondition();</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">BoundedQueue</span><span class="params">(<span class="keyword">int</span> size)</span> </span>&#123;</span><br><span class="line">        items = <span class="keyword">new</span> Object[size];</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">add</span><span class="params">(T t)</span> <span class="keyword">throws</span> InterruptedException </span>&#123;</span><br><span class="line">        lock.lock();</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            <span class="keyword">while</span> (count == items.length) &#123;</span><br><span class="line">                notFull.await();</span><br><span class="line">            &#125;</span><br><span class="line">            items[addIndex] = t;</span><br><span class="line">            <span class="keyword">if</span> (++addIndex == items.length) &#123; <span class="comment">// 循环数组</span></span><br><span class="line">                addIndex = <span class="number">0</span>;</span><br><span class="line">            &#125;</span><br><span class="line">            ++count;</span><br><span class="line">            notEmpty.signal();</span><br><span class="line">        &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">            lock.unlock();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> T <span class="title">remove</span><span class="params">()</span> <span class="keyword">throws</span> InterruptedException </span>&#123;</span><br><span class="line">        lock.lock();</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            <span class="keyword">while</span> (count == <span class="number">0</span>) &#123;</span><br><span class="line">                notEmpty.await();</span><br><span class="line">            &#125;</span><br><span class="line">            Object x = items[removeIndex];</span><br><span class="line">            <span class="keyword">if</span> (++removeIndex == items.length) &#123;<span class="comment">// 循环数组</span></span><br><span class="line">                removeIndex = <span class="number">0</span>;</span><br><span class="line">            &#125;</span><br><span class="line">            --count;</span><br><span class="line">            notFull.signal();</span><br><span class="line">            <span class="keyword">return</span> (T) x;</span><br><span class="line">        &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">            lock.unlock();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>上述案例中使用一个锁（<code>Lock</code>对象），而有两个等待队列，分别等待<code>notEmpty</code>和<code>notFull</code>条件。</p>
+<ul>
+<li>实现逻辑上：（逻辑上的工作流程）</li>
+</ul>
+<ol>
+<li>线程尝试获取锁，如果成功则占据锁，失败则进入同步队列；</li>
+<li>如果成功获取锁，且进行等待（<code>wait</code>或<code>await</code>），则进入等待队列，释放锁，通知同步队列中的后继节点；</li>
+<li>如果成功获取锁，且进行通知（<code>notify</code>或<code>signal</code>），则等待队列的首节点挪入同步队列，释放同步锁，通知同步队列中的后继节点。</li>
+</ol>
+<p>两个后面会反复用到的概念：</p>
+<ul>
+<li><code>同步队列</code>： 获取同步锁失败后的线程进入同步队列；</li>
+<li><code>等待队列</code>： 获取同步锁成功后，主动等待的线程进入等待队列。</li>
+</ul>
+<h1 id="5-2-队列同步器"><a href="#5-2-队列同步器" class="headerlink" title="5.2 队列同步器"></a>5.2 队列同步器</h1><p>前文中锁的实现中，一个很重要的组件是：<br><code>队列同步器：AQS(AbstractQueuedSynchronizer)</code>。<br>此外，其他同步组件的基础框架也是使用AQS。（如<code>ReentrantLock</code>,<code>CountDownLatch</code>）<br>回顾55页3.5.4节中的架构层次：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;&#x2F; 自顶向下：</span><br><span class="line">1.  Lock,同步器,阻塞队列,Executor,并发容器</span><br><span class="line">2.  AQS,非阻塞数据结构,原子变量类</span><br><span class="line">3.  volatile读写,CAS操作</span><br></pre></td></tr></table></figure>
+
+
+<p>AQS是一个抽象类。<br>AQS中自底向上的3类方法：</p>
+<ol>
+<li>基础方法。(固定)</li>
+<li>可重写的方法（调用1的方法）；</li>
+<li>模版方法；（固定，调用1，2的方法）</li>
+</ol>
+<p>AQS在设计上是基于模版方法模式的抽象类。也就是说，我们需要新增一个子类继承AQS，然后重写上述第2类方法。而第1类和第3类方法，要么是private的无法继承，要么是final的无法重写。而第二类方法，如果没有重写，默认实现只有一行<code>throw new UnsupportedOperationException();</code>,调用的时候就会直接抛异常了。</p>
+<p><strong>基础方法</strong></p>
+<ol>
+<li><code>getState()</code>: 获取当前同步状态；</li>
+<li><code>setState()</code>: 设置当前同步状态；</li>
+<li><code>compareAndSetState(int expect,int update)</code>: 使用CAS设置当前状态,该方法保证设置的原子性。</li>
+</ol>
+<p><strong>可重写的方法</strong></p>
+<table>
+<thead>
+<tr>
+<th align="center">可重写的方法</th>
+<th align="right">描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">boolean tryAcquire(int arg)</td>
+<td align="right">独占式获取同步状态。（调CAS）</td>
+</tr>
+<tr>
+<td align="center">boolean tryRelease(int arg)</td>
+<td align="right">独占式释放同步状态。</td>
+</tr>
+<tr>
+<td align="center">int tryAcquireShared(int arg)</td>
+<td align="right">共享式获取同步状态。返回值&gt;=0则成功。</td>
+</tr>
+<tr>
+<td align="center">boolean tryReleaseShared(int arg)</td>
+<td align="right">共享式释放同步状态。</td>
+</tr>
+<tr>
+<td align="center">boolean isHeldExclusively(int arg)</td>
+<td align="right">判断是否被当前线程独占。</td>
+</tr>
+</tbody></table>
+<p><strong>模版方法</strong></p>
+<table>
+<thead>
+<tr>
+<th align="center">模版方法</th>
+<th align="right">描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">void acquire(int arg)</td>
+<td align="right">独占式获取同步状态（调用上面的<code>tryAcquire</code>），失败则进入同步队列。</td>
+</tr>
+<tr>
+<td align="center">void acquireShared(int arg)</td>
+<td align="right">共享式获取同步状态，失败则进入同步队列。</td>
+</tr>
+<tr>
+<td align="center">boolean release(int arg)</td>
+<td align="right">独占式释放同步状态</td>
+</tr>
+<tr>
+<td align="center">boolean releaseShared(int arg)</td>
+<td align="right">共享式释放同步状态</td>
+</tr>
+<tr>
+<td align="center">Condition&lt; Thread&gt;getQueuedThreads()</td>
+<td align="right">获取同步队列线程集合</td>
+</tr>
+<tr>
+<td align="center">其他</td>
+<td align="right">其他响应中断/超时返回的版本的方法</td>
+</tr>
+</tbody></table>
+<p><strong>案例之-独占锁</strong><br><code>Mutex</code>的实现：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line"><span class="keyword">import</span> java.util.concurrent.TimeUnit;</span><br><span class="line"><span class="keyword">import</span> java.util.concurrent.locks.AbstractQueuedSynchronizer;</span><br><span class="line"><span class="keyword">import</span> java.util.concurrent.locks.Condition;</span><br><span class="line"><span class="keyword">import</span> java.util.concurrent.locks.Lock;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">Mutex</span> <span class="keyword">implements</span> <span class="title">Lock</span> </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">Sync</span> <span class="keyword">extends</span> <span class="title">AbstractQueuedSynchronizer</span> </span>&#123;</span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">protected</span> <span class="keyword">boolean</span> <span class="title">isHeldExclusively</span><span class="params">()</span> </span>&#123;</span><br><span class="line">            <span class="keyword">return</span> getState() == <span class="number">1</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">tryAcquire</span><span class="params">(<span class="keyword">int</span> acquireds)</span> </span>&#123;</span><br><span class="line">            <span class="keyword">if</span> (compareAndSetState(<span class="number">0</span>, <span class="number">1</span>)) &#123;</span><br><span class="line">                setExclusiveOwnerThread(Thread.currentThread());</span><br><span class="line">                <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">return</span> <span class="keyword">false</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">protected</span> <span class="keyword">boolean</span> <span class="title">tryRelease</span><span class="params">(<span class="keyword">int</span> releases)</span> </span>&#123;</span><br><span class="line">            <span class="keyword">if</span> (getState() == <span class="number">0</span>) &#123;</span><br><span class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> IllegalMonitorStateException();</span><br><span class="line">            &#125;</span><br><span class="line">            setExclusiveOwnerThread(<span class="keyword">null</span>);</span><br><span class="line">            setState(<span class="number">0</span>);</span><br><span class="line">            <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="function">Condition <span class="title">newCondition</span><span class="params">()</span> </span>&#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="keyword">new</span> ConditionObject();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 将操作委托给sync实现即可。</span></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> Sync sync = <span class="keyword">new</span> Sync(); <span class="comment">// (代理)</span></span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">lock</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        sync.acquire(<span class="number">1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">lockInterruptibly</span><span class="params">()</span> <span class="keyword">throws</span> InterruptedException </span>&#123;</span><br><span class="line">        sync.acquireInterruptibly(<span class="number">1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">tryLock</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> sync.tryAcquire(<span class="number">1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">tryLock</span><span class="params">(<span class="keyword">long</span> time, TimeUnit unit)</span> <span class="keyword">throws</span> InterruptedException </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> sync.tryAcquireNanos(<span class="number">1</span>, unit.toNanos(time));</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">unlock</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        sync.release(<span class="number">1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> Condition <span class="title">newCondition</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> sync.newCondition();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 不在Lock接口中，但是有用的方法：</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">isLocked</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> sync.isHeldExclusively();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">hasQueuedThread</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> sync.hasQueuedThreads();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>上述<code>sync</code>只实现了独占操作，因此调用共享操作会抛异常。<br>因此<code>mutex</code>中只调用了<code>sync</code>的独占模版方法。<br>因此<code>mutex</code>最多是一个独占锁。</p>
+<p><strong>案例之-TwinsLock</strong><br>用AQS实现一个最多能被两个线程同时占据的锁。<br><code>TwinsLock</code>实现：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">TwinsLock</span> <span class="keyword">implements</span> <span class="title">Lock</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="class"><span class="keyword">class</span> <span class="title">Sync</span> <span class="keyword">extends</span> <span class="title">AbstractQueuedSynchronizer</span> </span>&#123;</span><br><span class="line">        Sync(<span class="keyword">int</span> count) &#123;</span><br><span class="line">            <span class="keyword">if</span> (count &lt;= <span class="number">0</span>) &#123;</span><br><span class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> IllegalArgumentException(<span class="string">"count must larger than 0"</span>);</span><br><span class="line">            &#125;</span><br><span class="line">            setState(count);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">int</span> <span class="title">tryAcquireShared</span><span class="params">(<span class="keyword">int</span> reduceCount)</span> </span>&#123;</span><br><span class="line">            <span class="keyword">for</span> (; ; ) &#123;</span><br><span class="line">                <span class="keyword">int</span> current = getState();</span><br><span class="line">                <span class="keyword">int</span> newCount = current - reduceCount;</span><br><span class="line">                <span class="keyword">if</span> (newCount &lt; <span class="number">0</span> || compareAndSetState(current, newCount)) &#123;</span><br><span class="line">                    <span class="keyword">return</span> newCount;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">tryReleaseShared</span><span class="params">(<span class="keyword">int</span> returnCount)</span> </span>&#123;</span><br><span class="line">            <span class="keyword">for</span> (; ; ) &#123;</span><br><span class="line">                <span class="keyword">int</span> current = getState();</span><br><span class="line">                <span class="keyword">int</span> newCount = current + returnCount;</span><br><span class="line">                <span class="keyword">if</span> (compareAndSetState(current, newCount)) &#123;</span><br><span class="line">                    <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 额外的:</span></span><br><span class="line">        <span class="function">Condition <span class="title">newCondition</span><span class="params">()</span> </span>&#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="keyword">new</span> ConditionObject();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> Sync sync = <span class="keyword">new</span> Sync(<span class="number">2</span>);<span class="comment">// 最多俩人共享</span></span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">lock</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        sync.acquireShared(<span class="number">1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">unlock</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        sync.releaseShared(<span class="number">1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">lockInterruptibly</span><span class="params">()</span> <span class="keyword">throws</span> InterruptedException </span>&#123;</span><br><span class="line">        sync.acquireSharedInterruptibly(<span class="number">1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">tryLock</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> sync.tryAcquireShared(<span class="number">1</span>) &gt;= <span class="number">0</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">tryLock</span><span class="params">(<span class="keyword">long</span> time, TimeUnit unit)</span> <span class="keyword">throws</span> InterruptedException </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> sync.tryAcquireSharedNanos(<span class="number">1</span>, unit.toNanos(time));</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> Condition <span class="title">newCondition</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> sync.newCondition();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>与<code>Mutex</code>不同的是，<code>TwinsLock</code>中的同步器主要重写了AQS的共享方法，<code>Lock</code>接口中也调用的是共享方法。也就是按照共享式访问编写，然后用<code>count</code>控制同步资源数。</p>
+<h3 id="5-2-2-AQS的实现分析"><a href="#5-2-2-AQS的实现分析" class="headerlink" title="5.2.2 AQS的实现分析"></a>5.2.2 AQS的实现分析</h3><p>上面讲了<code>Lock</code>,<code>Condition</code>的使用，<code>AQS</code>的使用（用来自定义<code>Lock</code>），下面讲<code>AQS</code>的实现。</p>
+<p><strong>同步队列</strong></p>
+<ul>
+<li>同步队列与等待队列<br>AQS即队列同步器，很重要的一个概念就是同步，要控制多个线程对于一个锁的访问获取释放。<br>获取锁失败的线程都会进入同步队列，而一个lock上可以有多个condition,获取锁成功后还需要等待某个condition的线程进入等待队列，然后释放锁。</li>
+</ul>
+<p>同步队列是一个FIFO队列，实现上使用一个双向链表。<br>等待队列也是一个FIFO队列，实现上使用一个单向链表。</p>
+<p>同步队列的基本结构：</p>
+<img src="/images/syncqueue.png" class="" width="400" height="600" title="SyncQueue">
+
+<p>加上等待队列后的结构：</p>
+<img src="/images/waitingqueue.png" class="" width="400" height="600" title="WaitingQueue">
+
+<p>因为节点可以在同步队列和等待队列之间转化。（同步队列中节点获得锁后，可能发现需要等待condition，进入等待队列尾部；等待队列中节点唤醒后进入同步队列尾部）<br>JDK中将两个链表的节点的数据结构杂糅在了一起，大致如下：</p>
+<table>
+<thead>
+<tr>
+<th align="center">属性</th>
+<th align="right">描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">Thread thread</td>
+<td align="right">线程引用。</td>
+</tr>
+<tr>
+<td align="center">Node prev</td>
+<td align="right">同步队列使用。前驱同步节点。</td>
+</tr>
+<tr>
+<td align="center">Node next</td>
+<td align="right">同步队列使用。后继同步节点。</td>
+</tr>
+<tr>
+<td align="center">Node nextWaiter</td>
+<td align="right">等待队列使用。后继等待节点。</td>
+</tr>
+<tr>
+<td align="center">int waitStatus</td>
+<td align="right">等待状态。</td>
+</tr>
+</tbody></table>
+<p>其中的waitStatus取值包括：<br><code>Cancelled</code>：1. 同步队列中等待超时或被中断;<br><code>Signal</code>：-1. 当前节点释放了同步状态或者被取消。<br><code>Condition</code>: -2. 当前节点等待某个Condition，进入等待队列。<br><code>Propagate</code>: -3. 下一次共享式同步状态获取将会无条件地被传播下去。(没看懂.TODO)<br><code>Initial</code>: 0. 初始状态。</p>
+<p>同步队列遵循FIFO，AQS中保存了head和tail。<br>每次唤醒时，唤醒head；（由于每次由已经获取锁的线程完成，只有一个线程，没有并发，因此不需要CAS）<br>每次新增线程时，用CAS新增更改tail。(各种链表指针操作)</p>
+<ul>
+<li><code>自旋</code>：<br>同步队列中的线程被唤醒的两种可能：</li>
+</ul>
+<ol>
+<li>被中断；</li>
+<li>被离开队列的首节点唤醒。<br>每次被唤醒都会进行一次自旋。<br>自旋说白了就是一个死循环，首先检查前驱是否是首节点（判断是否是第二种情况），如果是就试图获取锁，获取失败就接着睡等待下次唤醒（等待下次自旋）。<br>因此并不是只有第二个节点会自旋， 同步队列的所有节点都会自旋，毕竟存在被中断唤醒的可能。</li>
+</ol>
+<img src="/images/spin.png" class="" width="400" height="600" title="spin">
+
+<p><strong>同步状态的获取与释放</strong><br>同步状态获取释放相关的方法主要有两类：独占式和共享式。</p>
+<ul>
+<li>独占式:</li>
+</ul>
+<ol>
+<li>模版方法：(AQS中写好的,可以翻看源码研读)<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">final</span> <span class="keyword">void</span> acquire</span><br><span class="line"><span class="keyword">public</span> <span class="keyword">final</span> <span class="keyword">boolean</span> release</span><br><span class="line"><span class="keyword">private</span> Node addWaiter</span><br><span class="line"><span class="keyword">private</span> Node enq</span><br><span class="line"><span class="keyword">final</span> <span class="keyword">boolean</span> acquiredQueued`</span><br></pre></td></tr></table></figure></li>
+<li>需要自己重写的：<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">protected</span> <span class="keyword">boolean</span> tryAcquire</span><br><span class="line"><span class="keyword">protected</span> <span class="keyword">boolean</span> tryRelease</span><br></pre></td></tr></table></figure>
+
+
+</li>
+</ol>
+<p>独占式的特点就是：<br><code>tyrAcquire</code>,<code>tryRelease</code>的返回值是<code>boolean</code>。<br>因为同一时刻只能有一个线程占据，因此用<code>boolean</code>就能表达了。<br>相当于资源数只有1，状态只有0,1两种。</p>
+<ul>
+<li>共享式<img src="/images/shareandmutex.png" class="" width="400" height="600" title="shareandmutex">
+
+</li>
+</ul>
+<p>共享式的代码逻辑会复杂一些，如上图所示：</p>
+<ol>
+<li>临界区里有共享锁时，只有共享请求能进入；</li>
+<li>临界区里有独占锁时，谁都不能进。</li>
+</ol>
+<p>共享式的方法：</p>
+<ol>
+<li><p>模版方法：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">final</span> <span class="keyword">void</span> acquiredShared</span><br><span class="line"><span class="keyword">private</span> <span class="keyword">void</span> doAcquiredShared</span><br><span class="line"><span class="keyword">public</span> <span class="keyword">final</span> <span class="keyword">boolean</span> releaseShared</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>自己重写的方法：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">protected</span> <span class="keyword">int</span> tryAcquireShared</span><br><span class="line"><span class="keyword">protected</span> <span class="keyword">int</span> tryReleaseShared</span><br></pre></td></tr></table></figure>
+
+
+</li>
+</ol>
+<p>共享式的特点就是:<br><code>tryAcquireShared</code>,<code>tryReleaseShared</code>返回值是<code>int</code>。<br>因为共享式的资源数可能不为1，状态较多。<br><code>doAcquireShared</code>方法中判断是否还有资源，用<code>tryAcquireShared(arg)&gt;=0</code>来判断，可知自己实现的时候，要注意让<code>tryAcquireShared</code>方法返回剩下的资源数。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/03/21/2018-03/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC%E4%BA%94%E7%AB%A0/" data-id="ck96cch2a00bfbhambxmx24ng" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%B9%B6%E5%8F%91/" rel="tag">并发</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2018/03/25/2018-03/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC%E4%BA%94%E7%AB%A0-2/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          java并发编程的艺术-第五章(2)
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2018/03/17/2018-03/Mysql%E8%B0%83%E4%BC%98%E6%89%8B%E6%AE%B5%E6%80%BB%E7%BB%93-%E6%8C%81%E7%BB%AD%E6%9B%B4%E6%96%B0/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">Mysql调优手段总结(持续更新)</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#第五章-java中的锁"><span class="toc-number">1.</span> <span class="toc-text">第五章 java中的锁</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#5-1-Lock接口"><span class="toc-number">2.</span> <span class="toc-text">5.1 Lock接口</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#5-6-Condition接口"><span class="toc-number">3.</span> <span class="toc-text">5.6 Condition接口</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#5-2-队列同步器"><span class="toc-number">4.</span> <span class="toc-text">5.2 队列同步器</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#5-2-2-AQS的实现分析"><span class="toc-number">4.0.1.</span> <span class="toc-text">5.2.2 AQS的实现分析</span></a></li></ol></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

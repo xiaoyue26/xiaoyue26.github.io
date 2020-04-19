@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>2-3树与红黑树 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="2-3树与红黑树 参考资料：2-3树：http:&#x2F;&#x2F;blog.jobbole.com&#x2F;79307&#x2F;红黑树：http:&#x2F;&#x2F;blog.jobbole.com&#x2F;79309&#x2F;  背景2-3树和红黑树都是一种平衡查找树。其中红黑树是在2-3树的基础上，对于实现进行了简化，代价是逻辑上（表现图）增加了直接理解的难度。换句话说就是:  2-3树理解起来简单，实现起来代码比较麻烦(其实也可以实现); 红黑树理解起">
+<meta property="og:type" content="article">
+<meta property="og:title" content="2-3树与红黑树">
+<meta property="og:url" content="http://xiaoyue26.github.io/2018/04/22/2018-04/2-3%E6%A0%91%E4%B8%8E%E7%BA%A2%E9%BB%91%E6%A0%91/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="2-3树与红黑树 参考资料：2-3树：http:&#x2F;&#x2F;blog.jobbole.com&#x2F;79307&#x2F;红黑树：http:&#x2F;&#x2F;blog.jobbole.com&#x2F;79309&#x2F;  背景2-3树和红黑树都是一种平衡查找树。其中红黑树是在2-3树的基础上，对于实现进行了简化，代价是逻辑上（表现图）增加了直接理解的难度。换句话说就是:  2-3树理解起来简单，实现起来代码比较麻烦(其实也可以实现); 红黑树理解起">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-04/a1.jpg">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-04/a2.jpg">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-04/a3.jpg">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-04/a4.jpg">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-04/a5.jpg">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-04/2.jpg">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-04/3.jpg">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-04/4.jpg">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-04/5.gif">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-04/6.jpg">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-04/7.jpg">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-04/8.gif">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-04/9.jpg">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-04/10.jpg">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-04/11.jpg">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-04/12.jpg">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-04/13.jpg">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2018-04/14.jpg">
+<meta property="article:published_time" content="2018-04-22T12:33:46.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.272Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="2-3树">
+<meta property="article:tag" content="红黑树">
+<meta property="article:tag" content="数据结构与算法">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://xiaoyue26.github.io/images/2018-04/a1.jpg">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2018-04/2-3树与红黑树" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/04/22/2018-04/2-3%E6%A0%91%E4%B8%8E%E7%BA%A2%E9%BB%91%E6%A0%91/" class="article-date">
+  <time datetime="2018-04-22T12:33:46.000Z" itemprop="datePublished">2018-04-22</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/">数据结构与算法</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      2-3树与红黑树
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="2-3树与红黑树"><a href="#2-3树与红黑树" class="headerlink" title="2-3树与红黑树"></a>2-3树与红黑树</h1><blockquote>
+<p>参考资料：<br>2-3树：<br><a href="http://blog.jobbole.com/79307/" target="_blank" rel="noopener">http://blog.jobbole.com/79307/</a><br>红黑树：<br><a href="http://blog.jobbole.com/79309/" target="_blank" rel="noopener">http://blog.jobbole.com/79309/</a></p>
+</blockquote>
+<h1 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h1><p><code>2-3树</code>和<code>红黑树</code>都是一种平衡查找树。其中<code>红黑树</code>是在<code>2-3树</code>的基础上，对于实现进行了简化，代价是逻辑上（表现图）增加了直接理解的难度。换句话说就是:</p>
+<ul>
+<li><code>2-3树</code>理解起来简单，实现起来代码比较麻烦(其实也可以实现);</li>
+<li><code>红黑树</code>理解起来稍微曲折，实现起来代码非常简单/简洁,如果用递归实现还非常优雅。</li>
+</ul>
+<p>因此我们应该先学<code>2-3树</code>，理解以后，带着简单理解去学<code>红黑树</code>的实现。上述参考资料里的两个链接对于两者的介绍非常值得一看。</p>
+<h1 id="2-3树"><a href="#2-3树" class="headerlink" title="2-3树"></a>2-3树</h1><h2 id="定义"><a href="#定义" class="headerlink" title="定义"></a>定义</h2><p>2-3树意思就是树里有两种节点:<br><code>2-node</code>: 保存1个key,左右2个子节点;<br><code>3-node</code>: 保存2个key,左中右3个子节点。</p>
+<p>和二叉查找树类似,如果中序遍历一个<code>2-3树</code>,可以得到一个排好序的序列。<br>在一个完全平衡的2-3树中,根节点到每一个叶节点距离相同.</p>
+<img src="/images/2018-04/a1.jpg" class="" width="400" height="600" title="tree23">
+
+<h2 id="平衡性"><a href="#平衡性" class="headerlink" title="平衡性:"></a>平衡性:</h2><p>直观上理解: 由于2-3树的<code>3-node</code>具有缓冲作用,而且它的分裂逻辑可以将不平衡因子传递到父节点(还可以继续),最终消除;<br>严谨证明: 还没找到相关论文,理论上它与AA树等价,所以可以按left-leaning red-black tree/LLRB的证明来完成。</p>
+<h2 id="查找"><a href="#查找" class="headerlink" title="查找"></a>查找</h2><p>和B树类似,按key跳转子节点查找就好了.</p>
+<h2 id="插入"><a href="#插入" class="headerlink" title="插入"></a>插入</h2><h3 id="往2-node节点插入"><a href="#往2-node节点插入" class="headerlink" title="往2-node节点插入"></a>往2-node节点插入</h3><img src="/images/2018-04/a2.jpg" class="" width="400" height="600" title="tree23insert2">
+<p>插入K,把2-node变成3-node。</p>
+<h3 id="往3-node节点插入"><a href="#往3-node节点插入" class="headerlink" title="往3-node节点插入"></a>往3-node节点插入</h3><p><strong>1. 只有一个3-node节点</strong></p>
+<img src="/images/2018-04/a3.jpg" class="" width="400" height="600" title="tree23insert3">
+<p>插入S,把3-node变成4-node,把4-node分裂成3个2-node,中间key拉升做根节点.（无法向上传导,根分裂,高度+1）</p>
+<p><strong>2. 父节点是2-node,节点是3-node</strong></p>
+<img src="/images/2018-04/a4.jpg" class="" width="400" height="600" title="tree23insert4">
+<p>插入Z:</p>
+<ol>
+<li>把3-node变成4-node;</li>
+<li>把中间key往上扔,传递给父节点;</li>
+<li>父节点从<code>2-node</code>=&gt;<code>3-node</code>。</li>
+</ol>
+<p><strong>3. 父节点是3-node,节点是3-node</strong></p>
+<img src="/images/2018-04/a5.jpg" class="" width="400" height="600" title="tree23insert5">
+<p>思路和之前相似,把中间元素往上传导,直到遇到父节点是2-node的。<br>如果连根节点也是3-node，就进行根节点分裂，高度+1。</p>
+<h2 id="性能"><a href="#性能" class="headerlink" title="性能"></a>性能</h2><p>最坏情况,所有节点都是2-node,因此最坏时间复杂度为O(logN).<br>最好情况,所有节点都是3-node,因此最好时间复杂度为O(log3N)=0.631logN.</p>
+<h1 id="红黑树"><a href="#红黑树" class="headerlink" title="红黑树"></a>红黑树</h1><p>(这里其实是left-leaning red-black tree/LLRB)<br><code>2-3树</code>中有<code>3-node</code>，红黑树则是将其全部转化成二叉树来实现。<br>参考资料2中同时出现红色节点与红色连线,容易引起混淆. 这里统一定义一下, 红色本质上是指节点,红黑信息实现上存放在红子节点中. 之所以有红色连线,主要是为了在图里画,可以更清晰得看出有两个红子节点的父节点. </p>
+<p>下文中:</p>
+<ol>
+<li>图中: 以红色连线表示子节点是红节点;️</li>
+<li>实现中: 红色信息存放在子节点中. （并不会存指向父节点的指针）</li>
+</ol>
+<p>具体实现:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Node</span></span></span><br><span class="line"><span class="class"></span>&#123;</span><br><span class="line">    <span class="keyword">public</span> Node Left &#123; get; set; &#125; <span class="comment">// 左子</span></span><br><span class="line">    <span class="keyword">public</span> Node Right &#123; get; set; &#125; <span class="comment">// 右子</span></span><br><span class="line">    <span class="keyword">public</span> TKey Key &#123; get; set; &#125; <span class="comment">// key</span></span><br><span class="line">    <span class="keyword">public</span> TValue Value &#123; get; set; &#125; <span class="comment">// 数据</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">int</span> Number &#123; get; set; &#125; <span class="comment">// 当前子树的size,总共有多少节点 </span></span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 当前节点是红还是黑</span></span><br><span class="line">    <span class="keyword">public</span> bool Color &#123; get; set; &#125;  </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>定义:</strong></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">1. 所有节点分为红节点和黑节点;</span><br><span class="line">2. 表现图中一个红节点的画法: 把它和父节点之间的连线画成红色。</span><br><span class="line">(看图的时候,一条红线:子节点是红节点)</span><br></pre></td></tr></table></figure>
+
+<p><strong>规则:</strong></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. 所有节点,只有左子节点可以是红节点, 右子节点只能是黑;(通过旋转保证)</span><br><span class="line">2. 红色节点不能相连; &#x2F;&#x2F; 父节点红色,子节点不能也红色</span><br><span class="line">3. 不能左右都是红节点. &#x2F;&#x2F; 左右子节点不能都是红色</span><br><span class="line">(2，3两个规则,图上看就是一个节点不能有两个红色连线)</span><br></pre></td></tr></table></figure>
+
+<img src="/images/2018-04/2.jpg" class="" width="400" height="600" title="red2">
+<p>如上图所示，红黑树其实是2-3树的另一种表现形式。将红黑树的红色连线水平绘制，就可以把水平的两个节点整体看作一个<code>3-node</code>.<br>从实现上看，也就是把节点和它的红子节点看作一个<code>3-node</code>。<br>从这个思路来看,也就能理解上述的3条规则了, 如果违反了任意一条,都会导致节点与其红子节点合并成一个整体来看待的时候, 变成<code>4-node</code>甚至<code>5-node</code>更多.<br>只有满足所有规则, 才能保证合并来看的时候最多是一个<code>3-node</code>。</p>
+<h2 id="查找-1"><a href="#查找-1" class="headerlink" title="查找"></a>查找</h2><p>由于本质上还是二叉查找树,查找的代码与普通二叉查找树一样.<br>只不过由于比较平衡,性能有保障。<br>(如果把红黑树看作<code>2-3树</code>的话,查找过程的差别就在于遇到<code>3-node</code>的时候,先找的是最左的key,然后通过红子节点查找了中间<code>key</code>。)</p>
+<h2 id="平衡化"><a href="#平衡化" class="headerlink" title="平衡化"></a>平衡化</h2><p>为了维持上文中的规则，也为了红黑树保持平衡,保障性能,需要进行一些平衡操作。</p>
+<h2 id="旋转"><a href="#旋转" class="headerlink" title="旋转"></a>旋转</h2><p>左旋: 输入父节点;<br>右旋: 输入父节点.</p>
+<h3 id="左旋"><a href="#左旋" class="headerlink" title="左旋"></a>左旋</h3><img src="/images/2018-04/3.jpg" class="" width="400" height="600" title="red3">
+<img src="/images/2018-04/4.jpg" class="" width="400" height="600" title="red4">
+<img src="/images/2018-04/5.gif" class="" width="400" height="600" title="red5">
+<p>左旋实现:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//左旋转</span></span><br><span class="line"><span class="function"><span class="keyword">private</span> Node <span class="title">RotateLeft</span><span class="params">(Node h)</span><span class="comment">// 输入父节点</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    Node x = h.Right;</span><br><span class="line">    <span class="comment">//将x的左节点复制给h右节点</span></span><br><span class="line">    h.Right = x.Left;</span><br><span class="line">    <span class="comment">//将h复制给x右节点</span></span><br><span class="line">    x.Left = h;</span><br><span class="line">    x.Color = h.Color;</span><br><span class="line">    h.Color = RED;</span><br><span class="line">    <span class="keyword">return</span> x;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>注意: 子节点继承父节点的颜色.<br>父节点变为红色。</p>
+<h3 id="右旋"><a href="#右旋" class="headerlink" title="右旋"></a>右旋</h3><img src="/images/2018-04/6.jpg" class="" width="400" height="600" title="red6">
+<img src="/images/2018-04/7.jpg" class="" width="400" height="600" title="red7">
+<img src="/images/2018-04/8.gif" class="" width="400" height="600" title="red8">
+<p>右旋实现:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//右旋转</span></span><br><span class="line"><span class="function"><span class="keyword">private</span> Node <span class="title">RotateRight</span><span class="params">(Node h)</span><span class="comment">// 输入父节点</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    Node x = h.Left;</span><br><span class="line">    h.Left = x.Right;</span><br><span class="line">    x.Right = h;</span><br><span class="line"></span><br><span class="line">    x.Color = h.Color;</span><br><span class="line">    h.Color = RED;</span><br><span class="line">    <span class="keyword">return</span> x;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>注意: 子节点继承父节点的颜色.<br>父节点变为红色。</p>
+<h2 id="颜色反转"><a href="#颜色反转" class="headerlink" title="颜色反转"></a>颜色反转</h2><p>如果违反规则2，也就是两个子节点都是红色节点,也需要调整/平衡化.如下图所示的话,其实就是把父节点变成红色，两个子节点变成黑色. 很简单。</p>
+<img src="/images/2018-04/9.jpg" class="" width="400" height="600" title="red9">
+<img src="/images/2018-04/10.jpg" class="" width="400" height="600" title="red10">
+
+
+<h2 id="插入-1"><a href="#插入-1" class="headerlink" title="插入"></a>插入</h2><h3 id="往2-node底部插入"><a href="#往2-node底部插入" class="headerlink" title="往2-node底部插入"></a>往2-node底部插入</h3><p>规则:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">新插入的节点标记为红色.</span><br></pre></td></tr></table></figure>
+<img src="/images/2018-04/11.jpg" class="" width="400" height="600" title="red11">
+<p>左图不需要额外操作;<br>右图需要一次左旋.</p>
+<h3 id="往3-node底部插入"><a href="#往3-node底部插入" class="headerlink" title="往3-node底部插入"></a>往3-node底部插入</h3><ol>
+<li>往只有两个节点的树中插入: （注意形状一定是左偏的）<br>规则:<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">新插入的节点标记为红色.</span><br></pre></td></tr></table></figure>
+<img src="/images/2018-04/12.jpg" class="" width="400" height="600" title="red12">
+左图需要1次颜色反转;<br>中图需要1次右旋,1次颜色反转;<br>右图需要1次左旋,1次右旋,1次颜色反转.</li>
+</ol>
+<p>简单总结一下平衡化的技巧如下:(按顺序检查,每次调整后回到1从头重复检查)</p>
+<ol>
+<li>如果左右都是红,用颜色反转;</li>
+<li>如果右子是红,左旋;</li>
+<li>如果连续两个左子是红,(父子都是红节点),右旋,然后颜色反转.</li>
+</ol>
+<p>更多案例:</p>
+<img src="/images/2018-04/13.jpg" class="" width="400" height="600" title="red13">
+<img src="/images/2018-04/14.jpg" class="" width="400" height="600" title="red14">
+<p>注意图14中到红色传递到根节点M后,由于根节点没有父节点,它的红黑属性不再重要,为了维持不打破上述的规则,定义根节点始终为黑. 如果通过颜色反转或者其他平衡化操作,把根节点变红以后,可以视作根节点还是黑.(强制根节点黑)</p>
+<h2 id="Put实现代码"><a href="#Put实现代码" class="headerlink" title="Put实现代码"></a>Put实现代码</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> override <span class="keyword">void</span> <span class="title">Put</span><span class="params">(TKey key, TValue value)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    root = Put(root, key, value);</span><br><span class="line">    root.Color = BLACK; <span class="comment">// 强制根节点黑</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">private</span> Node <span class="title">Put</span><span class="params">(Node h, TKey key, TValue value)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (h == <span class="keyword">null</span>) <span class="keyword">return</span> <span class="keyword">new</span> Node(key, value, <span class="number">1</span>, RED);</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 1. 进行二叉树插入: </span></span><br><span class="line">    <span class="keyword">int</span> cmp = key.CompareTo(h.Key);</span><br><span class="line">    <span class="keyword">if</span> (cmp &lt; <span class="number">0</span>) h.Left = Put(h.Left, key, value);</span><br><span class="line">    <span class="keyword">else</span> <span class="keyword">if</span> (cmp &gt; <span class="number">0</span>) h.Right = Put(h.Right, key, value);</span><br><span class="line">    <span class="keyword">else</span> h.Value = value;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 2. 进行平衡化:</span></span><br><span class="line">    <span class="keyword">if</span> (IsRed(h.Right) &amp;&amp; !IsRed(h.Left)) h = RotateLeft(h); <span class="comment">// 右边红节点</span></span><br><span class="line">    <span class="keyword">if</span> (IsRed(h.left) &amp;&amp; IsRed(h.Left.Left)) h = RotateRight(h); <span class="comment">// 我个人理解的写法,连续红节点</span></span><br><span class="line">    <span class="comment">// if (IsRed(h.Right) &amp;&amp; IsRed(h.Left.Left)) h = RotateRight(h); //  原文写法,我感觉不对	</span></span><br><span class="line">    <span class="keyword">if</span> (IsRed(h.Left) &amp;&amp; IsRed(h.Right)) h = FlipColor(h);<span class="comment">// 颜色反转</span></span><br><span class="line"></span><br><span class="line">    h.Number = Size(h.Left) + Size(h.Right) + <span class="number">1</span>; <span class="comment">// 更新子树size信息</span></span><br><span class="line">    <span class="keyword">return</span> h;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">int</span> <span class="title">Size</span><span class="params">(Node node)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (node == <span class="keyword">null</span>) <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">return</span> node.Number;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>注意到插入操作是自顶向下(<code>dfs</code>递归调用)进行的,由于<code>dfs</code>深度优先,可以先从子节点检查平衡/调整.因此不平衡从子节点传递到父节点,可以逐步调整传递到根节点,平衡操作也贯穿这个层层返回的过程,从平衡树的底层一直进行到根节点为止.</p>
+<h2 id="性能-1"><a href="#性能-1" class="headerlink" title="性能"></a>性能</h2><p>满足上述规则后, 红黑树能保障所有操作最坏复杂度为O(logN)。</p>
+<ul>
+<li>最坏情况:<br>除了最左侧路径,其他全部是<code>3-node</code>组成. 红黑相间的路径长度是全黑路径的两倍.</li>
+</ul>
+<p>特性:<br>红黑树从根节点到叶子节点的路径中,全黑路径是平衡的.</p>
+<h2 id="应用"><a href="#应用" class="headerlink" title="应用"></a>应用</h2><p>主要是各种map/符号表:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Java: TreeMap,TreeSet,HashMap,ConcurrentHashMap</span><br><span class="line">C++: STL: map,multimap,multiset</span><br><span class="line">.Net: SortedDictionary,SortedSet</span><br><span class="line">Linux: epoll,防火墙规则表</span><br></pre></td></tr></table></figure>
+
+<h2 id="核心规则"><a href="#核心规则" class="headerlink" title="核心规则"></a>核心规则</h2><ol>
+<li>不能两个左右子节点都是红节点; (颜色反转)</li>
+<li>父子节点不能都是红节点;(右旋)</li>
+<li>右节点不能是红节点;(左旋)</li>
+<li>新插入的节点是红节点;(新红)</li>
+<li>根节点强制是黑节点.(根黑)</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/04/22/2018-04/2-3%E6%A0%91%E4%B8%8E%E7%BA%A2%E9%BB%91%E6%A0%91/" data-id="ck96cch2d00brbham387nhv0s" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/2-3%E6%A0%91/" rel="tag">2-3树</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/" rel="tag">数据结构与算法</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E7%BA%A2%E9%BB%91%E6%A0%91/" rel="tag">红黑树</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2018/05/19/2018-05/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC%E5%85%AD%E7%AB%A02LinkedQueue/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          java并发编程的艺术-第六章2LinkedQueue
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2018/04/08/2018-04/resolv-conf%E7%AC%94%E8%AE%B0/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">resolv.conf笔记</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#2-3树与红黑树"><span class="toc-number">1.</span> <span class="toc-text">2-3树与红黑树</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#背景"><span class="toc-number">2.</span> <span class="toc-text">背景</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#2-3树"><span class="toc-number">3.</span> <span class="toc-text">2-3树</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#定义"><span class="toc-number">3.1.</span> <span class="toc-text">定义</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#平衡性"><span class="toc-number">3.2.</span> <span class="toc-text">平衡性:</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#查找"><span class="toc-number">3.3.</span> <span class="toc-text">查找</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#插入"><span class="toc-number">3.4.</span> <span class="toc-text">插入</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#往2-node节点插入"><span class="toc-number">3.4.1.</span> <span class="toc-text">往2-node节点插入</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#往3-node节点插入"><span class="toc-number">3.4.2.</span> <span class="toc-text">往3-node节点插入</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#性能"><span class="toc-number">3.5.</span> <span class="toc-text">性能</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#红黑树"><span class="toc-number">4.</span> <span class="toc-text">红黑树</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#查找-1"><span class="toc-number">4.1.</span> <span class="toc-text">查找</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#平衡化"><span class="toc-number">4.2.</span> <span class="toc-text">平衡化</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#旋转"><span class="toc-number">4.3.</span> <span class="toc-text">旋转</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#左旋"><span class="toc-number">4.3.1.</span> <span class="toc-text">左旋</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#右旋"><span class="toc-number">4.3.2.</span> <span class="toc-text">右旋</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#颜色反转"><span class="toc-number">4.4.</span> <span class="toc-text">颜色反转</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#插入-1"><span class="toc-number">4.5.</span> <span class="toc-text">插入</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#往2-node底部插入"><span class="toc-number">4.5.1.</span> <span class="toc-text">往2-node底部插入</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#往3-node底部插入"><span class="toc-number">4.5.2.</span> <span class="toc-text">往3-node底部插入</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Put实现代码"><span class="toc-number">4.6.</span> <span class="toc-text">Put实现代码</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#性能-1"><span class="toc-number">4.7.</span> <span class="toc-text">性能</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#应用"><span class="toc-number">4.8.</span> <span class="toc-text">应用</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#核心规则"><span class="toc-number">4.9.</span> <span class="toc-text">核心规则</span></a></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>java并发编程的艺术笔记-第二章 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="第二章 java并发机制的底层实现原理 java代码执行流程   java代码编译成class文件(字节码); class被类加载器加载到JVM中; JVM执行class,生成汇编码; 汇编码(转化成机器码&#x2F;cpu指令)在cpu上执行.  因此java并发机制的底层实现依赖于两个层面:  class&#x3D;&gt;汇编码过程中增加的指令; 并发相关cpu指令的具体执行过程.   2.1 volatile">
+<meta property="og:type" content="article">
+<meta property="og:title" content="java并发编程的艺术笔记-第二章">
+<meta property="og:url" content="http://xiaoyue26.github.io/2018/01/13/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF%E7%AC%94%E8%AE%B0-%E7%AC%AC%E4%BA%8C%E7%AB%A0/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="第二章 java并发机制的底层实现原理 java代码执行流程   java代码编译成class文件(字节码); class被类加载器加载到JVM中; JVM执行class,生成汇编码; 汇编码(转化成机器码&#x2F;cpu指令)在cpu上执行.  因此java并发机制的底层实现依赖于两个层面:  class&#x3D;&gt;汇编码过程中增加的指令; 并发相关cpu指令的具体执行过程.   2.1 volatile">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2018-01-13T13:29:19.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.268Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="java">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2018-01/java并发编程的艺术笔记-第二章" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/01/13/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF%E7%AC%94%E8%AE%B0-%E7%AC%AC%E4%BA%8C%E7%AB%A0/" class="article-date">
+  <time datetime="2018-01-13T13:29:19.000Z" itemprop="datePublished">2018-01-13</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      java并发编程的艺术笔记-第二章
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="第二章-java并发机制的底层实现原理"><a href="#第二章-java并发机制的底层实现原理" class="headerlink" title="第二章 java并发机制的底层实现原理"></a>第二章 java并发机制的底层实现原理</h1><ul>
+<li>java代码执行流程</li>
+</ul>
+<ol>
+<li>java代码编译成class文件(字节码);</li>
+<li>class被类加载器加载到JVM中;</li>
+<li>JVM执行class,生成汇编码;</li>
+<li>汇编码(转化成机器码/cpu指令)在cpu上执行.</li>
+</ol>
+<p>因此java并发机制的底层实现依赖于两个层面:</p>
+<ol>
+<li>class=&gt;汇编码过程中增加的指令;</li>
+<li>并发相关cpu指令的具体执行过程. </li>
+</ol>
+<h2 id="2-1-volatile"><a href="#2-1-volatile" class="headerlink" title="2.1 volatile"></a>2.1 volatile</h2><ul>
+<li><p>定义<br>可见性. 对于volatile变量,所有线程看到的值是一致的.<br>换句话说,某个线程对于volatile的修改能立即生效.</p>
+</li>
+<li><p>实现</p>
+</li>
+</ul>
+<ol>
+<li>class=&gt;指令: 增加Lock指令</li>
+<li>Lock指令具体执行:<br>(1) 将当前cpu包含该值的缓存行写回内存;<br>(2) 在总线上通知其他cpu这个地址已发生更改,需要刷新缓存.<br>(缓存一致性协议)</li>
+</ol>
+<ul>
+<li>相关优化<br>由于上述实现中的2(1)为:”将当前cpu包含该值的缓存行写回内存”,<br>换句话说,如果这个值跨行了,就会影响两行的数据,也就会导致两行的缓存失效,<br>其他cpu刷新缓存的数据量变成两倍.<br>因此尽量要把数据对齐到一行. (比如32位,64位)</li>
+</ul>
+<h2 id="2-2-synchronized"><a href="#2-2-synchronized" class="headerlink" title="2.2 synchronized"></a>2.2 synchronized</h2><p>内置锁,锁某个对象.(可以是当前实例对象或当前类对象)</p>
+<ul>
+<li>实现</li>
+</ul>
+<ol>
+<li><p>class=&gt;指令:<br>增加:<br>进入同步块: monitorenter<br>离开同步块: monitorexit (正常离开或者异常)</p>
+</li>
+<li><p>cpu对这俩指令的执行书里没有细讲,只说了对象头里相关数据是怎么存的.</p>
+</li>
+</ol>
+<h3 id="2-2-1-对象头中锁相关数据"><a href="#2-2-1-对象头中锁相关数据" class="headerlink" title="2.2.1 对象头中锁相关数据"></a>2.2.1 对象头中锁相关数据</h3><ul>
+<li>对象头内容</li>
+</ul>
+<ol>
+<li>Mark Word: hashCode/分代年龄/锁信息. </li>
+<li>类元数据地址;</li>
+<li>数组长度. // 如果是数组</li>
+</ol>
+<ul>
+<li>不同锁标志的信息</li>
+</ul>
+<ol>
+<li>轻量级锁: 指向栈中锁记录的指针;   // 锁标志00</li>
+<li>重量级锁: 指向互斥量的指针    ;   // 锁标志10</li>
+<li>GC标记  : 空;                     // 锁标志11</li>
+<li>偏向锁  : 线程ID,epoch,分代年龄,1; // 锁标志01</li>
+</ol>
+<p>锁的4种状态: (锁只能升级,不能降级)</p>
+<ol>
+<li>无锁;</li>
+<li>偏向锁: 一个线程使用该对象;</li>
+<li>轻量级锁: 多个线程交替使用该对象;</li>
+<li>重量级锁: 多个线程同时竞争该对象. </li>
+</ol>
+<p><strong>偏向锁</strong><br>HotSpot作者:<br>大多数情况下不存在多个线程竞争一个对象,这个时候可以优化让线程获得锁的代价更低.</p>
+<ul>
+<li>获取偏向锁流程</li>
+</ul>
+<ol>
+<li>检查对象头里线程ID是不是自己或者是否无锁状态;</li>
+<li>复制对象头中Mark Word到栈中;</li>
+<li>在副本上写线程ID为自己ID;</li>
+<li>CAS,用副本替换Mark Word,获得偏向锁. </li>
+</ol>
+<p>如果成功的话,下次进入同步块的时候,只要第1步能成功,就不再需要CAS操作了.<br>换句话说,这种场景下, 同一个线程可以重入同一个对象的锁,只有第一次需要CAS操作(代价比较大的操作).</p>
+<ul>
+<li>偏向锁的撤销(也就是对象头中存储的线程ID改掉)</li>
+</ul>
+<ol>
+<li>别的线程也申请这个锁;</li>
+<li>之前拥有锁的线程不存活=&gt; 对象头设置成无锁;</li>
+<li>之前拥有锁的线程存活 =&gt; 锁升级.</li>
+</ol>
+<p><strong>轻量级锁</strong></p>
+<ul>
+<li>获取轻量级锁流程</li>
+</ul>
+<ol>
+<li>检查</li>
+<li>复制对象头中Mark word到栈中;</li>
+<li>副本中写指向自己锁记录的指针;</li>
+<li>CAS,用副本替换Mark word,获得偏向锁. </li>
+</ol>
+<p>如果第4步失败,尝试先不阻塞,使用自旋获取锁.(有可能已经拥有这个锁,试试看)<br>如果又失败,膨胀(升级)为重量级锁.</p>
+<ul>
+<li>轻量级锁的解锁</li>
+</ul>
+<ol>
+<li>CAS还原复制的对象头.</li>
+</ol>
+<p>如果成功,就解锁;<br>如果失败,说明除了自己还有别人也改过对象头.膨胀为重量级锁.</p>
+<p>对比:</p>
+<ol>
+<li>偏向锁: 打个自己的标记;</li>
+<li>轻量级锁: 不阻塞,自旋重试;</li>
+<li>重量级锁: 阻塞,等待唤醒.</li>
+</ol>
+<h2 id="2-3-原子操作实现原理"><a href="#2-3-原子操作实现原理" class="headerlink" title="2.3 原子操作实现原理"></a>2.3 原子操作实现原理</h2><ol>
+<li>总线锁: 某个cpu用Lock指令锁总线,独占内存; // 开销大</li>
+<li>缓存锁: 某个cpu修改内存地址,使其他cpu缓存无效.//开销小</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/01/13/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF%E7%AC%94%E8%AE%B0-%E7%AC%AC%E4%BA%8C%E7%AB%A0/" data-id="ck96cch2100a9bham8p0effos" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2018/01/13/2018-01/Netty-in-action%E7%AC%94%E8%AE%B0-%E7%AC%AC1-2%E7%AB%A0/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          Netty in action笔记-第1-2章
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2018/01/13/2018-01/%E8%B0%B7%E6%AD%8C%E7%9A%84%E4%B8%80%E8%87%B4%E6%80%A7%E5%93%88%E5%B8%8C%E7%AE%97%E6%B3%95/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">谷歌的一致性哈希算法</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#第二章-java并发机制的底层实现原理"><span class="toc-number">1.</span> <span class="toc-text">第二章 java并发机制的底层实现原理</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#2-1-volatile"><span class="toc-number">1.1.</span> <span class="toc-text">2.1 volatile</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-2-synchronized"><span class="toc-number">1.2.</span> <span class="toc-text">2.2 synchronized</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#2-2-1-对象头中锁相关数据"><span class="toc-number">1.2.1.</span> <span class="toc-text">2.2.1 对象头中锁相关数据</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-3-原子操作实现原理"><span class="toc-number">1.3.</span> <span class="toc-text">2.3 原子操作实现原理</span></a></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

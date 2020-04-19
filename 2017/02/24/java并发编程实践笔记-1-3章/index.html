@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>java并发编程实践笔记-1-3章 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="避免多线程错误三个方法:(1)不共享变量(ThreadLocal);&#x2F;&#x2F;空间换时间(2)共享变量设定为不可变(Immutable);&#x2F;&#x2F;空间换时间(3)使用同步(Synchronized).&#x2F;&#x2F;时间换空间  tips:   java8stream在parallel中,不能操作非线程安全的类。  Synchronized 内置锁.非静态方法synchronized: 对当前对象加锁;  静态方法s">
+<meta property="og:type" content="article">
+<meta property="og:title" content="java并发编程实践笔记-1-3章">
+<meta property="og:url" content="http://xiaoyue26.github.io/2017/02/24/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E8%B7%B5%E7%AC%94%E8%AE%B0-1-3%E7%AB%A0/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="避免多线程错误三个方法:(1)不共享变量(ThreadLocal);&#x2F;&#x2F;空间换时间(2)共享变量设定为不可变(Immutable);&#x2F;&#x2F;空间换时间(3)使用同步(Synchronized).&#x2F;&#x2F;时间换空间  tips:   java8stream在parallel中,不能操作非线程安全的类。  Synchronized 内置锁.非静态方法synchronized: 对当前对象加锁;  静态方法s">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2017-02-24T11:42:54.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.294Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="java">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-java并发编程实践笔记-1-3章" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2017/02/24/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E8%B7%B5%E7%AC%94%E8%AE%B0-1-3%E7%AB%A0/" class="article-date">
+  <time datetime="2017-02-24T11:42:54.000Z" itemprop="datePublished">2017-02-24</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      java并发编程实践笔记-1-3章
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <blockquote>
+<p>避免多线程错误三个方法:<br>(1)不共享变量(ThreadLocal);//空间换时间<br>(2)共享变量设定为不可变(Immutable);//空间换时间<br>(3)使用同步(Synchronized).//时间换空间</p>
+</blockquote>
+<p>tips: </p>
+<blockquote>
+<p>java8stream在parallel中,不能操作非线程安全的类。</p>
+</blockquote>
+<h1 id="Synchronized"><a href="#Synchronized" class="headerlink" title="Synchronized"></a>Synchronized</h1><blockquote>
+<p>内置锁.<br>非静态方法synchronized: 对当前对象加锁;<br>  静态方法synchronized: 对Class对象加锁.</p>
+</blockquote>
+<p>同步块:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">synchronized</span>(<span class="keyword">this</span>)&#123;</span><br><span class="line"><span class="comment">//do something</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>因为锁是加在某个对象上,所以叫做内置锁.线程在进入同步块的时候获得锁,出来的时候释放锁.</p>
+<blockquote>
+<p>释放锁的情况:</p>
+</blockquote>
+<ol>
+<li>正常退出</li>
+<li>异常退出.</li>
+</ol>
+<ul>
+<li><p>优点:<br>同步块中的代码能作为一个原子操作.</p>
+</li>
+<li><p>缺点:<br>只有一个线程能获得锁.性能较低.</p>
+</li>
+</ul>
+<h2 id="可重入"><a href="#可重入" class="headerlink" title="可重入"></a>可重入</h2><blockquote>
+<p>重入: 当某个线程试图获取它自己已经持有的锁.<br><code>Synchronized</code>内置锁是可重入的,意味着线程可以多次获取自己持有的内置锁,都可以获得成功.</p>
+</blockquote>
+<h3 id="实现"><a href="#实现" class="headerlink" title="实现:"></a>实现:</h3><p>锁在对象里,锁中记录持有者的线程和获取计数器.<br>计数器为0时,锁被认为不被任何线程所持有;<br>当线程请求一个计数器为0的锁时,锁中记录下锁的持有者,并且将计数器置为1.如果再一次进入同步块,计数器+1,退出一次同步块计数器-1,当计数器为0,锁被释放.</p>
+<h1 id="可见性"><a href="#可见性" class="headerlink" title="可见性"></a>可见性</h1><blockquote>
+<p>不加任何同步控制的变量,由于指令重排,多线程等因素,可见性无法保证,读线程可能读到的不是最新的值(读到失效数据).这种级别是最低安全性.</p>
+</blockquote>
+<blockquote>
+<p>对于大部分基本类型来说,最低安全性是可以容忍的.但对于double,long来说,由于被更新的可能是数据的一半,除非使用volatile关键字等机制,否则读出来的可能不仅是失效数据,而是一个混合了失效数据\最新数据的近乎随机的值,可能带来毁灭性的后果. </p>
+</blockquote>
+<h1 id="volatile"><a href="#volatile" class="headerlink" title="volatile"></a>volatile</h1><p>作用: 保持可见性<br>缺点: 不保证操作的原子性. (需要原子性,应该使用锁或原子类)<br>使用场景:</p>
+<ol>
+<li>boolean值,状态变量;</li>
+<li>只有一个线程写,其他线程读.<br>或 写的时候不依赖原先的值(不是自增这种). </li>
+</ol>
+<h2 id="编译优化与变量"><a href="#编译优化与变量" class="headerlink" title="编译优化与变量"></a>编译优化与变量</h2><blockquote>
+<p>jvm在server模式下对循环内没有改变的变量进行优化,将其提出循环.<br>;在client模式下则不会有这种优化.</p>
+</blockquote>
+<p>示例代码:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">boolean</span> otherDone;<span class="comment">//此处应该volatile</span></span><br><span class="line"><span class="keyword">while</span>(!otherDone)&#123;</span><br><span class="line"><span class="comment">//sleep</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>上述代码如果不加volatile,则在server模式下可能会死锁,因为!otherDone的判断可能会被优化到循环外面.导致无限循环.</p>
+<h1 id="线程封闭"><a href="#线程封闭" class="headerlink" title="线程封闭"></a>线程封闭</h1><p>不在线程间共享变量,因此可以达到线程安全.<br>例如使用ThreadLocal. </p>
+<h2 id="栈封闭"><a href="#栈封闭" class="headerlink" title="栈封闭"></a>栈封闭</h2><p>线程封闭的特例.<br>由于每个线程有自己的栈,而局部变量在栈上,因此只使用局部变量的话,就是栈封闭.(达到线程安全)<br>由于基本类型无法获取引用,因此基本类型无法逸出,是安全的;<br>而对象引用可能逸出,因此需要编程人员自行保证不会逸出.<br>(不把引用乱传递)</p>
+<h1 id="发布与逸出"><a href="#发布与逸出" class="headerlink" title="发布与逸出"></a>发布与逸出</h1><ol>
+<li>线程安全的叫发布;</li>
+<li>不安全的叫逸出.</li>
+</ol>
+<p>安全发布的两种途径:</p>
+<blockquote>
+<ol>
+<li>发布的对象是不可变的;</li>
+<li>发布的时候使用同步方法. </li>
+</ol>
+</blockquote>
+<h2 id="途径1"><a href="#途径1" class="headerlink" title="途径1"></a>途径1</h2><p>其中,不可变的方法:</p>
+<blockquote>
+<p>private final,且返回clone或Arrays.copy的值.</p>
+</blockquote>
+<h2 id="途径2"><a href="#途径2" class="headerlink" title="途径2"></a>途径2</h2><p>把不可变对象安全发布的方法:</p>
+<blockquote>
+<ol>
+<li>静态初始化函数中初始化一个对象引用;</li>
+<li>把对象引用存放到volatile或AtomicReference;</li>
+<li>把对象引用存放到正确构造对象的final类型域;</li>
+<li>把对象引用存放到一个由锁保护的域中.(如放入同步容器中,包括HashTable,Vector,sychronizedMap,synchronizedMap,concurrentMap,CopyOnWriteArrayList,BlockingQueue,ConcurrentLinkedQueue).</li>
+</ol>
+</blockquote>
+<ul>
+<li>方法1: 静态初始化函数<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> Holder holder=<span class="keyword">new</span> Holder(<span class="number">42</span>);</span><br></pre></td></tr></table></figure>
+
+</li>
+</ul>
+<p>对于不可变对象,安全发布后就可以用了;<br>对于可变对象,安全发布以后还需要安全得使用,也就是使用的时候也需要同步.</p>
+<ul>
+<li>总结:<blockquote>
+<p>不可变对象: 任意发布<br>事实不可变: 安全发布<br>可变: 安全发布且安全使用.</p>
+</blockquote>
+</li>
+</ul>
+<h1 id="建议"><a href="#建议" class="headerlink" title="建议"></a>建议</h1><ol>
+<li>尽量使用final,private.<br>其中final能保证初始化值过程中的安全性.</li>
+</ol>
+<h1 id="疑问"><a href="#疑问" class="headerlink" title="疑问"></a>疑问</h1><ol>
+<li>immutable和threadLocal选哪个?</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2017/02/24/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E8%B7%B5%E7%AC%94%E8%AE%B0-1-3%E7%AB%A0/" data-id="ck96ccgzj002pbhame7ck9doy" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2017/02/25/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-4-5%E7%AB%A0/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          java并发编程实战笔记-4-5章
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2017/02/12/java%E6%B3%9B%E5%9E%8B/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">java泛型</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Synchronized"><span class="toc-number">1.</span> <span class="toc-text">Synchronized</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#可重入"><span class="toc-number">1.1.</span> <span class="toc-text">可重入</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#实现"><span class="toc-number">1.1.1.</span> <span class="toc-text">实现:</span></a></li></ol></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#可见性"><span class="toc-number">2.</span> <span class="toc-text">可见性</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#volatile"><span class="toc-number">3.</span> <span class="toc-text">volatile</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#编译优化与变量"><span class="toc-number">3.1.</span> <span class="toc-text">编译优化与变量</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#线程封闭"><span class="toc-number">4.</span> <span class="toc-text">线程封闭</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#栈封闭"><span class="toc-number">4.1.</span> <span class="toc-text">栈封闭</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#发布与逸出"><span class="toc-number">5.</span> <span class="toc-text">发布与逸出</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#途径1"><span class="toc-number">5.1.</span> <span class="toc-text">途径1</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#途径2"><span class="toc-number">5.2.</span> <span class="toc-text">途径2</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#建议"><span class="toc-number">6.</span> <span class="toc-text">建议</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#疑问"><span class="toc-number">7.</span> <span class="toc-text">疑问</span></a></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

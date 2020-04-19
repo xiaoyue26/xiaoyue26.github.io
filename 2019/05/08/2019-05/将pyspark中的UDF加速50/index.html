@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>将pyspark中的UDF加速50% | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="摘要 调用jar中的UDF，减少python与JVM的交互，简单banchmark下对于50G数据集纯map处理可以减少一半处理时间。牺牲UDF部分的开发时间，尽量提高性能。以接近纯python的开发成本，获得逼近纯scala的性能。兼顾性能和开发效率。  背景  当遇到sql无法直接处理的数据时(比如加密解密、thrift解析操作二进制)，我们需要自定义函数(UDF)来进行处理。出于开发效率的考">
+<meta property="og:type" content="article">
+<meta property="og:title" content="将pyspark中的UDF加速50%">
+<meta property="og:url" content="http://xiaoyue26.github.io/2019/05/08/2019-05/%E5%B0%86pyspark%E4%B8%AD%E7%9A%84UDF%E5%8A%A0%E9%80%9F50/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="摘要 调用jar中的UDF，减少python与JVM的交互，简单banchmark下对于50G数据集纯map处理可以减少一半处理时间。牺牲UDF部分的开发时间，尽量提高性能。以接近纯python的开发成本，获得逼近纯scala的性能。兼顾性能和开发效率。  背景  当遇到sql无法直接处理的数据时(比如加密解密、thrift解析操作二进制)，我们需要自定义函数(UDF)来进行处理。出于开发效率的考">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-05/pyspark_call.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-05/py_udf.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2019-05/py_jar.png">
+<meta property="article:published_time" content="2019-05-08T14:39:03.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.285Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="spark">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://xiaoyue26.github.io/images/2019-05/pyspark_call.png">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2019-05/将pyspark中的UDF加速50" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/05/08/2019-05/%E5%B0%86pyspark%E4%B8%AD%E7%9A%84UDF%E5%8A%A0%E9%80%9F50/" class="article-date">
+  <time datetime="2019-05-08T14:39:03.000Z" itemprop="datePublished">2019-05-08</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/spark/">spark</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      将pyspark中的UDF加速50%
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="摘要"><a href="#摘要" class="headerlink" title="摘要"></a>摘要</h1><blockquote>
+<p>调用jar中的UDF，减少python与JVM的交互，简单banchmark下对于50G数据集纯map处理可以减少一半处理时间。<br>牺牲UDF部分的开发时间，尽量提高性能。<br>以接近纯python的开发成本，获得逼近纯scala的性能。兼顾性能和开发效率。</p>
+</blockquote>
+<h1 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h1><p>  当遇到sql无法直接处理的数据时(比如加密解密、thrift解析操作二进制)，我们需要自定义函数(UDF)来进行处理。出于开发效率的考虑，我们一般会选择tesla平台，使用pyspark脚本。</p>
+<h1 id="Before-最简单的UDF"><a href="#Before-最简单的UDF" class="headerlink" title="Before: 最简单的UDF"></a>Before: 最简单的UDF</h1><p>一个最简单的UDF处理大致如下:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">str2idfa</span><span class="params">(txt)</span>:</span></span><br><span class="line">    <span class="keyword">try</span>:</span><br><span class="line">        txtDecoded = base64.b64decode(txt)</span><br><span class="line">        bytesWithSalt = bytes(txtDecoded)</span><br><span class="line">        <span class="comment"># 省略实际处理代码</span></span><br><span class="line">        <span class="keyword">return</span> <span class="string">'dump_data'</span></span><br><span class="line">    <span class="keyword">except</span>:</span><br><span class="line">        print(<span class="string">'error here'</span>)</span><br><span class="line">        <span class="keyword">return</span> <span class="string">'-1#-1'</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">'__main__'</span>:</span><br><span class="line">    spark = SparkSession.builder.appName(app_name).getOrCreate()</span><br><span class="line">    in_provider = TDWSQLProvider(spark, user=user, passwd=passwd, db=db_name)</span><br><span class="line"></span><br><span class="line">    in_df = in_provider.table(<span class="string">'t_dw_dc0xxxx'</span>, [<span class="string">'p_2019042100'</span>])  <span class="comment"># 分区数组</span></span><br><span class="line">    print(in_df.columns)</span><br><span class="line">    in_df.createOrReplaceTempView(<span class="string">"t1"</span>)</span><br><span class="line">    <span class="comment"># 1. 注册udf:</span></span><br><span class="line">    spark.udf.register(<span class="string">"str2idfa"</span>, str2idfa, StringType())</span><br><span class="line">    <span class="comment"># 2. 在sql中使用:</span></span><br><span class="line">    out_t1 = spark.sql(<span class="string">'''select uin</span></span><br><span class="line"><span class="string">        ,str2idfa(value) as idfa_idfv</span></span><br><span class="line"><span class="string">        from t1</span></span><br><span class="line"><span class="string">        '''</span>)</span><br><span class="line">    print(out_t1.columns)</span><br><span class="line">    print(out_t1.take(<span class="number">10</span>))</span><br></pre></td></tr></table></figure>
+
+<h2 id="底层实现原理"><a href="#底层实现原理" class="headerlink" title="底层实现原理"></a>底层实现原理</h2><img src="/images/2019-05/pyspark_call.png" class="" width="800" height="1200" title="pyspark_call">
+<p>  如上图所示，pyspark并没有像dpark一样用python重新实现一个计算引擎，依旧是复用了scala的jvm计算底层，只是用py4j架设了一条python进程和jvm互相调用的桥梁。<br>  <code>driver</code>:  pyspark脚本和sparkContext的jvm使用py4j相互调用;<br>  <code>executor</code>: 由于driver帮忙把spark算子封装好了，执行计划也生成了字节码，一般情况下不需要python进程参与，仅当需要运行UDF(含lambda表达式形式)时，将它委托给python进程处理(DAG图中的<code>BatchEvalPython</code>步骤)，此时JVM和python进程使用socket通信。</p>
+<p>   上述使用简单UDF时的pyspark由于需要使用UDF，因此DAG图中有<code>BatchEvalPython</code>步骤:<br>   <img src="/images/2019-05/py_udf.png" class="" width="400" height="400" title="py_udf"></p>
+<h2 id="BatchEvalPython过程"><a href="#BatchEvalPython过程" class="headerlink" title="BatchEvalPython过程"></a>BatchEvalPython过程</h2><p>参考源码：<a href="https://github.com/apache/spark/blob/master/sql/core/src/main/scala/org/apache/spark/sql/execution/python/BatchEvalPythonExec.scala" target="_blank" rel="noopener">https://github.com/apache/spark/blob/master/sql/core/src/main/scala/org/apache/spark/sql/execution/python/BatchEvalPythonExec.scala</a><br>可以看到和这个名字一样直白，它就是每次取100条数据让python进程帮忙处理一下:</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 第58行:</span></span><br><span class="line"><span class="comment">// Input iterator to Python: input rows are grouped so we send them in batches to Python.</span></span><br><span class="line">    <span class="comment">// For each row, add it to the queue.</span></span><br><span class="line">    <span class="keyword">val</span> inputIterator = iter.map &#123; row =&gt;</span><br><span class="line">      <span class="keyword">if</span> (needConversion) &#123;</span><br><span class="line">        <span class="type">EvaluatePython</span>.toJava(row, schema)</span><br><span class="line">      &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="comment">// fast path for these types that does not need conversion in Python</span></span><br><span class="line">        <span class="keyword">val</span> fields = <span class="keyword">new</span> <span class="type">Array</span>[<span class="type">Any</span>](row.numFields)</span><br><span class="line">        <span class="keyword">var</span> i = <span class="number">0</span></span><br><span class="line">        <span class="keyword">while</span> (i &lt; row.numFields) &#123;</span><br><span class="line">          <span class="keyword">val</span> dt = dataTypes(i)</span><br><span class="line">          fields(i) = <span class="type">EvaluatePython</span>.toJava(row.get(i, dt), dt)</span><br><span class="line">          i += <span class="number">1</span></span><br><span class="line">        &#125;</span><br><span class="line">        fields</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;.grouped(<span class="number">100</span>).map(x =&gt; pickle.dumps(x.toArray))</span><br></pre></td></tr></table></figure>
+
+
+<p>   由于我们的计算任务一般耗时瓶颈在于executor端的计算而不是driver，因此应该考虑尽量减少executor端调用python代码的次数从而优化性能。</p>
+<p>参考源码：<a href="https://github.com/apache/spark/blob/master/python/pyspark/java_gateway.py" target="_blank" rel="noopener">https://github.com/apache/spark/blob/master/python/pyspark/java_gateway.py</a></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">// 大概<span class="number">135</span>行的地方:</span><br><span class="line"><span class="comment"># Import the classes used by PySpark</span></span><br><span class="line">java_import(gateway.jvm, <span class="string">"org.apache.spark.SparkConf"</span>)</span><br><span class="line">java_import(gateway.jvm, <span class="string">"org.apache.spark.api.java.*"</span>)</span><br><span class="line">java_import(gateway.jvm, <span class="string">"org.apache.spark.api.python.*"</span>)</span><br><span class="line">java_import(gateway.jvm, <span class="string">"org.apache.spark.ml.python.*"</span>)</span><br><span class="line">java_import(gateway.jvm, <span class="string">"org.apache.spark.mllib.api.python.*"</span>)</span><br><span class="line"><span class="comment"># TODO(davies): move into sql</span></span><br><span class="line">java_import(gateway.jvm, <span class="string">"org.apache.spark.sql.*"</span>)</span><br><span class="line">java_import(gateway.jvm, <span class="string">"org.apache.spark.sql.api.python.*"</span>)</span><br><span class="line">java_import(gateway.jvm, <span class="string">"org.apache.spark.sql.hive.*"</span>)</span><br><span class="line">java_import(gateway.jvm, <span class="string">"scala.Tuple2"</span>)</span><br></pre></td></tr></table></figure>
+<p>pyspark可以把很多常见的运算封装到JVM中,但是显然不包括我们的UDF。<br>所以一个很自然的思路就是把我们的UDF也封到JVM中。</p>
+<h1 id="After-调用JAR包中UDF"><a href="#After-调用JAR包中UDF" class="headerlink" title="After: 调用JAR包中UDF"></a>After: 调用JAR包中UDF</h1><p>首先我们需要用scala重写一下UDF:</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">object</span> <span class="title">UdfUtils</span> <span class="keyword">extends</span> <span class="title">java</span>.<span class="title">io</span>.<span class="title">Serializable</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">case</span> <span class="class"><span class="keyword">class</span> <span class="title">Idfa</span>(<span class="params">idfa: <span class="type">String</span>, idfv: <span class="type">String</span></span>) </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">coalesce</span></span>(<span class="type">V</span>: <span class="type">String</span>, defV: <span class="type">String</span>) =</span><br><span class="line">      <span class="keyword">if</span> (<span class="type">V</span> == <span class="literal">null</span>) defV <span class="keyword">else</span> <span class="type">V</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">toString</span></span>: <span class="type">String</span> = coalesce(idfa, <span class="string">"-1"</span>) + <span class="string">"#"</span> + coalesce(idfv, <span class="string">"-1"</span>)</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">str2idfa</span></span>(txt: <span class="type">String</span>): <span class="type">Option</span>[<span class="type">String</span>] = &#123;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">      <span class="keyword">val</span> decodeTxt: <span class="type">Array</span>[<span class="type">Byte</span>] = <span class="type">Base64</span>.getDecoder.decode(txt)</span><br><span class="line">      <span class="comment">// TODO 省略一些处理逻辑</span></span><br><span class="line">      <span class="keyword">val</span> str = <span class="string">"after_some_time"</span></span><br><span class="line">      <span class="keyword">val</span> gson = <span class="keyword">new</span> <span class="type">Gson</span>()</span><br><span class="line">      <span class="keyword">val</span> reader = <span class="keyword">new</span> <span class="type">JsonReader</span>(<span class="keyword">new</span> <span class="type">StringReader</span>(str))</span><br><span class="line">      reader.setLenient(<span class="literal">true</span>)</span><br><span class="line">      <span class="keyword">val</span> idfaType: <span class="type">Type</span> = <span class="keyword">new</span> <span class="type">TypeToken</span>[<span class="type">Idfa</span>]() &#123;&#125;.getType</span><br><span class="line">      <span class="type">Some</span>(gson.fromJson(reader, idfaType).toString)</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">catch</span> &#123;</span><br><span class="line">      <span class="keyword">case</span> e: <span class="type">Throwable</span> =&gt;</span><br><span class="line">        println(txt)</span><br><span class="line">        e.printStackTrace()</span><br><span class="line">        <span class="type">None</span></span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">// 关键是这里把普通函数转成UDF:</span></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">str2idfaUDF</span></span>: <span class="type">UserDefinedFunction</span> = udf(str2idfa _)</span><br></pre></td></tr></table></figure>
+
+<p>然后在pyspark脚本里调用jar包中的UDF:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">#!/usr/bin/env python</span></span><br><span class="line"><span class="comment"># -*- coding: utf-8 -*-</span></span><br><span class="line"><span class="keyword">import</span> sys</span><br><span class="line"><span class="keyword">from</span> pytoolkit <span class="keyword">import</span> TDWSQLProvider, TDWUtil, TDWProvider</span><br><span class="line"><span class="keyword">from</span> pyspark <span class="keyword">import</span> SparkContext, SQLContext</span><br><span class="line"><span class="keyword">from</span> pyspark.sql <span class="keyword">import</span> SparkSession, Row</span><br><span class="line"><span class="keyword">from</span> pyspark.sql.types <span class="keyword">import</span> StructType, LongType, StringType, StructField, IntegerType</span><br><span class="line"><span class="keyword">from</span> pyspark.sql.functions <span class="keyword">import</span> udf, struct, array</span><br><span class="line"><span class="keyword">from</span> pyspark.sql.column <span class="keyword">import</span> Column</span><br><span class="line"><span class="keyword">from</span> pyspark.sql.column <span class="keyword">import</span> _to_java_column</span><br><span class="line"><span class="keyword">from</span> pyspark.sql.column <span class="keyword">import</span> _to_seq</span><br><span class="line"><span class="keyword">from</span> pyspark.sql.functions <span class="keyword">import</span> col</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">str2idfa</span><span class="params">(col)</span>:</span></span><br><span class="line">    _str2idfa = sc._jvm.com.tencent.kandian.utils.UdfUtils.str2idfaUDF()</span><br><span class="line">    <span class="keyword">return</span> Column(_str2idfa.apply(_to_seq(sc, [col], _to_java_column)))</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">spark = SparkSession.builder.appName(app_name).getOrCreate()</span><br><span class="line">sc = spark.sparkContext</span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">'__main__'</span>:</span><br><span class="line">    in_provider = TDWSQLProvider(spark, user=user, passwd=passwd, db=db_name)</span><br><span class="line">    in_df = in_provider.table(<span class="string">'t_dw_dcxxxx'</span>, [<span class="string">'p_2019042100'</span>])  <span class="comment"># 分区数组</span></span><br><span class="line">    print(in_df.columns)</span><br><span class="line">    in_df.createOrReplaceTempView(<span class="string">"t1"</span>)</span><br><span class="line">    out_t1 = in_df.select(col(<span class="string">'uin'</span>)</span><br><span class="line">                          , str2idfa(col(<span class="string">"value"</span>))) <span class="comment"># 直接使用scala的udf,节省43%时间,减少两个transform</span></span><br><span class="line">    print(out_t1.columns)</span><br><span class="line">    print(out_t1.take(<span class="number">10</span>))</span><br></pre></td></tr></table></figure>
+<p>其中<code>_jvm</code>变量是<code>sparkContext</code>中<code>JVMView</code>对象的名字,此外sc中还有<code>_gateway</code>变量以连接JVM中的<code>GatawayServer</code>。<br>提交时，在tesla上的配置<code>spark-conf</code>jar包路径:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">spark.driver.extraClassPath&#x3D;pipe-udf-1.0-SNAPSHOT-jar-with-dependencies.jar</span><br><span class="line">spark.executor.extraClassPath&#x3D;pipe-udf-1.0-SNAPSHOT-jar-with-dependencies.jar</span><br></pre></td></tr></table></figure>
+<p>同时在依赖包文件中上传jar包。</p>
+<p>这样一通操作之后，DAG图变成了这样:</p>
+<img src="/images/2019-05/py_jar.png" class="" width="400" height="400" title="py_jar">
+
+<p>可以看到比之前少了两个transform,没有了<code>BatchEvalPython</code>，也少了一个<code>WholeStageCodeGen</code>。<br>经过简单banchmark，对于50G数据集纯map处理。<br>第一种方案：大约13分钟；<br>第二种方案：大约7分钟。<br>第二种方案大约能节省一半的时间，并且进一步测试使用scala完全重写整个计算，运行时间和第二种方案接近，也大约需要7分钟。</p>
+<h1 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h1><p>   在pyspark中尽量使用spark算子和spark-sql，同时尽量将UDF(含lambda表达式形式)封装到一个地方减少JVM和python脚本的交互。<br>   由于<code>BatchEvalPython</code>过程每次处理100行，也可以把多行聚合成一行减少交互次数。<br>   最后还可以把UDF部分用scala重写打包成jar包，其他部分则保持python脚本以获得不用编译随时修改的灵活性，以兼顾性能和开发效率。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/05/08/2019-05/%E5%B0%86pyspark%E4%B8%AD%E7%9A%84UDF%E5%8A%A0%E9%80%9F50/" data-id="ck96cch4200ipbhamc0wh7z6v" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spark/" rel="tag">spark</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2019/05/11/2019-05/spark%E4%B8%AD%E7%BC%96%E5%86%99UDAF%E7%9A%844%E7%A7%8D%E5%A7%BF%E5%8A%BF/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          spark中编写UDAF的4种姿势
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2019/04/29/2019-04/spark%E4%B8%ADRDD%EF%BC%8CDataframe%EF%BC%8CDataSet%E5%8C%BA%E5%88%AB%E5%AF%B9%E6%AF%94/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">spark中RDD，Dataframe，DataSet区别对比</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#摘要"><span class="toc-number">1.</span> <span class="toc-text">摘要</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#背景"><span class="toc-number">2.</span> <span class="toc-text">背景</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#Before-最简单的UDF"><span class="toc-number">3.</span> <span class="toc-text">Before: 最简单的UDF</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#底层实现原理"><span class="toc-number">3.1.</span> <span class="toc-text">底层实现原理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#BatchEvalPython过程"><span class="toc-number">3.2.</span> <span class="toc-text">BatchEvalPython过程</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#After-调用JAR包中UDF"><span class="toc-number">4.</span> <span class="toc-text">After: 调用JAR包中UDF</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#总结"><span class="toc-number">5.</span> <span class="toc-text">总结</span></a></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

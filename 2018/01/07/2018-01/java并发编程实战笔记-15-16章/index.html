@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>java并发编程实战-15-16章 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="第十五章 原子变量与非阻塞同步机制并发包里的工具(如信号量Semaphore和ConcurrentLinkedQueue)比synchronized性能更好,伸缩性更好.原因是使用了原子变量与非阻塞同步机制. 非阻塞的底层: CAS操作. (compare and swap)没有锁,Lock free,因此更接近完美.因此没有活跃性问题. 15.1 锁的劣势性能不行. 15.2 硬件对并发的支持独">
+<meta property="og:type" content="article">
+<meta property="og:title" content="java并发编程实战-15-16章">
+<meta property="og:url" content="http://xiaoyue26.github.io/2018/01/07/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-15-16%E7%AB%A0/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="第十五章 原子变量与非阻塞同步机制并发包里的工具(如信号量Semaphore和ConcurrentLinkedQueue)比synchronized性能更好,伸缩性更好.原因是使用了原子变量与非阻塞同步机制. 非阻塞的底层: CAS操作. (compare and swap)没有锁,Lock free,因此更接近完美.因此没有活跃性问题. 15.1 锁的劣势性能不行. 15.2 硬件对并发的支持独">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2018-01-07T12:15:33.000Z">
+<meta property="article:modified_time" content="2020-04-18T15:38:11.268Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="java">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2018-01/java并发编程实战笔记-15-16章" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/01/07/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-15-16%E7%AB%A0/" class="article-date">
+  <time datetime="2018-01-07T12:15:33.000Z" itemprop="datePublished">2018-01-07</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      java并发编程实战-15-16章
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="第十五章-原子变量与非阻塞同步机制"><a href="#第十五章-原子变量与非阻塞同步机制" class="headerlink" title="第十五章 原子变量与非阻塞同步机制"></a>第十五章 原子变量与非阻塞同步机制</h1><p>并发包里的工具(如信号量<code>Semaphore</code>和<code>ConcurrentLinkedQueue</code>)<br>比<code>synchronized</code>性能更好,伸缩性更好.<br>原因是使用了<code>原子变量与非阻塞同步机制</code>.</p>
+<p>非阻塞的底层: CAS操作. (compare and swap)<br>没有锁,<code>Lock free</code>,因此更接近完美.<br>因此没有活跃性问题.</p>
+<h2 id="15-1-锁的劣势"><a href="#15-1-锁的劣势" class="headerlink" title="15.1 锁的劣势"></a>15.1 锁的劣势</h2><p>性能不行.</p>
+<h2 id="15-2-硬件对并发的支持"><a href="#15-2-硬件对并发的支持" class="headerlink" title="15.2 硬件对并发的支持"></a>15.2 硬件对并发的支持</h2><p>独占锁: 基于悲观假设,不互斥的话会出事.(悲观锁)<br>乐观方法: 特殊指令: 包括, Test And Set , Fetch and Increment, CAS, 条件存储.</p>
+<h2 id="15-2-CAS-比较并交换"><a href="#15-2-CAS-比较并交换" class="headerlink" title="15.2 CAS 比较并交换"></a>15.2 CAS 比较并交换</h2><p><code>CAS</code>包括三个操作数: 内存位置,旧值,新值.<br>//类似对应java中<code>map</code>的<code>replace</code>操作的三个操作数: key,旧值,新值.</p>
+<p>CAS操作失败的线程不会挂,会获得失败信息.(同步非阻塞)<br>可以反复重试. (类似于<code>poll</code>的轮询)</p>
+<p>CAS的缺点:<br>需要调用者自己处理竞争问题.// 重试,回退,放弃.<br>CAS实现的非阻塞算法通常比用锁写复杂一些.</p>
+<h2 id="15-3-原子变量类"><a href="#15-3-原子变量类" class="headerlink" title="15.3 原子变量类"></a>15.3 原子变量类</h2><p>包括<code>AtomicInteger</code>等等.提供各种原子操作,如CAS,自增等.<br>它和一样保证写后读,但还保证内容是原子更新的.(比如两块内存看似一起更新)</p>
+<ul>
+<li>tip:<blockquote>
+<p>原子变量类不适合作为容器的Key.<br>容器的Key一般要是Immutable对象.(如Integer,String)</p>
+</blockquote>
+</li>
+</ul>
+<h2 id="15-4-具体案例"><a href="#15-4-具体案例" class="headerlink" title="15.4 具体案例"></a>15.4 具体案例</h2><p>这一节用CAS实现了链表,栈,原子的域更新器.<br>需要看着源码学习.</p>
+<h3 id="15-4-4-ABA问题"><a href="#15-4-4-ABA问题" class="headerlink" title="15.4.4 ABA问题"></a>15.4.4 ABA问题</h3><p>CAS(V,A,B)需要判断V位置是否为A,然后替换为B.<br>但如果V位置发生变化: A-&gt;B-&gt;A.<br>这样其实和我们希望的条件已经不同了,本质上是变化了,只不过值没变,版本号变了.<br>实例来说,就是链表节点引用没变,引用的值已经变了.</p>
+<p>解决方案:<br>使用<code>AtomicStampedReference</code>(以及<code>AtomicMarkableReference</code>)支持在两个变量上执行原子的条件更新. </p>
+<ul>
+<li><p><code>AtomicStampedReference</code><br>[对象,引用]二元组,在引用上加上版本号. </p>
+</li>
+<li><p><code>AtomicMarkableReference</code><br>[对象引用,布尔值]二元组,可标记节点为已删除的节点.</p>
+</li>
+</ul>
+<h1 id="第十六章-java内存模型"><a href="#第十六章-java内存模型" class="headerlink" title="第十六章 java内存模型"></a>第十六章 java内存模型</h1><h2 id="16-1-概念"><a href="#16-1-概念" class="headerlink" title="16.1 概念"></a>16.1 概念</h2><p>为了性能,会进行指令重排,预测执行等等.<br>内存模型: <code>JMM</code>.<br>内存模型规定,优化(重排)时应该遵守哪些约束.</p>
+<ul>
+<li>串行一致性:<br>如果约束够用,执行结果就会和串行一样.</li>
+</ul>
+<h2 id="16-1-1-平台的内存模型"><a href="#16-1-1-平台的内存模型" class="headerlink" title="16.1.1 平台的内存模型"></a>16.1.1 平台的内存模型</h2><p>平台给出内存模型,约束自己,向外界保证xx条件下会发生什么.<br>提供接口/指令: 如内存栅栏,提供协调存储的接口.</p>
+<h2 id="16-1-3-JAVA内存模型"><a href="#16-1-3-JAVA内存模型" class="headerlink" title="16.1.3 JAVA内存模型"></a>16.1.3 JAVA内存模型</h2><ol>
+<li>程序顺序: 同一个线程里按源码顺序执行;</li>
+<li>监视器锁: 解锁会在加锁之前;(A线程释放了,B线程才能获得锁)</li>
+<li>volatile: 写后读. (原子变量也是)</li>
+<li>线程启动: Thread.start之后才会有run等其他操作发生.</li>
+<li>中断规则: (1)A线程中断B线程;(2)B检测到中断. 保证(1)在(2)前面. </li>
+<li>终结器:   构造函数在终结器之前执行完成.</li>
+<li>传递性:   上述规则可以传递.</li>
+</ol>
+<p>1是针对单一线程的,2-7都是针对多个线程之间的代码顺序.<br>口诀: 程锁原线中终传. </p>
+<h2 id="16-1-4-借助同步"><a href="#16-1-4-借助同步" class="headerlink" title="16.1.4 借助同步"></a>16.1.4 借助同步</h2><p>也就是借助上述7个已有的约束设计代码,达到同步效果.<br>比如我们平时用的锁,就是利用用了第二条,监视器锁规则.</p>
+<p>类库中提供的约束:</p>
+<ol>
+<li>线程安全容器: 写后读. </li>
+<li><code>CountDownLatch</code>: 倒数操作在await返回之前.</li>
+<li><code>Semaphore</code>: PV操作,V释放在P获得之前. (别人释放了,你才能获得)</li>
+<li><code>Future</code>: get返回之前,任务的代码会执行完.</li>
+<li><code>Executor</code>: 提交任务操作,将在执行任务操作之前.</li>
+<li><code>CyclicBarrier</code>: (1)线程A到达栅栏;(2)其他线程离开栅栏. (1)会在(2)前面.换句话说,大家伙会等线程A到了才离开.<br>… </li>
+</ol>
+<h2 id="16-2-发布"><a href="#16-2-发布" class="headerlink" title="16.2 发布"></a>16.2 发布</h2><p>错误示例:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@NotThreadSafe</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">A</span></span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> Resource resource;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> Resource <span class="title">getInstance</span><span class="params">()</span></span>&#123;</span><br><span class="line">        <span class="keyword">if</span>(resource==<span class="keyword">null</span>)&#123;<span class="comment">// 显然多个线程会在这里冲突.</span></span><br><span class="line">            resource=<span class="keyword">new</span> Resource();</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> resource;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>安全但是慢:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@ThreadSafe</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">B</span></span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> Resource resource;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">synchronized</span> <span class="keyword">static</span> Resource <span class="title">getInstance</span><span class="params">()</span></span>&#123;<span class="comment">// 方法级同步</span></span><br><span class="line">        <span class="keyword">if</span>(resource==<span class="keyword">null</span>)&#123;</span><br><span class="line">            resource=<span class="keyword">new</span> Resource();</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> resource;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>直接静态初始化:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@ThreadSafe</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">C</span></span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> Resource resource=<span class="keyword">new</span> Resource();</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> Resource <span class="title">getInstance</span><span class="params">()</span></span>&#123;</span><br><span class="line">        <span class="keyword">return</span> resource;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>占位符技术: 延迟静态初始化:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@ThreadSafe</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">D</span></span>&#123; </span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">ResourceHolder</span></span>&#123; <span class="comment">// 懒汉,完美. </span></span><br><span class="line">        <span class="keyword">public</span> <span class="keyword">static</span> Resource resource=<span class="keyword">new</span> Resource();</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> Resource <span class="title">getInstance</span><span class="params">()</span></span>&#123;</span><br><span class="line">        <span class="keyword">return</span> ResourceHolder.resource;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>双检(DCL): 不推荐. 慢,繁琐. </p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@ThreadSafe</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">E</span></span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">volatile</span> <span class="keyword">static</span> Resource resource; <span class="comment">// volatile</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> Resource <span class="title">getInstance</span><span class="params">()</span></span>&#123;</span><br><span class="line">        <span class="keyword">if</span>(resource==<span class="keyword">null</span>)&#123;</span><br><span class="line">            <span class="keyword">synchronized</span>(E<span class="class">.<span class="keyword">class</span>)</span>&#123; <span class="comment">// Class对象锁.</span></span><br><span class="line">                <span class="keyword">if</span>(resource==<span class="keyword">null</span>)&#123;</span><br><span class="line">                    resource=<span class="keyword">new</span> Resource();</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> resource;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// 之所以需要volatile,是为了保证resource变量的写操作立即刷新到内存,起码在读之前. (StoreLoad屏障)</span></span><br></pre></td></tr></table></figure>
+
+
+
+<h2 id="初始化安全域"><a href="#初始化安全域" class="headerlink" title="初始化安全域:"></a>初始化安全域:</h2><p>对象的初始引用不会被重排序到构造函数之前.</p>
+<ul>
+<li><code>final</code>:<br><code>final</code>域能够安全发布,通过<code>final</code>域可达的变量\容器的写入操作安全发布.</li>
+</ul>
+<p>示例:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@ThreadSafe</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">SafeStates</span></span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> Map&lt;String,String&gt;States;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">SafeStates</span><span class="params">()</span></span>&#123;</span><br><span class="line">        states= <span class="keyword">new</span> HashMap&lt;&gt;();</span><br><span class="line">        states.put(<span class="string">"alaska"</span>,<span class="string">"AK"</span>);</span><br><span class="line">        <span class="comment">//...</span></span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="function"><span class="keyword">public</span> String <span class="title">getV</span><span class="params">(String s)</span></span>&#123;</span><br><span class="line">        <span class="keyword">return</span> states.get(s);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>线程A创建的SafeStates对象,线程B能安全得访问getV方法.</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/01/07/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-15-16%E7%AB%A0/" data-id="ck96cch2000a2bham7yfih02j" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+    <a href="/2018/01/13/2018-01/%E8%B0%B7%E6%AD%8C%E7%9A%84%E4%B8%80%E8%87%B4%E6%80%A7%E5%93%88%E5%B8%8C%E7%AE%97%E6%B3%95/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">上一篇</strong>
+      <div class="article-nav-title">
+        
+          谷歌的一致性哈希算法
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2018/01/04/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-10-11%E7%AB%A0/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">java并发编程实战笔记-10-11章</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#第十五章-原子变量与非阻塞同步机制"><span class="toc-number">1.</span> <span class="toc-text">第十五章 原子变量与非阻塞同步机制</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#15-1-锁的劣势"><span class="toc-number">1.1.</span> <span class="toc-text">15.1 锁的劣势</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#15-2-硬件对并发的支持"><span class="toc-number">1.2.</span> <span class="toc-text">15.2 硬件对并发的支持</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#15-2-CAS-比较并交换"><span class="toc-number">1.3.</span> <span class="toc-text">15.2 CAS 比较并交换</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#15-3-原子变量类"><span class="toc-number">1.4.</span> <span class="toc-text">15.3 原子变量类</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#15-4-具体案例"><span class="toc-number">1.5.</span> <span class="toc-text">15.4 具体案例</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#15-4-4-ABA问题"><span class="toc-number">1.5.1.</span> <span class="toc-text">15.4.4 ABA问题</span></a></li></ol></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#第十六章-java内存模型"><span class="toc-number">2.</span> <span class="toc-text">第十六章 java内存模型</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#16-1-概念"><span class="toc-number">2.1.</span> <span class="toc-text">16.1 概念</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#16-1-1-平台的内存模型"><span class="toc-number">2.2.</span> <span class="toc-text">16.1.1 平台的内存模型</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#16-1-3-JAVA内存模型"><span class="toc-number">2.3.</span> <span class="toc-text">16.1.3 JAVA内存模型</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#16-1-4-借助同步"><span class="toc-number">2.4.</span> <span class="toc-text">16.1.4 借助同步</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#16-2-发布"><span class="toc-number">2.5.</span> <span class="toc-text">16.2 发布</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#初始化安全域"><span class="toc-number">2.6.</span> <span class="toc-text">初始化安全域:</span></a></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>
