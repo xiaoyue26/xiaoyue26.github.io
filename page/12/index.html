@@ -72,6 +72,74 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-02/reduce100-卡死故障排除" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/02/05/2018-02/reduce100-%E5%8D%A1%E6%AD%BB%E6%95%85%E9%9A%9C%E6%8E%92%E9%99%A4/" class="article-date">
+  <time datetime="2018-02-05T02:28:17.000Z" itemprop="datePublished">2018-02-05</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/hadoop/">hadoop</a>►<a class="article-category-link" href="/categories/hadoop/%E8%BF%90%E7%BB%B4/">运维</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/02/05/2018-02/reduce100-%E5%8D%A1%E6%AD%BB%E6%95%85%E9%9A%9C%E6%8E%92%E9%99%A4/">reduce100%卡死故障排除</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <ul>
+<li>摘要<blockquote>
+<p>集群所有MR job/Spark job奇慢无比,经过排查发现两个DataNode故障.<br>措施:<br>下线故障的DataNode,所有job运行重新变得飞快顺滑.<br>原因:<br>reduce结束后落盘的时候,pipeline中其中一个DN故障,导致返回太迟.<br>如果pipeline中恰好不包括故障DN,就能顺利完成.</p>
+</blockquote>
+</li>
+</ul>
+<h2 id="详情"><a href="#详情" class="headerlink" title="详情"></a>详情</h2><p>早上起来发现集群的任务只完成了平时的约1/8.</p>
+<h3 id="STEP1"><a href="#STEP1" class="headerlink" title="STEP1"></a>STEP1</h3><p>首先怀疑是调度不合理,job之间资源占用卡死.<br>进入管理页:<a href="http://f04:8088/cluster/scheduler" target="_blank" rel="noopener">http://f04:8088/cluster/scheduler</a><br>找到卡死的job,选出资源占用最大的job将其kill. </p>
+<p>表现1:<br>资源空闲情况下,即使是小job,也会在reduce的最终阶段卡死不动.最显著的特征是在reduce100%的状态下,依然卡死不动.<br>查看典型job后发现有如下log:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">WARN [ResponseProcessor for block BP-133847077-ip0-1413174984773:blk_3659724856_2615805444]</span><br><span class="line">org.apache.hadoop.hdfs.DFSClient: Slow ReadProcessor read fields took 54565ms (threshold&#x3D;30000ms);</span><br><span class="line">ack: seqno: 144299 reply: SUCCESS reply: SUCCESS reply: SUCCESS downstreamAckTimeNanos: 61280175650</span><br><span class="line">flag: 0 flag: 0 flag: 0, targets:</span><br><span class="line">[DatanodeInfoWithStorage[ip1:50010,DS-7048c932-5153-4b82-8f6e-e8a920f61947,DISK]</span><br><span class="line">, DatanodeInfoWithStorage[ip2:50010,DS-f11ae138-54eb-4fda-aeda-43e3a9eddeae,DISK]</span><br><span class="line">, DatanodeInfoWithStorage[ip3:50010,DS-82512645-0f03-434f-8693-4f1c8876c437,DISK]]</span><br></pre></td></tr></table></figure>
+<p>虽然只是一个<code>Warning</code>,但其实关键信息是reduce最后落盘的时候落不下来,写数据块的时候<code>pipeline</code>里的三个DN,至少有一个迟迟不接Block.</p>
+<p>进一步登录上述三个DN(ip1,ip2,ip3),查看DN的log,发现大致有如下log:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">INFO datanode.DataNode: Exception for BP-133847077-ip0-1413174984773:blk_3659234296_2615314111</span><br><span class="line">java.io.InterruptedIOException: Interrupted while waiting for IO on channel java.nio.channels.SocketChannel[connected</span><br><span class="line">local&#x3D;&#x2F;ip4:24281 remote&#x3D;&#x2F;ip1:50010]. 485000 millis timeout left.</span><br><span class="line">	at org.apache.hadoop.net.SocketIOWithTimeout$SelectorPool.select(SocketIOWithTimeout.java:342)</span><br><span class="line">	at org.apache.hadoop.net.SocketIOWithTimeout.doIO(SocketIOWithTimeout.java:157)</span><br><span class="line">	at org.apache.hadoop.net.SocketOutputStream.write(SocketOutputStream.java:159)</span><br><span class="line">	at org.apache.hadoop.net.SocketOutputStream.write(SocketOutputStream.java:117)</span><br><span class="line">	at java.io.BufferedOutputStream.write(BufferedOutputStream.java:122)</span><br><span class="line">	at java.io.DataOutputStream.write(DataOutputStream.java:107)</span><br><span class="line">	at org.apache.hadoop.hdfs.protocol.datatransfer.PacketReceiver.mirrorPacketTo(PacketReceiver.java:200)</span><br><span class="line">	at org.apache.hadoop.hdfs.server.datanode.BlockReceiver.receivePacket(BlockReceiver.java:556)</span><br><span class="line">	at org.apache.hadoop.hdfs.server.datanode.BlockReceiver.receiveBlock(BlockReceiver.java:895)</span><br><span class="line">	at org.apache.hadoop.hdfs.server.datanode.DataXceiver.writeBlock(DataXceiver.java:801)</span><br><span class="line">	at org.apache.hadoop.hdfs.protocol.datatransfer.Receiver.opWriteBlock(Receiver.java:137)</span><br><span class="line">	at org.apache.hadoop.hdfs.protocol.datatransfer.Receiver.processOp(Receiver.java:74)</span><br><span class="line">	at org.apache.hadoop.hdfs.server.datanode.DataXceiver.run(DataXceiver.java:253)</span><br><span class="line">	at java.lang.Thread.run(Thread.java:745)</span><br></pre></td></tr></table></figure>
+
+<p>查看DN的连接数,发现异乎寻常得高:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">netstat -n | awk '/^tcp/ &#123;++S[$NF]&#125; END &#123;for(a in S) print a, S[a]&#125;'</span><br></pre></td></tr></table></figure>
+
+<h2 id="STEP2"><a href="#STEP2" class="headerlink" title="STEP2"></a>STEP2</h2><p>经过收集几个卡住的job的log,统计pipeline中出现的DN的ip,可以找出出现频率最高的两个DN.<br>将上述DN kill,卡住的job就能够继续运行了.</p>
+<blockquote>
+<p>pipeline中某个DN挂了的话,会提前返回. 三备份会在以后找机会补上.</p>
+</blockquote>
+<p>下线(退役)DN,其上的Block会自动备份到其他DN.<br>集群故障排除.具体DN故障的原因待查.// TODO</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/02/05/2018-02/reduce100-%E5%8D%A1%E6%AD%BB%E6%95%85%E9%9A%9C%E6%8E%92%E9%99%A4/" data-id="ck96cxpnx00avmaam3p25dw9t" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/hadoop/" rel="tag">hadoop</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-02/java并发编程的艺术-第四章" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/02/03/2018-02/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC%E5%9B%9B%E7%AB%A0/" class="article-date">
@@ -1598,164 +1666,10 @@
 
 
   
-    <article id="post-2018-01/java并发编程的艺术笔记-第二章" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/01/13/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF%E7%AC%94%E8%AE%B0-%E7%AC%AC%E4%BA%8C%E7%AB%A0/" class="article-date">
-  <time datetime="2018-01-13T13:29:19.000Z" itemprop="datePublished">2018-01-13</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/01/13/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF%E7%AC%94%E8%AE%B0-%E7%AC%AC%E4%BA%8C%E7%AB%A0/">java并发编程的艺术笔记-第二章</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="第二章-java并发机制的底层实现原理"><a href="#第二章-java并发机制的底层实现原理" class="headerlink" title="第二章 java并发机制的底层实现原理"></a>第二章 java并发机制的底层实现原理</h1><ul>
-<li>java代码执行流程</li>
-</ul>
-<ol>
-<li>java代码编译成class文件(字节码);</li>
-<li>class被类加载器加载到JVM中;</li>
-<li>JVM执行class,生成汇编码;</li>
-<li>汇编码(转化成机器码/cpu指令)在cpu上执行.</li>
-</ol>
-<p>因此java并发机制的底层实现依赖于两个层面:</p>
-<ol>
-<li>class=&gt;汇编码过程中增加的指令;</li>
-<li>并发相关cpu指令的具体执行过程. </li>
-</ol>
-<h2 id="2-1-volatile"><a href="#2-1-volatile" class="headerlink" title="2.1 volatile"></a>2.1 volatile</h2><ul>
-<li><p>定义<br>可见性. 对于volatile变量,所有线程看到的值是一致的.<br>换句话说,某个线程对于volatile的修改能立即生效.</p>
-</li>
-<li><p>实现</p>
-</li>
-</ul>
-<ol>
-<li>class=&gt;指令: 增加Lock指令</li>
-<li>Lock指令具体执行:<br>(1) 将当前cpu包含该值的缓存行写回内存;<br>(2) 在总线上通知其他cpu这个地址已发生更改,需要刷新缓存.<br>(缓存一致性协议)</li>
-</ol>
-<ul>
-<li>相关优化<br>由于上述实现中的2(1)为:”将当前cpu包含该值的缓存行写回内存”,<br>换句话说,如果这个值跨行了,就会影响两行的数据,也就会导致两行的缓存失效,<br>其他cpu刷新缓存的数据量变成两倍.<br>因此尽量要把数据对齐到一行. (比如32位,64位)</li>
-</ul>
-<h2 id="2-2-synchronized"><a href="#2-2-synchronized" class="headerlink" title="2.2 synchronized"></a>2.2 synchronized</h2><p>内置锁,锁某个对象.(可以是当前实例对象或当前类对象)</p>
-<ul>
-<li>实现</li>
-</ul>
-<ol>
-<li><p>class=&gt;指令:<br>增加:<br>进入同步块: monitorenter<br>离开同步块: monitorexit (正常离开或者异常)</p>
-</li>
-<li><p>cpu对这俩指令的执行书里没有细讲,只说了对象头里相关数据是怎么存的.</p>
-</li>
-</ol>
-<h3 id="2-2-1-对象头中锁相关数据"><a href="#2-2-1-对象头中锁相关数据" class="headerlink" title="2.2.1 对象头中锁相关数据"></a>2.2.1 对象头中锁相关数据</h3><ul>
-<li>对象头内容</li>
-</ul>
-<ol>
-<li>Mark Word: hashCode/分代年龄/锁信息. </li>
-<li>类元数据地址;</li>
-<li>数组长度. // 如果是数组</li>
-</ol>
-<ul>
-<li>不同锁标志的信息</li>
-</ul>
-<ol>
-<li>轻量级锁: 指向栈中锁记录的指针;   // 锁标志00</li>
-<li>重量级锁: 指向互斥量的指针    ;   // 锁标志10</li>
-<li>GC标记  : 空;                     // 锁标志11</li>
-<li>偏向锁  : 线程ID,epoch,分代年龄,1; // 锁标志01</li>
-</ol>
-<p>锁的4种状态: (锁只能升级,不能降级)</p>
-<ol>
-<li>无锁;</li>
-<li>偏向锁: 一个线程使用该对象;</li>
-<li>轻量级锁: 多个线程交替使用该对象;</li>
-<li>重量级锁: 多个线程同时竞争该对象. </li>
-</ol>
-<p><strong>偏向锁</strong><br>HotSpot作者:<br>大多数情况下不存在多个线程竞争一个对象,这个时候可以优化让线程获得锁的代价更低.</p>
-<ul>
-<li>获取偏向锁流程</li>
-</ul>
-<ol>
-<li>检查对象头里线程ID是不是自己或者是否无锁状态;</li>
-<li>复制对象头中Mark Word到栈中;</li>
-<li>在副本上写线程ID为自己ID;</li>
-<li>CAS,用副本替换Mark Word,获得偏向锁. </li>
-</ol>
-<p>如果成功的话,下次进入同步块的时候,只要第1步能成功,就不再需要CAS操作了.<br>换句话说,这种场景下, 同一个线程可以重入同一个对象的锁,只有第一次需要CAS操作(代价比较大的操作).</p>
-<ul>
-<li>偏向锁的撤销(也就是对象头中存储的线程ID改掉)</li>
-</ul>
-<ol>
-<li>别的线程也申请这个锁;</li>
-<li>之前拥有锁的线程不存活=&gt; 对象头设置成无锁;</li>
-<li>之前拥有锁的线程存活 =&gt; 锁升级.</li>
-</ol>
-<p><strong>轻量级锁</strong></p>
-<ul>
-<li>获取轻量级锁流程</li>
-</ul>
-<ol>
-<li>检查</li>
-<li>复制对象头中Mark word到栈中;</li>
-<li>副本中写指向自己锁记录的指针;</li>
-<li>CAS,用副本替换Mark word,获得偏向锁. </li>
-</ol>
-<p>如果第4步失败,尝试先不阻塞,使用自旋获取锁.(有可能已经拥有这个锁,试试看)<br>如果又失败,膨胀(升级)为重量级锁.</p>
-<ul>
-<li>轻量级锁的解锁</li>
-</ul>
-<ol>
-<li>CAS还原复制的对象头.</li>
-</ol>
-<p>如果成功,就解锁;<br>如果失败,说明除了自己还有别人也改过对象头.膨胀为重量级锁.</p>
-<p>对比:</p>
-<ol>
-<li>偏向锁: 打个自己的标记;</li>
-<li>轻量级锁: 不阻塞,自旋重试;</li>
-<li>重量级锁: 阻塞,等待唤醒.</li>
-</ol>
-<h2 id="2-3-原子操作实现原理"><a href="#2-3-原子操作实现原理" class="headerlink" title="2.3 原子操作实现原理"></a>2.3 原子操作实现原理</h2><ol>
-<li>总线锁: 某个cpu用Lock指令锁总线,独占内存; // 开销大</li>
-<li>缓存锁: 某个cpu修改内存地址,使其他cpu缓存无效.//开销小</li>
-</ol>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/01/13/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF%E7%AC%94%E8%AE%B0-%E7%AC%AC%E4%BA%8C%E7%AB%A0/" data-id="ck96cxpnt00a6maamda4y0a46" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
-    <a class="extend prev" rel="prev" href="/page/11/">&amp;laquo; 上一页</a><a class="page-number" href="/">1</a><span class="space">&hellip;</span><a class="page-number" href="/page/10/">10</a><a class="page-number" href="/page/11/">11</a><span class="page-number current">12</span><a class="page-number" href="/page/13/">13</a><a class="page-number" href="/page/14/">14</a><span class="space">&hellip;</span><a class="page-number" href="/page/20/">20</a><a class="extend next" rel="next" href="/page/13/">下一页&amp;raquo;</a>
+    <a class="extend prev" rel="prev" href="/page/11/">&amp;laquo; 上一页</a><a class="page-number" href="/">1</a><span class="space">&hellip;</span><a class="page-number" href="/page/10/">10</a><a class="page-number" href="/page/11/">11</a><span class="page-number current">12</span><a class="page-number" href="/page/13/">13</a><a class="page-number" href="/page/14/">14</a><span class="space">&hellip;</span><a class="page-number" href="/page/21/">21</a><a class="extend next" rel="next" href="/page/13/">下一页&amp;raquo;</a>
   </nav>
 </section>
            
@@ -1778,6 +1692,10 @@
       <ul>
         
           <li>
+            <a href="/2020/05/05/2020-05/BeanCopier%E6%B5%8B%E8%AF%84%E6%8A%A5%E5%91%8A/">BeanCopier测评报告</a>
+          </li>
+        
+          <li>
             <a href="/2020/04/19/2020-04/spring%E6%8B%BE%E9%81%97/">spring拾遗</a>
           </li>
         
@@ -1791,10 +1709,6 @@
         
           <li>
             <a href="/2020/03/23/2020-03/redis%E5%A4%A7key%E9%97%AE%E9%A2%98/">redis大key问题</a>
-          </li>
-        
-          <li>
-            <a href="/2020/03/23/2020-03/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/">分布式事务</a>
           </li>
         
       </ul>

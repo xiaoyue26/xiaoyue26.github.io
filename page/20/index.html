@@ -72,6 +72,76 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-centos下nginx配置笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2014/10/29/centos%E4%B8%8Bnginx%E9%85%8D%E7%BD%AE%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2014-10-29T08:38:11.000Z" itemprop="datePublished">2014-10-29</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E9%85%8D%E7%BD%AE/">配置</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2014/10/29/centos%E4%B8%8Bnginx%E9%85%8D%E7%BD%AE%E7%AC%94%E8%AE%B0/">centos下nginx配置笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>日志文件位置：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">cat &#x2F;var&#x2F;log&#x2F;nginx&#x2F;host.access.log</span><br><span class="line">cat &#x2F;var&#x2F;log&#x2F;nginx&#x2F;access.log</span><br><span class="line">cat &#x2F;var&#x2F;log&#x2F;nginx&#x2F;error.log </span><br><span class="line">cat &#x2F;var&#x2F;log&#x2F;nginx&#x2F;NginxStatus.log</span><br><span class="line">cat &#x2F;var&#x2F;log&#x2F;nginx&#x2F;StatusError.log</span><br></pre></td></tr></table></figure>
+<p>用户名：<code>webadmin</code><br>密码： <code>nginx</code></p>
+<p>配置文件：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">cat &#x2F;etc&#x2F;nginx&#x2F;nginx.conf</span><br><span class="line">cat &#x2F;etc&#x2F;nginx&#x2F;conf.d&#x2F;default.conf</span><br></pre></td></tr></table></figure>
+<p>root命令和alias命令使用：<br><a href="http://blog.csdn.net/bjash/article/details/8596538" target="_blank" rel="noopener">http://blog.csdn.net/bjash/article/details/8596538</a></p>
+<p>如果没有配置root或alias,nginx默认会去/etc/nginx中找，可通过error日志查看具体找的路径。<br>如果在server里配置了root(location外面)，则会去root命令配置的目录下寻找。</p>
+<p><code>location</code>命令总结：<br><a href="http://blog.chinaunix.net/uid-25196855-id-108805.html" target="_blank" rel="noopener">http://blog.chinaunix.net/uid-25196855-id-108805.html</a></p>
+<p>自己笔记：</p>
+<ol>
+<li><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">location ~ .*\.(html|gif|jpg|jpeg|png|bmp|swf)$  &#123;  </span><br><span class="line">		root    &#x2F;usr&#x2F;share&#x2F;nginx&#x2F;html;  </span><br><span class="line">		expires 30d;  </span><br><span class="line">	&#125;</span><br></pre></td></tr></table></figure>
+
+</li>
+</ol>
+<p><code>~</code>表示下面将进行区分大小写的正则匹配；<br><strong>(注意<code>~</code>后面有一个空格)；</strong><br><code>.*</code> 任意个任意字符；<br><code>\.</code> (转义斜杠)一个点；<br><code>(html|...)$</code>这些后缀名之一结尾。<br>所以其实可以简化为： <code>location ~ \.(html|gif|jpg|jpeg|png|bmp|swf)$</code><br>反正前面都是任意，一堆废话。</p>
+<ol start="2">
+<li><p><code>~</code> 区分大小写的正则；<br><code>~*</code>不区分大小写的正则；<br><code>^~</code>匹配优先级比较高的正则；</p>
+</li>
+<li><p>注意写正则的时候先使用在线正则测试工具进行测试。</p>
+</li>
+<li><p>规范的nginx配置示例: </p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br><span class="line">150</span><br><span class="line">151</span><br><span class="line">152</span><br><span class="line">153</span><br><span class="line">154</span><br><span class="line">155</span><br><span class="line">156</span><br><span class="line">157</span><br><span class="line">158</span><br><span class="line">159</span><br><span class="line">160</span><br><span class="line">161</span><br><span class="line">162</span><br><span class="line">163</span><br><span class="line">164</span><br><span class="line">165</span><br><span class="line">166</span><br><span class="line">167</span><br><span class="line">168</span><br><span class="line">169</span><br><span class="line">170</span><br><span class="line">171</span><br><span class="line">172</span><br><span class="line">173</span><br><span class="line">174</span><br><span class="line">175</span><br><span class="line">176</span><br><span class="line">177</span><br><span class="line">178</span><br><span class="line">179</span><br><span class="line">180</span><br><span class="line">181</span><br><span class="line">182</span><br><span class="line">183</span><br><span class="line">184</span><br><span class="line">185</span><br><span class="line">186</span><br><span class="line">187</span><br><span class="line">188</span><br><span class="line">189</span><br><span class="line">190</span><br><span class="line">191</span><br><span class="line">192</span><br><span class="line">193</span><br><span class="line">194</span><br><span class="line">195</span><br><span class="line">196</span><br><span class="line">197</span><br><span class="line">198</span><br><span class="line">199</span><br><span class="line">200</span><br><span class="line">201</span><br><span class="line">202</span><br><span class="line">203</span><br><span class="line">204</span><br><span class="line">205</span><br><span class="line">206</span><br><span class="line">207</span><br><span class="line">208</span><br><span class="line">209</span><br><span class="line">210</span><br><span class="line">211</span><br><span class="line">212</span><br><span class="line">213</span><br><span class="line">214</span><br><span class="line">215</span><br><span class="line">216</span><br><span class="line">217</span><br><span class="line">218</span><br><span class="line">219</span><br><span class="line">220</span><br><span class="line">221</span><br><span class="line">222</span><br><span class="line">223</span><br><span class="line">224</span><br><span class="line">225</span><br><span class="line">226</span><br><span class="line">227</span><br><span class="line">228</span><br><span class="line">229</span><br><span class="line">230</span><br><span class="line">231</span><br><span class="line">232</span><br><span class="line">233</span><br><span class="line">234</span><br><span class="line">235</span><br><span class="line">236</span><br><span class="line">237</span><br><span class="line">238</span><br><span class="line">239</span><br><span class="line">240</span><br><span class="line">241</span><br><span class="line">242</span><br><span class="line">243</span><br><span class="line">244</span><br><span class="line">245</span><br><span class="line">246</span><br><span class="line">247</span><br></pre></td><td class="code"><pre><span class="line">#使用的用户和组</span><br><span class="line">user www www;</span><br><span class="line">#指定工作衍生进程数（一般等于CPU的总核数或者总核数的两倍），每个进程耗费10MB-12MB内存</span><br><span class="line">worker_processes 8;</span><br><span class="line">#指定错误日志存放的路径，错误日志记录级别可选项为：[debug | info | noticd | warn | error | crit]</span><br><span class="line">error_log  logs&#x2F;error.log;</span><br><span class="line">#指定错误日志级别</span><br><span class="line">#error_log  logs&#x2F;error.log  notice;</span><br><span class="line">#error_log  logs&#x2F;error.log  info;</span><br><span class="line">#指定pid存放的路径，文件内记录当前nginx主进程的ID，kill -HUP &#39;logs&#x2F;nginx.pid&#39;</span><br><span class="line">#pid        logs&#x2F;nginx.pid;</span><br><span class="line"></span><br><span class="line">#指定文件描述符数量</span><br><span class="line">worker_rlimit_nofile 51200;</span><br><span class="line"></span><br><span class="line">#工作模式及连接数上限</span><br><span class="line">events &#123;</span><br><span class="line">    #提高linux的io操作选项，Linux系统推荐采用epoll模型，FreeBSD系统推荐采用kequeue，linux下建议开启</span><br><span class="line">   use epoll;</span><br><span class="line">   #允许最大连接数</span><br><span class="line">   worker_connections      51200;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">http &#123;</span><br><span class="line">    #mimie.types 浏览器请求的文件媒体类型</span><br><span class="line">    include       mime.types;</span><br><span class="line">    #用来告诉浏览器请求的文件媒体类型</span><br><span class="line">    default_type  application&#x2F;octet-stream;</span><br><span class="line">    #设置使用的字符集，如果一个网站有多种字符集，请不要随便设置，应该让程序员在HTML代码中通过Meta标签设置</span><br><span class="line">    #charset gb2312;</span><br><span class="line">    </span><br><span class="line">    #日志记录格式</span><br><span class="line">    #log_format  main  &#39;$remote_addr - $remote_user [$time_local] &quot;$request&quot; &#39;</span><br><span class="line">    #                  &#39;$status $body_bytes_sent &quot;$http_referer&quot; &#39;</span><br><span class="line">    #                  &#39;&quot;$http_user_agent&quot; &quot;$http_x_forwarded_for&quot;&#39;;</span><br><span class="line">    </span><br><span class="line">    #日志名称，和日志记录格式采用main</span><br><span class="line">    #access_log  logs&#x2F;access.log  main;</span><br><span class="line">    </span><br><span class="line">    server_names_hash_bucket_size 128;</span><br><span class="line">    #用于设置客户端请求的Header头缓冲区大小，大部分情况1KB大小足够。不能超过large_client_header_buffers缓冲区大小的设置</span><br><span class="line">    client_header_buffer_size 32k;</span><br><span class="line">    #该指令用于设置客户端请求的Header头缓冲区大小，默认值为4KB。</span><br><span class="line">    large_client_header_buffers 4 32k;</span><br><span class="line">    </span><br><span class="line">    #设置客户端能够上传的文件大小，默认为1m</span><br><span class="line">    client_max_body_size 8m;</span><br><span class="line">     </span><br><span class="line">    sendfile on;</span><br><span class="line">    #该指令允许或禁止使用FreeBSD上的TCP_NOPUSH,或者Linux上的TCP_CORK套接字选项。</span><br><span class="line">    #tcp_nopush on;</span><br><span class="line">    </span><br><span class="line">    </span><br><span class="line">    #keepalive_timeout  0该指令可以使客户端到服务器端的连接持续有效</span><br><span class="line">    keepalive_timeout 60;</span><br><span class="line">    #该指令允许或禁止使用套接字选项TCP_NODELAY,仅适用于keep-alive连接</span><br><span class="line">    tcp_nodelay on;</span><br><span class="line">    </span><br><span class="line">    </span><br><span class="line">    fastcgi_connect_timeout 300;</span><br><span class="line">    fastcgi_send_timeout 300;</span><br><span class="line">    #该指令用于设置upstream模块等待FastCGI进程发送数据的超时时间，默认值为60s；</span><br><span class="line">    fastcgi_read_timeout 200;</span><br><span class="line">    #该指令设置FastCGI服务器相应头部的缓冲区大小。通常情况，该缓冲区大小设置等于fastcgi_buffers指令设置的一个缓冲区的大小。</span><br><span class="line">    fastcgi_buffer_size 64k;</span><br><span class="line">    #该指令设置了读取FastCGI进程返回信息的缓冲区数量和大小。</span><br><span class="line">    fastcgi_buffers 4 64k;</span><br><span class="line">    </span><br><span class="line">    fastcgi_busy_buffers_size 128k;</span><br><span class="line">    fastcgi_temp_file_writer_size 128k;</span><br><span class="line">    </span><br><span class="line">    #开启gzip压缩,对网页文件、css、js、xml等启动gzip压缩，减少数据传输量，提高访问速度。</span><br><span class="line">    gzip on;</span><br><span class="line">    #该指令允许压缩的页面最小字节数，页面字节数从header头中的Content-Length中进行获取。</span><br><span class="line">    gzip_min_length 1k;</span><br><span class="line">    #设置系统获取几个单位的缓存用于存储gzip的压缩结果数据流。下面的设置代表16k为单位，按照原始数据大小以16k为单位的4倍申请内存。</span><br><span class="line">    gzip_buffers 4 16k;</span><br><span class="line">    #识别http的协议版本。</span><br><span class="line">    gzip_http_version 1.1;</span><br><span class="line">    #gzip压缩比，1 压缩比最小处理速度最快，9 压缩比最大但处理速度最慢（传输快但比较消耗cpu）</span><br><span class="line">    gzip_comp_level 2;</span><br><span class="line">    #匹配mime类型进行压缩，无论是否指定，“text&#x2F;html”类型总是会被压缩的。</span><br><span class="line">    gzip_types text&#x2F;plain application&#x2F;x-javascript text&#x2F;css application&#x2F;xml;</span><br><span class="line">    gzip_vary on;</span><br><span class="line">    #该指令定义了一个数据区，其中记录会话状态信息。  定义一个叫“crawler”的记录去，总容量为10MB，以变量$binary_remote_addr作为会话的判断基准（即一个地址一个会话）</span><br><span class="line">    #limit_zone crawler $binary_remote_addr 10m;</span><br><span class="line">    </span><br><span class="line">    #允许客户端请求的最大单个文件字节数</span><br><span class="line">    client_max_body_size 300m;</span><br><span class="line">    </span><br><span class="line">    #缓冲区代理缓冲用户端请求的最大字节数，可以理解为先保存到本地再传给用户</span><br><span class="line">    client_body_buffer_size 128k;</span><br><span class="line">    </span><br><span class="line">    #跟后端服务器连接的超时时间_发起握手等候响应超时时间</span><br><span class="line">    proxy_connect_timeout 600;</span><br><span class="line">    </span><br><span class="line">    #连接成功后_等候后端服务器响应时间_其实已经进入后端的排队之中等候处理</span><br><span class="line">    proxy_read_timeout 600;</span><br><span class="line">    </span><br><span class="line">    #后端服务器数据回传时间_就是在规定时间内后端服务器必须传完所有的数据</span><br><span class="line">    proxy_send_timeout 600;</span><br><span class="line">    </span><br><span class="line">    #代理请求缓存区_这个缓存区会保存用户的头信息以供Nginx进行规则处理_一般只要能保存下头信息即可</span><br><span class="line">    proxy_buffers 16k;</span><br><span class="line">    </span><br><span class="line">    #同上 告诉Nginx保存单个用的几个Buffer最大用多大空间</span><br><span class="line">    proxy_buffers 4 32k;</span><br><span class="line">    </span><br><span class="line">    #如果系统很忙的时候可以申请更大的proxy_buffers 官方推荐*2</span><br><span class="line">    proxy_busy_buffers_size 64k;</span><br><span class="line">    </span><br><span class="line">    #proxy缓存临时文件的大小</span><br><span class="line">    proxy_temp_file_write_size 64k;</span><br><span class="line">    </span><br><span class="line">    #缓存    proxy_temp_path和proxy_cache_path必须在同一个分区</span><br><span class="line">    proxy_temp_path &#x2F;data2&#x2F;proxy_temp_path;</span><br><span class="line">    #该指令用于设置缓存文件的存放路径，设置缓存区名称为cache_one ，内存缓存空间大小为200M，自动清除超过1天没有被访问的缓存数据，硬盘缓存空间大小为30GB</span><br><span class="line">    proxy_cache_path &#x2F;data2&#x2F;proxy_cache_path levels&#x3D;1:2 keys_zone&#x3D;cache_one:2000m inactive&#x3D;1d max_size&#x3D;30g;</span><br><span class="line">    </span><br><span class="line">    </span><br><span class="line">    #include指令，使用此指令，可以包含任何你想要包含的配置文件，支持文件名匹配。</span><br><span class="line">    #include vhosts&#x2F;*.conf;</span><br><span class="line">    </span><br><span class="line">    upstream php_server_pool&#123;</span><br><span class="line">        #weight&#x3D;NUMBER ——设置服务器的权重，权重数高被分配访问数越高，默认权重1.</span><br><span class="line">        #max_fails&#x3D;NUMBER——在参数fail_timeout指定的时间内对后端服务器请求失败的次数，如果检测到后端服务器无法连接及发生服务器错误（404错误除外），则标记为失败。默认值为1.设置为0这关闭这项检查</span><br><span class="line">        #fail_timeout&#x3D;TIME——在经历参数max_fails设置的失败次数后，暂停的时间</span><br><span class="line">        #down——标记服务器为永久离线状态，用于ip_hash指令</span><br><span class="line">        #backup——仅仅在非backup服务器全部繁忙的时候才启动</span><br><span class="line">        </span><br><span class="line">        #upstream模块拥有以下变量：</span><br><span class="line">        #    $upstream_addr:处理请求的upstream服务器地址</span><br><span class="line">        #    $upstream_status:upstream服务器的应答状态</span><br><span class="line">        #    $upstream_response_time:Upstream服务器响应时间（毫秒），多个响应以逗号和冒号分隔。</span><br><span class="line">        #    $upstream_http_$HEADER:任意的HTTP协议头信息，例如:$upstream_http_host</span><br><span class="line">        </span><br><span class="line">        server 192.168.1.10:80 weight&#x3D;1 max_fails&#x3D;2 fail_timeout&#x3D;30s;</span><br><span class="line">        server 192.168.1.11:80 weight&#x3D;1 max_fails&#x3D;2 fail_timeout&#x3D;30s;</span><br><span class="line">        server 192.168.1.12:80 weight&#x3D;1 max_fails&#x3D;2 fail_timeout&#x3D;30s;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    upstream message_server_pool&#123;</span><br><span class="line">        #ip_hash指令能够将某个客户端IP的请求通过哈希算法定位到同一台后端服务器。但无法保证后端服务器的负载均衡，所以建议后端服务器能做到session共享来代替nginx的ip_hash方式。</span><br><span class="line">        #且如果后端服务器有时要从Nginx负载均衡中摘除一段时间，你必须将其标记为“down”</span><br><span class="line">        #ip_hash;</span><br><span class="line">        server 192.168.1.13:3245;</span><br><span class="line">        server 192.168.1.14:3245 down;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    upstream bbs_server_pool&#123;</span><br><span class="line">        server 192.168.1.15:80 weight&#x3D;1 max_fails&#x3D;2 fail_timeout&#x3D;30s;</span><br><span class="line">        server 192.168.1.16:80 weight&#x3D;1 max_fails&#x3D;2 fail_timeout&#x3D;30s;</span><br><span class="line">        server 192.168.1.17:80 weight&#x3D;1 max_fails&#x3D;2 fail_timeout&#x3D;30s;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    #第一个虚拟主机，反向代理php_server_pool这组服务器</span><br><span class="line">    server</span><br><span class="line">    &#123;</span><br><span class="line">        #该指令用于设置虚拟主机监听的服务器地址和端口号。</span><br><span class="line">        #listen127.0.0.1:8080;</span><br><span class="line">        #listen 8000;</span><br><span class="line">        #listen *:8000;</span><br><span class="line">        #listen localhost:8000;</span><br><span class="line">        listen 80;</span><br><span class="line">        server_name www.yourdomain.com;</span><br><span class="line">        </span><br><span class="line">        #SSL加密浏览</span><br><span class="line">        ssl on</span><br><span class="line">        ssl_certificate www.yourdomain.com.crt;</span><br><span class="line">        ssl_certificate_key www.yourdomain.com.key;</span><br><span class="line">        </span><br><span class="line">        location &#x2F;</span><br><span class="line">        &#123;</span><br><span class="line">            #限制下载速度256KB&#x2F;秒</span><br><span class="line">            limit_rate 256k;</span><br><span class="line">            #如果后端的服务器返回502、504、执行超时等错误，自动将请求转发到upstream负载均衡池中的另一台服务器，实现故障转移</span><br><span class="line">            proxy_next_upstream http_502  http_504 error timeout invalid_header;</span><br><span class="line">            proxy_pass http:&#x2F;&#x2F;php_server_pool;</span><br><span class="line">            proxy_set_header Host www.yourdomain.com;</span><br><span class="line">            proxy_set_header X-Forwarded-For $remote_addr;</span><br><span class="line">        &#125;</span><br><span class="line">        </span><br><span class="line">        access_log &#x2F;data1&#x2F;logs&#x2F;www.yourdomain.com_access.log;        </span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    #第二个虚拟主机，反向代理message_server_pool这组服务器</span><br><span class="line">    server</span><br><span class="line">    &#123;</span><br><span class="line">        listen 80;</span><br><span class="line">        server_name www1.yourdomain.com;</span><br><span class="line">        </span><br><span class="line">        #访问http:&#x2F;&#x2F;www1.yourdomain.com&#x2F;message&#x2F;***地址，反向代理message_server_pool这组服务器</span><br><span class="line">        location &#x2F;</span><br><span class="line">        &#123;</span><br><span class="line">            proxy_pass http:&#x2F;&#x2F;message_server_pool;</span><br><span class="line">            proxy_set_header Host $host;</span><br><span class="line">        &#125;</span><br><span class="line">        </span><br><span class="line">        #访问除了&#x2F;message&#x2F;之外的http:&#x2F;&#x2F;www1.yourdomain.com&#x2F;***，反向代理php_server_pool这组服务器</span><br><span class="line">        location &#x2F;message&#x2F;</span><br><span class="line">        &#123;</span><br><span class="line">            #DNS解析服务器的IP地址，可以在IE 工具-Internet选项-连接-局域网设置-代理服务器 中设置代理服务器IP地址和端口</span><br><span class="line">            resolver 8.8.8.8；</span><br><span class="line">            #该指令用于设置被代理服务器端口或套接字，以及URI</span><br><span class="line">            proxy_pass http:&#x2F;&#x2F;php_server_pool;</span><br><span class="line">            #该指令可以设置哪些从后端服务器传送过来的文件被Nginx存储。on保持文件与alias或root指令设置的目录一致，参数off不存储文件</span><br><span class="line">            #proxy_store &#x2F;data&#x2F;www$original_uri;</span><br><span class="line">            proxy_store on;</span><br><span class="line">            #该指令用于指定创建文件和目录的权限</span><br><span class="line">            proxy_store_access user:rw group:rw all:r;</span><br><span class="line">            #指定一个本地目录来缓冲较大的代理请求</span><br><span class="line">            proxy_temp_path &#x2F;data&#x2F;temp;</span><br><span class="line">            #该指令用于在URL和文件系统路径之间实现映射。</span><br><span class="line">            alias &#x2F;data&#x2F;www;</span><br><span class="line">            #该指令允许重新定义或添加Header行道转发给被代理服务器的请求信息中，它的值可以是文本，也可以是变量，或者是文本和变量的组合。</span><br><span class="line">            #使用$host变量，它的值相当于服务器的主机名（如果使用域名访问，则该值为域名；如果使用IP访问，则该值为IP）。此外可以将主机名和被代理服务器的端口一起传递  $host:$proxy_port</span><br><span class="line">            proxy_set_header Host $host;</span><br><span class="line">            proxy_set_header X-Forwarded-For $remote_addr;</span><br><span class="line">            </span><br><span class="line">        &#125;</span><br><span class="line">        </span><br><span class="line">        access_log &#x2F;data1&#x2F;logs&#x2F;www.yourdomain.com_access.log;        </span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    #第三个虚拟主机</span><br><span class="line">    server</span><br><span class="line">    &#123;</span><br><span class="line">        listen 80;</span><br><span class="line">        server_name bbs.yourdomain.com *.bbs.yourdomain.com;</span><br><span class="line">            </span><br><span class="line">        location &#x2F;</span><br><span class="line">        &#123;</span><br><span class="line">            proxy_pass http:&#x2F;&#x2F;bbs_server_pool;</span><br><span class="line">            proxy_set_header Host $host;</span><br><span class="line">            proxy_set_header X-Forwarded-For $remote_addr;</span><br><span class="line">            #禁止指定的IP地址或者IP段访问某些虚拟主机或目录</span><br><span class="line">            #deny 192.168.1.1&#x2F;24;</span><br><span class="line">            #允许指定的IP地址或者IP段访问某些虚拟主机或目录</span><br><span class="line">            #allow 192.168.1.0&#x2F;24;</span><br><span class="line">            </span><br><span class="line">        &#125;</span><br><span class="line">        </span><br><span class="line">        #不记录日志</span><br><span class="line">        access_log off;        </span><br><span class="line">    &#125;                 </span><br><span class="line">    </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2014/10/29/centos%E4%B8%8Bnginx%E9%85%8D%E7%BD%AE%E7%AC%94%E8%AE%B0/" data-id="ck96cxpks000ymaamdm180g2n" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E9%85%8D%E7%BD%AE/" rel="tag">配置</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-centos官网安装nginx" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2014/10/29/centos%E5%AE%98%E7%BD%91%E5%AE%89%E8%A3%85nginx/" class="article-date">
@@ -625,69 +695,10 @@
 
 
   
-    <article id="post-abc" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2013/08/13/abc/" class="article-date">
-  <time datetime="2013-08-13T14:03:23.000Z" itemprop="datePublished">2013-08-13</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/%E6%97%A5%E5%BF%97/">日志</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2013/08/13/abc/">新的开始</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>这是<strong>新的开始</strong>，我用hexo创建了第一篇文章。</p>
-<p>通过下面的命令，就可以创建新文章</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">..&#x2F;workspace&#x2F;blog&#x2F;xiaoyue26&#x2F;hexo new 新的开始</span><br><span class="line">[info] File created at ..&#x2F;workspace&#x2F;blog&#x2F;xiaoyue26&#x2F;source&#x2F;_posts&#x2F;新的开始.md</span><br></pre></td></tr></table></figure>
-
-<p>感觉非常好。</p>
-<h2 id="引用"><a href="#引用" class="headerlink" title="引用"></a>引用</h2><blockquote><p>Every interaction is both precious and an opportunity to delight.</p>
-<footer><strong>Seth Godin</strong><cite><a href="http://sethgodin.typepad.com/seths_blog/2009/07/welcome-to-island-marketing.html" target="_blank" rel="noopener">Welcome to Island Marketing</a></cite></footer></blockquote>
-
-<h2 id="代码块"><a href="#代码块" class="headerlink" title="代码块"></a>代码块</h2><figure class="highlight plain"><figcaption><span>.compact</span><a href="http://underscorejs.org/#compact" target="_blank" rel="noopener">Underscore.js</a></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">.compact([0, 1, false, 2, ‘’, 3]);</span><br><span class="line">&#x3D;&gt; [1, 2, 3]</span><br></pre></td></tr></table></figure>
-
-<h2 id="链接"><a href="#链接" class="headerlink" title="链接"></a>链接</h2><a href="http://xiaoyue26.github.io/" title="homepage" target="_blank">homepage</a>
-
-<h2 id="图片"><a href="#图片" class="headerlink" title="图片"></a>图片</h2><img src="/images/wallhaven-75789.jpg" class="" width="400" height="600" title="这是一张图片">
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2013/08/13/abc/" data-id="ck96cxpmd006kmaam5sxn9jii" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E9%85%8D%E7%BD%AE/" rel="tag">配置</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
-    <a class="extend prev" rel="prev" href="/page/19/">&amp;laquo; 上一页</a><a class="page-number" href="/">1</a><span class="space">&hellip;</span><a class="page-number" href="/page/18/">18</a><a class="page-number" href="/page/19/">19</a><span class="page-number current">20</span>
+    <a class="extend prev" rel="prev" href="/page/19/">&amp;laquo; 上一页</a><a class="page-number" href="/">1</a><span class="space">&hellip;</span><a class="page-number" href="/page/18/">18</a><a class="page-number" href="/page/19/">19</a><span class="page-number current">20</span><a class="page-number" href="/page/21/">21</a><a class="extend next" rel="next" href="/page/21/">下一页&amp;raquo;</a>
   </nav>
 </section>
            
@@ -710,6 +721,10 @@
       <ul>
         
           <li>
+            <a href="/2020/05/05/2020-05/BeanCopier%E6%B5%8B%E8%AF%84%E6%8A%A5%E5%91%8A/">BeanCopier测评报告</a>
+          </li>
+        
+          <li>
             <a href="/2020/04/19/2020-04/spring%E6%8B%BE%E9%81%97/">spring拾遗</a>
           </li>
         
@@ -723,10 +738,6 @@
         
           <li>
             <a href="/2020/03/23/2020-03/redis%E5%A4%A7key%E9%97%AE%E9%A2%98/">redis大key问题</a>
-          </li>
-        
-          <li>
-            <a href="/2020/03/23/2020-03/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/">分布式事务</a>
           </li>
         
       </ul>
