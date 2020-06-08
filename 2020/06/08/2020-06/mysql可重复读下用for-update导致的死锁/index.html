@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>mysql可重复读下用for update导致的死锁 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="背景试图用代码(JVM进程)来维持某列的唯一性。 实例以下代码在可重复读隔离级别下执行，表中原来只有1~10的rank。假如A、B两个事务同时试图插入rank为21和22的rank； 1234567891011121314151617@Transactional    public void createBannerDeadlock(Banner banner) &amp;#123;        ban">
+<meta property="og:type" content="article">
+<meta property="og:title" content="mysql可重复读下用for update导致的死锁">
+<meta property="og:url" content="http://xiaoyue26.github.io/2020/06/08/2020-06/mysql%E5%8F%AF%E9%87%8D%E5%A4%8D%E8%AF%BB%E4%B8%8B%E7%94%A8for-update%E5%AF%BC%E8%87%B4%E7%9A%84%E6%AD%BB%E9%94%81/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="背景试图用代码(JVM进程)来维持某列的唯一性。 实例以下代码在可重复读隔离级别下执行，表中原来只有1~10的rank。假如A、B两个事务同时试图插入rank为21和22的rank； 1234567891011121314151617@Transactional    public void createBannerDeadlock(Banner banner) &amp;#123;        ban">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2020-06-08T01:45:39.000Z">
+<meta property="article:modified_time" content="2020-06-08T01:47:40.167Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="mysql">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2020-06/mysql可重复读下用for-update导致的死锁" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/06/08/2020-06/mysql%E5%8F%AF%E9%87%8D%E5%A4%8D%E8%AF%BB%E4%B8%8B%E7%94%A8for-update%E5%AF%BC%E8%87%B4%E7%9A%84%E6%AD%BB%E9%94%81/" class="article-date">
+  <time datetime="2020-06-08T01:45:39.000Z" itemprop="datePublished">2020-06-08</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      mysql可重复读下用for update导致的死锁
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h1><p>试图用代码(JVM进程)来维持某列的唯一性。</p>
+<h1 id="实例"><a href="#实例" class="headerlink" title="实例"></a>实例</h1><p>以下代码在可重复读隔离级别下执行，表中原来只有1~10的rank。假如A、B两个事务同时试图插入rank为21和22的rank；</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Transactional</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">createBannerDeadlock</span><span class="params">(Banner banner)</span> </span>&#123;</span><br><span class="line">        banner.recordCreate();</span><br><span class="line">        List&lt;Banner&gt; rankList = cscCenterBannerDAO.selectForUpdate(banner.getRank());</span><br><span class="line">        <span class="comment">// 无记录,A占据间隙锁rank(10,+), B占据间隙锁 (10,+)，gap锁之间不互斥</span></span><br><span class="line">        <span class="keyword">if</span> (!rankList.isEmpty()) &#123;</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> RuntimeException(<span class="string">"记录已存在"</span>);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            logger.info(<span class="string">"睡5秒钟"</span>);</span><br><span class="line">            Thread.sleep(MILLIS);</span><br><span class="line">        &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> RuntimeException(<span class="string">"中断"</span>);</span><br><span class="line">        &#125;</span><br><span class="line">        logger.info(<span class="string">"开始插入: &#123;&#125;"</span>, System.currentTimeMillis());</span><br><span class="line">        cscCenterBannerDAO.insert(banner); <span class="comment">// 都申请插入意向锁, 都需要等待别人的间隙锁释放；死锁</span></span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+<p>1.如果rank上没索引:<br>两个事务第一个for update就会互相阻塞(锁全表)，串行执行，没有死锁，两个插入都成功；<br>2.如果rank上有索引(普通索引或者唯一索引):<br>两个事务第一个for update不会互相阻塞(锁区间10~正无穷)，并行执行，有死锁，到最后真正插入的时候，两者都需要插入意向锁，然后都等待对方的gap锁释放，死锁；等待很久以后，一个成功一个失败(一个事务被回滚)；</p>
+<p>死锁异常:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Deadlock found when trying to get lock; <span class="keyword">try</span> restarting transaction;</span><br></pre></td></tr></table></figure>
+
+
+<h1 id="原理"><a href="#原理" class="headerlink" title="原理"></a>原理</h1><p>两个原因导致了有索引的时候反而会死锁:<br>1.select for update的间隙锁之间不互斥,两个事务都能获得gap锁;<br>2.插入意向锁需要等待gap锁释放;</p>
+<p>间隙锁相关: <a href="http://xiaoyue26.github.io/2018/05/26/2018-05/MVCC%E4%B8%8E%E9%97%B4%E9%9A%99%E9%94%81-mysql%E6%8B%BE%E9%81%97/">http://xiaoyue26.github.io/2018/05/26/2018-05/MVCC%E4%B8%8E%E9%97%B4%E9%9A%99%E9%94%81-mysql%E6%8B%BE%E9%81%97/</a><br>意向锁相关: <a href="http://xiaoyue26.github.io/2018/12/24/2018-12/mysql%E6%84%8F%E5%90%91%E9%94%81/">http://xiaoyue26.github.io/2018/12/24/2018-12/mysql%E6%84%8F%E5%90%91%E9%94%81/</a></p>
+<h2 id="select-for-update的结果"><a href="#select-for-update的结果" class="headerlink" title="select for update的结果"></a>select for update的结果</h2><p>即使是同样的语句，也有可能有不同的加锁结果。<br>1.如果有唯一索引,命中了唯一记录: 行锁,互斥锁;<br>2.如果有唯一索引,没命中: gap锁，另一个事务也可以获得这个gap锁，但是不能插入数据；(后续有死锁可能)<br>3.如果有普通索引,命中了记录: 行锁+gap锁;(后续有死锁可能)<br>4.如果有普通索引,没有命中记录: gap锁,和情况2相同;(后续有死锁可能)<br>5.如果没有索引,直接锁全表，互斥，直接阻塞别的事务。（mysql的行锁是依赖索引的，这一点和oracle锁在数据块上不同；<br>因此如果没有索引或者没有用上索引，mysql就只能加表锁了。）</p>
+<p>可见如果where条件没有命中记录的时候,如果有索引，反而可能有死锁风险。<br>除了select for update,其他进行当前读的语句(如delete)也可以获得gap锁，因此也有同样的烦恼。</p>
+<p>那么都有哪些语句能获得gap锁呢？</p>
+<h2 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h2><p><a href="https://dev.mysql.com/doc/refman/5.7/en/innodb-locking.html#innodb-gap-locks" target="_blank" rel="noopener">https://dev.mysql.com/doc/refman/5.7/en/innodb-locking.html#innodb-gap-locks</a></p>
+<h2 id="gap锁"><a href="#gap锁" class="headerlink" title="gap锁"></a>gap锁</h2><p>首先当然要可重复读和串行读才有gap锁。<br>然后根据上面的参考资料，gap锁只有一个目标:<br>就是防止别的事务在这个区间插入数据。</p>
+<p>因此不同事务可以获得同一个区间的gap锁，因为这与上述目标并不冲突。两个事务可以获得这个区间的gap-S锁，gap-X锁，都可以。这一点和意向锁有点类似，只不过意向锁是加在表上的，gap锁是加在区间上的。</p>
+<p>gap-S锁和gap-X锁没有区别。(因此select in share mode和select for update获得的gap锁本质是一样的，想要无锁读，就直接用select进行快照读。)</p>
+<p>select in share mode/select for update/update/delete这4种语句是可能获取gap锁的。因此这4种当前读如果没有命中记录，而且又用到了索引，就会给死锁埋下风险。</p>
+<h2 id="RC的优势"><a href="#RC的优势" class="headerlink" title="RC的优势"></a>RC的优势</h2><p>RC下: 扫描过但不匹配的记录不会加锁，或者是先加锁再释放，即semi-consistent read；<br>RR下: 扫描过记录都要加锁。</p>
+<h2 id="RC的缺点"><a href="#RC的缺点" class="headerlink" title="RC的缺点"></a>RC的缺点</h2><p>1.RC有幻读;<br>2.RC需要搭配row模式binlog;</p>
+<p>mysql5.0以前的statement模式binlog和RC搭配有bug，因此为了兼容性，一般默认隔离级别RR，binlog模式row。</p>
+<p>因此:<br>RC搭配row模式binlog;<br>RR搭配statement模式binlog;</p>
+<h2 id="RC和RR读的区别"><a href="#RC和RR读的区别" class="headerlink" title="RC和RR读的区别"></a>RC和RR读的区别</h2><blockquote>
+<p> RR下，事务在第一个Read操作时，会建立Read View<br>RC下，事务在每次Read操作时，都会建立Read View</p>
+</blockquote>
+<p>所以:<br>读已提交: 总是读到最新提交的数据;<br>可重复读: 总是读到和第一次读的时候相同的数据,与事务开始时间无关。</p>
+<h2 id="innodb的7种锁类型"><a href="#innodb的7种锁类型" class="headerlink" title="innodb的7种锁类型"></a>innodb的7种锁类型</h2><p>参考这里: <a href="https://dev.mysql.com/doc/refman/5.7/en/innodb-locking.html" target="_blank" rel="noopener">https://dev.mysql.com/doc/refman/5.7/en/innodb-locking.html</a></p>
+<p>行的读锁 S<br>行的写锁 X<br>表级：读意向锁 IS<br>表级：写意向锁 IX<br>(意向锁只影响和辅助表级操作，毕竟行级操作直接定位到具体行了，不需要意向锁的帮助。)<br>记录锁: Record Lock: 在索引上加锁。<br>gap锁: 区间内阻止插入的锁,当前读可能触发。<br>next-key锁: 记录锁+gap锁；<br>插入意向锁: 同区间insert可以并发,只要不重复;<br>自增锁: 如果是严格增模式,自增id会导致事务串行;</p>
+<h2 id="查看当前锁的信息"><a href="#查看当前锁的信息" class="headerlink" title="查看当前锁的信息"></a>查看当前锁的信息</h2><p>InnoDB整体状态，其中包括锁的情况:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">engine</span> <span class="keyword">innodb</span> <span class="keyword">status</span></span><br></pre></td></tr></table></figure>
+<p>只看锁信息:<br>mysql8.0.1以前:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- 有事务在等的锁:</span></span><br><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> information_schema.innodb_locks;</span><br></pre></td></tr></table></figure>
+<p>mysql8.0.1以后:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- 所有的锁:</span></span><br><span class="line"><span class="keyword">SELECT</span> * <span class="keyword">FROM</span> performance_schema.data_locks</span><br></pre></td></tr></table></figure>
+<p>两者字段的对应关系: <a href="https://dev.mysql.com/doc/refman/8.0/en/innodb-locks-table.html" target="_blank" rel="noopener">https://dev.mysql.com/doc/refman/8.0/en/innodb-locks-table.html</a></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2020/06/08/2020-06/mysql%E5%8F%AF%E9%87%8D%E5%A4%8D%E8%AF%BB%E4%B8%8B%E7%94%A8for-update%E5%AF%BC%E8%87%B4%E7%9A%84%E6%AD%BB%E9%94%81/" data-id="ckb5u4aje0000rzamgw23h290" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+  
+    <a href="/2020/05/05/2020-05/BeanCopier%E6%B5%8B%E8%AF%84%E6%8A%A5%E5%91%8A/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">BeanCopier测评报告</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#背景"><span class="toc-number">1.</span> <span class="toc-text">背景</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#实例"><span class="toc-number">2.</span> <span class="toc-text">实例</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#原理"><span class="toc-number">3.</span> <span class="toc-text">原理</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#select-for-update的结果"><span class="toc-number">3.1.</span> <span class="toc-text">select for update的结果</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#参考"><span class="toc-number">3.2.</span> <span class="toc-text">参考</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#gap锁"><span class="toc-number">3.3.</span> <span class="toc-text">gap锁</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#RC的优势"><span class="toc-number">3.4.</span> <span class="toc-text">RC的优势</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#RC的缺点"><span class="toc-number">3.5.</span> <span class="toc-text">RC的缺点</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#RC和RR读的区别"><span class="toc-number">3.6.</span> <span class="toc-text">RC和RR读的区别</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#innodb的7种锁类型"><span class="toc-number">3.7.</span> <span class="toc-text">innodb的7种锁类型</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#查看当前锁的信息"><span class="toc-number">3.8.</span> <span class="toc-text">查看当前锁的信息</span></a></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>
