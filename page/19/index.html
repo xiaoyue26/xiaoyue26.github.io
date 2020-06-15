@@ -72,6 +72,62 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-singleton" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2015/10/05/singleton/" class="article-date">
+  <time datetime="2015-10-05T09:02:26.000Z" itemprop="datePublished">2015-10-05</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/">设计模式</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2015/10/05/singleton/">Singleton 单例模式</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>网上说得很清楚了：<br><a href="http://blog.csdn.net/haoel/article/details/4028232" target="_blank" rel="noopener">Singleton链接</a><br><code>CmdInvokeSingleton.java</code></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">enum</span> CmdInvokeSingleton &#123;</span><br><span class="line">    INSTANCE &#123;</span><br><span class="line">        <span class="comment">/**</span></span><br><span class="line"><span class="comment">         * 运行shell脚本</span></span><br><span class="line"><span class="comment">         * </span></span><br><span class="line"><span class="comment">         * <span class="doctag">@param</span> shell 需要运行的shell脚本</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">execShell</span><span class="params">(String shell)</span> </span>&#123;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                Runtime rt = Runtime.getRuntime();</span><br><span class="line">                <span class="keyword">final</span> Process process = rt.exec(shell);</span><br><span class="line">                DaemonThread daemonThread = <span class="keyword">new</span> DaemonThread(process);</span><br><span class="line">                daemonThread.start();<span class="comment">//Destroy process if necessary</span></span><br><span class="line">                <span class="keyword">int</span> exitcode = process.waitFor();</span><br><span class="line">                daemonThread.interrupt();</span><br><span class="line">                System.out.println(<span class="string">"finish:"</span> + exitcode);</span><br><span class="line">            &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">                e.printStackTrace();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">    &#125;;</span><br><span class="line">    <span class="function"><span class="keyword">protected</span> <span class="keyword">abstract</span> <span class="keyword">void</span> <span class="title">execShell</span><span class="params">(String shell)</span></span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<hr>
+<p><code>DaemonThread.java</code></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">DaemonThread</span> <span class="keyword">extends</span> <span class="title">Thread</span> </span>&#123;</span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 监视指定的进程，3秒后强制销毁它。</span></span><br><span class="line"><span class="comment">     * */</span></span><br><span class="line">    <span class="keyword">private</span> Process process;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">DaemonThread</span><span class="params">(Process process)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.process = process;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            sleep(<span class="number">3000</span>); <span class="comment">// 延迟3秒</span></span><br><span class="line">        &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">            System.out.println(e.getMessage());</span><br><span class="line">        &#125;</span><br><span class="line">        process.destroy();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<hr>
+<p>调用的时候：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">try</span> &#123;</span><br><span class="line">           String cmdString = <span class="string">"ls &gt; out.txt"</span>;</span><br><span class="line">           CmdInvokeSingleton.INSTANCE.execShell(cmdString);</span><br><span class="line">       &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">           e.printStackTrace();</span><br><span class="line">           <span class="keyword">return</span> <span class="string">"invoke failed."</span>;</span><br><span class="line">       &#125;</span><br></pre></td></tr></table></figure>
+<hr>
+<p>下一步可以学习cakephp。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2015/10/05/singleton/" data-id="ck96cxplu004smaam9tqzdkut" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/" rel="tag">设计模式</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-GsonNote" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2015/10/05/GsonNote/" class="article-date">
@@ -664,102 +720,6 @@
 
 
   
-    <article id="post-pyqt绘图库" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2014/12/23/pyqt%E7%BB%98%E5%9B%BE%E5%BA%93/" class="article-date">
-  <time datetime="2014-12-23T09:52:55.000Z" itemprop="datePublished">2014-12-23</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/%E9%85%8D%E7%BD%AE/">配置</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2014/12/23/pyqt%E7%BB%98%E5%9B%BE%E5%BA%93/">pyqt绘图库</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>先记录下ubuntu下pygal的安装命令:</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">sudo pip install pygal</span><br><span class="line">sudo pip install cssselect</span><br><span class="line">sudo pip install tinycss</span><br><span class="line">sudo apt-get update</span><br><span class="line">sudo apt-get install libxml2 libxml2-dev</span><br><span class="line">sudo apt-get install python-libxml2 python-libxslt1</span><br><span class="line">sudo apt-get install python2.7-dev</span><br><span class="line">sudo apt-get install idle </span><br><span class="line">sudo apt-get install libxslt-dev  </span><br><span class="line">sudo apt-get install libxml2 libxml2-dev</span><br><span class="line">sudo pip install lxml </span><br><span class="line">sudo apt-get install python-lxml</span><br><span class="line">sudo apt-get install libffi-dev </span><br><span class="line">sudo pip install cairosvg</span><br><span class="line">sudo pip install cssselect</span><br></pre></td></tr></table></figure>
-
-
-<p>pycharm下配置Pyqt4:</p>
-<ol>
-<li><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">sudo apt-get install python-pip</span><br><span class="line">sudo apt-get install build-essential</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>pyqt4:</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo apt-get install libxext6 libxext-dev libqt4-dev libqt4-gui libqt4-sql qt4-dev-tools qt4-doc qt4-designer qt4-qtconfig "python-qt4-*" python-qt4</span><br></pre></td></tr></table></figure>
-
-</li>
-</ol>
-<p>3.安装pycharm(官网下载)专业版支持django<br>解压到program下(用VNC图形界面下操作)<br>用户名：<br><code>EMBRACE</code><br>密钥：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">14203-12042010</span><br><span class="line">0000107Iq75C621P7X1SFnpJDivKnX</span><br><span class="line">6zcwYOYaGK3euO3ehd1MiTT&quot;2!Jny8</span><br><span class="line">bff9VcTSJk7sRDLqKRVz1XGKbMqw3G</span><br></pre></td></tr></table></figure>
-<p>脚本默认启动目录：<code>/usr/local/bin/charm</code></p>
-<p>4.</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">apt-get install python-lxml</span><br><span class="line">pip install lxml</span><br><span class="line">apt-get install libffi-dev</span><br><span class="line">pip install cairosvg</span><br><span class="line">pip install tinycss</span><br><span class="line">pip install cssselect</span><br><span class="line">pip install pygal</span><br></pre></td></tr></table></figure>
-<p>5.<code>pycharm+pyqt4</code>配置：<br><a href="http://www.jb51.net/softjc/127737.html" target="_blank" rel="noopener">http://www.jb51.net/softjc/127737.html</a></p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">sudo apt-get install qdevelop </span><br><span class="line">sudo apt-get install libqwt5-qt4 libqwt5-qt4-dev</span><br><span class="line">sudo apt-get install libqt4-sql-mysql</span><br><span class="line">sudo apt-get install pyqt4-dev-tools</span><br></pre></td></tr></table></figure>
-<p>6.sip安装：<br><code>pip install sip</code>不成功的话：<br><code>easy_install sip</code><br>估计还是不行 绿色安装吧：<br><a href="http://www.riverbankcomputing.com/software/sip/download" target="_blank" rel="noopener">http://www.riverbankcomputing.com/software/sip/download</a><br>解压缩，进文件夹然后：<br><code>python configure.py</code><br>检查<code>sip -V</code>是否成功。</p>
-<p>7.用ubuntu的软件中心安装软件cx_Freeze失败所以：</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo pip install cx_Freeze</span><br></pre></td></tr></table></figure>
-<ol start="8">
-<li><p>pycharm连接qtdesigner:<br>pycharm中：<br><code>File-&gt;settings-&gt;Tools-&gt;external tools</code><br>‘+’增加一个工具，<br>Program选择qtdesigner的运行路径；<br><code>Working directory</code>中输入<code>$ProjectFileDir$</code></p>
-</li>
-<li><p>pycharm连接pyuic:<br>先安装：</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo apt-get install pyqt4-dev-tools</span><br></pre></td></tr></table></figure>
-<p>测试pyuic命令能否运行。</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">pyuic</span><br></pre></td></tr></table></figure>
-<p>pycharm中：<br><code>File-&gt;settings-&gt;Tools-&gt;external tools</code><br>‘+’增加一个工具，<br>Program输入：<br><code>pyuic4</code><br>参数输入：<br><code>-x $FileName$ -o $FileNameWithoutExtension$.py</code><br><code>Working directory</code>中输入:<br><code>$ProjectFileDir$</code></p>
-</li>
-</ol>
-<p>示例命令:</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">pyuic4 -x untitled.ui -o untitled.py</span><br></pre></td></tr></table></figure>
-
-
-<p>三种绘制表格的库: </p>
-<p>1.第一种pygal:<br><a href="http://pygal.org/" target="_blank" rel="noopener">http://pygal.org/</a></p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">apt-get install python-lxml</span><br><span class="line">pip install lxml</span><br><span class="line">pip install cairosvg</span><br><span class="line">pip install tinycss</span><br><span class="line">pip install cssselect</span><br><span class="line">pip install pygal</span><br></pre></td></tr></table></figure>
-
-<ol start="2">
-<li><p>第二种matplotlib:</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">apt-get install python-numpy</span><br><span class="line">apt-get install python-scipy</span><br><span class="line">apt-get install libpng-dev</span><br><span class="line">apt-get install python-matplotlib</span><br><span class="line">pip install matplotlib</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>第三种pycha:</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">pip install pycha</span><br></pre></td></tr></table></figure>
-
-</li>
-</ol>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2014/12/23/pyqt%E7%BB%98%E5%9B%BE%E5%BA%93/" data-id="ck96cxplr004emaam24ku3y35" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E9%85%8D%E7%BD%AE/" rel="tag">配置</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -786,6 +746,10 @@
       <ul>
         
           <li>
+            <a href="/2020/06/15/2020-06/jdk11%E4%B8%8Bg1%E6%94%B6%E9%9B%86%E5%99%A8%E4%BD%BF%E7%94%A8/">jdk11下g1收集器使用</a>
+          </li>
+        
+          <li>
             <a href="/2020/06/08/2020-06/mysql%E5%8F%AF%E9%87%8D%E5%A4%8D%E8%AF%BB%E4%B8%8B%E7%94%A8for-update%E5%AF%BC%E8%87%B4%E7%9A%84%E6%AD%BB%E9%94%81/">mysql可重复读下用for update导致的死锁</a>
           </li>
         
@@ -799,10 +763,6 @@
         
           <li>
             <a href="/2020/03/26/2020-03/%E5%88%A9%E7%94%A8UTF-8%E7%BC%96%E7%A0%81%E7%9A%84%E7%89%B9%E6%80%A7%E8%BF%9B%E8%A1%8C%E4%BC%98%E5%8C%96/">利用UTF-8编码的特性进行优化</a>
-          </li>
-        
-          <li>
-            <a href="/2020/03/24/2020-03/linux%E8%87%AA%E8%BF%9E%E6%8E%A5/">linux自连接</a>
           </li>
         
       </ul>

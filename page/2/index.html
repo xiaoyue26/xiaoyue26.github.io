@@ -72,6 +72,70 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-12/分布式限流-redis-令牌桶" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/12/28/2019-12/%E5%88%86%E5%B8%83%E5%BC%8F%E9%99%90%E6%B5%81-redis-%E4%BB%A4%E7%89%8C%E6%A1%B6/" class="article-date">
+  <time datetime="2019-12-28T13:34:45.000Z" itemprop="datePublished">2019-12-28</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/12/28/2019-12/%E5%88%86%E5%B8%83%E5%BC%8F%E9%99%90%E6%B5%81-redis-%E4%BB%A4%E7%89%8C%E6%A1%B6/">分布式限流: redis+令牌桶</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>限流一般有漏桶和令牌桶两种实现，详情网上很多资料。<br>一般都会选用令牌桶算法，比较灵活，可以支持预热、容忍一定突发流量、预支一部分流量的弹性。</p>
+<h1 id="单进程限流"><a href="#单进程限流" class="headerlink" title="单进程限流"></a>单进程限流</h1><p>单个jvm限流有现成的库，谷歌的guava库提供了<code>RateLimiter</code>,底层实现上有两个，一个是能容忍突发的实现，一个是能提供预热功能的实现；通过create时提供不同的参数来获得。</p>
+<h2 id="实现原理"><a href="#实现原理" class="headerlink" title="实现原理"></a>实现原理</h2><h3 id="朴素解法"><a href="#朴素解法" class="headerlink" title="朴素解法"></a>朴素解法</h3><p>如果按照令牌桶算法朴素的定义来实现的话，一个很自然的思路就是增加一个定时线程、进程，然后不断生成新的token; </p>
+<h4 id="朴素解法的缺点"><a href="#朴素解法的缺点" class="headerlink" title="朴素解法的缺点"></a>朴素解法的缺点</h4><p>重度依赖这个定时线程，如果定时程序挂了，所有工作线程就被卡住了，风险较大。<br>如果给定时线程加监控，又会需要监控的监控，那就变成俄罗斯套娃了。</p>
+<h3 id="guava库中的解法"><a href="#guava库中的解法" class="headerlink" title="guava库中的解法"></a>guava库中的解法</h3><p>需要访问者多输入一个参数: 当前时钟。<br><code>lazy eval</code>: 每次取token的时候才计算当前”应该”有多少token。<br>基于时钟来计算: 当前时钟下, 过去了多久没有生成token，应该生成多少新的token。<br>核心代码:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment">   * Updates &#123;<span class="doctag">@code</span> storedPermits&#125; and &#123;<span class="doctag">@code</span> nextFreeTicketMicros&#125; based on the current time.</span></span><br><span class="line"><span class="comment">   */</span></span><br><span class="line">  <span class="function"><span class="keyword">void</span> <span class="title">resync</span><span class="params">(<span class="keyword">long</span> nowMicros)</span> </span>&#123;</span><br><span class="line">    <span class="comment">// if nextFreeTicket is in the past, resync to now</span></span><br><span class="line">    <span class="keyword">if</span> (nowMicros &gt; nextFreeTicketMicros) &#123;</span><br><span class="line">      storedPermits = min(maxPermits,</span><br><span class="line">          storedPermits</span><br><span class="line">            + (nowMicros - nextFreeTicketMicros) / coolDownIntervalMicros());</span><br><span class="line">      nextFreeTicketMicros = nowMicros;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
+<h3 id="guava库中解法的优点"><a href="#guava库中解法的优点" class="headerlink" title="guava库中解法的优点"></a>guava库中解法的优点</h3><p>开销更低: 去掉了定时线程的开销;<br>健壮性更高: 每个线程都可以承担生成新token的任务;</p>
+<h3 id="guava库中解法的缺点"><a href="#guava库中解法的缺点" class="headerlink" title="guava库中解法的缺点"></a>guava库中解法的缺点</h3><p>每个线程的时钟得对齐。但这一点在单进程场景下很好保证。</p>
+<h2 id="使用"><a href="#使用" class="headerlink" title="使用"></a>使用</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> com.google.common.util.concurrent.RateLimiter;</span><br><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">run1</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        RateLimiter limiter = RateLimiter.create(<span class="number">5</span>);<span class="comment">// 令牌桶</span></span><br><span class="line">        <span class="keyword">while</span> (<span class="keyword">true</span>) &#123;</span><br><span class="line">            System.out.println(<span class="string">"get 1 tokens: "</span> + limiter.acquire() + <span class="string">"s"</span></span><br><span class="line">            );</span><br><span class="line"></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 3秒预热期: 预热期内限频较严格: 1.3s , 0.9s , 0.6s // 线性提速</span></span><br><span class="line"><span class="comment">     * 预热期后: 正式达到1秒2个的额定速度.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">run2</span><span class="params">()</span> </span>&#123;<span class="comment">// 预热测试</span></span><br><span class="line">        RateLimiter r = RateLimiter.create(<span class="number">2</span>, <span class="number">3</span>, TimeUnit.SECONDS);</span><br><span class="line">        <span class="keyword">while</span> (<span class="keyword">true</span>) &#123;</span><br><span class="line">            System.out.println(<span class="string">"get 1 tokens: "</span> + r.acquire(<span class="number">1</span>) + <span class="string">"s"</span>);</span><br><span class="line">            System.out.println(<span class="string">"get 1 tokens: "</span> + r.acquire(<span class="number">1</span>) + <span class="string">"s"</span>);</span><br><span class="line">            System.out.println(<span class="string">"get 1 tokens: "</span> + r.acquire(<span class="number">1</span>) + <span class="string">"s"</span>);</span><br><span class="line">            System.out.println(<span class="string">"get 1 tokens: "</span> + r.acquire(<span class="number">1</span>) + <span class="string">"s"</span>);</span><br><span class="line">            System.out.println(<span class="string">"end"</span>);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">run3</span><span class="params">()</span> </span>&#123;<span class="comment">// 突发测试</span></span><br><span class="line">        RateLimiter r = RateLimiter.create(<span class="number">5</span>);</span><br><span class="line">        <span class="keyword">while</span> (<span class="keyword">true</span>) &#123;</span><br><span class="line">            System.out.println(<span class="string">"get 5 tokens: "</span> + r.acquire(<span class="number">5</span>) + <span class="string">"s"</span>);</span><br><span class="line">            System.out.println(<span class="string">"get 1 tokens: "</span> + r.acquire(<span class="number">1</span>) + <span class="string">"s"</span>);<span class="comment">// 每次都负责还债</span></span><br><span class="line">            System.out.println(<span class="string">"get 1 tokens: "</span> + r.acquire(<span class="number">1</span>) + <span class="string">"s"</span>);</span><br><span class="line">            System.out.println(<span class="string">"get 1 tokens: "</span> + r.acquire(<span class="number">1</span>) + <span class="string">"s"</span>);</span><br><span class="line">            System.out.println(<span class="string">"end"</span>);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<h1 id="分布式限流"><a href="#分布式限流" class="headerlink" title="分布式限流"></a>分布式限流</h1><p>如果是多实例的情况下,下游处理能力有上限时(例如物料有限),需要对整体有一个限流。<br>可以参考guava的实现,实现一个基于redis的，有一定弹性的令牌桶实现:<br>(由于是借鉴guava的实现，所以有相同的依赖: 所有进程、机器的时钟对齐)</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">tokenLimitDemo</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        DefaultRedisScript&lt;Long&gt; lua = <span class="keyword">new</span> DefaultRedisScript&lt;&gt;();</span><br><span class="line">        lua.setResultType(Long<span class="class">.<span class="keyword">class</span>)</span>;</span><br><span class="line">        lua.setScriptSource(<span class="keyword">new</span> ResourceScriptSource(<span class="keyword">new</span></span><br><span class="line">                ClassPathResource(<span class="string">"tokenLimiter.lua"</span>)));</span><br><span class="line">        List&lt;String&gt; keys = <span class="keyword">new</span> ArrayList&lt;&gt;();</span><br><span class="line">        keys.add(<span class="string">"test_ip"</span>);</span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; <span class="number">100</span>; i++) &#123;</span><br><span class="line">            Long res = (Long) redisTemplate.execute(lua, keys</span><br><span class="line">                    , <span class="string">"1"</span></span><br><span class="line">                    , String.valueOf(System.currentTimeMillis())</span><br><span class="line">            );</span><br><span class="line">            <span class="keyword">if</span> (res != <span class="number">1</span>) &#123;</span><br><span class="line">                <span class="keyword">try</span> &#123;</span><br><span class="line">                    System.out.println(<span class="string">"waiting"</span>);</span><br><span class="line">                    Thread.sleep(<span class="number">100</span>);</span><br><span class="line">                    i--;</span><br><span class="line">                &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                    e.printStackTrace();</span><br><span class="line">                &#125;</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                System.out.println(res);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>相应的lua脚本: </p>
+<figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- 令牌桶算法:</span></span><br><span class="line"><span class="comment">-- 1. 校验输入:</span></span><br><span class="line"><span class="keyword">local</span> need_token = <span class="built_in">tonumber</span>(ARGV[<span class="number">1</span>])</span><br><span class="line"><span class="keyword">local</span> req_time = <span class="built_in">tonumber</span>(ARGV[<span class="number">2</span>])</span><br><span class="line"><span class="keyword">if</span> <span class="built_in">type</span>(need_token) ~= <span class="string">"number"</span> <span class="keyword">or</span> <span class="built_in">type</span>(req_time) ~= <span class="string">"number"</span> <span class="keyword">then</span></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span></span><br><span class="line"><span class="keyword">end</span></span><br><span class="line"></span><br><span class="line"><span class="comment">-- 2. 校验redis:</span></span><br><span class="line"><span class="keyword">local</span> key = KEYS[<span class="number">1</span>]</span><br><span class="line"><span class="keyword">local</span> info = redis.<span class="built_in">pcall</span>(<span class="string">"HMGET"</span>, key, <span class="string">"last_time"</span>, <span class="string">"cur_token_num"</span>, <span class="string">"max_token"</span>, <span class="string">"rate"</span>)</span><br><span class="line"><span class="keyword">local</span> last_time = <span class="built_in">tonumber</span>(info[<span class="number">1</span>])</span><br><span class="line"><span class="keyword">local</span> cur_token_num = <span class="built_in">tonumber</span>(info[<span class="number">2</span>])</span><br><span class="line"><span class="keyword">local</span> max_token = <span class="built_in">tonumber</span>(info[<span class="number">3</span>])</span><br><span class="line"><span class="keyword">local</span> rate = <span class="built_in">tonumber</span>(info[<span class="number">4</span>])</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> <span class="built_in">type</span>(last_time) ~= <span class="string">"number"</span> <span class="keyword">then</span> <span class="comment">-- init</span></span><br><span class="line">    last_time = req_time</span><br><span class="line">    max_token = <span class="number">2</span> <span class="comment">-- 最大token弹性</span></span><br><span class="line">    cur_token_num = max_token <span class="comment">-- 假设已经预热完毕</span></span><br><span class="line">    rate = <span class="number">1</span></span><br><span class="line">    <span class="comment">-- 初始化redis:</span></span><br><span class="line">    redis.<span class="built_in">pcall</span>(<span class="string">"HMSET"</span>, key, <span class="string">"last_time"</span>, req_time, <span class="string">"cur_token_num"</span>, cur_token_num)</span><br><span class="line">    redis.<span class="built_in">pcall</span>(<span class="string">"HMSET"</span>, key, <span class="string">"max_token"</span>, max_token, <span class="string">"rate"</span>, rate)</span><br><span class="line"><span class="keyword">end</span></span><br><span class="line"></span><br><span class="line"><span class="comment">-- 3. 处理请求:</span></span><br><span class="line"><span class="keyword">local</span> result = <span class="number">0</span></span><br><span class="line"><span class="keyword">if</span> <span class="built_in">tonumber</span>(need_token) &gt; <span class="built_in">tonumber</span>(max_token) <span class="keyword">then</span></span><br><span class="line">    result = <span class="number">0</span></span><br><span class="line"><span class="keyword">end</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">local</span> new_gen_token = <span class="built_in">math</span>.<span class="built_in">floor</span>((req_time - last_time) / <span class="number">1000</span>) * rate</span><br><span class="line"><span class="keyword">local</span> cur_token_num = <span class="built_in">math</span>.<span class="built_in">min</span>(cur_token_num + new_gen_token, max_token)</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> <span class="built_in">tonumber</span>(need_token) &gt; <span class="built_in">tonumber</span>(cur_token_num) <span class="keyword">then</span></span><br><span class="line">    result = <span class="number">0</span></span><br><span class="line"><span class="keyword">else</span> <span class="comment">-- do consume token</span></span><br><span class="line">    cur_token_num = cur_token_num - need_token</span><br><span class="line">    result = <span class="number">1</span></span><br><span class="line">    <span class="comment">-- 保存进度:</span></span><br><span class="line">    redis.<span class="built_in">pcall</span>(<span class="string">"HMSET"</span>, key, <span class="string">"last_time"</span>, req_time, <span class="string">"cur_token_num"</span>, cur_token_num)</span><br><span class="line"><span class="keyword">end</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">return</span> result</span><br></pre></td></tr></table></figure>
+
+
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/12/28/2019-12/%E5%88%86%E5%B8%83%E5%BC%8F%E9%99%90%E6%B5%81-redis-%E4%BB%A4%E7%89%8C%E6%A1%B6/" data-id="ck96cxpqg00ksmaamhw2t7jgz" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2019-12/RTP-RTCP协议" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/12/02/2019-12/RTP-RTCP%E5%8D%8F%E8%AE%AE/" class="article-date">
@@ -1327,72 +1391,6 @@
 
 
   
-    <article id="post-2019-09/静态链接库和动态链接库" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/09/04/2019-09/%E9%9D%99%E6%80%81%E9%93%BE%E6%8E%A5%E5%BA%93%E5%92%8C%E5%8A%A8%E6%80%81%E9%93%BE%E6%8E%A5%E5%BA%93/" class="article-date">
-  <time datetime="2019-09-04T02:24:06.000Z" itemprop="datePublished">2019-09-04</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E6%80%A7%E8%83%BD/">性能</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/09/04/2019-09/%E9%9D%99%E6%80%81%E9%93%BE%E6%8E%A5%E5%BA%93%E5%92%8C%E5%8A%A8%E6%80%81%E9%93%BE%E6%8E%A5%E5%BA%93/">静态链接库和动态链接库</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h2 id="引子"><a href="#引子" class="headerlink" title="引子"></a>引子</h2><p><code>JNI</code>的时候发现要使用<code>so</code>文件、动态链接库，那么究竟什么是动态链接库呢？</p>
-<p>参考:<br><a href="https://www.zhihu.com/question/20484931" target="_blank" rel="noopener">https://www.zhihu.com/question/20484931</a></p>
-<h1 id="概念"><a href="#概念" class="headerlink" title="概念"></a>概念</h1><p>库有两种：静态库和动态库。<br>静态库: <code>.a</code>,<code>.lib</code>;<br>动态库：<code>.so</code>,<code>.dll</code>;<br><code>windows</code>:<code>.lib</code>,<code>.dll</code>;<br><code>linux</code>:<code>.a</code>,<code>.so</code>;</p>
-<p>非库:<br>生成<code>.o</code>文件: <code>g++ -c hellospeak.cpp</code>;<br>// 只产生编译的代码(没有链接link)<br>生成<code>.out</code>文件: <code>g++ hellospeak.cpp speak.cpp -o hellospeak</code>;<br>// 执行完整的编译过程，并且生成一个a.out文件。</p>
-<h1 id="链接过程"><a href="#链接过程" class="headerlink" title="链接过程"></a>链接过程</h1><p>源文件(<code>.h</code>,<code>.cpp</code>)<br>=&gt;预编译=&gt;编译=&gt;汇编<br>=&gt;<strong>链接</strong><br>=&gt;可执行文件</p>
-<p>这里我们主要关心<strong>链接</strong>阶段。</p>
-<h2 id="静态库"><a href="#静态库" class="headerlink" title="静态库"></a>静态库</h2><p>链接阶段:<br>汇编生成的<code>.o</code>+引用的库=&gt; 可执行文件;</p>
-<h3 id="缺点"><a href="#缺点" class="headerlink" title="缺点"></a>缺点</h3><ol>
-<li>静态库在内存中可能造成空间浪费。<br>如100个进程都使用了静态库A，则内存中有100份占用。</li>
-<li>更新库不灵活。</li>
-</ol>
-<h2 id="动态库-又称共享库"><a href="#动态库-又称共享库" class="headerlink" title="动态库(又称共享库)"></a>动态库(又称共享库)</h2><p>链接阶段：<br>不加入引用的库。推迟到运行时。<br>运行时：<br>动态加载<code>.so</code>,<code>.dll</code>文件。</p>
-<h3 id="缺点-1"><a href="#缺点-1" class="headerlink" title="缺点"></a>缺点</h3><p>多了运行时计算符号链接的开销，但是这个开销不大。</p>
-<p>所以jni只能使用动态链接库。(linux的话就是<code>so</code>文件)</p>
-<h2 id="gcc相关参数"><a href="#gcc相关参数" class="headerlink" title="gcc相关参数"></a>gcc相关参数</h2><p><a href="https://colobu.com/2018/08/28/15-Most-Frequently-Used-GCC-Compiler-Command-Line-Options/" target="_blank" rel="noopener">https://colobu.com/2018/08/28/15-Most-Frequently-Used-GCC-Compiler-Command-Line-Options/</a></p>
-<p><code>-fPIC</code>: 产生位置无关的代码；<br><code>-shared</code>: 产生共享库;(动态库)<br>例子:</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">gcc -c -Wall -Werror -fPIC Cfile.c</span><br><span class="line">gcc -shared -o libCfile.so Cfile.o</span><br></pre></td></tr></table></figure>
-
-<p><code>-static</code>: 生成静态链接的文件<br>例子:</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">gcc main.c -static -o main -lpthread</span><br></pre></td></tr></table></figure>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/09/04/2019-09/%E9%9D%99%E6%80%81%E9%93%BE%E6%8E%A5%E5%BA%93%E5%92%8C%E5%8A%A8%E6%80%81%E9%93%BE%E6%8E%A5%E5%BA%93/" data-id="ck96cxpq900k4maamdzml6iii" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/JNI/" rel="tag">JNI</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1419,6 +1417,10 @@
       <ul>
         
           <li>
+            <a href="/2020/06/15/2020-06/jdk11%E4%B8%8Bg1%E6%94%B6%E9%9B%86%E5%99%A8%E4%BD%BF%E7%94%A8/">jdk11下g1收集器使用</a>
+          </li>
+        
+          <li>
             <a href="/2020/06/08/2020-06/mysql%E5%8F%AF%E9%87%8D%E5%A4%8D%E8%AF%BB%E4%B8%8B%E7%94%A8for-update%E5%AF%BC%E8%87%B4%E7%9A%84%E6%AD%BB%E9%94%81/">mysql可重复读下用for update导致的死锁</a>
           </li>
         
@@ -1432,10 +1434,6 @@
         
           <li>
             <a href="/2020/03/26/2020-03/%E5%88%A9%E7%94%A8UTF-8%E7%BC%96%E7%A0%81%E7%9A%84%E7%89%B9%E6%80%A7%E8%BF%9B%E8%A1%8C%E4%BC%98%E5%8C%96/">利用UTF-8编码的特性进行优化</a>
-          </li>
-        
-          <li>
-            <a href="/2020/03/24/2020-03/linux%E8%87%AA%E8%BF%9E%E6%8E%A5/">linux自连接</a>
           </li>
         
       </ul>
