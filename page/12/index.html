@@ -72,6 +72,200 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-03/高性能Mysql笔记-第五章-2" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/03/03/2018-03/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC%E4%BA%94%E7%AB%A0-2/" class="article-date">
+  <time datetime="2018-03-03T09:11:25.000Z" itemprop="datePublished">2018-03-03</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/03/03/2018-03/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC%E4%BA%94%E7%AB%A0-2/">高性能Mysql笔记-第五章(2)</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h2 id="5-3-7-使用索引扫描来做排序"><a href="#5-3-7-使用索引扫描来做排序" class="headerlink" title="5.3.7 使用索引扫描来做排序"></a>5.3.7 使用索引扫描来做排序</h2><p>Mysql生成有序结果的两种方法: (详见第7章)</p>
+<ol>
+<li>排序操作. </li>
+<li>按索引顺序扫描.</li>
+</ol>
+<p>// explain结果中的type,如果为<code>index</code>,则使用第二种方法,按索引顺序扫描.<br>按索引顺序扫描工作流程:(Innodb二级索引)</p>
+<ol>
+<li>顺序扫描索引,获取主键指针;</li>
+<li>回表查询相应主键的数据行.<br>如果索引是覆盖索引,则可以避免上述第二步,减少一次磁盘IO,并且避免大范围扫描时的大量随机IO.</li>
+</ol>
+<p><strong>正确示例:</strong><br><strong>索引为(a,b,c)</strong><br>示例1:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> a,b,c <span class="keyword">from</span> t</span><br><span class="line"><span class="keyword">where</span> a=<span class="string">'xxx'</span> <span class="keyword">ORDER</span> <span class="keyword">BY</span> b,c</span><br></pre></td></tr></table></figure>
+<p>组合where条件和order by条件,而且都是顺序(ASC). 此外如果组合后是索引的最左前缀,也是可以利用索引进行排序的.</p>
+<p><strong>错误示例</strong><br>示例2:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> a,b,c <span class="keyword">from</span> t</span><br><span class="line"><span class="keyword">where</span> a=<span class="string">'xxx'</span> <span class="keyword">order</span> <span class="keyword">by</span> b <span class="keyword">DESC</span>,c ASC.</span><br></pre></td></tr></table></figure>
+<p>由于顺序和建立索引的不同,因此不能利用到索引进行排序.<br>如果需要按不同方向排序, 可以通过存储这列的相反数或者反转值, 满足这种需求.</p>
+<p>示例3:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> a,b,c <span class="keyword">from</span> t</span><br><span class="line"><span class="keyword">where</span> a&gt;<span class="string">'xxx'</span> <span class="keyword">order</span> <span class="keyword">by</span> b,c</span><br></pre></td></tr></table></figure>
+<p>由于a是范围查询,因此无法利用索引的其他列(b和c).</p>
+<h2 id="5-3-8-压缩-前缀压缩-索引"><a href="#5-3-8-压缩-前缀压缩-索引" class="headerlink" title="5.3.8 压缩(前缀压缩)索引"></a>5.3.8 压缩(前缀压缩)索引</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">仅对于MyISAM引擎.</span><br></pre></td></tr></table></figure>
+<p><code>MyISAM</code>使用前缀压缩来减少索引的大小,从而让更多的索引可以放入内存中.</p>
+<ul>
+<li><p>压缩对象:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">1. 字符串(默认设置)</span><br><span class="line">2. 整数(用参数设置)</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>压缩方法:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">1. 完全保存索引块的第一个值;</span><br><span class="line">2. 从第二个值开始,保存:(相同前缀字节数,剩余部分)</span><br><span class="line"></span><br><span class="line">例如原始数据为:</span><br><span class="line">1. perform</span><br><span class="line">2. performance</span><br><span class="line"></span><br><span class="line">压缩后:</span><br><span class="line">1. perform (完整保存)</span><br><span class="line">2. 7,ance  (相同前缀字节数,剩余部分)</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>压缩优点:<br>使用更少空间;</p>
+</li>
+<li><p>压缩缺点:<br>某些操作变慢: 因为每个值的压缩前缀都依赖前面的值,所以MyISAM查找时无法二分查找. 正序扫描不受影响,倒序扫描性能变慢.<br>块中查找某一行的平均耗时: 扫描半个索引块. </p>
+</li>
+<li><p>压缩索引使用场景:<br>IO密集型查询.(减少传输量,可能只需要1/10的磁盘大小)</p>
+</li>
+<li><p>压缩索引不适用的场景:<br>CPU密集型查询.(因为扫描需要随机查找)</p>
+</li>
+</ul>
+<h2 id="5-3-9-冗余和重复索引"><a href="#5-3-9-冗余和重复索引" class="headerlink" title="5.3.9 冗余和重复索引"></a>5.3.9 冗余和重复索引</h2><ul>
+<li><p>背景:<br>MySQL允许在列上创建多个索引.</p>
+</li>
+<li><p>重复索引:<br>相同列,顺序相同,类型相同的索引.<br>(例: 同一列上建立主键和唯一索引,事实上唯一限制和主键限制都是通过索引实现的,事实上建立了重复索引)</p>
+</li>
+<li><p>冗余索引:<br>前缀索引与索引冗余.<br>(例: 索引(A,B)与索引(A)冗余.)</p>
+</li>
+</ul>
+<p>处理:</p>
+<ol>
+<li>重复索引应该移除;</li>
+<li>冗余索引应该考虑移除:<br>(1) 如果原来的索引已经太长到影响性能,可以保留冗余索引<br>(2) 如果(1)不成立,应该尽量移除冗余索引.</li>
+</ol>
+<p>索引太多的缺点:</p>
+<ol>
+<li>写入速度变慢;(可以通过禁用索引,然后延迟build索引优化)</li>
+<li>查询时mysql需要选择索引,索引多的话需要比较的索引也变多,影响查询计划的<br>生成速度.</li>
+<li>存储索引成本增加.</li>
+</ol>
+<h2 id="5-3-10-未使用的索引"><a href="#5-3-10-未使用的索引" class="headerlink" title="5.3.10 未使用的索引"></a>5.3.10 未使用的索引</h2><p>检查各个索引的使用频率:</p>
+<ol>
+<li>打开userstates参数;(默认是关闭的)</li>
+<li>mysql服务器正常运行一段时间;(可以考虑使用benchmark)</li>
+<li>查询Information_schema.Index_statistics,查到每个索引的使用频率.</li>
+</ol>
+<h2 id="5-3-11-索引和锁"><a href="#5-3-11-索引和锁" class="headerlink" title="5.3.11 索引和锁"></a>5.3.11 索引和锁</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">以下讨论Innodb引擎</span><br></pre></td></tr></table></figure>
+
+<p>索引可以让查询锁定更少的行:</p>
+<ol>
+<li>减少内存使用;</li>
+<li>减少锁争用,提高并发度.</li>
+</ol>
+<ul>
+<li><p>早期Mysql:<br>事务提交后才释放锁;</p>
+</li>
+<li><p>新版本Mysql:<br>服务器端过滤掉行后,释放没用到的行锁.</p>
+</li>
+<li><p>示例</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">Set</span> autoCommit=<span class="number">0</span>;<span class="comment">-- 默认是每句都是一个事务</span></span><br><span class="line"><span class="comment">-- 这里改成显式提交。</span></span><br><span class="line"><span class="keyword">BEGIN</span>；</span><br><span class="line"><span class="keyword">Explain</span></span><br><span class="line"><span class="keyword">select</span> actor_id <span class="keyword">from</span> t</span><br><span class="line"><span class="keyword">where</span> actor_id&lt;<span class="number">5</span> <span class="keyword">and</span> actor_id!=<span class="number">1</span> </span><br><span class="line"><span class="keyword">FOR</span> <span class="keyword">Update</span>; <span class="comment">-- 加上排他锁</span></span><br><span class="line"></span><br><span class="line">Extra列：</span><br><span class="line">Using Where;Using index</span><br></pre></td></tr></table></figure>
+<p>从Extra列可以看出，虽然使用了索引，但依然有<code>Using Where</code>，意思是使用索引从存储引擎获取到一些数据行，传送给服务器后，依然要使用Where条件进行过滤。因此这个查询锁住的并不只是id为2-4的行。<br>（TODO： 验证锁住的范围，以及索引类型是否为主键的影响）</p>
+</li>
+</ul>
+<p>Innodb不同索引对应的锁：</p>
+<ol>
+<li>主键索引： 排他锁（写锁）；</li>
+<li>二级索引： 共享锁（读锁）。</li>
+</ol>
+<h2 id="5-4-索引案例"><a href="#5-4-索引案例" class="headerlink" title="5.4 索引案例"></a>5.4 索引案例</h2><h3 id="5-4-1-支持多种过滤条件"><a href="#5-4-1-支持多种过滤条件" class="headerlink" title="5.4.1 支持多种过滤条件"></a>5.4.1 支持多种过滤条件</h3><p>也就是支持Where条件。<br>作为过滤条件的列需要考察的3个属性，按重要性如下：</p>
+<ol>
+<li>查询频率；</li>
+<li>相关查询是否是范围查询，或者列的取值是否可枚举。</li>
+<li>选择性。</li>
+</ol>
+<p>设计索引的原则：</p>
+<ol>
+<li>查询频率高，则应该加入索引；</li>
+<li>如果是范围查询，则如果作为联合索引的一列，应该放在后面；（因为最左前缀无法利用范围查询后的列）<br>如果是可枚举列，则查询语句中可以使用In (‘male’,’female’)绕过列顺序限制，让Mysql始终能够应用相关索引；</li>
+<li>满足前两个条件后，应该把选择性高的列放在联合索引的前面。</li>
+</ol>
+<p>案例：<br>查询频率高的列，组成联合索引：<br>(sex,country,age)</p>
+<p>由于sex的枚举值少，可以放在最前面。<br>由于age值一般是范围查询，所以应该放在最后面。</p>
+<ul>
+<li>注意事项：</li>
+</ul>
+<ol>
+<li>避免使用多个范围查询；</li>
+<li>通过枚举列(IN条件)，让Mysql尽量使用到索引。</li>
+</ol>
+<h3 id="5-4-3-优化排序"><a href="#5-4-3-优化排序" class="headerlink" title="5.4.3 优化排序"></a>5.4.3 优化排序</h3><ul>
+<li><p>示例1：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> <span class="keyword">profiles</span></span><br><span class="line"><span class="keyword">where</span> sex=<span class="string">'M'</span> </span><br><span class="line"><span class="keyword">order</span> <span class="keyword">by</span> rating <span class="keyword">limit</span> <span class="number">10</span></span><br></pre></td></tr></table></figure>
+<p>可以考虑建立索引(sex,rating)来优化查询。</p>
+</li>
+<li><p>示例2：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> <span class="keyword">profiles</span></span><br><span class="line"><span class="keyword">where</span> sex=<span class="string">'M'</span></span><br><span class="line"><span class="keyword">order</span> <span class="keyword">by</span> rating <span class="keyword">limit</span> <span class="number">10000</span>,<span class="number">10</span></span><br></pre></td></tr></table></figure>
+<p>这个查询的性能难点在于偏移量太大。<br>Mysql需要花费大量的时间扫描需要丢弃的数据。</p>
+</li>
+</ul>
+<p>解决方案：</p>
+<ol>
+<li>预先计算+缓存；</li>
+<li>覆盖索引+延迟关联。</li>
+</ol>
+<p>方案2的代码如下：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> <span class="keyword">profiles</span> <span class="keyword">AS</span>　ａ　</span><br><span class="line"><span class="keyword">join</span></span><br><span class="line">    (<span class="keyword">select</span> <span class="keyword">id</span> <span class="keyword">from</span> <span class="keyword">profiles</span></span><br><span class="line">    <span class="keyword">where</span> sex=<span class="string">'M'</span> </span><br><span class="line">    <span class="keyword">order</span> <span class="keyword">by</span> rating <span class="keyword">limit</span> <span class="number">10000</span>,<span class="number">10</span></span><br><span class="line">    ) <span class="keyword">as</span> b </span><br><span class="line"><span class="keyword">on</span> a.id=b.id</span><br></pre></td></tr></table></figure>
+
+<h2 id="5-5-维护索引和表"><a href="#5-5-维护索引和表" class="headerlink" title="5.5 维护索引和表"></a>5.5 维护索引和表</h2><p>相关内容包括：</p>
+<ol>
+<li>找到并修复损坏的表；</li>
+<li>维护准确的索引信息；</li>
+<li>减少碎片。</li>
+</ol>
+<h3 id="5-5-1-找到并修复损坏的表"><a href="#5-5-1-找到并修复损坏的表" class="headerlink" title="5.5.1 找到并修复损坏的表"></a>5.5.1 找到并修复损坏的表</h3><ul>
+<li>相关命令：<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- 检查：</span></span><br><span class="line"><span class="keyword">Check</span> <span class="keyword">Table</span> xxx</span><br><span class="line"><span class="comment">-- 修复方法1：</span></span><br><span class="line"><span class="keyword">Repair</span> <span class="keyword">Table</span> xxx</span><br><span class="line"><span class="comment">-- 修复方法2：(重建表)</span></span><br><span class="line"><span class="keyword">Alter</span> <span class="keyword">table</span> innodb_tbl <span class="keyword">engine</span>=<span class="keyword">innodb</span>;</span><br><span class="line"><span class="comment">-- 注意此处引擎类型应该与原先一致。</span></span><br></pre></td></tr></table></figure>
+
+</li>
+</ul>
+<h3 id="5-5-2-维护索引信息"><a href="#5-5-2-维护索引信息" class="headerlink" title="5.5.2 维护索引信息"></a>5.5.2 维护索引信息</h3><ul>
+<li>相关命令：<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- 重新生成统计信息：</span></span><br><span class="line"><span class="keyword">Analyze</span> <span class="keyword">Table</span> xxx</span><br></pre></td></tr></table></figure>
+
+</li>
+</ul>
+<p>Innodb引擎则不在磁盘存储索引统计信息，而是通过随机的索引抽样访问获取信息存储在内存。<br>相关参数：<br><code>innodb_stats_sample_pages</code><br>设置样本页的数量。</p>
+<h3 id="5-5-3-减少索引和数据的碎片"><a href="#5-5-3-减少索引和数据的碎片" class="headerlink" title="5.5.3 减少索引和数据的碎片"></a>5.5.3 减少索引和数据的碎片</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">以下针对B-Tree索引。</span><br></pre></td></tr></table></figure>
+<p>碎片的类型：</p>
+<ol>
+<li>行碎片；数据行被分散存储到多个地方。</li>
+<li>行间碎片： 顺序的行被存储到多个地方；</li>
+<li>剩余空间碎片： 数据页中有大量空余空间。</li>
+</ol>
+<p>相关命令：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">Optimize</span> <span class="keyword">table</span> xxx</span><br><span class="line"><span class="comment">-- 或者可以重建表/索引，也可以消除碎片。</span></span><br></pre></td></tr></table></figure>
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/03/03/2018-03/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC%E4%BA%94%E7%AB%A0-2/" data-id="ck96cxpo000bbmaam29jlezf2" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-02/高性能Mysql笔记-第5章" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/02/11/2018-02/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC5%E7%AB%A0/" class="article-date">
@@ -1505,118 +1699,6 @@
 
 
   
-    <article id="post-2018-01/高性能Mysql笔记-全文索引" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/01/14/2018-01/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E5%85%A8%E6%96%87%E7%B4%A2%E5%BC%95/" class="article-date">
-  <time datetime="2018-01-14T11:33:44.000Z" itemprop="datePublished">2018-01-14</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/mysql/">mysql</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/01/14/2018-01/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E5%85%A8%E6%96%87%E7%B4%A2%E5%BC%95/">高性能Mysql笔记-全文索引</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="MyISAM的全文索引-第七章"><a href="#MyISAM的全文索引-第七章" class="headerlink" title="MyISAM的全文索引(第七章)"></a>MyISAM的全文索引(第七章)</h1><p>有很多限制,比较弱.</p>
-<ul>
-<li><p>作用对象:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">全文集合: 将需要索引的列全部拼接成一个字符串,然后进行索引.</span><br></pre></td></tr></table></figure>
-<p>由于是对列进行拼接,因此无法设置哪一列更重要.(没有权重)</p>
-</li>
-<li><p>实现:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">B-Tree索引,两层.</span><br><span class="line">第一层: 所有关键字;</span><br><span class="line">第二层: 一组相关的文档指针.</span><br></pre></td></tr></table></figure>
-<p>全文索引不会索引文档对象中的所有词语,过滤规则如下:</p>
-</li>
-</ul>
-<ol>
-<li>停用词. 默认按通用英语的使用,可以通过参数ft_stopword_file指定;</li>
-<li>长度条件. ft_min_word_len &lt;=len &lt;= ft_max_word_len. </li>
-</ol>
-<h2 id="7-10-1-自然语言的全文索引"><a href="#7-10-1-自然语言的全文索引" class="headerlink" title="7.10.1 自然语言的全文索引"></a>7.10.1 自然语言的全文索引</h2><p>文档对象和查询的相关度.<br>相关度= f(匹配的关键词个数,关键词在文档中出现的次数)</p>
-<p>原理:<br>索引中出现次数越少=&gt;相关度越高<br>常见单词=&gt;相关度低.</p>
-<p>创建全文索引语法:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ALTER TABLE film_text ADD FULLTEXT INDEX fulltext_article(title,description);</span><br></pre></td></tr></table></figure>
-
-
-<p>自然语言搜索的查询语法:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">select film_id,title,Right(description,25)</span><br><span class="line">,Match(title,description) against (&#39;factor casualties&#39;) as relevance -- 相关度</span><br><span class="line">FROM film_text</span><br><span class="line">WHERE  Match(title,description) against (&#39;factor casualties&#39;)</span><br></pre></td></tr></table></figure>
-<p>执行计划:<br>Mysql将搜索词语分为两个独立的关键词进行搜索. (<code>factory</code>和<code>casualties</code>)<br>搜索对象: <code>title</code>和<code>description</code>组成的列的全文索引.</p>
-<h2 id="7-10-2-布尔全文索引"><a href="#7-10-2-布尔全文索引" class="headerlink" title="7.10.2 布尔全文索引"></a>7.10.2 布尔全文索引</h2><p>编写布尔搜索查询时,可以通过一些前缀修饰符来定制搜索.</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">dino: 包含dino的行rank更高;</span><br><span class="line">~dino: 包含dino的行rank更低;</span><br><span class="line">+dino: 行记录必须包含dino;</span><br><span class="line">-dino: 行记录不能包含dino;</span><br><span class="line">dino*: 以dino开头的行rank更高.</span><br><span class="line">本例中dino作为搜索词可能太短,其实太短的词并不会被全文索引,查询优化器也可能要求搜索词&gt;&#x3D;ft_min_word_len.</span><br></pre></td></tr></table></figure>
-
-<p>查询语法:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">select film_id,title,right(description,25)</span><br><span class="line">FROM film_text</span><br><span class="line">where match(title,description)</span><br><span class="line">Against(&#39;+factory +casualties&#39; In Boolean Mode);</span><br><span class="line">-- title拼接description后必须同时包含factory和casualties</span><br></pre></td></tr></table></figure>
-
-<h2 id="7-10-3-插件和限制"><a href="#7-10-3-插件和限制" class="headerlink" title="7.10.3 插件和限制"></a>7.10.3 插件和限制</h2><p>可以加入插件改变:</p>
-<ol>
-<li>分词方式(如C++);</li>
-<li>预处理(如PDF).</li>
-</ol>
-<p>Mysql全文索引判断相关性的方法: 词频;<br>限制: </p>
-<ol>
-<li>全文索引能全部load到内存时,才能快.</li>
-<li>判断相关性只有词频,没有顺序;</li>
-<li>优化器会优先使用全文索引,而不管是否有其他更优索引, 并且全文索引会在其他索引之前使用. </li>
-<li>碎片多.</li>
-</ol>
-<h1 id="Sphinx-Mysql-SphinxSE-附录F"><a href="#Sphinx-Mysql-SphinxSE-附录F" class="headerlink" title="Sphinx + Mysql + SphinxSE (附录F)"></a>Sphinx + Mysql + SphinxSE (附录F)</h1><p>Sphinx: 开源全文搜索引擎. 可将数据源配置为Mysql查询的结果. 可水平扩展.<br>SphinxSE: Mysql的Sphinx插件,以便支持将Sphinx的搜索结果和Mysql的表进行join. </p>
-<p>Sphinx性能:</p>
-<ol>
-<li>查询1GB时间:  10~100ms;</li>
-<li>单CPU处理能力:10~100GB. </li>
-</ol>
-<p>分布式搜索工作流程:</p>
-<ol>
-<li>向所有服务器发送远程查询;</li>
-<li>执行本地索引搜索;</li>
-<li>从每个服务器读取部分搜索结果;</li>
-<li>合并结果返回客户端.</li>
-</ol>
-<h2 id="架构"><a href="#架构" class="headerlink" title="架构"></a>架构</h2><ul>
-<li>Indexed<br>从不同数据源创建全文索引.作为后台任务,一般定时运行;</li>
-<li>Searchd<br>运行时服务于客户端,查询创建好的索引.</li>
-</ul>
-<h2 id="SphinxSE可插拔存储引擎"><a href="#SphinxSE可插拔存储引擎" class="headerlink" title="SphinxSE可插拔存储引擎"></a>SphinxSE可插拔存储引擎</h2><p>建表语法:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">create table search_table</span><br><span class="line">(id int not null</span><br><span class="line">,weight int not null</span><br><span class="line">,query varchar(3070) not null</span><br><span class="line">,group_id int</span><br><span class="line">,INDEX(query)</span><br><span class="line">) engine&#x3D;Spinx conncet&#x3D;&quot;sphinx:&#x2F;&#x2F;localhost:3312&#x2F;test&quot;</span><br></pre></td></tr></table></figure>
-<p>查询语法:(把查询藏在query里,传递给sphinx)</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">select * from search_table where query&#x3D;&#39;test;mode&#x3D;all&#39;;</span><br></pre></td></tr></table></figure>
-<p><code>Searchd</code>服务返回查询结果,存储引擎把数据转换成mysql表.</p>
-<p>与<code>ElasticSearch</code>比较:<br><a href="https://zhuanlan.zhihu.com/p/21334385" target="_blank" rel="noopener">https://zhuanlan.zhihu.com/p/21334385</a></p>
-<p>决定倒向<code>ElasticSearch</code>社区.XD</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/01/14/2018-01/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E5%85%A8%E6%96%87%E7%B4%A2%E5%BC%95/" data-id="ck96cxpnt00aamaam99xke1w8" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1643,6 +1725,10 @@
       <ul>
         
           <li>
+            <a href="/2020/06/19/2020-06/tcp%E8%B0%83%E4%BC%98/">tcp调优</a>
+          </li>
+        
+          <li>
             <a href="/2020/06/15/2020-06/jdk11%E4%B8%8Bg1%E6%94%B6%E9%9B%86%E5%99%A8%E4%BD%BF%E7%94%A8/">jdk11下g1收集器使用</a>
           </li>
         
@@ -1656,10 +1742,6 @@
         
           <li>
             <a href="/2020/04/19/2020-04/spring%E6%8B%BE%E9%81%97/">spring拾遗</a>
-          </li>
-        
-          <li>
-            <a href="/2020/03/26/2020-03/%E5%88%A9%E7%94%A8UTF-8%E7%BC%96%E7%A0%81%E7%9A%84%E7%89%B9%E6%80%A7%E8%BF%9B%E8%A1%8C%E4%BC%98%E5%8C%96/">利用UTF-8编码的特性进行优化</a>
           </li>
         
       </ul>

@@ -72,6 +72,62 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-01/redis的quicklist" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/01/19/2019-01/redis%E7%9A%84quicklist/" class="article-date">
+  <time datetime="2019-01-19T12:29:18.000Z" itemprop="datePublished">2019-01-19</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/01/19/2019-01/redis%E7%9A%84quicklist/">redis的quicklist</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>列表对象: <code>REDIS_LIST</code></p>
+<p>列表对象以前有两种编码: <code>linkedlist</code>和<code>zipList</code>：<br><code>linkedList</code>: 双向链表,灵活扩展,存取效率低。<br><code>zipList</code>: 连续存储,存取效率高，对缓存友好，扩展性差，修改插入需要级联移动.甚至可以粗略看做数组。<br>小数据量的时候会使用<code>zipList</code>,大数据量的时候会使用<code>linkedList</code>。<br>但它们其实是两个极端，各有优缺点。因此之后的版本就把它们混血了一下，出了一个<code>quickList</code>，平衡优缺点。</p>
+<h2 id="quickList设计"><a href="#quickList设计" class="headerlink" title="quickList设计"></a>quickList设计</h2><p>粗略地看，把双向链表的每一个节点变成<code>zipList</code>，就是<code>quickList</code>了。<br>在原来的两个数据结构之间做一个折中，量化折中的参数:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"># 负数表示存储容量等级,每个节点上的ziplist大小不能超过8Kb（也就是2^3KB，以此类推）</span><br><span class="line">list-max-ziplist-size -2</span><br><span class="line"># 正数表示存储个数，每个节点上的zipList内元素不能超过5个:</span><br><span class="line">list-max-ziplist-size 5</span><br></pre></td></tr></table></figure>
+
+<p>还有一个压缩参数:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"># 不进行压缩:</span><br><span class="line">list-compress-depth 0 </span><br><span class="line"># 除了首尾1个，中间的压缩:</span><br><span class="line">list-compress-depth 1</span><br></pre></td></tr></table></figure>
+<p>由于双向链表一般用<code>LPush</code>,<code>Rpush</code>，两端的数据访问比较频繁，</p>
+<h2 id="quickList源码"><a href="#quickList源码" class="headerlink" title="quickList源码"></a>quickList源码</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">quicklist</span> &#123;</span></span><br><span class="line">    quicklistNode *head;    <span class="comment">// 头结点</span></span><br><span class="line">    quicklistNode *tail;    <span class="comment">// 尾节点</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> count;    <span class="comment">// 所有数据的数量</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> len;       <span class="comment">// quicklist节点数量</span></span><br><span class="line">    <span class="keyword">int</span> <span class="built_in">fill</span>:<span class="number">16</span>;          <span class="comment">// 单个ziplist的大小限制</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> compress:<span class="number">16</span>;   <span class="comment">// 压缩深度</span></span><br><span class="line">&#125; quicklist;</span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">quicklistNode</span> &#123;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">quicklistNode</span> *<span class="title">prev</span>;</span> <span class="comment">// 前一个节点</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">quicklistNode</span> *<span class="title">next</span>;</span> <span class="comment">// 后一个节点</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> *zl;  <span class="comment">// ziplist</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> sz;             <span class="comment">// ziplist的内存大小</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> count:<span class="number">16</span>;     <span class="comment">// zpilist中数据项的个数</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> encoding:<span class="number">2</span>;   <span class="comment">// 1为ziplist 2是LZF压缩存储方式</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> container:<span class="number">2</span>;  </span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> recompress:<span class="number">1</span>;   <span class="comment">// 压缩标志, 为1 是压缩</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> attempted_compress:<span class="number">1</span>; <span class="comment">// 节点是否能够被压缩,只用在测试</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> extra:<span class="number">10</span>; <span class="comment">/* more bits to steal for future usage */</span></span><br><span class="line">&#125; quicklistNode;</span><br></pre></td></tr></table></figure>
+
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/01/19/2019-01/redis%E7%9A%84quicklist/" data-id="ck96cxpp400fqmaam3ugwg3le" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2019-01/redis的embstr为什么是39B" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/01/19/2019-01/redis%E7%9A%84embstr%E4%B8%BA%E4%BB%80%E4%B9%88%E6%98%AF39B/" class="article-date">
@@ -1009,235 +1065,6 @@
 
 
   
-    <article id="post-2018-11/jvisualvm-运行时java程序监控" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/11/27/2018-11/jvisualvm-%E8%BF%90%E8%A1%8C%E6%97%B6java%E7%A8%8B%E5%BA%8F%E7%9B%91%E6%8E%A7/" class="article-date">
-  <time datetime="2018-11-27T04:01:57.000Z" itemprop="datePublished">2018-11-27</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/jvm/">jvm</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/11/27/2018-11/jvisualvm-%E8%BF%90%E8%A1%8C%E6%97%B6java%E7%A8%8B%E5%BA%8F%E7%9B%91%E6%8E%A7/">jvisualvm-运行时java程序监控</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="查看进程id"><a href="#查看进程id" class="headerlink" title="查看进程id"></a>查看进程id</h1><p>首先需要知道我们关心的java程序的进程id，才能方便后续的操作。<br><code>jps -lvm</code><br>如果不是java程序,则可以用命令<code>ps aux | grep [name]</code>。</p>
-<h1 id="查看进程运行参数"><a href="#查看进程运行参数" class="headerlink" title="查看进程运行参数"></a>查看进程运行参数</h1><p><code>jinfo -flags &lt;PID&gt;</code></p>
-<h1 id="查看进程各项统计信息"><a href="#查看进程各项统计信息" class="headerlink" title="查看进程各项统计信息"></a>查看进程各项统计信息</h1><p>类加载统计:<br><code>jstat -class &lt;PID&gt;</code><br>此外还有:   编译统计、垃圾回收统计、堆内存统计、新生代垃圾回收统计、新生代内存统计等等统计信息。<br>参考: <a href="https://www.cnblogs.com/yjd_hycf_space/p/7755633.html" target="_blank" rel="noopener">https://www.cnblogs.com/yjd_hycf_space/p/7755633.html</a><br><a href="https://blog.csdn.net/zhaozheng7758/article/details/8623549" target="_blank" rel="noopener">https://blog.csdn.net/zhaozheng7758/article/details/8623549</a></p>
-<p>缺点: 都是文本、英文,不一定马上看得懂。</p>
-<h1 id="生成3种dump文件"><a href="#生成3种dump文件" class="headerlink" title="生成3种dump文件"></a>生成3种dump文件</h1><p>为了了解更详细进程信息,可以生成3种dump文件:(然后用各种(图形)工具辅助查看)</p>
-<ol>
-<li>Thread Dump: 线程运行状态;</li>
-<li>Heap Dump: 堆内存状态;</li>
-<li>Core Dump: 进程地址空间的内容以及有关进程状态的其他信息写出的一个磁盘文件。</li>
-</ol>
-<h2 id="Thread-Dump"><a href="#Thread-Dump" class="headerlink" title="Thread Dump"></a>Thread Dump</h2><p>拿到进程id以后,我们可以用<code>jstack</code>命令生成<code>Thread Dump</code>文件。</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">jstack &lt;PID&gt;</span><br></pre></td></tr></table></figure>
-<p>然后可以:</p>
-<ol>
-<li>把Thread dump文件装载入<code>jvisualvm</code>查看。</li>
-<li>直接文本编辑器打开看;</li>
-<li>粘贴到网站,辅助查看: <a href="http://spotify.github.io/threaddump-analyzer/" target="_blank" rel="noopener">http://spotify.github.io/threaddump-analyzer/</a></li>
-</ol>
-<blockquote>
-<p><code>jstack</code>是jvm原生支持的,底层实现原理:</p>
-</blockquote>
-<ol>
-<li><code>tool.jar</code>中提供的一个<code>Attach Listener</code>,监听相关socket连接。</li>
-<li><code>sa-jdi.jar</code>中的监听。</li>
-</ol>
-<h2 id="Heap-Dump"><a href="#Heap-Dump" class="headerlink" title="Heap Dump"></a>Heap Dump</h2><p>还可以通过<code>jmap</code>命令+进程id，输出<code>Heap Dump</code>。</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">jmap -histo:live &lt;PID&gt;</span><br></pre></td></tr></table></figure>
-<p>输出到文件:</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">jmap -dump:live,format=b,file=heap.dump &lt;PID&gt;</span><br></pre></td></tr></table></figure>
-<p>需要注意这些指令都可能导致进程挂起,不能频繁在线上环境执行。</p>
-<p>得到<code>heap dump</code>文件以后,可以:</p>
-<ol>
-<li>用jhat命令: <code>jhat -port 443 [filename]</code>,然后访问<code>http://localhost:443</code>查看;</li>
-<li>装入到<code>jvisualvm</code>中查看.</li>
-</ol>
-<p>参考: <a href="http://www.importnew.com/27804.html" target="_blank" rel="noopener">http://www.importnew.com/27804.html</a></p>
-<h2 id="Core-Dump"><a href="#Core-Dump" class="headerlink" title="Core Dump"></a>Core Dump</h2><p>还可以输出进程的核心转储文件,方法是对进程发送一些会产生<code>core dump</code>的信号,例如:<br><code>kill -3 [PID]</code><br>用了上述命令以后<code>core dump</code>数据会输出到进程的标准输出中。（可以事先重定向stdout）</p>
-<p>详细的信号包括:</p>
-<table>
-<thead>
-<tr>
-<th>Signal</th>
-<th align="right">Value</th>
-<th align="center">Action</th>
-<th align="center">Comment</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>SIGHUP</td>
-<td align="right">1</td>
-<td align="center">Term</td>
-<td align="center">Hangup detected on controlling terminal or death of controlling process</td>
-</tr>
-<tr>
-<td>SIGINT</td>
-<td align="right">2</td>
-<td align="center">Term</td>
-<td align="center">Interrupt from keyboard</td>
-</tr>
-<tr>
-<td>SIGQUIT</td>
-<td align="right">3</td>
-<td align="center">Core</td>
-<td align="center">Quit from keyboard</td>
-</tr>
-<tr>
-<td>SIGILL</td>
-<td align="right">4</td>
-<td align="center">Core</td>
-<td align="center">Illegal Instruction</td>
-</tr>
-<tr>
-<td>SIGABRT</td>
-<td align="right">6</td>
-<td align="center">Core</td>
-<td align="center">Abort signal from abort(3)</td>
-</tr>
-<tr>
-<td>SIGFPE</td>
-<td align="right">8</td>
-<td align="center">Core</td>
-<td align="center">Floating point exception</td>
-</tr>
-<tr>
-<td>SIGKILL</td>
-<td align="right">9</td>
-<td align="center">Term</td>
-<td align="center">Kill signal</td>
-</tr>
-<tr>
-<td>SIGSEGV</td>
-<td align="right">11</td>
-<td align="center">Core</td>
-<td align="center">Invalid memory reference</td>
-</tr>
-<tr>
-<td>SIGPIPE</td>
-<td align="right">13</td>
-<td align="center">Term</td>
-<td align="center">Broken pipe: write to pipe with no readers</td>
-</tr>
-<tr>
-<td>SIGALRM</td>
-<td align="right">14</td>
-<td align="center">Term</td>
-<td align="center">Timer signal from alarm(2)</td>
-</tr>
-<tr>
-<td>SIGTERM</td>
-<td align="right">15</td>
-<td align="center">Term</td>
-<td align="center">Termination signal</td>
-</tr>
-<tr>
-<td>SIGUSR1</td>
-<td align="right">30,10,16</td>
-<td align="center">Term</td>
-<td align="center">User-defined signal 1</td>
-</tr>
-<tr>
-<td>SIGUSR2</td>
-<td align="right">31,12,17</td>
-<td align="center">Term</td>
-<td align="center">User-defined signal 2</td>
-</tr>
-<tr>
-<td>SIGCHLD</td>
-<td align="right">20,17,18</td>
-<td align="center">Ign</td>
-<td align="center">Child stopped or terminated</td>
-</tr>
-<tr>
-<td>SIGCONT</td>
-<td align="right">19,18,25</td>
-<td align="center">Cont</td>
-<td align="center">Continue if stopped</td>
-</tr>
-<tr>
-<td>SIGSTOP</td>
-<td align="right">17,19,23</td>
-<td align="center">Stop</td>
-<td align="center">Stop process</td>
-</tr>
-<tr>
-<td>SIGTSTP</td>
-<td align="right">18,20,24</td>
-<td align="center">Stop</td>
-<td align="center">Stop typed at tty</td>
-</tr>
-<tr>
-<td>SIGTTIN</td>
-<td align="right">21,21,26</td>
-<td align="center">Stop</td>
-<td align="center">tty input for background process</td>
-</tr>
-<tr>
-<td>SIGTTOU</td>
-<td align="right">22,22,27</td>
-<td align="center">Stop</td>
-<td align="center">tty output for background process</td>
-</tr>
-</tbody></table>
-<h1 id="jvisualvm"><a href="#jvisualvm" class="headerlink" title="jvisualvm"></a>jvisualvm</h1><p>上述几个工具比较零散,而且大部分是文本,不能直观迅速感知内存是上升还是下降.<br>可以直接用<code>jvisualvm</code>命令启动图形界面，直接监控本地的java进程(包括堆、thread dump信息等，还能进行操作)。</p>
-<img src="/images/2018-11/jvi1.png" class="" width="800" height="1200" title="jvi1">
-<img src="/images/2018-11/jvi2.png" class="" width="800" height="1200" title="jvi2">
-<img src="/images/2018-11/jvi3.png" class="" width="800" height="1200" title="jvi3">
-<img src="/images/2018-11/jvi4.png" class="" width="800" height="1200" title="jvi4">
-<p>用法:</p>
-<ol>
-<li>监控本地java进程;</li>
-<li>装载heap dump,thread dump文件查看;</li>
-<li>远端启动<code>jstatd</code>/<code>jmx</code>,打开端口权限,远程监控java程序。</li>
-</ol>
-<h2 id="jstatd"><a href="#jstatd" class="headerlink" title="jstatd"></a>jstatd</h2><p>准备配置文件:</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">vi jstatd.all.policy</span><br></pre></td></tr></table></figure>
-<p>内容如下:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">grant codebase &quot;file:&#x2F;usr&#x2F;java&#x2F;default&#x2F;lib&#x2F;tools.jar&quot; &#123;   </span><br><span class="line">    permission java.security.AllPermission;   </span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
-<p>启动:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">jstatd -J-Djava.security.policy&#x3D;.&#x2F;jstatd.all.policy</span><br></pre></td></tr></table></figure>
-<p>默认会启动在1099端口。<br>启动以后<code>jvisualvm</code>就能创建远程主机，并监控它所有的java程序了。</p>
-<h2 id="jmx"><a href="#jmx" class="headerlink" title="jmx"></a>jmx</h2><p><code>jstatd</code>和<code>jmx</code>似乎不能同时用，不然<code>jvisualvm</code>会卡死.<br>需要在启动java的时候就指定相应的端口等信息:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">nohup java \</span><br><span class="line">-Dcom.sun.management.jmxremote&#x3D;true \</span><br><span class="line">-Dcom.sun.management.jmxremote.port&#x3D;8080 \</span><br><span class="line">-Dcom.sun.management.jmxremote.ssl&#x3D;false \</span><br><span class="line">-Dcom.sun.management.jmxremote.authenticate&#x3D;false \</span><br><span class="line">-Djava.rmi.server.hostname&#x3D;10.65.89.102 \</span><br><span class="line">-XX:+HeapDumpOnOutOfMemoryError \</span><br><span class="line">-XX:HeapDumpPath&#x3D;&#x2F;data&#x2F;mengqifeng&#x2F;test \</span><br><span class="line">-classpath pipe-realtime-client-0.0.1-jar-with-dependencies.jar \</span><br><span class="line">com.tencent.kandian.HippoConsumer &gt;&gt; con.log &amp; echo $! &gt; con.pid</span><br></pre></td></tr></table></figure>
-<p>然后在<code>jvisualvm</code>中创建远程<code>JMX</code>连接。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/11/27/2018-11/jvisualvm-%E8%BF%90%E8%A1%8C%E6%97%B6java%E7%A8%8B%E5%BA%8F%E7%9B%91%E6%8E%A7/" data-id="ck96cxpos00eimaam56iqfh0b" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/jvm/" rel="tag">jvm</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1264,6 +1091,10 @@
       <ul>
         
           <li>
+            <a href="/2020/06/19/2020-06/tcp%E8%B0%83%E4%BC%98/">tcp调优</a>
+          </li>
+        
+          <li>
             <a href="/2020/06/15/2020-06/jdk11%E4%B8%8Bg1%E6%94%B6%E9%9B%86%E5%99%A8%E4%BD%BF%E7%94%A8/">jdk11下g1收集器使用</a>
           </li>
         
@@ -1277,10 +1108,6 @@
         
           <li>
             <a href="/2020/04/19/2020-04/spring%E6%8B%BE%E9%81%97/">spring拾遗</a>
-          </li>
-        
-          <li>
-            <a href="/2020/03/26/2020-03/%E5%88%A9%E7%94%A8UTF-8%E7%BC%96%E7%A0%81%E7%9A%84%E7%89%B9%E6%80%A7%E8%BF%9B%E8%A1%8C%E4%BC%98%E5%8C%96/">利用UTF-8编码的特性进行优化</a>
           </li>
         
       </ul>

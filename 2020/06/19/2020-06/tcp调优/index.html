@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>tcp调优 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="原理：linux如何处理新的tcp连接 触发时机: 客户端: 发起一个tcp连接（SYN）;  服务端:(相关参数: net.ipv4.tcp_max_syn_backlog)TCP模块查看max_syn_backlog是否超阈值;超阈值的话: 根据tcp_abort_on_overflow是丢弃还是reset;未超的话: 放到半连接队列;  触发时机: 客户端: 回复服务端ACK服务端:(相关参">
+<meta property="og:type" content="article">
+<meta property="og:title" content="tcp调优">
+<meta property="og:url" content="http://xiaoyue26.github.io/2020/06/19/2020-06/tcp%E8%B0%83%E4%BC%98/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="原理：linux如何处理新的tcp连接 触发时机: 客户端: 发起一个tcp连接（SYN）;  服务端:(相关参数: net.ipv4.tcp_max_syn_backlog)TCP模块查看max_syn_backlog是否超阈值;超阈值的话: 根据tcp_abort_on_overflow是丢弃还是reset;未超的话: 放到半连接队列;  触发时机: 客户端: 回复服务端ACK服务端:(相关参">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2020-06-19T09:44:55.000Z">
+<meta property="article:modified_time" content="2020-06-19T10:15:08.224Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="tcp">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2020-06/tcp调优" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/06/19/2020-06/tcp%E8%B0%83%E4%BC%98/" class="article-date">
+  <time datetime="2020-06-19T09:44:55.000Z" itemprop="datePublished">2020-06-19</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/tcp/">tcp</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      tcp调优
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="原理：linux如何处理新的tcp连接"><a href="#原理：linux如何处理新的tcp连接" class="headerlink" title="原理：linux如何处理新的tcp连接"></a>原理：linux如何处理新的tcp连接</h1><ol>
+<li>触发时机: 客户端: 发起一个tcp连接（SYN）;</li>
+</ol>
+<p>服务端:<br>(相关参数: <code>net.ipv4.tcp_max_syn_backlog</code>)<br>TCP模块查看<code>max_syn_backlog</code>是否超阈值;<br>超阈值的话: 根据<code>tcp_abort_on_overflow</code>是丢弃还是reset;<br>未超的话: 放到半连接队列;</p>
+<ol start="2">
+<li>触发时机: 客户端: 回复服务端ACK<br>服务端:<br>(相关参数: <code>net.core.somaxconn</code>)<br>完全建立连接: 放到全连接队列; </li>
+</ol>
+<h2 id="内核调优"><a href="#内核调优" class="headerlink" title="内核调优"></a>内核调优</h2><ol>
+<li><code>vim /etc/sysctl.conf</code> 在末尾添加：</li>
+</ol>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">net.core.somaxconn &#x3D; 16384 # ESTABLISHED的连接队列最大</span><br><span class="line">net.ipv4.tcp_max_syn_backlog &#x3D; 65536 # SYN半开连接队列最大</span><br><span class="line">net.core.wmem_default&#x3D;8388608 # 默认发送窗口的字节大小,还有一个最大值的参数</span><br><span class="line">net.core.rmem_default&#x3D;8388608 # 默认接收窗口的字节大小,还有一个最大值的参数</span><br></pre></td></tr></table></figure>
+
+<ol start="2">
+<li><p><code>sysctl -p /etc/sysctl.conf</code></p>
+</li>
+<li><p><code>echo &quot;1&quot; &gt; /proc/sys/net/ipv4/tcp_abort_on_overflow</code> # 满了以后显式发送RST包给客户端</p>
+</li>
+<li><p>修改nginx配置</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">listen 80 backlog&#x3D;16384;</span><br><span class="line"></span><br><span class="line">listen 443 backlog&#x3D;16384;</span><br></pre></td></tr></table></figure>
+<p>就是server里面的配置，在80 后面加上backlog=16384</p>
+</li>
+<li><p><code>cd tnginx_1_0_0-1.0/bin/nginx -s reload</code></p>
+</li>
+<li><p>重启api服务(如果有)</p>
+</li>
+<li><p>确认配置生效 <code>ss -lnt</code></p>
+</li>
+</ol>
+<h1 id="相关内核commit"><a href="#相关内核commit" class="headerlink" title="相关内核commit"></a>相关内核commit</h1><p>since Linux 5.4 it was increased to 4096 <a href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=19f92a030ca6d772ab44b22ee6a01378a8cb32d4" target="_blank" rel="noopener">https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=19f92a030ca6d772ab44b22ee6a01378a8cb32d4</a></p>
+<p>查看现有配置:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sysctl -a  | grep somaxconn</span><br></pre></td></tr></table></figure>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2020/06/19/2020-06/tcp%E8%B0%83%E4%BC%98/" data-id="ckbm1ztus0000jfam43bahz0n" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/tcp/" rel="tag">tcp</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+  
+    <a href="/2020/06/15/2020-06/jdk11%E4%B8%8Bg1%E6%94%B6%E9%9B%86%E5%99%A8%E4%BD%BF%E7%94%A8/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">jdk11下g1收集器使用</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#原理：linux如何处理新的tcp连接"><span class="toc-number">1.</span> <span class="toc-text">原理：linux如何处理新的tcp连接</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#内核调优"><span class="toc-number">1.1.</span> <span class="toc-text">内核调优</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#相关内核commit"><span class="toc-number">2.</span> <span class="toc-text">相关内核commit</span></a></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

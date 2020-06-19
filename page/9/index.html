@@ -72,6 +72,217 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-10/Netty-in-action-第十一章-SSL等预置实现-笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/10/10/2018-10/Netty-in-action-%E7%AC%AC%E5%8D%81%E4%B8%80%E7%AB%A0-SSL%E7%AD%89%E9%A2%84%E7%BD%AE%E5%AE%9E%E7%8E%B0-%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2018-10-10T10:38:46.000Z" itemprop="datePublished">2018-10-10</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/Netty/">Netty</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/10/10/2018-10/Netty-in-action-%E7%AC%AC%E5%8D%81%E4%B8%80%E7%AB%A0-SSL%E7%AD%89%E9%A2%84%E7%BD%AE%E5%AE%9E%E7%8E%B0-%E7%AC%94%E8%AE%B0/">Netty-in-action-第十一章-SSL等预置实现-笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>这章主要讲内容:</p>
+<ol>
+<li>SSL/TLS;</li>
+<li>HTTP/HTTPS;</li>
+<li>空闲的连接和超时;</li>
+<li>基于分隔符和长度的协议（处理粘包，半包）;</li>
+<li>写大型数据。</li>
+<li>序列化</li>
+</ol>
+<h1 id="SSL-TLS"><a href="#SSL-TLS" class="headerlink" title="SSL/TLS"></a>SSL/TLS</h1><p>安全协议：<code>SSL</code>/<code>TLS</code><br>用例： <code>HTTPS</code>, <code>SMTPS</code><br>实现： jdk实现(<code>javax.net.ssl</code>), <code>openssl</code>(性能更好)<br>Netty中的支持:<br><code>SslHandler</code></p>
+<img src="/images/2018-10/11.1.png" class="" width="400" height="600" title="sslhandler">
+<p><code>SslHandler</code>的声明:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">-- SslHandler:</span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">SslHandler</span> <span class="keyword">extends</span> <span class="title">ByteToMessageDecoder</span> <span class="keyword">implements</span> <span class="title">ChannelOutboundHandler</span> </span></span><br><span class="line">-- 其中的ByteToMessageDecoder:</span><br><span class="line"><span class="keyword">public</span> <span class="keyword">abstract</span> <span class="class"><span class="keyword">class</span> <span class="title">ByteToMessageDecoder</span> <span class="keyword">extends</span> <span class="title">ChannelInboundHandlerAdapter</span></span></span><br></pre></td></tr></table></figure>
+<p>由声明看出，它是一个编解码器（入站事件和出站事件都处理）。<br>入站: 字节=&gt;消息（解密）<br>出站: 消息=&gt;字节（加密）<br>具体使用则和以前的编解码器都不同：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">SslChannelInitializer</span> <span class="keyword">extends</span> <span class="title">ChannelInitializer</span>&lt;<span class="title">Channel</span>&gt; </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> SslContext context;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">boolean</span> startTls;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">SslChannelInitializer</span><span class="params">(SslContext context,<span class="keyword">boolean</span> startTls)</span></span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.context = context;</span><br><span class="line">        <span class="keyword">this</span>.startTls = startTls;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">initChannel</span><span class="params">(Channel ch)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">        SSLEngine engine = context.newEngine(ch.alloc());</span><br><span class="line">        ch.pipeline().addFirst(<span class="string">"ssl"</span></span><br><span class="line">            , <span class="keyword">new</span> SslHandler(engine, startTls));</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>总结:<br>需要借用: SslContext</p>
+<p>两个要注意的点:</p>
+<ol>
+<li>对于每个 <code>SslHandler</code> 实例，都使用 <code>Channel</code> 的 <code>ByteBufAllocator</code> 从 <code>SslContext</code> 获取一个新的 <code>SSLEngine</code>(<code>ch.alloc()</code>);</li>
+<li><code>startTls</code>: 如果设置为 true，第一个写入的消息将不会被加密;（客户端应该设置为 true）</li>
+<li><a href="https://github.com/devsunny/netty-ssl-example/blob/master/src/main/java/com/asksunny/ssl/StreamReader.java" target="_blank" rel="noopener">https://github.com/devsunny/netty-ssl-example/blob/master/src/main/java/com/asksunny/ssl/StreamReader.java</a></li>
+</ol>
+<h1 id="HTTP相关的handler"><a href="#HTTP相关的handler" class="headerlink" title="HTTP相关的handler"></a>HTTP相关的handler</h1><p>4个解码器、编码器：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">HttpPipelineInitializer</span> <span class="keyword">extends</span> <span class="title">ChannelInitializer</span>&lt;<span class="title">Channel</span>&gt; </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">boolean</span> client;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">HttpPipelineInitializer</span><span class="params">(<span class="keyword">boolean</span> client)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.client = client;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">initChannel</span><span class="params">(Channel ch)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">        ChannelPipeline pipeline = ch.pipeline();</span><br><span class="line">        <span class="keyword">if</span> (client) &#123;</span><br><span class="line">            pipeline.addLast(<span class="string">"decoder"</span>, <span class="keyword">new</span> HttpResponseDecoder());  <span class="comment">//1</span></span><br><span class="line">            pipeline.addLast(<span class="string">"encoder"</span>, <span class="keyword">new</span> HttpRequestEncoder());  <span class="comment">//2</span></span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            pipeline.addLast(<span class="string">"decoder"</span>, <span class="keyword">new</span> HttpRequestDecoder());  <span class="comment">//3</span></span><br><span class="line">            pipeline.addLast(<span class="string">"encoder"</span>, <span class="keyword">new</span> HttpResponseEncoder());  <span class="comment">//4</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="消息聚合"><a href="#消息聚合" class="headerlink" title="消息聚合:"></a>消息聚合:</h2><p>这回是编解码器<code>Codec</code>:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">HttpAggregatorInitializer</span> <span class="keyword">extends</span> <span class="title">ChannelInitializer</span>&lt;<span class="title">Channel</span>&gt; </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">boolean</span> client;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">HttpAggregatorInitializer</span><span class="params">(<span class="keyword">boolean</span> client)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.client = client;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">initChannel</span><span class="params">(Channel ch)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">        ChannelPipeline pipeline = ch.pipeline();</span><br><span class="line">        <span class="keyword">if</span> (client) &#123;</span><br><span class="line">            pipeline.addLast(<span class="string">"codec"</span>, <span class="keyword">new</span> HttpClientCodec());  <span class="comment">//1</span></span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            pipeline.addLast(<span class="string">"codec"</span>, <span class="keyword">new</span> HttpServerCodec());  <span class="comment">//2</span></span><br><span class="line">        &#125;</span><br><span class="line">        pipeline.addLast(<span class="string">"aggegator"</span>, <span class="keyword">new</span> HttpObjectAggregator(<span class="number">512</span> * <span class="number">1024</span>));  <span class="comment">//3 512kb</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<h2 id="HTTP-压缩"><a href="#HTTP-压缩" class="headerlink" title="HTTP 压缩"></a>HTTP 压缩</h2><p>客户端加解压器，服务端加压缩器:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">HttpAggregatorInitializer</span> <span class="keyword">extends</span> <span class="title">ChannelInitializer</span>&lt;<span class="title">Channel</span>&gt; </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">boolean</span> isClient;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">HttpAggregatorInitializer</span><span class="params">(<span class="keyword">boolean</span> isClient)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.isClient = isClient;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">initChannel</span><span class="params">(Channel ch)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">        ChannelPipeline pipeline = ch.pipeline();</span><br><span class="line">        <span class="keyword">if</span> (isClient) &#123;</span><br><span class="line">            pipeline.addLast(<span class="string">"codec"</span>, <span class="keyword">new</span> HttpClientCodec()); <span class="comment">//1</span></span><br><span class="line">            pipeline.addLast(<span class="string">"decompressor"</span>,<span class="keyword">new</span> HttpContentDecompressor()); <span class="comment">//2</span></span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            pipeline.addLast(<span class="string">"codec"</span>, <span class="keyword">new</span> HttpServerCodec()); <span class="comment">//3</span></span><br><span class="line">            pipeline.addLast(<span class="string">"compressor"</span>,<span class="keyword">new</span> HttpContentCompressor()); <span class="comment">//4</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="HTTPS"><a href="#HTTPS" class="headerlink" title="HTTPS"></a>HTTPS</h2><p><code>http</code>部分加上<code>sslHandler</code>就是<code>https</code>。不过本质上还是需要<code>SslContext</code>:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">HttpsCodecInitializer</span> <span class="keyword">extends</span> <span class="title">ChannelInitializer</span>&lt;<span class="title">Channel</span>&gt; </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> SslContext context;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">boolean</span> client;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">HttpsCodecInitializer</span><span class="params">(SslContext context, <span class="keyword">boolean</span> client)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.context = context;</span><br><span class="line">        <span class="keyword">this</span>.client = client;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">initChannel</span><span class="params">(Channel ch)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">        ChannelPipeline pipeline = ch.pipeline();</span><br><span class="line">        SSLEngine engine = context.newEngine(ch.alloc());</span><br><span class="line">        pipeline.addFirst(<span class="string">"ssl"</span>, <span class="keyword">new</span> SslHandler(engine));  <span class="comment">//1</span></span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (client) &#123;</span><br><span class="line">            pipeline.addLast(<span class="string">"codec"</span>, <span class="keyword">new</span> HttpClientCodec());  <span class="comment">//2</span></span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            pipeline.addLast(<span class="string">"codec"</span>, <span class="keyword">new</span> HttpServerCodec());  <span class="comment">//3</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h1 id="WebSocket"><a href="#WebSocket" class="headerlink" title="WebSocket"></a>WebSocket</h1><p><code>http</code>仅让客户端向服务端请求数据，服务端无法主动推数据给客户端。一种解决方案是让客户端轮询，另一种解决方案是<code>WebSocket</code>。<br>用<code>WebSocket</code>的话，底层是tcp双向连接，服务端可以主动发消息给客户端。</p>
+<h2 id="WebSocket帧类型"><a href="#WebSocket帧类型" class="headerlink" title="WebSocket帧类型"></a>WebSocket帧类型</h2><p>三种数据帧:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">BinaryWebSocketFrame: 二进制;</span><br><span class="line">TextWebSocketFrame: 文本;</span><br><span class="line">ContunuationWebSocketFrame: 后续数据;</span><br></pre></td></tr></table></figure>
+<p>三种控制帧:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">PingWebSocketFrame: ping，对方会回pong;</span><br><span class="line">PongWebSocketFrame: pong;</span><br><span class="line">CloseWebSocketFrame: 关闭。</span><br></pre></td></tr></table></figure>
+
+<p>服务端示例:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">WebSocketServerInitializer</span> <span class="keyword">extends</span> <span class="title">ChannelInitializer</span>&lt;<span class="title">Channel</span>&gt; </span>&#123;</span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">initChannel</span><span class="params">(Channel ch)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">        ch.pipeline().addLast(</span><br><span class="line">            <span class="keyword">new</span> HttpServerCodec(),</span><br><span class="line">            <span class="comment">//为握手提供聚合的 HttpRequest</span></span><br><span class="line">            <span class="keyword">new</span> HttpObjectAggregator(<span class="number">65536</span>),</span><br><span class="line">            <span class="comment">//如果被请求的端点是"/websocket"，则处理该升级握手</span></span><br><span class="line">            <span class="keyword">new</span> WebSocketServerProtocolHandler(<span class="string">"/websocket"</span>),</span><br><span class="line">            <span class="comment">//TextFrameHandler 处理 TextWebSocketFrame</span></span><br><span class="line">            <span class="keyword">new</span> TextFrameHandler(),</span><br><span class="line">            <span class="comment">//BinaryFrameHandler 处理 BinaryWebSocketFrame</span></span><br><span class="line">            <span class="keyword">new</span> BinaryFrameHandler(),</span><br><span class="line">            <span class="comment">//ContinuationFrameHandler 处理 ContinuationWebSocketFrame</span></span><br><span class="line">            <span class="keyword">new</span> ContinuationFrameHandler());</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="class"><span class="keyword">class</span> <span class="title">TextFrameHandler</span> <span class="keyword">extends</span></span></span><br><span class="line"><span class="class">        <span class="title">SimpleChannelInboundHandler</span>&lt;<span class="title">TextWebSocketFrame</span>&gt; </span>&#123;</span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">channelRead0</span><span class="params">(ChannelHandlerContext ctx,</span></span></span><br><span class="line"><span class="function"><span class="params">            TextWebSocketFrame msg)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">            <span class="comment">// Handle text frame</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="class"><span class="keyword">class</span> <span class="title">BinaryFrameHandler</span> <span class="keyword">extends</span></span></span><br><span class="line"><span class="class">        <span class="title">SimpleChannelInboundHandler</span>&lt;<span class="title">BinaryWebSocketFrame</span>&gt; </span>&#123;</span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">channelRead0</span><span class="params">(ChannelHandlerContext ctx,</span></span></span><br><span class="line"><span class="function"><span class="params">            BinaryWebSocketFrame msg)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">            <span class="comment">// Handle binary frame</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="class"><span class="keyword">class</span> <span class="title">ContinuationFrameHandler</span> <span class="keyword">extends</span></span></span><br><span class="line"><span class="class">        <span class="title">SimpleChannelInboundHandler</span>&lt;<span class="title">ContinuationWebSocketFrame</span>&gt; </span>&#123;</span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">channelRead0</span><span class="params">(ChannelHandlerContext ctx,</span></span></span><br><span class="line"><span class="function"><span class="params">            ContinuationWebSocketFrame msg)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">            <span class="comment">// Handle continuation frame</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h1 id="空闲事件、超时事件"><a href="#空闲事件、超时事件" class="headerlink" title="空闲事件、超时事件"></a>空闲事件、超时事件</h1><p><code>WebSocket</code>协议中多了几种事件: </p>
+<table>
+<thead>
+<tr>
+<th align="center">触发时机</th>
+<th align="left">事件</th>
+<th align="center">处理方法</th>
+<th align="center">预置handler</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">空闲时间超过配置</td>
+<td align="left">IdleStateEvent</td>
+<td align="center">userEventTriggered()</td>
+<td align="center">IdleStateHandler</td>
+</tr>
+<tr>
+<td align="center">指定时间间隔内没有收到入站数据</td>
+<td align="left">ReadTimeoutException</td>
+<td align="center">exceptionCaught()</td>
+<td align="center">ReadTimeoutHandler</td>
+</tr>
+<tr>
+<td align="center">指定时间间隔内没有出站数据</td>
+<td align="left">WriteTimeoutException</td>
+<td align="center">exceptionCaught()</td>
+<td align="center">WriteTimeoutHandler</td>
+</tr>
+</tbody></table>
+<p>具体使用方法:</p>
+<ol>
+<li>注册预置的handler,截获对应的事件;(<code>IdleStateHandler</code>,<code>ReadTimeoutHandler</code>,<code>WriteTimeoutHandler</code>)</li>
+<li>实现一个自定义handler注册到pipeline,处理对应的事件。 </li>
+</ol>
+<p>空闲事件示例:</p>
+<ol>
+<li>注册<code>IdleStateHandler</code>，负责截获空闲事件，它会调用<code>fireUserEventTriggered</code>方法,触发<code>userEvent</code>事件;</li>
+<li>实现自定义<code>handler</code>,处理<code>userEvent</code>:一种可能的处理逻辑是进行心跳检测，检测到是空闲事件就发送心跳,发送失败就关闭连接; 如果不是空闲事件,则抛出去,让下一级处理。<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">IdleStateHandlerInitializer</span> <span class="keyword">extends</span> <span class="title">ChannelInitializer</span>&lt;<span class="title">Channel</span>&gt;</span></span><br><span class="line"><span class="class">    </span>&#123;</span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">initChannel</span><span class="params">(Channel ch)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">        ChannelPipeline pipeline = ch.pipeline();</span><br><span class="line">        pipeline.addLast(</span><br><span class="line"><span class="comment">//(1)IdleStateHandler 将在被触发时发送一个IdleStateEvent事件:</span></span><br><span class="line">                <span class="keyword">new</span> IdleStateHandler(<span class="number">0</span>, <span class="number">0</span>, <span class="number">60</span>, TimeUnit.SECONDS));</span><br><span class="line"><span class="comment">//(2)将一个HeartbeatHandler添加到ChannelPipeline中:</span></span><br><span class="line">        pipeline.addLast(<span class="keyword">new</span> HeartbeatHandler());</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//(3)实现userEventTriggered()方法以发送心跳消息:</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="class"><span class="keyword">class</span> <span class="title">HeartbeatHandler</span></span></span><br><span class="line"><span class="class">        <span class="keyword">extends</span> <span class="title">ChannelInboundHandlerAdapter</span> </span>&#123;</span><br><span class="line">        <span class="comment">//发送到远程节点的心跳消息</span></span><br><span class="line">        <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> ByteBuf HEARTBEAT_SEQUENCE =</span><br><span class="line">                Unpooled.unreleasableBuffer(Unpooled.copiedBuffer(</span><br><span class="line">                <span class="string">"HEARTBEAT"</span>, CharsetUtil.ISO_8859_1));</span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">userEventTriggered</span><span class="params">(ChannelHandlerContext ctx,</span></span></span><br><span class="line"><span class="function"><span class="params">            Object evt)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line"><span class="comment">//(4)发送心跳消息，并在发送失败时关闭该连接</span></span><br><span class="line">            <span class="keyword">if</span> (evt <span class="keyword">instanceof</span> IdleStateEvent) &#123;</span><br><span class="line">                ctx.writeAndFlush(HEARTBEAT_SEQUENCE.duplicate())</span><br><span class="line">                     .addListener(</span><br><span class="line">                         ChannelFutureListener.CLOSE_ON_FAILURE);</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                <span class="comment">//若不是IdleStateEvent事件，所以将它传递给下一个ChannelInboundHandler</span></span><br><span class="line">                <span class="keyword">super</span>.userEventTriggered(ctx, evt);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+</li>
+</ol>
+<h1 id="工具：解决粘包和半包-数据帧的划分问题"><a href="#工具：解决粘包和半包-数据帧的划分问题" class="headerlink" title="工具：解决粘包和半包(数据帧的划分问题)"></a>工具：解决粘包和半包(数据帧的划分问题)</h1><p><code>netty</code>主要是字节流层传输，并不关心应用层对数据的划分（并不关心帧是如何划分的）。<br>但是<code>netty</code>提供了很多帮助分隔帧的工具类，来解决粘包和半包的问题。<br>数据帧的划分问题一般有三种解决方案:</p>
+<ol>
+<li>定长帧;</li>
+<li>指定分隔符;</li>
+<li>head-body结构，header中规定body长度。(<code>HTTP</code>)比较灵活，比较常见。</li>
+</ol>
+<h2 id="指定分隔符"><a href="#指定分隔符" class="headerlink" title="指定分隔符"></a>指定分隔符</h2><p>相关工具类: <code>DelimitedBasedFrameDecoder</code>,<code>LineBasedFrameDecoder</code></p>
+<h2 id="定长帧"><a href="#定长帧" class="headerlink" title="定长帧"></a>定长帧</h2><p>相关工具类: <code>FixedLengthFrameDecoder</code></p>
+<h2 id="head-body结构"><a href="#head-body结构" class="headerlink" title="head-body结构"></a>head-body结构</h2><p>相关工具类: <code>LengthFieldBasedFrameDecoder</code></p>
+<h1 id="高级特性-写大文件-或大数据"><a href="#高级特性-写大文件-或大数据" class="headerlink" title="高级特性: 写大文件(或大数据)"></a>高级特性: 写大文件(或大数据)</h1><p>两种实现:</p>
+<ol>
+<li>直接写文件: <code>FileRegion</code>;</li>
+<li>借助预置实现:<code>ChunkedWriteHandler</code>。</li>
+</ol>
+<h2 id="FileReion"><a href="#FileReion" class="headerlink" title="FileReion"></a>FileReion</h2><p>直接在<code>channel</code>中写入<code>FileRegion</code>即可:(还可以用<code>ChannelProgressivePromise</code>来获取传输进度)</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">FileInputStream in = <span class="keyword">new</span> FileInputStream(file);</span><br><span class="line"><span class="comment">//以该文件的完整长度创建一个新的 DefaultFileRegion</span></span><br><span class="line">FileRegion region = <span class="keyword">new</span> DefaultFileRegion(</span><br><span class="line">        in.getChannel(), <span class="number">0</span>, file.length());</span><br><span class="line"><span class="comment">//发送该 DefaultFileRegion，并注册一个 ChannelFutureListener</span></span><br><span class="line">channel.writeAndFlush(region).addListener(</span><br><span class="line">    <span class="keyword">new</span> ChannelFutureListener() &#123;</span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">operationComplete</span><span class="params">(ChannelFuture future)</span></span></span><br><span class="line"><span class="function">       <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">       <span class="keyword">if</span> (!future.isSuccess()) &#123;</span><br><span class="line">           <span class="comment">//处理失败</span></span><br><span class="line">           Throwable cause = future.cause();</span><br><span class="line">           <span class="comment">// Do something</span></span><br><span class="line">       &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+
+<h2 id="ChunkedWriterHandler"><a href="#ChunkedWriterHandler" class="headerlink" title="ChunkedWriterHandler"></a>ChunkedWriterHandler</h2><p>数据流是:<br>数据源=&gt;<code>ChunkedInput</code>=&gt;自定义的StreamHandler=&gt;<code>ChunkedWriteHandler</code>=&gt;出站</p>
+<p>其中<code>ChunkedInput</code>有4种实现:</p>
+<table>
+<thead>
+<tr>
+<th align="center">实现名称</th>
+<th align="left">数据源</th>
+<th align="center">备注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">ChunkedFile</td>
+<td align="left">文件</td>
+<td align="center">当平台不支持零拷贝，或需要转换数据时使用</td>
+</tr>
+<tr>
+<td align="center">ChunkedNioFile</td>
+<td align="left">文件</td>
+<td align="center">使用FileChannel</td>
+</tr>
+<tr>
+<td align="center">ChunkedStream</td>
+<td align="left">InputStream</td>
+<td align="center"></td>
+</tr>
+<tr>
+<td align="center">ChunkedNioStream</td>
+<td align="left">ReadableByteChannel</td>
+<td align="center"></td>
+</tr>
+</tbody></table>
+<p>示例代码:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">initChannel</span><span class="params">(Channel ch)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">    ChannelPipeline pipeline = ch.pipeline();</span><br><span class="line">    <span class="comment">//将 SslHandler 添加到 ChannelPipeline 中</span></span><br><span class="line">    pipeline.addLast(<span class="keyword">new</span> SslHandler(sslCtx.newEngine(ch.alloc())));</span><br><span class="line">    <span class="comment">//添加 ChunkedWriteHandler 以处理作为 ChunkedInput 传入的数据</span></span><br><span class="line">    pipeline.addLast(<span class="keyword">new</span> ChunkedWriteHandler());</span><br><span class="line">    <span class="comment">//一旦连接建立，WriteStreamHandler 就开始写文件数据</span></span><br><span class="line">    pipeline.addLast(<span class="keyword">new</span> WriteStreamHandler());</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">final</span> <span class="class"><span class="keyword">class</span> <span class="title">WriteStreamHandler</span></span></span><br><span class="line"><span class="class"><span class="keyword">extends</span> <span class="title">ChannelInboundHandlerAdapter</span> </span>&#123;</span><br><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="comment">//当连接建立时，channelActive() 方法将使用 ChunkedInput 写文件数据</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">channelActive</span><span class="params">(ChannelHandlerContext ctx)</span></span></span><br><span class="line"><span class="function">        <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">        <span class="keyword">super</span>.channelActive(ctx);</span><br><span class="line">        ctx.writeAndFlush(</span><br><span class="line">        <span class="keyword">new</span> ChunkedStream(<span class="keyword">new</span> FileInputStream(file))); <span class="comment">// ChunkedStream =&gt; ChunkedInput</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h1 id="序列化数据"><a href="#序列化数据" class="headerlink" title="序列化数据"></a>序列化数据</h1><p>这里介绍3种方法:</p>
+<ol>
+<li>JDK的<code>ObjectOutputStream</code>;</li>
+<li>JBoss marshalling;</li>
+<li>Protocol buffers.<h2 id="JDK序列化"><a href="#JDK序列化" class="headerlink" title="JDK序列化"></a>JDK序列化</h2>只要实现了<code>Serializable</code>接口的对象，就可以使用<code>ObjectOutputStream</code>。<br>示例代码:<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">FileOutputStream fos = <span class="keyword">new</span> FileOutputStream(<span class="string">"t.tmp"</span>);</span><br><span class="line">ObjectOutputStream oos = <span class="keyword">new</span> ObjectOutputStream(fos);</span><br><span class="line">oos.writeObject(<span class="keyword">new</span> Date());</span><br><span class="line">oos.close();</span><br></pre></td></tr></table></figure>
+
+</li>
+</ol>
+<p>Netty提供的速度优化:<br><code>ObjectInputStream</code> =&gt;<code>ObjectDecoder</code><br><code>ObjectOutputStream</code>=&gt;<code>ObjectEncoder</code></p>
+<h2 id="JBoss-Marshalling序列化"><a href="#JBoss-Marshalling序列化" class="headerlink" title="JBoss Marshalling序列化"></a>JBoss Marshalling序列化</h2><p>比JDK序列化快3倍。<br><code>MarshallingDecoder</code><br><code>MarshallingEncoder</code></p>
+<p>示例代码:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">MarshallingInitializer</span> <span class="keyword">extends</span> <span class="title">ChannelInitializer</span>&lt;<span class="title">Channel</span>&gt; </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> MarshallerProvider marshallerProvider;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> UnmarshallerProvider unmarshallerProvider;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">MarshallingInitializer</span><span class="params">(</span></span></span><br><span class="line"><span class="function"><span class="params">            UnmarshallerProvider unmarshallerProvider,</span></span></span><br><span class="line"><span class="function"><span class="params">            MarshallerProvider marshallerProvider)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.marshallerProvider = marshallerProvider;</span><br><span class="line">        <span class="keyword">this</span>.unmarshallerProvider = unmarshallerProvider;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">initChannel</span><span class="params">(Channel channel)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">        ChannelPipeline pipeline = channel.pipeline();</span><br><span class="line">        <span class="comment">//添加 MarshallingDecoder 以将 ByteBuf 转换为 POJO</span></span><br><span class="line">        pipeline.addLast(<span class="keyword">new</span> MarshallingDecoder(unmarshallerProvider));</span><br><span class="line">        <span class="comment">//添加 MarshallingEncoder 以将POJO 转换为 ByteBuf</span></span><br><span class="line">        pipeline.addLast(<span class="keyword">new</span> MarshallingEncoder(marshallerProvider));</span><br><span class="line">        <span class="comment">//添加 ObjectHandler，以处理普通的实现了Serializable 接口的 POJO</span></span><br><span class="line">        pipeline.addLast(<span class="keyword">new</span> ObjectHandler());</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="class"><span class="keyword">class</span> <span class="title">ObjectHandler</span></span></span><br><span class="line"><span class="class">        <span class="keyword">extends</span> <span class="title">SimpleChannelInboundHandler</span>&lt;<span class="title">Serializable</span>&gt; </span>&#123;</span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">channelRead0</span><span class="params">(</span></span></span><br><span class="line"><span class="function"><span class="params">            ChannelHandlerContext channelHandlerContext,</span></span></span><br><span class="line"><span class="function"><span class="params">            Serializable serializable)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">            <span class="comment">// Do something</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>其中provider的创建代码:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> MarshallingDecoder <span class="title">buildMarshallingDecoder</span><span class="params">()</span> </span>&#123;</span><br><span class="line">       <span class="comment">//首先通过Marshalling工具类的getProvidedMarshallerFactory静态方法获取MarshallerFactory实例</span></span><br><span class="line">       <span class="comment">//参数“serial”表示创建的是Java序列化工厂对象，它由jboss-marshalling-serial-1.3.0.CR9.jar提供。</span></span><br><span class="line">       <span class="keyword">final</span> MarshallerFactory marshallerFactory = Marshalling.getProvidedMarshallerFactory(<span class="string">"serial"</span>);</span><br><span class="line">       <span class="comment">//创建了MarshallingConfiguration对象</span></span><br><span class="line">       <span class="keyword">final</span> MarshallingConfiguration configuration = <span class="keyword">new</span> MarshallingConfiguration();</span><br><span class="line">       <span class="comment">//将它的版本号设置为5</span></span><br><span class="line">       configuration.setVersion(<span class="number">5</span>);</span><br><span class="line">       <span class="comment">//然后根据MarshallerFactory和MarshallingConfiguration创建UnmarshallerProvider实例</span></span><br><span class="line">       UnmarshallerProvider provider = <span class="keyword">new</span> DefaultUnmarshallerProvider(marshallerFactory, configuration);</span><br><span class="line">       <span class="comment">//最后通过构造函数创建Netty的MarshallingDecoder对象</span></span><br><span class="line">       <span class="comment">//它有两个参数，分别是UnmarshallerProvider和单个消息序列化后的最大长度。</span></span><br><span class="line">       MarshallingDecoder decoder = <span class="keyword">new</span> MarshallingDecoder(provider, <span class="number">1024</span>);</span><br><span class="line">       <span class="keyword">return</span> decoder;</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
+
+
+<h2 id="Protocol-Buffer序列化"><a href="#Protocol-Buffer序列化" class="headerlink" title="Protocol Buffer序列化"></a>Protocol Buffer序列化</h2><p>google的序列化方案。<br>主要是4个类:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 解码:</span></span><br><span class="line">ProtobufVarint32FrameDecoder: bytes=&gt;msg; 解析出头部的长度字段,以正确划分帧;</span><br><span class="line">ProtobufDecoder: msg=&gt;msg;</span><br><span class="line"><span class="comment">// 编码:</span></span><br><span class="line">ProtobufVarint32LengthFieldPrepender: msg=&gt;bytes; 头部添加长度字段.</span><br><span class="line">ProtobufEncoder: msg=&gt;msg.</span><br></pre></td></tr></table></figure>
+
+
+<p>示例代码:<br>服务端:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">.childHandler(<span class="keyword">new</span> ChannelInitializer&lt;SocketChannel&gt;() &#123;</span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">initChannel</span><span class="params">(SocketChannel ch)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">        ch.pipeline()</span><br><span class="line">                .addLast(<span class="keyword">new</span> ProtobufVarint32FrameDecoder())</span><br><span class="line">                .addLast(<span class="keyword">new</span> ProtobufDecoder(</span><br><span class="line">                        ProtoObject.Req.getDefaultInstance()))</span><br><span class="line">                .addLast(<span class="keyword">new</span> ProtobufVarint32LengthFieldPrepender())</span><br><span class="line">                .addLast(<span class="keyword">new</span> ProtobufEncoder())</span><br><span class="line">                .addLast(<span class="keyword">new</span> ServerHandler());</span><br><span class="line">    &#125;</span><br><span class="line">&#125;)</span><br></pre></td></tr></table></figure>
+<p>客户端:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">.childHandler(<span class="keyword">new</span> ChannelInitializer&lt;SocketChannel&gt;() &#123;</span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">initChannel</span><span class="params">(SocketChannel ch)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">        ch.pipeline()</span><br><span class="line">                .addLast(<span class="keyword">new</span> ProtobufVarint32FrameDecoder())</span><br><span class="line">                .addLast(<span class="keyword">new</span> ProtobufDecoder(</span><br><span class="line">                        ProtoObject.Resp.getDefaultInstance()))</span><br><span class="line">                .addLast(<span class="keyword">new</span> ProtobufVarint32LengthFieldPrepender())</span><br><span class="line">                .addLast(<span class="keyword">new</span> ProtobufEncoder())</span><br><span class="line">                .addLast(<span class="keyword">new</span> ClientHandler());</span><br><span class="line">    &#125;</span><br><span class="line">&#125;)</span><br></pre></td></tr></table></figure>
+<p><code>ProtobufDecoder</code>实际上可以接受<code>MessageLite</code>或者<code>Builder</code>。<br><code>Message</code>是<code>MessageLite</code>的子接口，因此可以用<code>Message</code>代替<code>MessageLite</code>。(基类指针存放子类对象)</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">Message</span> <span class="keyword">extends</span> <span class="title">MessageLite</span>, <span class="title">MessageOrBuilder</span> </span>&#123;...&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/10/10/2018-10/Netty-in-action-%E7%AC%AC%E5%8D%81%E4%B8%80%E7%AB%A0-SSL%E7%AD%89%E9%A2%84%E7%BD%AE%E5%AE%9E%E7%8E%B0-%E7%AC%94%E8%AE%B0/" data-id="ck96cxpop00e0maambxtf4rc5" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Netty/" rel="tag">Netty</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-09/通俗理解SSL-TLS协议区别与原理" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/09/26/2018-09/%E9%80%9A%E4%BF%97%E7%90%86%E8%A7%A3SSL-TLS%E5%8D%8F%E8%AE%AE%E5%8C%BA%E5%88%AB%E4%B8%8E%E5%8E%9F%E7%90%86/" class="article-date">
@@ -1217,60 +1428,6 @@ r3是关键的加密保护的随机数，r1,r2,r3一起生成key。<br>r1,r2的�
 
 
   
-    <article id="post-2018-08/引用类型" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/08/18/2018-08/%E5%BC%95%E7%94%A8%E7%B1%BB%E5%9E%8B/" class="article-date">
-  <time datetime="2018-08-18T12:53:23.000Z" itemprop="datePublished">2018-08-18</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/08/18/2018-08/%E5%BC%95%E7%94%A8%E7%B1%BB%E5%9E%8B/">引用类型</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h2 id="强引用"><a href="#强引用" class="headerlink" title="强引用"></a>强引用</h2><p>普通对象，<code>GCroot</code>能引用到就不回收。</p>
-<h2 id="软引用"><a href="#软引用" class="headerlink" title="软引用"></a>软引用</h2><p>用于内存敏感的高速缓存。<br>内存不足时会被回收。<br>实际应用中使用<code>ReferenceQueue</code>，回收后引用进入<code>ReferenceQueue</code>。</p>
-<h2 id="弱引用"><a href="#弱引用" class="headerlink" title="弱引用"></a>弱引用</h2><p>也用于缓存，但更容易被回收。<br>内存充足时也会被回收。<br>实际应用中使用<code>ReferenceQueue</code>，回收后引用进入<code>ReferenceQueue</code>。</p>
-<h3 id="案例：-ThreadLocal的key"><a href="#案例：-ThreadLocal的key" class="headerlink" title="案例： ThreadLocal的key"></a>案例： ThreadLocal的key</h3><p><code>ThreadLocal</code>的<code>key</code>是弱引用，被回收后，<code>key</code>是<code>null</code>，此时<code>value</code>无法被访问，但是有强引用。<br>但是每次发生<code>get,set,remove</code>的时候，会移除<code>key</code>为<code>null</code>的<code>entry</code>,消除内存泄露。</p>
-<img src="/images/2018-08/threadlocal.jpg" class="" width="400" height="600" title="threadlocal">
-
-
-<h2 id="虚引用"><a href="#虚引用" class="headerlink" title="虚引用"></a>虚引用</h2><p>完全不影响回收，相当于没引用。<br>必须和引用队列 （<code>ReferenceQueue</code>）联合使用，回收后引用进入<code>ReferenceQueue</code>。</p>
-<h3 id="案例：堆外内存管理"><a href="#案例：堆外内存管理" class="headerlink" title="案例：堆外内存管理"></a>案例：堆外内存管理</h3>
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/08/18/2018-08/%E5%BC%95%E7%94%A8%E7%B1%BB%E5%9E%8B/" data-id="ck96cxpog00d2maam3m27dqem" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1297,6 +1454,10 @@ r3是关键的加密保护的随机数，r1,r2,r3一起生成key。<br>r1,r2的�
       <ul>
         
           <li>
+            <a href="/2020/06/19/2020-06/tcp%E8%B0%83%E4%BC%98/">tcp调优</a>
+          </li>
+        
+          <li>
             <a href="/2020/06/15/2020-06/jdk11%E4%B8%8Bg1%E6%94%B6%E9%9B%86%E5%99%A8%E4%BD%BF%E7%94%A8/">jdk11下g1收集器使用</a>
           </li>
         
@@ -1310,10 +1471,6 @@ r3是关键的加密保护的随机数，r1,r2,r3一起生成key。<br>r1,r2的�
         
           <li>
             <a href="/2020/04/19/2020-04/spring%E6%8B%BE%E9%81%97/">spring拾遗</a>
-          </li>
-        
-          <li>
-            <a href="/2020/03/26/2020-03/%E5%88%A9%E7%94%A8UTF-8%E7%BC%96%E7%A0%81%E7%9A%84%E7%89%B9%E6%80%A7%E8%BF%9B%E8%A1%8C%E4%BC%98%E5%8C%96/">利用UTF-8编码的特性进行优化</a>
           </li>
         
       </ul>
