@@ -72,6 +72,102 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-03/spark语法概要" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/03/31/2019-03/spark%E8%AF%AD%E6%B3%95%E6%A6%82%E8%A6%81/" class="article-date">
+  <time datetime="2019-03-31T11:36:22.000Z" itemprop="datePublished">2019-03-31</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/spark/">spark</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/03/31/2019-03/spark%E8%AF%AD%E6%B3%95%E6%A6%82%E8%A6%81/">spark笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>job: action分割<br>task: shuffle分割<br>application: 多个job</p>
+<p>join\cogroup: 确保Rdd1.partitioner = Rdd2.partitioner = join.partitioner<br>换句话就是 rdd1的key和rdd2的key，还有join时用的key,三者是相等的。</p>
+<h1 id="语法概要"><a href="#语法概要" class="headerlink" title="语法概要"></a>语法概要</h1><p>官方示例代码库:<br><a href="http://spark.apache.org/examples.html" target="_blank" rel="noopener">http://spark.apache.org/examples.html</a><br>此外还有安装目录的<code>examples</code>目录。</p>
+<h2 id="生成rdd"><a href="#生成rdd" class="headerlink" title="生成rdd"></a>生成rdd</h2><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// (1) 从数组:</span></span><br><span class="line">data = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>]</span><br><span class="line">distData = sc.parallelize(data)</span><br><span class="line"><span class="comment">// (1)从文件:</span></span><br><span class="line">scala&gt; <span class="keyword">val</span> distFile = sc.textFile(<span class="string">"data.txt"</span>)</span><br><span class="line">distFile: org.apache.spark.rdd.<span class="type">RDD</span>[<span class="type">String</span>]</span><br></pre></td></tr></table></figure>
+
+<h2 id="RDD操作"><a href="#RDD操作" class="headerlink" title="RDD操作"></a>RDD操作</h2><p>RDD分为：</p>
+<ol>
+<li>普通RDD；</li>
+<li>PairRDD。<br>两者能用的函数大不相同，每次操作RDD前需要复核一下到底是普通RDD还是Pair RDD。</li>
+</ol>
+<p>方法分为:</p>
+<ol>
+<li>transform: 变换结构;</li>
+<li>action: 真正有输出，有动作（特例是forEachPartition这种类似遍历，反函数式编程的）。</li>
+</ol>
+<h2 id="普通RDD-transform"><a href="#普通RDD-transform" class="headerlink" title="普通RDD-transform"></a>普通RDD-transform</h2><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// scala用箭头=&gt;:</span></span><br><span class="line"><span class="keyword">val</span> lineLengths = lines.map(s =&gt; s.length)</span><br><span class="line"><span class="keyword">val</span> totalLength = lineLengths.reduce((a, b) =&gt; a + b)</span><br><span class="line"><span class="comment">// python用lambda:</span></span><br><span class="line">lineLengths = lines.map(lambda s: len(s))</span><br><span class="line">totalLength = lineLengths.reduce(lambda a, b: a + b)</span><br></pre></td></tr></table></figure>
+<p>也可以传递函数:</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// scala借用object单例:</span></span><br><span class="line"><span class="class"><span class="keyword">object</span> <span class="title">MyFunctions</span> </span>&#123;</span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">func1</span></span>(s: <span class="type">String</span>): <span class="type">String</span> = &#123; ... &#125;</span><br><span class="line">&#125;</span><br><span class="line">myRdd.map(<span class="type">MyFunctions</span>.func1)</span><br></pre></td></tr></table></figure>
+<p>其他函数汇总:(因为不是pair rdd，因此基本都无shuffle)</p>
+<h3 id="无shuffle-1对1"><a href="#无shuffle-1对1" class="headerlink" title="无shuffle,1对1"></a>无shuffle,1对1</h3><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">map(func)： </span><br><span class="line">filter(func)：无shuffle</span><br></pre></td></tr></table></figure>
+<h3 id="无shuffle-1对多、多对多"><a href="#无shuffle-1对多、多对多" class="headerlink" title="无shuffle,1对多、多对多"></a>无shuffle,1对多、多对多</h3><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">flatMap(func)	:  每个item可以返回一个seq;</span><br><span class="line">mapPartitions(func)	:  输入迭代器，返回迭代器 </span><br><span class="line">mapPartitionsWithIndex(func):  输入迭代器，返回迭代器</span><br></pre></td></tr></table></figure>
+<h3 id="集合运算"><a href="#集合运算" class="headerlink" title="集合运算"></a>集合运算</h3><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">sample(withReplacement, fraction, seed)	</span><br><span class="line">union(otherDataset)	</span><br><span class="line">intersection(otherDataset)	</span><br><span class="line">distinct([numTasks])): 如果是pairRDD，有shuffle，可以定义并行度。</span><br><span class="line">coalesce(numPartitions)	</span><br><span class="line">repartition(numPartitions)	</span><br><span class="line">repartitionAndSortWithinPartitions(partitioner)</span><br></pre></td></tr></table></figure>
+<p>此外还有一个<code>forEachPartition</code>，返回值为空，是个遍历的action。<br>有shuffle的变换一般都可以定义<code>[numTasks]</code>，也就是可以定义并行度。</p>
+<h3 id="闭包"><a href="#闭包" class="headerlink" title="闭包"></a>闭包</h3><p>闭包是指 <code>executor</code> 要在<code>RDD</code>上进行计算时必须对执行节点可见的那些变量和方法。闭包被序列化并被发送到每个 <code>executor</code>。</p>
+<p>闭包的变量副本(序列化后)发给每个 <code>executor</code>.</p>
+<h2 id="Pair-RDD-transform"><a href="#Pair-RDD-transform" class="headerlink" title="Pair RDD-transform"></a>Pair RDD-transform</h2><p>加上了很多shuffle操作的函数(算子)</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> pairs = lines.map(s =&gt; (s, <span class="number">1</span>))</span><br><span class="line"><span class="keyword">val</span> counts = pairs.reduceByKey((a, b) =&gt; a + b)</span><br></pre></td></tr></table></figure>
+<p>其他函数汇总:</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">groupByKey([numTasks])： 返回(<span class="type">K</span>, <span class="type">Iterable</span>&lt;<span class="type">V</span>&gt;)，一般用reduceByKey代替这个算子</span><br><span class="line">reduceByKey(func, [numTasks])	</span><br><span class="line">aggregateByKey(zeroValue)(seqOp, combOp, [numTasks])	</span><br><span class="line">sortByKey([ascending], [numTasks])	</span><br><span class="line">join(otherDataset, [numTasks]): (<span class="type">K</span>, <span class="type">V</span>) 和 (<span class="type">K</span>, <span class="type">W</span>)  =&gt;  (<span class="type">K</span>, (<span class="type">V</span>, <span class="type">W</span>))</span><br><span class="line">cogroup(otherDataset, [numTasks])	</span><br><span class="line">cartesian(otherDataset)	</span><br><span class="line">partitionBy(partitioner): 一般比repartition靠谱，因为下一步能用到key，而不是随机划分</span><br></pre></td></tr></table></figure>
+
+
+<p>Action汇总:<br>可以注意到凡是最终需要输出、反函数式编程的（遍历）就是action，最后汇聚到driver单点处理。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">reduce(func): 注意和map相反,reduce是action。数据最后聚合成单点。</span><br><span class="line">collect()	</span><br><span class="line">count()	</span><br><span class="line">first()	</span><br><span class="line">take(n)</span><br><span class="line">takeSample(withReplacement, num, [seed])	</span><br><span class="line">takeOrdered(n, [ordering])	</span><br><span class="line">saveAsTextFile(path)	</span><br><span class="line">saveAsSequenceFile(path)	</span><br><span class="line">countByKey()	: 因为整合了reduce的功能</span><br><span class="line">foreach(func) 以及foreachPartition等。</span><br></pre></td></tr></table></figure>
+
+<h3 id="自定义UDAF的核心-combineByKey"><a href="#自定义UDAF的核心-combineByKey" class="headerlink" title="自定义UDAF的核心: combineByKey"></a>自定义UDAF的核心: combineByKey</h3><p>大部分shuffle算子都是调用<code>combineByKey</code>实现的，可以说<code>combineByKey</code>就是shuffle的核心。<br>combineByKey定义:</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">combineByKey</span></span>[<span class="type">C</span>](</span><br><span class="line">  createCombiner: <span class="type">V</span> =&gt; <span class="type">C</span>,</span><br><span class="line">  mergeValue: (<span class="type">C</span>, <span class="type">V</span>) =&gt; <span class="type">C</span>,</span><br><span class="line">  mergeCombiners: (<span class="type">C</span>, <span class="type">C</span>) =&gt; <span class="type">C</span>): <span class="type">RDD</span>[(<span class="type">K</span>, <span class="type">C</span>)] = self.withScope &#123;</span><br><span class="line">combineByKeyWithClassTag(createCombiner, mergeValue, mergeCombiners)(<span class="literal">null</span>)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="示例"><a href="#示例" class="headerlink" title="示例"></a>示例</h4><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> pairs = sc.parallelize(<span class="type">List</span>((<span class="string">"prova"</span>, <span class="number">1</span>), (<span class="string">"ciao"</span>, <span class="number">2</span>),</span><br><span class="line">                                (<span class="string">"prova"</span>, <span class="number">2</span>), (<span class="string">"ciao"</span>, <span class="number">4</span>),</span><br><span class="line">                                (<span class="string">"prova"</span>, <span class="number">3</span>), (<span class="string">"ciao"</span>, <span class="number">6</span>)))</span><br><span class="line"><span class="comment">// aggregateByKey:</span></span><br><span class="line">pairs.aggregateByKey(<span class="type">List</span>[<span class="type">Any</span>]())(</span><br><span class="line">  (aggr, value) =&gt; aggr ::: (value :: <span class="type">Nil</span>),</span><br><span class="line">  (aggr1, aggr2) =&gt; aggr1 ::: aggr2</span><br><span class="line">).collect().toMap</span><br><span class="line"><span class="comment">// combineByKey:</span></span><br><span class="line">pairs.combineByKey(</span><br><span class="line">  (value) =&gt; <span class="type">List</span>(value),</span><br><span class="line">  (aggr: <span class="type">List</span>[<span class="type">Any</span>], value) =&gt; aggr ::: (value :: <span class="type">Nil</span>),</span><br><span class="line">  (aggr1: <span class="type">List</span>[<span class="type">Any</span>], aggr2: <span class="type">List</span>[<span class="type">Any</span>]) =&gt; aggr1 ::: aggr2</span><br><span class="line">).collect().toMap</span><br></pre></td></tr></table></figure>
+<p>combineByKey比aggregateByKey更加通用，区别是它的第一个参数创建初始聚合器都是函数，而aggregateByKey第一个参数是一个初始值。</p>
+<h2 id="缓存"><a href="#缓存" class="headerlink" title="缓存"></a>缓存</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">cache()</span><br><span class="line">persist([LEVEL])</span><br></pre></td></tr></table></figure>
+<p>在 shuffle 操作中（例如 reduceByKey），即便是用户没有调用 persist 方法，Spark 也会自动缓存部分中间数据.</p>
+<h2 id="广播变量"><a href="#广播变量" class="headerlink" title="广播变量"></a>广播变量</h2><p><code>immutable</code><br>先用action从sc(driver)上广播出去，然后用<code>.value</code>访问。</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">scala&gt; <span class="keyword">val</span> broadcastVar = sc.broadcast(<span class="type">Array</span>(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>))</span><br><span class="line">broadcastVar: org.apache.spark.broadcast.<span class="type">Broadcast</span>[<span class="type">Array</span>[<span class="type">Int</span>]] = <span class="type">Broadcast</span>(<span class="number">0</span>)</span><br><span class="line"></span><br><span class="line">scala&gt; broadcastVar.value</span><br><span class="line">res0: <span class="type">Array</span>[<span class="type">Int</span>] = <span class="type">Array</span>(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>)</span><br></pre></td></tr></table></figure>
+
+
+<h2 id="累加器"><a href="#累加器" class="headerlink" title="累加器"></a>累加器</h2><p>数值型。<br>可变。</p>
+<img src="/images/2019-03/acc.jpg" class="" width="800" height="1200" title="acc">
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">scala&gt; <span class="keyword">val</span> accum = sc.longAccumulator(<span class="string">"My Accumulator"</span>)</span><br><span class="line">accum: org.apache.spark.util.<span class="type">LongAccumulator</span> = <span class="type">LongAccumulator</span>(id: <span class="number">0</span>, name: <span class="type">Some</span>(<span class="type">My</span> <span class="type">Accumulator</span>), value: <span class="number">0</span>)</span><br><span class="line"></span><br><span class="line">scala&gt; sc.parallelize(<span class="type">Array</span>(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>)).foreach(x =&gt; accum.add(x))</span><br><span class="line">...</span><br><span class="line"><span class="number">10</span>/<span class="number">09</span>/<span class="number">29</span> <span class="number">18</span>:<span class="number">41</span>:<span class="number">08</span> <span class="type">INFO</span> <span class="type">SparkContext</span>: <span class="type">Tasks</span> finished in <span class="number">0.317106</span> s</span><br><span class="line"></span><br><span class="line">scala&gt; accum.value</span><br><span class="line">res2: <span class="type">Long</span> = <span class="number">10</span></span><br></pre></td></tr></table></figure>
+<p>自定义累加器需要实现的3个方法:（类似于<code>combineByKey</code>）</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">reset : 清零。防止重算。</span><br><span class="line">add: 累加</span><br><span class="line">merge: 合并累加器。</span><br></pre></td></tr></table></figure>
+<p>示例:</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">VectorAccumulatorV2</span> <span class="keyword">extends</span> <span class="title">AccumulatorV2</span>[<span class="type">MyVector</span>, <span class="type">MyVector</span>] </span>&#123;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">private</span> <span class="keyword">val</span> myVector: <span class="type">MyVector</span> = <span class="type">MyVector</span>.createZeroVector</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">reset</span></span>(): <span class="type">Unit</span> = &#123;</span><br><span class="line">    myVector.reset()</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">add</span></span>(v: <span class="type">MyVector</span>): <span class="type">Unit</span> = &#123;</span><br><span class="line">    myVector.add(v)</span><br><span class="line">  &#125;</span><br><span class="line">  ...</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// Then, create an Accumulator of this type:</span></span><br><span class="line"><span class="keyword">val</span> myVectorAcc = <span class="keyword">new</span> <span class="type">VectorAccumulatorV2</span></span><br><span class="line"><span class="comment">// Then, register it into spark context:</span></span><br><span class="line">sc.register(myVectorAcc, <span class="string">"MyVectorAcc1"</span>) <span class="comment">// 注册一下</span></span><br></pre></td></tr></table></figure>
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/03/31/2019-03/spark%E8%AF%AD%E6%B3%95%E6%A6%82%E8%A6%81/" data-id="ck96cxppm00hzmaam5jf963fq" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spark/" rel="tag">spark</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2019-03/redis设计与实现笔记12-慢查询日志" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/03/18/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B012-%E6%85%A2%E6%9F%A5%E8%AF%A2%E6%97%A5%E5%BF%97/" class="article-date">
@@ -867,108 +963,6 @@
 
 
   
-    <article id="post-2019-02/redis设计与实现笔记5-事件" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/02/21/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B05-%E4%BA%8B%E4%BB%B6/" class="article-date">
-  <time datetime="2019-02-21T13:53:58.000Z" itemprop="datePublished">2019-02-21</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/redis/">redis</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/02/21/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B05-%E4%BA%8B%E4%BB%B6/">redis设计与实现笔记5-事件</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>redis服务器需要处理的事件可以分为两类：</p>
-<ol>
-<li>文件事件(file event): 套接字的抽象。服务器通过套接字与客户端或其他服务端连接、通信；</li>
-<li>时间事件(time event): 定时任务。</li>
-</ol>
-<h2 id="文件事件"><a href="#文件事件" class="headerlink" title="文件事件"></a>文件事件</h2><p>事件模型是基于Reactor开发的:</p>
-<img src="/images/2019-02/file_event_handler.png" class="" width="800" height="1200" title="file_event_handler">
-<ol>
-<li>套接字;</li>
-<li>IO多路复用程序；</li>
-<li>事件分派器;(dispatcher)</li>
-<li>事件处理器。</li>
-</ol>
-<p>每当一个套接字准备好执行：<br>连接应答(accept)、<br>写入、<br>读取、<br>关闭<br>等操作时，就会产生一个事件（可能并发）。</p>
-<img src="/images/2019-02/force_single.png" class="" width="800" height="1200" title="force_single">
-<p><code>IO多路复用程序</code>：把上游并发的事件组织成一个队列（方便下游单线程地使用）。<br>当上一个套接字事件被处理完以后，IO多路复用程序才会向事件分派器传送下一个套接字事件。</p>
-<h3 id="IO多路复用"><a href="#IO多路复用" class="headerlink" title="IO多路复用"></a>IO多路复用</h3><p>具体啥是IO多路复用？就是一个进程处理多个连接。<br>方案有很多：(详见:<a href="http://xiaoyue26.github.io/2017/11/06/2017-11/epoll%E7%9B%B8%E5%85%B3%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86/">http://xiaoyue26.github.io/2017/11/06/2017-11/epoll%E7%9B%B8%E5%85%B3%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86/</a>)</p>
-<ol>
-<li>循环、轮询；</li>
-<li>Select;</li>
-<li>poll;</li>
-<li>epoll(红黑树)/kqueue(哈希表);</li>
-<li>libevent库。</li>
-</ol>
-<h3 id="事件优先级"><a href="#事件优先级" class="headerlink" title="事件优先级"></a>事件优先级</h3><p>先处理可读，再处理可写。</p>
-<h3 id="API接口"><a href="#API接口" class="headerlink" title="API接口"></a>API接口</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">1. createFileEvent(套接字描述符,事件类型,事件处理器):开始监听;</span><br><span class="line">2. deleteFileEvent(套接字描述符,事件类型): 取消监听;</span><br><span class="line">3. getFileEvents(套接字描述符): 返回被监听的事件类型;</span><br><span class="line">4. wait(套接字描述符,事件类型,超时时长(ms)): 等待事件;</span><br><span class="line">5. apiPoll(超时时长): 等待所有被监听事件直至至少一个发生；</span><br><span class="line">6. processEvent():等待事件,然后分派;</span><br><span class="line">7. getApiName: 返回底层使用的IO库(epoll,poll或select等)</span><br></pre></td></tr></table></figure>
-
-<h2 id="时间事件"><a href="#时间事件" class="headerlink" title="时间事件"></a>时间事件</h2><ol>
-<li>定时事件：指定时间后执行1次；</li>
-<li>周期事件：每隔指定时间就执行1次（总N次)。</li>
-</ol>
-<h3 id="时间事件属性："><a href="#时间事件属性：" class="headerlink" title="时间事件属性："></a>时间事件属性：</h3><ol>
-<li>id: 全局唯一，递增；</li>
-<li>when: 毫秒，事件到达时间；</li>
-<li>timeProc: 函数，到期执行。</li>
-</ol>
-<p>定时事件和周期事件区分：</p>
-<ol>
-<li>timeProc返回<code>AE_NOMORE</code>: no more事件，不再调用；</li>
-<li>timeProc返回30： 周期事件，30ms后再次调用。</li>
-</ol>
-<p>TODO: 全局唯一id=&gt;服务器内唯一？</p>
-<h3 id="实现"><a href="#实现" class="headerlink" title="实现"></a>实现</h3><img src="/images/2019-02/time_event.png" class="" width="800" height="1200" title="time_event">
-<p>所有时间事件放在一个无序链表中，每次遍历整个链表，查找所有已到达的时间事件。</p>
-<h3 id="性能"><a href="#性能" class="headerlink" title="性能"></a>性能</h3><p>由于时间事件很少（1，2个），所以虽然实现很naive，性能也还行。</p>
-<h3 id="现有时间事件"><a href="#现有时间事件" class="headerlink" title="现有时间事件"></a>现有时间事件</h3><p><code>serverCron</code>:（每100ms）</p>
-<ol>
-<li>更新统计信息：时间、内存、数据库占用；</li>
-<li>清理过期KV；</li>
-<li>关闭清理失效客户端；</li>
-<li>AOF\RDB持久化；</li>
-<li>主从同步；</li>
-<li>集群模式：定期同步、连接测试。</li>
-</ol>
-<h2 id="事件循环"><a href="#事件循环" class="headerlink" title="事件循环"></a>事件循环</h2><img src="/images/2019-02/all_event.png" class="" width="800" height="1200" title="all_event">
-<p>事件无抢占。<br>先文件事件后时间事件，因此时间事件一般会滞后一点。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/02/21/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B05-%E4%BA%8B%E4%BB%B6/" data-id="ck96cxpp700g8maamdrkkafkw" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -995,6 +989,10 @@
       <ul>
         
           <li>
+            <a href="/2020/07/22/2020-07/ES%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0/">ES实战笔记</a>
+          </li>
+        
+          <li>
             <a href="/2020/06/19/2020-06/tcp%E8%B0%83%E4%BC%98/">tcp调优</a>
           </li>
         
@@ -1008,10 +1006,6 @@
         
           <li>
             <a href="/2020/05/05/2020-05/BeanCopier%E6%B5%8B%E8%AF%84%E6%8A%A5%E5%91%8A/">BeanCopier测评报告</a>
-          </li>
-        
-          <li>
-            <a href="/2020/04/19/2020-04/spring%E6%8B%BE%E9%81%97/">spring拾遗</a>
           </li>
         
       </ul>

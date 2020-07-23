@@ -72,6 +72,145 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-10/Netty-in-action第14-15章案例研究-笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/10/14/2018-10/Netty-in-action%E7%AC%AC14-15%E7%AB%A0%E6%A1%88%E4%BE%8B%E7%A0%94%E7%A9%B6-%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2018-10-14T04:00:00.000Z" itemprop="datePublished">2018-10-14</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/Netty/">Netty</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/10/14/2018-10/Netty-in-action%E7%AC%AC14-15%E7%AB%A0%E6%A1%88%E4%BE%8B%E7%A0%94%E7%A9%B6-%E7%AC%94%E8%AE%B0/">Netty-in-action第14-15章案例研究-笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="文件上传案例-Droplr"><a href="#文件上传案例-Droplr" class="headerlink" title="文件上传案例: Droplr"></a>文件上传案例: Droplr</h1><h2 id="需求"><a href="#需求" class="headerlink" title="需求:"></a>需求:</h2><p>上传文件到S3,返回一个下载url。</p>
+<p>数据流: 客户端=&gt;服务端=&gt;S3</p>
+<h2 id="原始方案"><a href="#原始方案" class="headerlink" title="原始方案:"></a>原始方案:</h2><ol>
+<li>服务器接受上传,存成文件;</li>
+<li>服务器上传到S3;</li>
+<li>服务器回复url给客户端。</li>
+</ol>
+<p>缺点: </p>
+<ol>
+<li>每个上传开销大占用大量内存,导致并发低;</li>
+<li>上传完整个文件才开始上传S3,而瓶颈恰恰在于S3。</li>
+<li>有磁盘IO。</li>
+</ol>
+<h2 id="改进方案"><a href="#改进方案" class="headerlink" title="改进方案"></a>改进方案</h2><p>流式上传,只在内存,不过磁盘。</p>
+<ol>
+<li>服务器接受上传，每块数据实时传输到S3;</li>
+<li>接受和上传做速度适配，保持低内存消耗，高并发；</li>
+<li>最后返回url给客户端。</li>
+</ol>
+<p>并发达到10K。</p>
+<h3 id="要点"><a href="#要点" class="headerlink" title="要点"></a>要点</h3><ol>
+<li><code>IdelStateHandler</code>关闭不活跃的连接,回滚历史进度(速度控制失败时);</li>
+<li>并发达到上限时,返回503;</li>
+<li>需要保证<code>HttpChunk</code>的顺序(线程池)。<br>(注: 503: 服务不可用（服务器资源耗尽，拒绝服务）)</li>
+</ol>
+<p>http-client库:<br><a href="https://github.com/akka/akka-http" target="_blank" rel="noopener">https://github.com/akka/akka-http</a><br><a href="https://github.com/AsyncHttpClient/async-http-client" target="_blank" rel="noopener">https://github.com/AsyncHttpClient/async-http-client</a></p>
+<h1 id="实时数据同步：FireBase（被谷歌收购）"><a href="#实时数据同步：FireBase（被谷歌收购）" class="headerlink" title="实时数据同步：FireBase（被谷歌收购）"></a>实时数据同步：FireBase（被谷歌收购）</h1><h2 id="需求1"><a href="#需求1" class="headerlink" title="需求1:"></a>需求1:</h2><p>在各个用户和设备之间实时同步数据。<br>(服务器同步到各个客户端)</p>
+<h2 id="解决方案"><a href="#解决方案" class="headerlink" title="解决方案"></a>解决方案</h2><p>长轮询+WebSocket.<br>先使用长轮询连接，当WebSocket可用时切换到WebSocket。</p>
+<p>难点在于长轮询。</p>
+<h2 id="具体细节"><a href="#具体细节" class="headerlink" title="具体细节"></a>具体细节</h2><p>轮询 : 客户端每隔N秒轮询一次;实时性不强,开销大（空转）;<br>长轮询 : 客户端询问一次服务器,然后等待服务器响应,收到响应以后才继续轮询。<br>在服务端没有回复客户端的期间,如果客户端此时想发送数据给服务端,它会先阻塞。<br><code>此时，客户端手头的数据会堆积在缓冲区。</code><br>换言之，限制是: <code>未完成请求数&lt;=1</code>。(同一个客户端)</p>
+<h3 id="长轮询"><a href="#长轮询" class="headerlink" title="长轮询"></a>长轮询</h3><p>优点: 没有新数据时,服务器可以不回应客户端,这样客户端就不会接着轮询,减少空转;<br>缺点: 客户端发送数据可能被阻塞。 </p>
+<h4 id="改进"><a href="#改进" class="headerlink" title="改进"></a>改进</h4><p>客户端: 限制改成<code>未完成请求数&lt;=2</code>。(从1上调到2)<br>服务端: 如果当前有1个未完成请求<code>A</code>，此时又收到了同一个客户端的第二个请求<code>B</code>(一般第二个是发送数据的请求),会先对<code>A</code>进行空响应,然后处理请求<code>B</code>。</p>
+<p>引入新问题: <strong>消息的有序性;</strong><br>解决方案: 元数据加入消息序列号。</p>
+<p>引入新问题: <strong>连接断开检测</strong><br>解决方案:<br>客户端: 超时重试(以区分于慢速网络)。<br>服务端: 超时判断为连接断开。</p>
+<p>要点: Netty支持一个端口多个协议(HTTP,Websocket,长轮询,TCP)</p>
+<h2 id="需求2"><a href="#需求2" class="headerlink" title="需求2:"></a>需求2:</h2><p>加密环境(<code>SSLHandler</code>)下，基于带宽计费。</p>
+<h3 id="方案"><a href="#方案" class="headerlink" title="方案:"></a>方案:</h3><ol>
+<li>解密前统计字节数;</li>
+<li>解密后得到账户名,计入该账户的账单。</li>
+</ol>
+<p>要点: 统计字节数提前到解密前，提高性能。</p>
+<h1 id="app推送通知-Urban-Airship案例"><a href="#app推送通知-Urban-Airship案例" class="headerlink" title="app推送通知: Urban Airship案例"></a>app推送通知: Urban Airship案例</h1><h2 id="需求-1"><a href="#需求-1" class="headerlink" title="需求"></a>需求</h2><p>实时推送通知</p>
+<h2 id="方案-1"><a href="#方案-1" class="headerlink" title="方案"></a>方案</h2><ol>
+<li>app维护一条到后端服务的连接;</li>
+<li>借助第三方推送服务中转,服务器把消息传输给第三方平台，然后转交给app。</li>
+</ol>
+<p>其中苹果的APNS推送服务的使用流程:</p>
+<ol>
+<li>生产者: 通过TCP+SSLv3连接到APNS服务器,使用X.509证书进行身份认证;</li>
+<li>生产者: 按APNS规定的格式，发送消息(二进制);</li>
+<li>生产者: 读取(消息id,错误码)或成功。(因为有消息id,这里可以异步)</li>
+</ol>
+<p>其中消息格式是大端字节序，可以如下显式指定:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ByteBuf buf = Unpooled.buffer(size).order(ByteOrder.BIG_ENDIAN);</span><br></pre></td></tr></table></figure>
+
+<p>初始化,设置允许重新协商密钥:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> ChannelPipeline pipeline = channel.pipeline();</span><br><span class="line"> <span class="keyword">final</span> SslHandler handler = <span class="keyword">new</span> SslHandler(clientEngine);</span><br><span class="line"> handler.setEnableRenegotiation(<span class="keyword">true</span>);<span class="comment">// 重新协商</span></span><br><span class="line"> pipeline.addLast(<span class="string">"ssl"</span>, handler);</span><br><span class="line"> pipeline.addLast(<span class="string">"decoder"</span>, <span class="keyword">new</span> ApnsResponseDecoder());</span><br></pre></td></tr></table></figure>
+
+<h2 id="需要注意的经验"><a href="#需要注意的经验" class="headerlink" title="需要注意的经验"></a>需要注意的经验</h2><ol>
+<li>运营商可能不允许TCP的keep-alive特性,会积极剔除空闲的TCP会话;</li>
+<li>移动运营商可能禁止UDP.</li>
+</ol>
+<h1 id="第15章-案例研究，第二部分"><a href="#第15章-案例研究，第二部分" class="headerlink" title="第15章 案例研究，第二部分"></a>第15章 案例研究，第二部分</h1><h1 id="服务通信案例-Nifty和Swift-Facebook"><a href="#服务通信案例-Nifty和Swift-Facebook" class="headerlink" title="服务通信案例: Nifty和Swift(Facebook)"></a>服务通信案例: Nifty和Swift(Facebook)</h1><p><code>Thrift</code>: facebook开发的跨语言rpc远程调用、服务通信的框架。<br>组件:</p>
+<ol>
+<li>IDL: 定义通信的格式;</li>
+<li>协议；</li>
+<li>传输接口;</li>
+<li>编译器: 从IDL生成服务端和客户端的存根代码(不同语言);</li>
+<li>客户端和服务端实现。</li>
+</ol>
+<h2 id="场景"><a href="#场景" class="headerlink" title="场景:"></a>场景:</h2><p>由于<code>Thrift</code>是跨语言的远程调用。<br>其中C++版本基于<code>libevent</code>\ <code>Folly</code>开发，性能很高;<br>Java版本(<code>Nifty</code>)基于<code>Netty</code>开发，性能与C++版本不相上下。</p>
+<p><strong>Nifty</strong>：</p>
+<blockquote>
+<p>基于<code>Netty</code>的<code>Thrift</code>java实现。</p>
+</blockquote>
+<h3 id="需求1：-按顺序响应"><a href="#需求1：-按顺序响应" class="headerlink" title="需求1： 按顺序响应"></a>需求1： 按顺序响应</h3><p>客户端可能会要求:<br>服务器端并行处理请求，但是返回响应必须是顺序的。</p>
+<p>解决方案: 服务器端并行处理请求, 返回前排序响应。(缓冲处理好的请求结果)<br>开销: 缓冲响应的内存。（所以如果客户端不要求顺序响应，可以免除这部分开销）</p>
+<p>Netty4的实现支持: <code>EventExecutor</code><br>Netty3的实现支持: <code>OrderedMemoryAwareThreadPoolExcecutor</code></p>
+<p><strong>Swift</strong></p>
+<blockquote>
+<p>用注解来定义模型，无效IDL文件和存根。<br>底层使用Nifty作为I/O引擎。<br><a href="https://github.com/facebookarchive/swift" target="_blank" rel="noopener">https://github.com/facebookarchive/swift</a><br>已经不再维护。<br>还在维护的类似开源项目是:<br><a href="https://github.com/airlift/drift" target="_blank" rel="noopener">https://github.com/airlift/drift</a></p>
+</blockquote>
+<h2 id="超时处理"><a href="#超时处理" class="headerlink" title="超时处理"></a>超时处理</h2><p>问题: 每个请求维护一个超时事件的话，代价很昂贵。</p>
+<p>方案1: 超时集。<br>每个客户端维护一个计时器，或者每组相同超时间隔的请求，维护一个计时器。<br>每次超时结束以后，进行下一个超时计时器。<br>优点: 开销小;<br>缺点: 要求超时间隔长度一致。</p>
+<p>方案2: 使用<code>Netty</code>的<code>HashedWheelTimer</code>工具类。（空间换时间）<br>算法来自:<br><a href="http://www.cs.columbia.edu/~nahum/w6998/papers/sosp87-timing-wheels.pdf" target="_blank" rel="noopener">http://www.cs.columbia.edu/~nahum/w6998/papers/sosp87-timing-wheels.pdf</a><br>示例代码:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">HashedWheelTimer timer = <span class="keyword">new</span> HashedWheelTimer(<span class="number">100</span>, TimeUnit.MILLISECONDS, <span class="number">16</span>);</span><br><span class="line">System.out.println(LocalTime.now());</span><br><span class="line">timer.newTimeout((timeout) -&gt; &#123;</span><br><span class="line">    System.out.println(LocalTime.now());</span><br><span class="line">    System.out.println(timeout);</span><br><span class="line">&#125;, <span class="number">5</span>, TimeUnit.SECONDS);</span><br><span class="line"><span class="comment">//阻塞main线程</span></span><br><span class="line">System.in.read();</span><br></pre></td></tr></table></figure>
+
+
+<h1 id="RPC框架案例-Finagle-Twitter"><a href="#RPC框架案例-Finagle-Twitter" class="headerlink" title="RPC框架案例: Finagle(Twitter)"></a>RPC框架案例: Finagle(Twitter)</h1><p>前端api端点&lt;=&gt;<code>Finagle</code>&lt;=&gt;后端服务们(提供:用户信息、twitter、时间线)<br>(大部分是scala开发。原先是ruby on rails)</p>
+<img src="/images/2018-10/15.6.png" class="" width="400" height="600" title="Finagle">
+<p>主要功能包括: SSL、打日志(统计)、负载均衡</p>
+<h3 id="负载均衡（故障管理）"><a href="#负载均衡（故障管理）" class="headerlink" title="负载均衡（故障管理）"></a>负载均衡（故障管理）</h3><p>客户端统计所有服务器的延迟、未完成请求数（负载），<br>每次选择最低负载的主机派发请求。</p>
+<p>失败请求=&gt;从列表中移除对应服务器=&gt;后台不断尝试重连。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/10/14/2018-10/Netty-in-action%E7%AC%AC14-15%E7%AB%A0%E6%A1%88%E4%BE%8B%E7%A0%94%E7%A9%B6-%E7%AC%94%E8%AE%B0/" data-id="ck96cxpoo00dxmaamfjyfcdyu" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Netty/" rel="tag">Netty</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-10/Netty-in-action-第十一章-SSL等预置实现-笔记" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/10/10/2018-10/Netty-in-action-%E7%AC%AC%E5%8D%81%E4%B8%80%E7%AB%A0-SSL%E7%AD%89%E9%A2%84%E7%BD%AE%E5%AE%9E%E7%8E%B0-%E7%AC%94%E8%AE%B0/" class="article-date">
@@ -1356,78 +1495,6 @@ r3是关键的加密保护的随机数，r1,r2,r3一起生成key。<br>r1,r2的�
 
 
   
-    <article id="post-2018-08/Netty实战第三章-外部接口笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/08/18/2018-08/Netty%E5%AE%9E%E6%88%98%E7%AC%AC%E4%B8%89%E7%AB%A0-%E5%A4%96%E9%83%A8%E6%8E%A5%E5%8F%A3%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2018-08-18T12:54:06.000Z" itemprop="datePublished">2018-08-18</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/Netty/">Netty</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/08/18/2018-08/Netty%E5%AE%9E%E6%88%98%E7%AC%AC%E4%B8%89%E7%AB%A0-%E5%A4%96%E9%83%A8%E6%8E%A5%E5%8F%A3%E7%AC%94%E8%AE%B0/">Netty实战第三章-外部接口笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="外部接口"><a href="#外部接口" class="headerlink" title="外部接口"></a>外部接口</h1><h2 id="Channel-EventLoop-ChannelFuture"><a href="#Channel-EventLoop-ChannelFuture" class="headerlink" title="Channel,EventLoop,ChannelFuture"></a>Channel,EventLoop,ChannelFuture</h2><img src="/images/2018-08/pic31.png" class="" width="400" height="600" title="外部接口">
-<h3 id="Channel接口"><a href="#Channel接口" class="headerlink" title="Channel接口"></a>Channel接口</h3><p>封装<code>Socket</code>类，预定义的实现类包括:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">EmbeddedChannel</span><br><span class="line">LocalServerChannel</span><br><span class="line">NioDatagramChannel</span><br><span class="line">NioSctpChannel</span><br><span class="line">NioSocketChannel</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
-
-<h3 id="EventLoop"><a href="#EventLoop" class="headerlink" title="EventLoop"></a>EventLoop</h3><p><code>EventLoop</code>: 只绑定一个专有线程。<br><code>Channel</code>: 只注册于一个<code>EventLoop</code>；</p>
-<p><code>EventLoop</code>与线程: 1对1；<br><code>EventLoop</code>与<code>Channel</code>: 1对多；<br>因此：线程与<code>Channel</code>：1对多。同一个<code>Channel</code>的IO操作一定由同一个线程完成。</p>
-<img src="/images/2018-08/reactor.png" class="" width="400" height="600" title="reactor模式">
-
-<h3 id="ChannelFuture接口"><a href="#ChannelFuture接口" class="headerlink" title="ChannelFuture接口"></a>ChannelFuture接口</h3><p>用于查询<code>Channel</code>的操作结果。</p>
-<h2 id="ChannelHandler和ChannelPipeline"><a href="#ChannelHandler和ChannelPipeline" class="headerlink" title="ChannelHandler和ChannelPipeline"></a>ChannelHandler和ChannelPipeline</h2><h3 id="ChannelHandler接口"><a href="#ChannelHandler接口" class="headerlink" title="ChannelHandler接口"></a>ChannelHandler接口</h3><p>用来处理事件的方法。<br>子接口：<br><code>ChannelInboundHandler</code>:入站事件接口<br><code>ChannelOutboundHandler</code>:出站事件接口</p>
-<h3 id="ChannelPipeline接口"><a href="#ChannelPipeline接口" class="headerlink" title="ChannelPipeline接口"></a>ChannelPipeline接口</h3><p><code>ChannelHandler</code>接口的容器，就像一个<code>List&lt;ChannelHandler&gt;</code>。<br>是一个处理链。<br>在链上定义了入站和出站事件流。</p>
-<img src="/images/2018-08/pic33.png" class="" width="400" height="600" title="入站出站">
-<p><code>ChannelHandler</code>安装过程:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. 一个ChannelInitializer的实现注册到Bootstrap;</span><br><span class="line">2. 调用initChannel,在pipeline中安装一组自定义的ChannelHandler;</span><br><span class="line">    （2.1）ChannelHandler被安装时，分配一个ChannelHandlerContext给它，保存它与pipeline之间的绑定。</span><br><span class="line">3. ChannelInitializer将自己从pipeline中移除。</span><br></pre></td></tr></table></figure>
-
-<h3 id="ChannelHandlerContext"><a href="#ChannelHandlerContext" class="headerlink" title="ChannelHandlerContext"></a><code>ChannelHandlerContext</code></h3><p>可以用于获取底层的<code>Channel</code>。<br>两种写消息方式:</p>
-<ol>
-<li>写到<code>ChannelHandlerContext</code>中： 传递给<code>pipeline</code>中下一个<code>handler</code>;</li>
-<li>直接写<code>channel</code>：跳过后续的<code>handler</code>，直接到达尾端。</li>
-</ol>
-<h3 id="适配器"><a href="#适配器" class="headerlink" title="适配器"></a>适配器</h3><p>实际编写<code>ChannelHandler</code>的时候，一般不会直接用<code>ChannelInboundHandler</code>或者<code>ChannelOutboundHandler</code>接口，而会直接用预定义的实现类，然后进行扩展，也就是直接继承<code>extends</code>下列适配器类：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">ChannelHandlerAdapter</span><br><span class="line">ChannelInboundHandlerAdapter</span><br><span class="line">ChannelOutboundHandlerAdapter</span><br><span class="line">ChannelDuplexHandler</span><br></pre></td></tr></table></figure>
-<p>好处是可以只重写自己关心的事件处理，其他的用默认的。</p>
-<h2 id="ChannelHandler的子类型-编码器-解码器"><a href="#ChannelHandler的子类型-编码器-解码器" class="headerlink" title="ChannelHandler的子类型: 编码器/解码器"></a>ChannelHandler的子类型: 编码器/解码器</h2><p>编码解码： 入站出站时候字节和对象的数据转换。</p>
-<h2 id="抽象类SimpleChannelInboundHandler"><a href="#抽象类SimpleChannelInboundHandler" class="headerlink" title="抽象类SimpleChannelInboundHandler"></a>抽象类SimpleChannelInboundHandler</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">SimpleChannelInboundHandler&lt;I&gt; extends ChannelInboundHandlerAdapter</span><br></pre></td></tr></table></figure>
-<p>要注意处理的数据类型。<br>由于上游可能有其他解码器，导致数据类型发生改变。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/08/18/2018-08/Netty%E5%AE%9E%E6%88%98%E7%AC%AC%E4%B8%89%E7%AB%A0-%E5%A4%96%E9%83%A8%E6%8E%A5%E5%8F%A3%E7%AC%94%E8%AE%B0/" data-id="ck96cxpoe00cwmaam4zyy46zn" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Netty/" rel="tag">Netty</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1454,6 +1521,10 @@ r3是关键的加密保护的随机数，r1,r2,r3一起生成key。<br>r1,r2的�
       <ul>
         
           <li>
+            <a href="/2020/07/22/2020-07/ES%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0/">ES实战笔记</a>
+          </li>
+        
+          <li>
             <a href="/2020/06/19/2020-06/tcp%E8%B0%83%E4%BC%98/">tcp调优</a>
           </li>
         
@@ -1467,10 +1538,6 @@ r3是关键的加密保护的随机数，r1,r2,r3一起生成key。<br>r1,r2的�
         
           <li>
             <a href="/2020/05/05/2020-05/BeanCopier%E6%B5%8B%E8%AF%84%E6%8A%A5%E5%91%8A/">BeanCopier测评报告</a>
-          </li>
-        
-          <li>
-            <a href="/2020/04/19/2020-04/spring%E6%8B%BE%E9%81%97/">spring拾遗</a>
           </li>
         
       </ul>

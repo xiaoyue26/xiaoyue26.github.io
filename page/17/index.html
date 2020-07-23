@@ -72,6 +72,72 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-HDFS-namenode" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2017/01/07/HDFS-namenode/" class="article-date">
+  <time datetime="2017-01-07T11:25:41.000Z" itemprop="datePublished">2017-01-07</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/hadoop/">hadoop</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2017/01/07/HDFS-namenode/">HDFS namenode</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="HDFS-namenode"><a href="#HDFS-namenode" class="headerlink" title="HDFS namenode"></a>HDFS namenode</h1><ol>
+<li>双缓冲机制</li>
+<li>paxos协议</li>
+</ol>
+<ul>
+<li><code>hdfs-site.xml</code>配置文件<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">property</span>&gt;</span></span><br><span class="line">   <span class="tag">&lt;<span class="name">name</span>&gt;</span>dfs.nameservices<span class="tag">&lt;/<span class="name">name</span>&gt;</span></span><br><span class="line">   <span class="tag">&lt;<span class="name">value</span>&gt;</span>sync<span class="tag">&lt;/<span class="name">value</span>&gt;</span></span><br><span class="line">   <span class="tag">&lt;<span class="name">description</span>&gt;</span>Logical name for this new nameservice<span class="tag">&lt;/<span class="name">description</span>&gt;</span></span><br><span class="line"> <span class="tag">&lt;/<span class="name">property</span>&gt;</span></span><br><span class="line"> <span class="tag">&lt;<span class="name">property</span>&gt;</span></span><br><span class="line">   <span class="tag">&lt;<span class="name">name</span>&gt;</span>dfs.namenode.name.dir<span class="tag">&lt;/<span class="name">name</span>&gt;</span></span><br><span class="line">   <span class="tag">&lt;<span class="name">value</span>&gt;</span>file://home/wudi/hadoop/nn<span class="tag">&lt;/<span class="name">value</span>&gt;</span></span><br><span class="line"> <span class="tag">&lt;/<span class="name">property</span>&gt;</span></span><br><span class="line"> <span class="tag">&lt;<span class="name">property</span>&gt;</span></span><br><span class="line">   <span class="tag">&lt;<span class="name">name</span>&gt;</span>dfs.namenode.shared.edits.dir<span class="tag">&lt;/<span class="name">name</span>&gt;</span></span><br><span class="line">   <span class="tag">&lt;<span class="name">value</span>&gt;</span>qjournal://host1:port1;host2:port2;host3:port3/sync<span class="tag">&lt;/<span class="name">value</span>&gt;</span></span><br><span class="line"> <span class="tag">&lt;/<span class="name">property</span>&gt;</span></span><br></pre></td></tr></table></figure>
+这个配置是说，edit log需要往两个地方写：</li>
+</ul>
+<ol>
+<li>file://home/wudi/hadoop/nn</li>
+<li>qjournal://host1:port1;host2:port2;host3:port3/sync</li>
+</ol>
+<p>qjournal是一个共享的edit log目录；<br>JouralNode节点之间运行Paxos协议(帕克萨斯),保证多点写时也能对edit log达成一致。</p>
+<ul>
+<li>双buffer机制<br>edit log 维护双buffer,用途：</li>
+</ul>
+<ol>
+<li>填充数据；</li>
+<li>flush。<br>往buffer写需要事先加锁，写完后检查如果buffer中数据大小达到阈值，则进行sync，将buffer真正写出；<br>或：线程主动调用sync,主动将buffer写出。</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2017/01/07/HDFS-namenode/" data-id="ck96cxpkd0002maam82br2y7s" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/hadoop/" rel="tag">hadoop</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/hdfs/" rel="tag">hdfs</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-Hadoop-FileInputFormat" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2017/01/02/Hadoop-FileInputFormat/" class="article-date">
@@ -959,78 +1025,6 @@
 
 
   
-    <article id="post-jdk1-7中fork-join并发框架源码浅析及具体实例分析" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2016/02/26/jdk1-7%E4%B8%ADfork-join%E5%B9%B6%E5%8F%91%E6%A1%86%E6%9E%B6%E6%BA%90%E7%A0%81%E6%B5%85%E6%9E%90%E5%8F%8A%E5%85%B7%E4%BD%93%E5%AE%9E%E4%BE%8B%E5%88%86%E6%9E%90/" class="article-date">
-  <time datetime="2016-02-26T11:55:46.000Z" itemprop="datePublished">2016-02-26</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2016/02/26/jdk1-7%E4%B8%ADfork-join%E5%B9%B6%E5%8F%91%E6%A1%86%E6%9E%B6%E6%BA%90%E7%A0%81%E6%B5%85%E6%9E%90%E5%8F%8A%E5%85%B7%E4%BD%93%E5%AE%9E%E4%BE%8B%E5%88%86%E6%9E%90/">jdk1.7中fork-join并发框架源码浅析及具体实例分析</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>&emsp;&emsp;java7中的<code>fork-join</code>的基本思想就是创立线程池然后试图进行<code>Work Stealing</code>:</p>
-<blockquote>
- <img src="/images/workStealing.png" class="" width="200" height="100" title="Work Stealing">
-</blockquote>
-<p>&emsp;&emsp;所以任务的创建和线程的触发顺序就显得比较微妙而需要额外小心线程同步的问题，若子任务无返回值，尽量使用<code>invorkAll</code>方法。也可以参考源码中<code>invokeAll</code>的使用方法学习<code>fork</code>、<code>invork</code>和<code>join</code>的使用规范:</p>
-<figure class="highlight plain"><figcaption><span>invorkAll</span><a href="http://xiaoyue26.github.io/">java.util.concurrent.ForkJoinTask.java</a></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"> &#x2F;**</span><br><span class="line">     * Forks the given tasks, returning when &#123;@code isDone&#125; holds for</span><br><span class="line">     * each task or an (unchecked) exception is encountered, in which</span><br><span class="line">     * case the exception is rethrown. If more than one task</span><br><span class="line">     * encounters an exception, then this method throws any one of</span><br><span class="line">     * these exceptions. If any task encounters an exception, others</span><br><span class="line">     * may be cancelled. However, the execution status of individual</span><br><span class="line">     * tasks is not guaranteed upon exceptional return. The status of</span><br><span class="line">     * each task may be obtained using &#123;@link #getException()&#125; and</span><br><span class="line">     * related methods to check if they have been cancelled, completed</span><br><span class="line">     * normally or exceptionally, or left unprocessed.</span><br><span class="line">     *</span><br><span class="line">     * @param tasks the tasks</span><br><span class="line">     * @throws NullPointerException if any task is null</span><br><span class="line">     *&#x2F;</span><br><span class="line">public static void invokeAll(ForkJoinTask&lt;?&gt;... tasks) &#123;</span><br><span class="line">    Throwable ex &#x3D; null;</span><br><span class="line">    int last &#x3D; tasks.length - 1;</span><br><span class="line">    for (int i &#x3D; last; i &gt;&#x3D; 0; --i) &#123;&#x2F;&#x2F;从last到1依次fork,而0则直接invork。</span><br><span class="line">        ForkJoinTask&lt;?&gt; t &#x3D; tasks[i];</span><br><span class="line">        if (t &#x3D;&#x3D; null) &#123;</span><br><span class="line">            if (ex &#x3D;&#x3D; null)</span><br><span class="line">                ex &#x3D; new NullPointerException();</span><br><span class="line">        &#125;</span><br><span class="line">        else if (i !&#x3D; 0)&#x2F;&#x2F;不为0则fork</span><br><span class="line">            t.fork();</span><br><span class="line">        else if (t.doInvoke() &lt; NORMAL &amp;&amp; ex &#x3D;&#x3D; null)&#x2F;&#x2F;为0则invork</span><br><span class="line">            ex &#x3D; t.getException();</span><br><span class="line">    &#125;</span><br><span class="line">    for (int i &#x3D; 1; i &lt;&#x3D; last; ++i) &#123;&#x2F;&#x2F;注意此处是从1开始, 依次join</span><br><span class="line">        ForkJoinTask&lt;?&gt; t &#x3D; tasks[i];</span><br><span class="line">        if (t !&#x3D; null) &#123;</span><br><span class="line">            if (ex !&#x3D; null)</span><br><span class="line">                t.cancel(false);</span><br><span class="line">            else if (t.doJoin() &lt; NORMAL &amp;&amp; ex &#x3D;&#x3D; null)</span><br><span class="line">                ex &#x3D; t.getException();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    if (ex !&#x3D; null)</span><br><span class="line">        UNSAFE.throwException(ex);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>输入为两个任务的源码例子:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment">  * Forks the given tasks, returning when &#123;<span class="doctag">@code</span> isDone&#125; holds for</span></span><br><span class="line"><span class="comment">  * each task or an (unchecked) exception is encountered, in which</span></span><br><span class="line"><span class="comment">  * case the exception is rethrown. If more than one task</span></span><br><span class="line"><span class="comment">  * encounters an exception, then this method throws any one of</span></span><br><span class="line"><span class="comment">  * these exceptions. If any task encounters an exception, the</span></span><br><span class="line"><span class="comment">  * other may be cancelled. However, the execution status of</span></span><br><span class="line"><span class="comment">  * individual tasks is not guaranteed upon exceptional return. The</span></span><br><span class="line"><span class="comment">  * status of each task may be obtained using &#123;<span class="doctag">@link</span></span></span><br><span class="line"><span class="comment">  * #getException()&#125; and related methods to check if they have been</span></span><br><span class="line"><span class="comment">  * cancelled, completed normally or exceptionally, or left</span></span><br><span class="line"><span class="comment">  * unprocessed.</span></span><br><span class="line"><span class="comment">  *</span></span><br><span class="line"><span class="comment">  * <span class="doctag">@param</span> t1 the first task</span></span><br><span class="line"><span class="comment">  * <span class="doctag">@param</span> t2 the second task</span></span><br><span class="line"><span class="comment">  * <span class="doctag">@throws</span> NullPointerException if any task is null</span></span><br><span class="line"><span class="comment">  */</span></span><br><span class="line"> <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">invokeAll</span><span class="params">(ForkJoinTask&lt;?&gt; t1, ForkJoinTask&lt;?&gt; t2)</span> </span>&#123;</span><br><span class="line">     <span class="keyword">int</span> s1, s2;</span><br><span class="line">     t2.fork();</span><br><span class="line">     <span class="keyword">if</span> ((s1 = t1.doInvoke() &amp; DONE_MASK) != NORMAL)</span><br><span class="line">         t1.reportException(s1);</span><br><span class="line">     <span class="keyword">if</span> ((s2 = t2.doJoin() &amp; DONE_MASK) != NORMAL)</span><br><span class="line">         t2.reportException(s2);</span><br><span class="line"> &#125;</span><br></pre></td></tr></table></figure>
-<p>两个任务的时候也是先<code>fork t2-&gt;invork t1-&gt;join t2</code>这样的流程。</p>
-<hr>
-<p>fork操作是把任务放入<code>workQueue</code>的尾部(<code>push</code>):</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">final</span> ForkJoinTask&lt;V&gt; <span class="title">fork</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        Thread t;</span><br><span class="line">        <span class="keyword">if</span> ((t = Thread.currentThread()) <span class="keyword">instanceof</span> ForkJoinWorkerThread)</span><br><span class="line">            ((ForkJoinWorkerThread)t).workQueue.push(<span class="keyword">this</span>);<span class="comment">//放入尾部</span></span><br><span class="line">        <span class="keyword">else</span></span><br><span class="line">            ForkJoinPool.common.externalPush(<span class="keyword">this</span>);</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">this</span>;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
-<p>join操作:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment">    * Implementation for join, get, quietlyJoin. Directly handles</span></span><br><span class="line"><span class="comment">    * only cases of already-completed, external wait, and</span></span><br><span class="line"><span class="comment">    * unfork+exec.  Others are relayed to ForkJoinPool.awaitJoin.</span></span><br><span class="line"><span class="comment">    *</span></span><br><span class="line"><span class="comment">    * <span class="doctag">@return</span> status upon completion</span></span><br><span class="line"><span class="comment">    */</span></span><br><span class="line">   <span class="function"><span class="keyword">private</span> <span class="keyword">int</span> <span class="title">doJoin</span><span class="params">()</span> </span>&#123;</span><br><span class="line">       <span class="keyword">int</span> s; Thread t; ForkJoinWorkerThread wt; ForkJoinPool.WorkQueue w;</span><br><span class="line">       <span class="keyword">return</span> (s = status) &lt; <span class="number">0</span> ? s :</span><br><span class="line">           ((t = Thread.currentThread()) <span class="keyword">instanceof</span> ForkJoinWorkerThread) ?</span><br><span class="line">           (w = (wt = (ForkJoinWorkerThread)t).workQueue).</span><br><span class="line">           tryUnpush(<span class="keyword">this</span>) &amp;&amp; (s = doExec()) &lt; <span class="number">0</span> ? s :</span><br><span class="line">           wt.pool.awaitJoin(w, <span class="keyword">this</span>, <span class="number">0L</span>) :</span><br><span class="line">           externalAwaitDone();</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
-<p>综上所述，整个标准的调用流程应该是先反序<code>fork</code>(除了第一个任务),把任务(this)放入队列尾部，调用第一个任务，再顺序<code>join</code>(也除了第一个任务)。</p>
-<hr>
-<p>下面是一个比较复杂、具体的求<code>double</code>数组平方和的过程。恰当的组织可以让运算保持分而治之的理念，而不是仅仅只是递归。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line"><span class="keyword">import</span> java.util.concurrent.ForkJoinPool;</span><br><span class="line"><span class="keyword">import</span> java.util.concurrent.RecursiveAction;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">Applyer</span> <span class="keyword">extends</span> <span class="title">RecursiveAction</span> </span>&#123;</span><br><span class="line">	<span class="function"><span class="keyword">static</span> <span class="keyword">double</span> <span class="title">sumOfSquares</span><span class="params">(ForkJoinPool pool, <span class="keyword">double</span>[] array)</span> </span>&#123;</span><br><span class="line">		<span class="keyword">int</span> n = array.length;</span><br><span class="line">		Applyer a = <span class="keyword">new</span> Applyer(array, <span class="number">0</span>, n, <span class="keyword">null</span>);</span><br><span class="line">		pool.invoke(a);</span><br><span class="line">		<span class="keyword">return</span> a.result;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">final</span> <span class="keyword">double</span>[] array;</span><br><span class="line">	<span class="keyword">final</span> <span class="keyword">int</span> lo, hi;</span><br><span class="line">	<span class="keyword">double</span> result;</span><br><span class="line">	Applyer next; <span class="comment">// keeps track of right-hand-side tasks</span></span><br><span class="line"></span><br><span class="line">	Applyer(<span class="keyword">double</span>[] array, <span class="keyword">int</span> lo, <span class="keyword">int</span> hi, Applyer next) &#123;</span><br><span class="line">		<span class="keyword">this</span>.array = array;</span><br><span class="line">		<span class="keyword">this</span>.lo = lo;</span><br><span class="line">		<span class="keyword">this</span>.hi = hi;</span><br><span class="line">		<span class="keyword">this</span>.next = next;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="function"><span class="keyword">double</span> <span class="title">atLeaf</span><span class="params">(<span class="keyword">int</span> l, <span class="keyword">int</span> h)</span> </span>&#123;</span><br><span class="line">		<span class="keyword">double</span> sum = <span class="number">0</span>;</span><br><span class="line">		<span class="keyword">for</span> (<span class="keyword">int</span> i = l; i &lt; h; ++i) <span class="comment">// perform leftmost base step</span></span><br><span class="line">			sum += array[i] * array[i];</span><br><span class="line">		<span class="keyword">return</span> sum;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="function"><span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">compute</span><span class="params">()</span> </span>&#123;</span><br><span class="line">		<span class="keyword">int</span> l = lo;</span><br><span class="line">		<span class="keyword">int</span> h = hi;</span><br><span class="line">		Applyer right = <span class="keyword">null</span>;</span><br><span class="line">		<span class="keyword">while</span> (h - l &gt; <span class="number">1</span> &amp;&amp; getSurplusQueuedTaskCount() &lt;= <span class="number">3</span>) &#123;</span><br><span class="line">			<span class="keyword">int</span> mid = (l + h) &gt;&gt;&gt; <span class="number">1</span>;<span class="comment">//无符号右移(除以2)(若(l+h)为负数,mid就变成整数了)</span></span><br><span class="line">			right = <span class="keyword">new</span> Applyer(array, mid, h, right);</span><br><span class="line">			right.fork();</span><br><span class="line">			h = mid;</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="keyword">double</span> sum = atLeaf(l, h);</span><br><span class="line">		<span class="keyword">while</span> (right != <span class="keyword">null</span>) &#123;</span><br><span class="line">			<span class="keyword">if</span> (right.tryUnfork()) <span class="comment">// directly calculate if not stolen</span></span><br><span class="line">				sum += right.atLeaf(right.lo, right.hi);</span><br><span class="line">			<span class="keyword">else</span> &#123;</span><br><span class="line">				right.join();</span><br><span class="line">				sum += right.result;</span><br><span class="line">			&#125;</span><br><span class="line">			right = right.next;</span><br><span class="line">		&#125;</span><br><span class="line">		result = sum;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">		ForkJoinPool forkJoinPool = <span class="keyword">new</span> ForkJoinPool();</span><br><span class="line">		<span class="keyword">double</span>[] array = &#123; <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span> &#125;;</span><br><span class="line">		System.out.println(sumOfSquares(forkJoinPool, array));</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p><code>Applyer</code>作为一个<code>RecursiveAction</code>，从最初的一个<code>Applyer(array, 0, n, null)</code>,分裂为多个任务，放置于任务列表中，空闲的工作线程从列表中取出任务运行<code>compute</code>方法，计算一个叶节点后， 优先再去寻找右边的叶节点进行计算，若靠右的叶节点们先结束运算，再去任务列表中窃取任务进行计算。</p>
-<p>其中<code>getSurplusQueuedTaskCount</code>方法用于判断当前过剩的任务数量，例如当工作线程数量为<code>10</code>，而划分的任务数量为<code>14</code>，则不会有空闲的线程来进行任务窃取，大家都很忙，所以就没必要继续划分任务了。反之，若有空闲的工作线程，而且任务足够大，则应该先把任务划分一下，以方便其他空闲线程窃取自己的任务，加快所有任务的完成。</p>
-<p><code>compute</code>函数第一个<code>while</code>循环先对任务数量和当前工作线程数量进行权衡，如果过剩的任务数量小于3，则进行二分。一直到任务数量足够了，跳出循环。使用<code>atLeaf()</code>函数直接计算<code>(l,f)</code>范围内的平方和。</p>
-<p>计算完当前叶节点的任务后，检查右边叶节点的任务是否被其他线程窃取。若被窃取了则等待其完成，反之则自己计算该任务。然后继续往右遍历任务。</p>
-<p>所有任务分布在树的叶节点上，并且以链表的形式串联起来，以便相互窃取任务。(注意到由于线程的工作速度不同，叶节点的深度很可能不是一致的。)</p>
-<p>参考:</p>
-<p>[1] <a href="http://www.molotang.com/articles/694.html" target="_blank" rel="noopener">http://www.molotang.com/articles/694.html</a><br>[2] <a href="http://www.iteye.com/topic/643724" target="_blank" rel="noopener">http://www.iteye.com/topic/643724</a> (其中fork和join用法不符合jdk源码使用规范)</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2016/02/26/jdk1-7%E4%B8%ADfork-join%E5%B9%B6%E5%8F%91%E6%A1%86%E6%9E%B6%E6%BA%90%E7%A0%81%E6%B5%85%E6%9E%90%E5%8F%8A%E5%85%B7%E4%BD%93%E5%AE%9E%E4%BE%8B%E5%88%86%E6%9E%90/" data-id="ck96cxplg003amaam6si1714c" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1057,6 +1051,10 @@
       <ul>
         
           <li>
+            <a href="/2020/07/22/2020-07/ES%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0/">ES实战笔记</a>
+          </li>
+        
+          <li>
             <a href="/2020/06/19/2020-06/tcp%E8%B0%83%E4%BC%98/">tcp调优</a>
           </li>
         
@@ -1070,10 +1068,6 @@
         
           <li>
             <a href="/2020/05/05/2020-05/BeanCopier%E6%B5%8B%E8%AF%84%E6%8A%A5%E5%91%8A/">BeanCopier测评报告</a>
-          </li>
-        
-          <li>
-            <a href="/2020/04/19/2020-04/spring%E6%8B%BE%E9%81%97/">spring拾遗</a>
           </li>
         
       </ul>
