@@ -72,6 +72,349 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-10/HashedWheelTimer-大量定时器解决方案-Netty与kafka" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/10/27/2018-10/HashedWheelTimer-%E5%A4%A7%E9%87%8F%E5%AE%9A%E6%97%B6%E5%99%A8%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88-Netty%E4%B8%8Ekafka/" class="article-date">
+  <time datetime="2018-10-27T12:16:33.000Z" itemprop="datePublished">2018-10-27</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/Netty/">Netty</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/10/27/2018-10/HashedWheelTimer-%E5%A4%A7%E9%87%8F%E5%AE%9A%E6%97%B6%E5%99%A8%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88-Netty%E4%B8%8Ekafka/">HashedWheelTimer-大量定时器解决方案(Netty与kafka)</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="需求"><a href="#需求" class="headerlink" title="需求:"></a>需求:</h1><p>有大量定时任务需要执行，精度要求不高，可以允许延迟执行。<br>可能的场景: 每个连接的超时事件、每个请求的超时事件。</p>
+<h1 id="方案1"><a href="#方案1" class="headerlink" title="方案1:"></a>方案1:</h1><p>每个定时任务设置一个定时器、或一个<code>Scheduled</code>,<code>DelayedQueue</code>和实现<code>Delayed</code>接口的线程。<br>缺点: 开销太大;<br>优点: 少量任务时精度较高。</p>
+<h1 id="方案2-超时集"><a href="#方案2-超时集" class="headerlink" title="方案2: 超时集"></a>方案2: 超时集</h1><p>将相同时间间隔的任务组织成一个集合。每个集合分配一个计时器（thread）。<br>缺点: 相同时间间隔难以满足，性能不够。</p>
+<h1 id="方案3-HashedWheelTimer：-时间轮算法-Netty4工具类"><a href="#方案3-HashedWheelTimer：-时间轮算法-Netty4工具类" class="headerlink" title="方案3: HashedWheelTimer： 时间轮算法(Netty4工具类)"></a>方案3: HashedWheelTimer： 时间轮算法(Netty4工具类)</h1><p>设计一个虚拟的哈希表组织定时任务。<br>优点: 默认只用一个thread,开销小;<br>缺点:</p>
+<ol>
+<li>精度降低到<code>tickDuration</code>粒度;</li>
+<li>定时任务不能太耗时;(解决方案: 可以在定时任务里异步处理)。</li>
+</ol>
+<h2 id="基本架构"><a href="#基本架构" class="headerlink" title="基本架构"></a>基本架构</h2><img src="/images/2018-10/timewheel.jpg" class="" width="400" height="600" title="timewheel">
+<p>如上图所示即为时间轮。<br>引入术语:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">tick: 时间轮里每一格;</span><br><span class="line">tickDuration: 每一格的时长;</span><br><span class="line">ticksPerWheel: 时间轮总共有多少格.</span><br><span class="line">newTimeout: 定时任务分配到时间轮</span><br></pre></td></tr></table></figure>
+
+<h3 id="定时任务分配到时间轮"><a href="#定时任务分配到时间轮" class="headerlink" title="定时任务分配到时间轮"></a>定时任务分配到时间轮</h3><p>分配流程:</p>
+<ol>
+<li>计算定时任务deadline = <code>System.nanoTime() + unit.toNanos(delay) - startTime</code>;</li>
+<li>计算定时任务放入第几格: <figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">long</span> calculated = deadline / tickDuration; <span class="comment">// 需要计算几次</span></span><br><span class="line"><span class="function"><span class="keyword">final</span> <span class="keyword">long</span> <span class="title">ticks</span><span class="params">(还需要走几格)</span> </span>= Math.max(calculated, 当前tick次数); <span class="comment">// 一般就等于calculated，这里只是为了确保不在以前走过的格子里（这样的话这个任务永远不会执行而且移除不掉了）</span></span><br><span class="line">stopIndex = (<span class="keyword">int</span>) (ticks &amp; mask); <span class="comment">// 相当于% wheel.length，因为长度是2的幂。</span></span><br></pre></td></tr></table></figure></li>
+<li>计算定时任务第几轮被调用: <code>remainingRounds = (calculated - tick) / wheel.length;</code></li>
+<li>放入时间轮stopIndex位置中任务链表: (remainingRounds,task)：<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">HashedWheelBucket bucket = wheel[stopIndex];</span><br><span class="line">bucket.addTimeout(timeout); <span class="comment">// 加入链表尾部。</span></span><br></pre></td></tr></table></figure>
+
+</li>
+</ol>
+<p>当这个时间轮开始运行的时候（也就是开始计时，执行定时任务了），每次跳转一个tick,都会检查这个tick里的定时任务,如果定时任务轮次应当执行，则执行对应任务。</p>
+<p>使用的示例代码: </p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * tickDuration: 每 tick 一次的时间间隔, 每 tick 一次就会到达下一个槽位</span></span><br><span class="line"><span class="comment"> * ticksPerWheel: 轮中的 slot 数</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="meta">@Test</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">testHashedWheelTimer</span><span class="params">()</span> <span class="keyword">throws</span> InterruptedException </span>&#123;</span><br><span class="line"><span class="comment">// 1000ms一格,一轮16格（一般是2的N次幂，这样可以把hash转换为&amp;0xFFFF）</span></span><br><span class="line">    HashedWheelTimer hashedWheelTimer = <span class="keyword">new</span> HashedWheelTimer(<span class="number">1000</span>,TimeUnit.MILLISECONDS, <span class="number">16</span> );</span><br><span class="line">    System.out.println(LocalTime.now()+<span class="string">" submitted"</span>);</span><br><span class="line">    Timeout timeout = hashedWheelTimer.newTimeout((t) -&gt; &#123;</span><br><span class="line">        <span class="keyword">new</span> Thread()&#123;</span><br><span class="line">            <span class="meta">@Override</span></span><br><span class="line">            <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">                System.out.println(<span class="keyword">new</span> Date() + <span class="string">" executed"</span>);</span><br><span class="line">                System.out.println(hashedWheelTimer);</span><br><span class="line">                <span class="keyword">try</span> &#123;</span><br><span class="line">                    TimeUnit.SECONDS.sleep(<span class="number">100</span>);</span><br><span class="line">                &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                    e.printStackTrace();</span><br><span class="line">                &#125;</span><br><span class="line">                System.out.println(<span class="keyword">new</span> Date() + <span class="string">" FINISH"</span>);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;.start();</span><br><span class="line">    &#125;, <span class="number">5</span>, TimeUnit.SECONDS);</span><br><span class="line"></span><br><span class="line">    hashedWheelTimer.newTimeout((t) -&gt; &#123;</span><br><span class="line">        <span class="keyword">new</span> Thread()&#123;</span><br><span class="line">            <span class="meta">@Override</span></span><br><span class="line">            <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">                System.out.println(<span class="keyword">new</span> Date() + <span class="string">" TASK2 executed"</span>);</span><br><span class="line">                System.out.println(hashedWheelTimer);</span><br><span class="line">                <span class="keyword">try</span> &#123;</span><br><span class="line">                    TimeUnit.SECONDS.sleep(<span class="number">10</span>);</span><br><span class="line">                &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                    e.printStackTrace();</span><br><span class="line">                &#125;</span><br><span class="line">                System.out.println(<span class="keyword">new</span> Date() + <span class="string">" TASK2 FINISH"</span>);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;.start();</span><br><span class="line">    &#125;, <span class="number">15</span>, TimeUnit.SECONDS);</span><br><span class="line"></span><br><span class="line">    TimeUnit.SECONDS.sleep(<span class="number">500</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<p><code>HashedWheelTimer</code>源码:<br><a href="https://github.com/netty/netty/blob/4.1/common/src/main/java/io/netty/util/HashedWheelTimer.java" target="_blank" rel="noopener">https://github.com/netty/netty/blob/4.1/common/src/main/java/io/netty/util/HashedWheelTimer.java</a></p>
+<p>理论基础:(操作系统内核的定时器)<br><a href="http://www.cs.columbia.edu/~nahum/w6998/papers/sosp87-timing-wheels.pdf" target="_blank" rel="noopener">http://www.cs.columbia.edu/~nahum/w6998/papers/sosp87-timing-wheels.pdf</a></p>
+<h1 id="方案4：-层级时间轮-Kafka使用"><a href="#方案4：-层级时间轮-Kafka使用" class="headerlink" title="方案4： 层级时间轮(Kafka使用)"></a>方案4： 层级时间轮(Kafka使用)</h1><p>上述简单时间轮的算法存在的<strong>缺点</strong>:<br>对于延迟很长时间的任务,该方案存在较多的cpu空转。一种可能的方案是增大<code>tickduration</code>,但是很难兼顾精度和性能。</p>
+<p>一种解决方案: 层级时间轮。<br>思路是模拟现实中的钟表,现实中的钟表有时针、分针、秒针,相当于不同<code>tickDuration</code>的时间轮。<br>架构图如下:</p>
+<img src="/images/2018-10/timewheel2.jpg" class="" width="400" height="600" title="timewheel2">
+
+<p>不同于<code>Netty4</code>中每个任务存放自己应到执行的轮次,层级时间轮把高轮次的定时任务分配到高层的时间轮中:层数越高=&gt;<code>tickDuration</code>越大。</p>
+<p>假如定义最低层的时间轮的层号为0,高一层的为1,依次类推,只有n-1层的定时任务到期后,才会取出n层时间轮的定时任务处理（要么直接执行,要么降级,要么放回时间轮）。</p>
+<p>(如果让层级时间轮每层的<code>tickDuratino</code>相同，则退化为方案3的普通时间轮。)</p>
+<p>同时为了辅助推进时间轮的指针,使用<code>DelayQueue</code>存放最近到期的定时任务</p>
+<h2 id="双向链表"><a href="#双向链表" class="headerlink" title="双向链表"></a>双向链表</h2><p>时间中每一个格中使用的数据结构为双向链表。<br>好处是只要持有其中某个节点，就可以在<code>O(1)</code>时间内进行插入或者删除操作。</p>
+<h2 id="到期操作"><a href="#到期操作" class="headerlink" title="到期操作"></a>到期操作</h2><p>由<code>DelayQueue</code>辅助推进指针: </p>
+<ol>
+<li><code>DelayQueue</code>中优先级队列的队首最近到期的定时任务。处理结束后,由<code>leader</code>线程等待下一个定时任务的时间。因此推进步长由定时任务的间隔决定,没有cpu空转的现象。</li>
+<li>推进所有时间轮的指针,对于遇到的定时任务,要么插入低层时间轮,要么删除(执行)。</li>
+</ol>
+<h2 id="插入操作-删除类似"><a href="#插入操作-删除类似" class="headerlink" title="插入操作(删除类似)"></a>插入操作(删除类似)</h2><p>插入新的定时任务:</p>
+<ol>
+<li>插入时间轮: 根据到期时间,可以算出具体应该放在哪一层时间轮的哪一格,得到对应的双向链表引用。如果这一格还是空的,需要新建一个,然后插入到<code>DelayQueue</code>中(<code>O(logN)</code>时间复杂度)。(参见<code>DelayQueue</code>原理,如果时间低于<code>DelayQueue</code>的最小延时任务,会提前唤醒里面的<code>leader</code>线程)</li>
+<li>插入<code>DelayQueue</code>: 根据上一步中得到的双向链表引用,往里面插入新的定时任务（<code>O(1)</code>）。</li>
+</ol>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>层级时间轮通过不同<code>tickDuration</code>的时间轮,以较小的空间映射到一个很大的时间范围,兼顾了精度和性能。<br><strong>插入删除的时间复杂度:</strong><br>时间复杂度其实取决于有效格子的数量,因为<code>DelayQueue</code>存放的是有任务的格子,也就是双向链表的数量。低层用的是优先级队列(最小堆),假如有效格子的数量是<code>m</code>，则复杂度为<code>O(log(m))</code>。<br>实际中m一般远小于n，因此性能有很大的提高。<br><strong>理想情况</strong>:定时任务的时间间隔分布能尽量让它们位于相同格子中。 (<code>O(1)</code>)<br><strong>最坏情况</strong>:所有双向链表都只有一个任务(均匀地分布在不同格子中)。(<code>O(logN)</code>)</p>
+<p>实际业务中,定时任务一般都服从对数正态分布,因此每次插入删除时间复杂度是接近<code>O(1)</code>的。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/10/27/2018-10/HashedWheelTimer-%E5%A4%A7%E9%87%8F%E5%AE%9A%E6%97%B6%E5%99%A8%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88-Netty%E4%B8%8Ekafka/" data-id="ck96cxpon00dqmaamcxajhzfw" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Netty/" rel="tag">Netty</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/kafka/" rel="tag">kafka</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%AE%9A%E6%97%B6%E4%BB%BB%E5%8A%A1/" rel="tag">定时任务</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2018-10/Java并发编程的艺术-第6章3-DelayQueue" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/10/27/2018-10/Java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC6%E7%AB%A03-DelayQueue/" class="article-date">
+  <time datetime="2018-10-27T04:06:10.000Z" itemprop="datePublished">2018-10-27</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/10/27/2018-10/Java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC6%E7%AB%A03-DelayQueue/">Java并发编程的艺术-第6章3-DelayQueue</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p><code>DelayQueue</code>: JDK提供的延迟获取元素的无界阻塞队列。<br><strong>应用场景</strong>:</p>
+<ol>
+<li>缓存有效期: 能取到的时候过期.</li>
+<li>定时任务: 能取到的时候执行。</li>
+</ol>
+<p><code>DelayQueue</code>的两个特性:<br><strong>无界</strong>: 说明底层至少使用了链表。<br><strong>阻塞</strong>: 为底层实现时，利用访问线程干活埋下伏笔(<code>leader</code>)。 </p>
+<h2 id="底层实现机制"><a href="#底层实现机制" class="headerlink" title="底层实现机制"></a>底层实现机制</h2><p>底层用一个优先级队列存储<code>delay</code>元素(比如定时任务),排序依据是延迟的时长。<br>可以看出，这里用的是一个支持无界阻塞的优先级队列实现(例如<code>PriorityBlockingQueue</code>)。</p>
+<p><strong>时间复杂度</strong>: <code>O(logN)</code>。由于使用的是优先级队列(最小堆),插入新元素(任务)的时间复杂度是<code>O(logN)</code>。</p>
+<p><code>take</code>流程: </p>
+<ol>
+<li><code>lock.lockInterruptibly()</code>;</li>
+<li>delay =  队首元素延时;</li>
+<li>delay&lt;=0: 取出该元素;</li>
+<li>delay&gt;0: 尝试设置自己线程为<code>leader</code>，然后等待delay时间。</li>
+<li><code>finnally: lock.unlock()</code>;</li>
+</ol>
+<p>这里<code>leader</code>的职责是等待<code>delay</code>时间，以及唤醒其他等待线程。<br>注意第四步里, 由于<code>leader</code>只能有一个,所以如果尝试成为<code>leader</code>失败，就直接<code>await</code>就好,会被<code>leader</code>叫醒的。</p>
+<p><code>offer</code>: offer就是简单地把元素插入堆中。如果正好是延迟最小，则此时之前的<code>leader</code>等待时间太长了，因此需要叫醒所有等待线程。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p><code>DelayQueue</code><br><strong>优点</strong>:<br>资源开销小: 本质上只需一个线程负责等待;每次等待间隔都是delay时间,cpu空转少。<br><strong>缺点</strong><br>插入删除延时元素时间复杂度为<strong>O(logN)</strong>，对于成千上万的延时任务时间开销大,有待优化。</p>
+<p>优化思路:<br>如果要比<code>O(logN)</code>更好,很自然的思路就是使用哈希表<code>O(1)</code>，空间换时间。</p>
+<h2 id="优化方案"><a href="#优化方案" class="headerlink" title="优化方案"></a>优化方案</h2><p>需求: 降低插入删除延时元素的时间复杂度。<br>方案:</p>
+<ol>
+<li>保留优先级队列,但里面的元素改成链表引用(比如从<code>Task</code>到<code>List&lt;Task&gt;</code>);</li>
+<li>引入辅助哈希表,保存的也是链表引用(<code>List&lt;Task&gt;</code>)，hash函数的输入为延时时长。</li>
+</ol>
+<p>这里即使<code>List&lt;Task&gt;</code>长期只有1个元素也没有关系,这里只是为了起到C++中指针的效果，方便从哈希表里直接修改(插入删除)优先级队里的数据。</p>
+<p><strong><code>take</code>/<code>offer</code>流程</strong>: 与之前相似,唯一不同就是取到<code>List&lt;Task&gt;</code>后，遍历其中所有<code>Task</code>。</p>
+<p><strong>插入延时元素(任务)</strong>：（删除也类似）</p>
+<ol>
+<li>根据延时,通过哈希函数找到哈希表中的槽位;</li>
+<li>如果以前有过相同延时: 直接插入List;</li>
+<li>如果以前没有相同延时: 新建List，并且插入优先级队列。</li>
+</ol>
+<p>可以看出这里优化的重要条件是能合并多个Task到List。<br>为了达到这个条件，可以使用进一步的优化方案: 时间轮。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/10/27/2018-10/Java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC6%E7%AB%A03-DelayQueue/" data-id="ck96cxpon00dumaam35pv69ma" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%B9%B6%E5%8F%91/" rel="tag">并发</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2018-10/flask多线程下，连接泄露的bug" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/10/23/2018-10/flask%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%8B%EF%BC%8C%E8%BF%9E%E6%8E%A5%E6%B3%84%E9%9C%B2%E7%9A%84bug/" class="article-date">
+  <time datetime="2018-10-23T08:35:52.000Z" itemprop="datePublished">2018-10-23</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/10/23/2018-10/flask%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%8B%EF%BC%8C%E8%BF%9E%E6%8E%A5%E6%B3%84%E9%9C%B2%E7%9A%84bug/">flask多线程下，连接泄露的bug</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="架构图"><a href="#架构图" class="headerlink" title="架构图"></a>架构图</h1><img src="/images/2018-10/flask.png" class="" width="400" height="600" title="flask">
+
+<p>如图所示，底层使用mysql，web服务使用<code>flask-SqlAlchemy</code>的连接池（复用连接，减少创建销毁开销），逻辑层代码使用线程池（异步IO操作，如果要异步cpu操作，可以很方便改成进程池）。</p>
+<h1 id="基础知识"><a href="#基础知识" class="headerlink" title="基础知识"></a>基础知识</h1><ol>
+<li>使用<code>db.engine.execute(sql)</code>: 从连接池获取一个连接,执行完sql后自动<code>commit</code>;(<code>commit</code>操作的回调是: 归还连接到池里); </li>
+<li>使用<code>session</code>的<code>orm</code>(<code>xxxModel.query等</code>): 默认配置及推荐配置是<code>autocommit=false</code>，执行完增删查改后，处于事务未提交的状态，也就是没有归还连接。如果要归还连接，可以使用语句:<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">db.session.commit()</span><br><span class="line">db.session.rollback()</span><br><span class="line">db.session.close()</span><br><span class="line">db.session.remove(): 底层会调用db.session.close()</span><br></pre></td></tr></table></figure>
+
+</li>
+</ol>
+<p>小结:</p>
+<blockquote>
+<p>db.engine.execute(sql) =&gt; 自动commit =&gt; 自动归还<br>session(orm) =&gt; 手动commit =&gt; 手动归还<br>因此db.engine.execute(sql)是绝对安全的;<br>orm是有条件的。接着往下看orm的安全条件。</p>
+</blockquote>
+<h2 id="线程与session"><a href="#线程与session" class="headerlink" title="线程与session"></a>线程与session</h2><p>使用flask的SqlAlchemy插件<code>flask-SqlAlchemy</code>时，每个线程可以直接用<code>db.session</code>获得session，即使不显式获得，使用orm的model时，其实也隐式得获得了<code>session</code>。</p>
+<h3 id="线程与session的关系"><a href="#线程与session的关系" class="headerlink" title="线程与session的关系:"></a>线程与session的关系:</h3><p>每个线程有自己的<code>threadlocal</code>的<code>session</code>对象，并且随着线程销毁，会自动释放<code>session</code>,也就是会隐式调用<code>session.remove</code>，也就是会隐式释放<code>session</code>的连接。</p>
+<p>多线程两种使用:</p>
+<ol>
+<li><code>t1=threading.Thread(...)</code>;</li>
+<li>线程池: <code>future= pool.submit(...)</code>.<br>方法1的线程使用完以后自动销毁=&gt;session自动销毁=&gt;连接自动释放;<br>方法2的线程使用完以后归还线程池=&gt;session手动销毁=&gt;连接释放。</li>
+</ol>
+<p>小结:<br>不使用线程池=&gt;连接自动释放;<br>使用线程池=&gt;连接手动释放.<br>手动释放的方法:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">db.session.remove()</span><br></pre></td></tr></table></figure>
+
+<h1 id="空闲连接超时与连接释放bug"><a href="#空闲连接超时与连接释放bug" class="headerlink" title="空闲连接超时与连接释放bug"></a>空闲连接超时与连接释放bug</h1><p>前面说到使用线程池时，连接没有自动释放，一直维护在线程的threadlocal存储中(tls)。那么这样似乎也没有什么关系，只要线程池大小&lt;连接池大小,这样连接池有空闲连接，每个线程也有自己的连接可以用，一切似乎也相安无事。</p>
+<p>然而，这里有一个之前没有提到的机制：空闲连接超时回收。</p>
+<h3 id="空闲连接超时回收"><a href="#空闲连接超时回收" class="headerlink" title="空闲连接超时回收"></a>空闲连接超时回收</h3><h4 id="mysql服务端"><a href="#mysql服务端" class="headerlink" title="mysql服务端:"></a>mysql服务端:</h4><p>定期检查现存连接的空闲时间，把超出<code>wait_timeout</code>的连接删除，此时客户端保存的长连接引用就失效了; 这个时间的设定:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">global</span> <span class="keyword">variables</span> <span class="keyword">like</span> <span class="string">'wait_timeout'</span>;</span><br><span class="line"><span class="keyword">set</span> <span class="keyword">global</span> wait_timeout=<span class="number">10</span>*<span class="number">60</span>; <span class="comment">-- seconds</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="web服务"><a href="#web服务" class="headerlink" title="web服务:"></a>web服务:</h4><p>flask会定期检查连接池里的连接，把空闲连接删除，重新向mysql服务端申请新的连接，这样就不会访问到失效的连接引用了。其中定期的时间是: <code>app.config[&#39;SQLALCHEMY_POOL_RECYCLE&#39;] =xxx</code>(秒，应当设置为小于<code>wait_timeout</code>)。这就是为什么最好连接用完及时归还，否则可能就没法被flask刷新成新连接。</p>
+<h4 id="空闲连接超时与连接释放bug-1"><a href="#空闲连接超时与连接释放bug-1" class="headerlink" title="空闲连接超时与连接释放bug"></a>空闲连接超时与连接释放bug</h4><p>bug发生的流程</p>
+<ol>
+<li>mysql服务端清除了空闲时间过长的连接;</li>
+<li>线程池中线程一直不销毁，因此持有了活了很久的session;</li>
+<li>活了很久的session持有了空闲很久的连接, 这个连接其实已经被服务端销毁了，因此已经不可用了，但是由于其一直没有归还到连接池中，因此一直没有得到更新。</li>
+<li>此时web服务收到数据请求，使用该线程中的该session中的连接，就会抛异常了，因为连接已经不可用了。</li>
+</ol>
+<p>一般来说，空闲时间很长以后，线程池里所有线程的所有session的所有连接都会失效，因此就会完全无法通过orm访问数据库了。</p>
+<p>相关异常信息:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">MySQL server has gone away</span><br><span class="line">Can&#39;t reconnect until invalid transaction is rolled back</span><br></pre></td></tr></table></figure>
+<p>这里之所以说<code>invalid transaction is rolled back</code>，是因为老session收到数据请求后，准备要用连接了。<br>而连接上的事务没有自动提交，也没有rollback，因此不能直接用。<br>因此尝试把连接上，上一次请求的事务提交，但由于连接已经失效，所以失败了。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/10/23/2018-10/flask%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%8B%EF%BC%8C%E8%BF%9E%E6%8E%A5%E6%B3%84%E9%9C%B2%E7%9A%84bug/" data-id="ck96cxpop00e4maamerbl1rgc" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/flask/" rel="tag">flask</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/python/" rel="tag">python</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2018-10/mysql优化实战-范围查询转点查询" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/10/22/2018-10/mysql%E4%BC%98%E5%8C%96%E5%AE%9E%E6%88%98-%E8%8C%83%E5%9B%B4%E6%9F%A5%E8%AF%A2%E8%BD%AC%E7%82%B9%E6%9F%A5%E8%AF%A2/" class="article-date">
+  <time datetime="2018-10-22T02:28:25.000Z" itemprop="datePublished">2018-10-22</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/10/22/2018-10/mysql%E4%BC%98%E5%8C%96%E5%AE%9E%E6%88%98-%E8%8C%83%E5%9B%B4%E6%9F%A5%E8%AF%A2%E8%BD%AC%E7%82%B9%E6%9F%A5%E8%AF%A2/">mysql优化实战-范围查询转点查询</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="反直觉优化"><a href="#反直觉优化" class="headerlink" title="反直觉优化"></a>反直觉优化</h1><h2 id="慢查询"><a href="#慢查询" class="headerlink" title="慢查询:"></a>慢查询:</h2><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> *</span><br><span class="line">    <span class="keyword">from</span> layer_data.layers_push b</span><br><span class="line">    <span class="keyword">where</span> group_key=<span class="string">'nopushtest'</span></span><br><span class="line">    <span class="keyword">AND</span> utype=<span class="string">'10w1'</span></span><br><span class="line">    <span class="keyword">AND</span> dt&gt;=<span class="number">20180620</span> <span class="keyword">AND</span> dt&lt;=<span class="number">20181020</span></span><br><span class="line">    <span class="keyword">AND</span> bucket_id=<span class="number">60</span></span><br></pre></td></tr></table></figure>
+<p>上述SQL执行时间约在2.10秒,通过查看执行计划,可以发现有一个异常的指标,预估扫描的行数(<code>rows</code>)为96W，而实际结果行数应该在几十条。(查询涉及到的列合起来是联合主键)<br>此外<code>type</code>为<code>range</code>，执行的是范围扫描。<br>查询计划:(<code>explain exntended select ...</code>)</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">+----+-------------+-------------+-------+---------------+---------+---------+------+--------+-------------+</span><br><span class="line">| id | select_type | table       | type  | possible_keys | key     | key_len | ref  | rows   | Extra       |</span><br><span class="line">+----+-------------+-------------+-------+---------------+---------+---------+------+--------+-------------+</span><br><span class="line">|  1 | SIMPLE      | layers_push | range | PRIMARY       | PRIMARY | 216     | NULL | 989236 | Using where |</span><br><span class="line">+----+-------------+-------------+-------+---------------+---------+---------+------+--------+-------------+</span><br></pre></td></tr></table></figure>
+
+
+<h2 id="快查询-（反直觉优化）"><a href="#快查询-（反直觉优化）" class="headerlink" title="快查询:（反直觉优化）"></a>快查询:（反直觉优化）</h2><p>基于上面观察到预估行数异常，一个自然的思路就是引入一个很小的辅助表来帮助优化器减少扫描的行数。辅助表的主键与原表分布相同: </p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> b.*</span><br><span class="line"><span class="keyword">from</span> layer_data.layers__nopushtest a</span><br><span class="line"><span class="keyword">join</span> layer_data.layers_push b</span><br><span class="line"> <span class="keyword">ON</span> a.dt=b.dt</span><br><span class="line"><span class="keyword">AND</span> a.bucket_id=b.bucket_id</span><br><span class="line"><span class="keyword">AND</span> b.group_key=<span class="string">'nopushtest'</span></span><br><span class="line"><span class="keyword">AND</span> b.dt <span class="keyword">between</span> <span class="number">20180620</span> <span class="keyword">AND</span> <span class="number">20181020</span></span><br><span class="line"><span class="keyword">AND</span> b.utype=<span class="string">'10w1'</span></span><br><span class="line">    <span class="keyword">where</span> a.dt&gt;=<span class="number">20180620</span> <span class="keyword">and</span> a.dt&lt;=<span class="number">20181020</span></span><br><span class="line">    <span class="keyword">and</span> a.utype=<span class="string">'w1'</span></span><br><span class="line">    <span class="keyword">and</span> a.bucket_id=<span class="number">60</span></span><br></pre></td></tr></table></figure>
+<p>优化后,执行时间大约在0.05秒,快了40多倍。<br>优化后的执行计划:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">+----+-------------+-------+--------+---------------+---------+---------+-----------------------------------+-------+--------------------------+</span><br><span class="line">| id | select_type | table | type   | possible_keys | key     | key_len | ref                               | rows  | Extra                    |</span><br><span class="line">+----+-------------+-------+--------+---------------+---------+---------+-----------------------------------+-------+--------------------------+</span><br><span class="line">|  1 | SIMPLE      | a     | range  | PRIMARY       | PRIMARY | 38      | NULL                              | 23925 | Using where; Using index |</span><br><span class="line">|  1 | SIMPLE      | b     | eq_ref | PRIMARY       | PRIMARY | 216     | layer_data.a.dt,const,const,const |     1 | Using where              |</span><br><span class="line">+----+-------------+-------+--------+---------------+---------+---------+-----------------------------------+-------+--------------------------+</span><br></pre></td></tr></table></figure>
+<p>执行流程:<br>第一步:范围扫描表a,得到连接键的所有可能取值;<br>第二步: 表b的type是eq_ref(等值连接,而且是唯一键),ref是<code>layer_data.a.dt,const,const,const</code>，预估扫描的行数变成只有1。</p>
+<h1 id="原理分析"><a href="#原理分析" class="headerlink" title="原理分析"></a>原理分析</h1><h2 id="慢查询的执行计划"><a href="#慢查询的执行计划" class="headerlink" title="慢查询的执行计划:"></a>慢查询的执行计划:</h2><p>预估的行数有96w，执行计划是从dt为20180620的数据页顺序扫描到dt为20181020的数据页。</p>
+<h3 id="范围查询的扫描行数预估："><a href="#范围查询的扫描行数预估：" class="headerlink" title="范围查询的扫描行数预估："></a>范围查询的扫描行数预估：</h3><p>这里由于使用的mysql版本是5.6(可以通过<code>select version();</code>语句查看)，预估的流程:</p>
+<ol>
+<li>取符合where条件的最左边的数据页及后续的8个页，再加上符合where条件的最右边的数据页,共计10个页进行采样;</li>
+<li>根据上述采样结果，以及与总数据的采样比，估算出需要扫描的行数。</li>
+</ol>
+<h2 id="快查询的执行计划"><a href="#快查询的执行计划" class="headerlink" title="快查询的执行计划:"></a>快查询的执行计划:</h2><p>因为有辅助的小表帮忙，扫描的行数减少。执行计划是先范围扫描小表，得到所有连接键的取值后，用表b的索引挨个儿进行点查询（<code>type</code>是<code>eq_ref</code>，而不是<code>range</code>）,扫描的数据页大大减少。</p>
+<p><code>range</code>类型查询:</p>
+<blockquote>
+<p>以下操作符会导致查询计划为range:<br>=, &lt;&gt;, &gt;, &gt;=, &lt;, &lt;=, IS NULL, &lt;=&gt;, BETWEEN, IN (…)</p>
+</blockquote>
+<h1 id="符合直觉的优化"><a href="#符合直觉的优化" class="headerlink" title="符合直觉的优化"></a>符合直觉的优化</h1><p>由于mysql对in有特殊的优化: 把范围查询转换为多次点查询。<br>此时虽然查询计划是<code>range</code>，但实际执行时候不会进行范围扫描，而会进行点查询。<br>因此也可以把查询改写成:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span>   *</span><br><span class="line">    <span class="keyword">from</span> layer_data.layers_push b</span><br><span class="line">    <span class="keyword">where</span> group_key=<span class="string">'nopushtest'</span></span><br><span class="line">    <span class="keyword">AND</span> utype=<span class="string">'10w1'</span></span><br><span class="line">    <span class="keyword">AND</span> dt  <span class="keyword">in</span>  (<span class="number">20180805</span>,<span class="number">20180806</span>,<span class="number">20180807</span>,<span class="number">20180808</span>,<span class="number">20180809</span>,<span class="number">20180810</span>,<span class="number">20180811</span>,<span class="number">20180812</span>,<span class="number">20180813</span>,<span class="number">20180814</span>,<span class="number">20180815</span>,<span class="number">20180816</span>,<span class="number">20180817</span>,<span class="number">20180818</span>,<span class="number">20180819</span>,<span class="number">20180820</span>,<span class="number">20180821</span>,<span class="number">20180822</span>,<span class="number">20180823</span>,<span class="number">20180824</span>,<span class="number">20180825</span>,<span class="number">20180826</span>,<span class="number">20180827</span>,<span class="number">20180828</span>,<span class="number">20180829</span>,<span class="number">20180830</span>,<span class="number">20180831</span></span><br><span class="line">,<span class="number">20180901</span>,<span class="number">20180902</span>,<span class="number">20180903</span>,<span class="number">20180904</span>,<span class="number">20180905</span>,<span class="number">20180906</span>,<span class="number">20180907</span>,<span class="number">20180908</span>,<span class="number">20180909</span>,<span class="number">20180910</span>,<span class="number">20180911</span>,<span class="number">20180912</span>,<span class="number">20180913</span>,<span class="number">20180914</span>,<span class="number">20180915</span>,<span class="number">20180916</span>,<span class="number">20180917</span>,<span class="number">20180918</span>,<span class="number">20180919</span>,<span class="number">20180920</span>,<span class="number">20180921</span>,<span class="number">20180922</span>,<span class="number">20180923</span>,<span class="number">20180924</span>,<span class="number">20180925</span>,<span class="number">20180926</span>,<span class="number">20180927</span>,<span class="number">20180928</span>,<span class="number">20180929</span>,<span class="number">20180930</span></span><br><span class="line">,<span class="number">20181001</span>,<span class="number">20181002</span>,<span class="number">20181003</span>,<span class="number">20181004</span>,<span class="number">20181005</span>,<span class="number">20181006</span>,<span class="number">20181007</span>,<span class="number">20181008</span>,<span class="number">20181009</span>,<span class="number">20181010</span>,<span class="number">20181011</span>,<span class="number">20181012</span>,<span class="number">20181013</span>,<span class="number">20181014</span>,<span class="number">20181015</span>,<span class="number">20181016</span>,<span class="number">20181017</span>,<span class="number">20181018</span>,<span class="number">20181019</span>,<span class="number">20181020</span>,<span class="number">20181021</span>,<span class="number">20181022</span>,<span class="number">20181023</span>,<span class="number">20181024</span>,<span class="number">20181025</span>,<span class="number">20181026</span>,<span class="number">20181027</span>)</span><br><span class="line">    <span class="keyword">AND</span> bucket_id=<span class="number">60</span></span><br></pre></td></tr></table></figure>
+<p>优点:<br>直观,速度最快。<br>缺点:<br>啰嗦，改写起来比较麻烦，只适用于能使用代码预处理sql的地方，而且有最大长度限制。</p>
+<h3 id="in查询的扫描行数预估"><a href="#in查询的扫描行数预估" class="headerlink" title="in查询的扫描行数预估"></a>in查询的扫描行数预估</h3><p>有两种方式:</p>
+<ol>
+<li>精确计算(<code>index_dive</code>): 直接查询对应的行;</li>
+<li>采样预估(<code>index statistics</code>): 采样10个数据页,通过索引的选择性统计数据，预估总行数。</li>
+</ol>
+<p>具体采取哪种方式，由<code>eq_range_index_dive_limit</code>参数控制(默认是10)。<br>小于<code>eq_range_index_dive_limit</code>的时候，采用方法1，精确计算；<br>大于等于<code>eq_range_index_dive_limit</code>的时候，采用方法2, 采样预估。</p>
+<h1 id="执行计划耗时"><a href="#执行计划耗时" class="headerlink" title="执行计划耗时"></a>执行计划耗时</h1><p>可以通过命令查看某个查询的具体耗时及具体发生了哪些操作:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">set</span> profiling=<span class="number">1</span>;</span><br><span class="line"><span class="comment">-- select * from xxx ;</span></span><br><span class="line"><span class="keyword">show</span> <span class="keyword">profiles</span>;</span><br><span class="line"><span class="keyword">show</span> profile <span class="keyword">for</span> <span class="keyword">query</span> <span class="number">1</span>;</span><br><span class="line"><span class="keyword">show</span> profile <span class="keyword">all</span> <span class="keyword">for</span> <span class="keyword">query</span> <span class="number">1</span>; <span class="comment">-- cpu,io等详细信息</span></span><br></pre></td></tr></table></figure>
+<p>这里可以看到之前的慢查询发生了51w个block io input。</p>
+<h1 id="优化器查询计划选择"><a href="#优化器查询计划选择" class="headerlink" title="优化器查询计划选择"></a>优化器查询计划选择</h1><p>可以通过命令查看某个查询生成执行计划时，考虑过哪些方案，以及对于where条件的等价变换，最终选择了哪个方案(<code>chosen:true</code>)。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">set</span> optimizer_trace=<span class="string">"enabled=on"</span>;</span><br><span class="line"><span class="keyword">SET</span> optimizer_trace_max_mem_size=<span class="number">1000000</span>;</span><br><span class="line"><span class="keyword">explain</span> <span class="keyword">select</span> xxx</span><br><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> information_schema.OPTIMIZER_TRACE\G</span><br></pre></td></tr></table></figure>
+<p>可以看到对于之前慢查询的查询条件只用到了dt条件，其他where条件是在服务器层进行过滤的。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/10/22/2018-10/mysql%E4%BC%98%E5%8C%96%E5%AE%9E%E6%88%98-%E8%8C%83%E5%9B%B4%E6%9F%A5%E8%AF%A2%E8%BD%AC%E7%82%B9%E6%9F%A5%E8%AF%A2/" data-id="ck96cxpoq00e7maam5h9zcfq9" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-10/Netty-in-action第14-15章案例研究-笔记" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/10/14/2018-10/Netty-in-action%E7%AC%AC14-15%E7%AB%A0%E6%A1%88%E4%BE%8B%E7%A0%94%E7%A9%B6-%E7%AC%94%E8%AE%B0/" class="article-date">
@@ -932,569 +1275,6 @@ r3是关键的加密保护的随机数，r1,r2,r3一起生成key。<br>r1,r2的�
 
 
   
-    <article id="post-2018-09/Netty-in-action第七章-EventLoop和线程模型-笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/09/15/2018-09/Netty-in-action%E7%AC%AC%E4%B8%83%E7%AB%A0-EventLoop%E5%92%8C%E7%BA%BF%E7%A8%8B%E6%A8%A1%E5%9E%8B-%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2018-09-15T12:34:37.000Z" itemprop="datePublished">2018-09-15</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/Netty/">Netty</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/09/15/2018-09/Netty-in-action%E7%AC%AC%E4%B8%83%E7%AB%A0-EventLoop%E5%92%8C%E7%BA%BF%E7%A8%8B%E6%A8%A1%E5%9E%8B-%E7%AC%94%E8%AE%B0/">Netty in action第七章-EventLoop和线程模型-笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="线程模型"><a href="#线程模型" class="headerlink" title="线程模型"></a>线程模型</h1><h2 id="Executor-API-java-5"><a href="#Executor-API-java-5" class="headerlink" title="Executor API(java 5)"></a>Executor API(java 5)</h2><img src="/images/2018-09/7.1.jpg" class="" width="400" height="600" title="线程池">
-<p>java 5引入的Executor的执行逻辑是：池化线程，做成一个线程池，复用线程。</p>
-<p>优点:<br>消除了创建和销毁线程的开销；</p>
-<p>缺点:<br>高负载下上下文切换开销大。</p>
-<h2 id="事件循环：-EventLoop接口"><a href="#事件循环：-EventLoop接口" class="headerlink" title="事件循环： EventLoop接口"></a>事件循环： EventLoop接口</h2><p>事件循环如下。所谓事件循环就是一个死循环,1次批量处理所有ready的事件，而不是像之前Executor接口那样每个任务切换一次。可以看出高负载的时候比较有优势，低负载的时候有cpu空转。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">executeTaskInEventLoop</span><span class="params">()</span> </span>&#123;</span><br><span class="line">       <span class="keyword">boolean</span> terminated = <span class="keyword">true</span>;</span><br><span class="line">       <span class="comment">//...</span></span><br><span class="line">       <span class="keyword">while</span> (!terminated) &#123;</span><br><span class="line">           <span class="comment">//阻塞，直到有事件已经就绪可被运行</span></span><br><span class="line">           List&lt;Runnable&gt; readyEvents = blockUntilEventsReady();</span><br><span class="line">           <span class="keyword">for</span> (Runnable ev: readyEvents) &#123;</span><br><span class="line">               <span class="comment">//循环遍历，并处理所有的事件</span></span><br><span class="line">               ev.run();</span><br><span class="line">           &#125;</span><br><span class="line">       &#125;</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
-<p>看代码可以看出一个事件循环(<code>EventLoop</code>)就是某一个线程在那死循环执行任务。<br>所以如果要有多个线程干活，就要多个<code>EventLoop</code>,就组成了<code>EventLoopGroup</code>。(可以理解成一种批处理任务的线程池)。 看类层次也能发现，<code>EventLoopGroup</code>继承自<code>AbstractExecutorService</code>。<br>相应的类层次如下:</p>
-<img src="/images/2018-09/7.2.jpg" class="" width="400" height="600" title="EventLoop类图">
-
-<h3 id="执行顺序"><a href="#执行顺序" class="headerlink" title="执行顺序"></a>执行顺序</h3><p>事件/任务执行顺序是FIFO的。</p>
-<h2 id="Netty-IO和事件处理"><a href="#Netty-IO和事件处理" class="headerlink" title="Netty IO和事件处理"></a>Netty IO和事件处理</h2><p><strong>Netty3:</strong></p>
-<blockquote>
-<p>木有EventLoop.<br>入站事件: IO线程中处理;// 类似于EventLoop<br>出站事件: 调用线程处理;</p>
-</blockquote>
-<p>缺点:<br>上下文切换开销;<br>同步困难(例如当出站事件触发入站事件)。</p>
-<p><strong>Netty4:</strong></p>
-<blockquote>
-<p>用EventLoop;<br>给定EvenLoop，一个线程处理所有事件。<br>优点:<br>无需同步（除非是Sharable）,上下文开销降低。</p>
-</blockquote>
-<h1 id="任务调度-外部接口"><a href="#任务调度-外部接口" class="headerlink" title="任务调度(外部接口)"></a>任务调度(外部接口)</h1><p>有两种方式：</p>
-<ol>
-<li>JDK API;</li>
-<li>Netty API.</li>
-</ol>
-<h2 id="1-使用JDK-API"><a href="#1-使用JDK-API" class="headerlink" title="1. 使用JDK API"></a>1. 使用JDK API</h2><p>使用<code>java.util.concurrent.Executors</code>包里的api。<br>如果要设定一个60s后执行的任务:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">schedule</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="comment">// 线程池:</span></span><br><span class="line">    ScheduledExecutorService executor =</span><br><span class="line">            Executors.newScheduledThreadPool(<span class="number">10</span>);</span><br><span class="line">    ScheduledFuture&lt;?&gt; future = executor.schedule(</span><br><span class="line">        <span class="keyword">new</span> Runnable() &#123;</span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">            System.out.println(<span class="string">"Now it is 60 seconds later"</span>);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;, <span class="number">60</span>, TimeUnit.SECONDS); </span><br><span class="line">    executor.shutdown();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>缺点:<br>高负载下性能不足。</p>
-<h2 id="使用EventLoop调度任务"><a href="#使用EventLoop调度任务" class="headerlink" title="使用EventLoop调度任务"></a>使用EventLoop调度任务</h2><p>如果要设定一个60s后执行的任务:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">scheduleViaEventLoop</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    Channel ch = CHANNEL_FROM_SOMEWHERE; <span class="comment">// get reference from somewhere</span></span><br><span class="line">    ScheduledFuture&lt;?&gt; future = ch.eventLoop().schedule(</span><br><span class="line">        <span class="keyword">new</span> Runnable() &#123;</span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">            System.out.println(<span class="string">"60 seconds later"</span>);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;, <span class="number">60</span>, TimeUnit.SECONDS); <span class="comment">// 60s后</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>由于<code>EventLoop</code>是<code>ScheduledExecutorService</code>的子接口，因此有它一样的对外接口。<br>使用起来没啥区别。</p>
-<p>如果要设定一个每隔60s运行的任务:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">scheduleFixedViaEventLoop</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    Channel ch = CHANNEL_FROM_SOMEWHERE; <span class="comment">// get reference from somewhere</span></span><br><span class="line">    ScheduledFuture&lt;?&gt; future = ch.eventLoop().scheduleAtFixedRate(</span><br><span class="line">       <span class="keyword">new</span> Runnable() &#123;</span><br><span class="line">       <span class="meta">@Override</span></span><br><span class="line">       <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">            System.out.println(<span class="string">"Run every 60 seconds"</span>);</span><br><span class="line">       &#125;</span><br><span class="line">    &#125;, <span class="number">60</span>, <span class="number">60</span>, TimeUnit.SECONDS);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h1 id="实现细节-内部细节"><a href="#实现细节-内部细节" class="headerlink" title="实现细节(内部细节)"></a>实现细节(内部细节)</h1><h2 id="线程管理"><a href="#线程管理" class="headerlink" title="线程管理"></a>线程管理</h2><p>确定当前执行的线程是否是分配给当前Channel的线程。<br>// 一个Channel的所有事件会在同一个EventLoop里头。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span>(当前线程 in 匹配EventLoop中的线程) 直接执行;</span><br><span class="line"><span class="keyword">else</span>&#123;</span><br><span class="line">    任务放入内部队列。</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<img src="/images/2018-09/7.3.jpg" class="" width="400" height="600" title="EventLoop执行逻辑">
-
-<p><strong>优点:</strong><br>(1) 避免了线程同步。(只会执行当前Channel的任务)<br>(2) 减少了上下文切换。(有时候能够不进任务队列，直接执行)</p>
-<p><strong>缺点:</strong><br>单个事件可能阻塞整个<code>Channel</code>:<br>由于一个Channel的所有事件都由同一个EventLoop处理，因此要求EventLoop不能阻塞(不然其他事件就无法处理了)。</p>
-<p><strong>解决方案</strong><br>长时间运行或阻塞的任务=&gt;创建一个<code>EventExecutor</code>来消费掉，以便从<code>EventLoop</code>中移除，Netty提供了一个默认的<code>DefaultEventExecutorGroup</code>来支持这种操作。把它add进pipeline即可。<br>// TODO</p>
-<h2 id="EventLoop-线程分配"><a href="#EventLoop-线程分配" class="headerlink" title="EventLoop/线程分配"></a>EventLoop/线程分配</h2><p>一个Channel的事件由同一个EventLoop处理。Channel和EventLoop的对应关系由<code>EventLoopGroup</code>分配。</p>
-<h2 id="异步传输"><a href="#异步传输" class="headerlink" title="异步传输"></a>异步传输</h2><p><strong>特点:</strong><br>EventLoop数量少于Channel数量。// 多个Channel共享一个EventLoop。<br>EventLoop数量固定，不新增。</p>
-<img src="/images/2018-09/7.4.jpg" class="" width="400" height="600" title="异步EventLoop">
-
-<p>因为异步，所以少量线程数就能支撑。<br>具体分配Channel的时候，用<code>round-robin</code>实现即可，比较粗糙的负载均衡。</p>
-<p><strong>限制</strong><br>由于1个EventLoop用于多个Channel, 意味着<code>Threadlocal</code>对象会被多个Channel共享。<br>需要注意这一点。</p>
-<h2 id="同步传输"><a href="#同步传输" class="headerlink" title="同步传输"></a>同步传输</h2><p><strong>特点</strong><br>EventLoop数量等于Channel数量。 // 不共享EventLoop<br>EventLoop数量不断增加，每次新增Channel，就新增EventLoop。</p>
-<img src="/images/2018-09/7.5.jpg" class="" width="400" height="600" title="同步EventLoop">
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/09/15/2018-09/Netty-in-action%E7%AC%AC%E4%B8%83%E7%AB%A0-EventLoop%E5%92%8C%E7%BA%BF%E7%A8%8B%E6%A8%A1%E5%9E%8B-%E7%AC%94%E8%AE%B0/" data-id="ck96cxpoh00d5maamcscucndh" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Netty/" rel="tag">Netty</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-2018-09/Netty-in-action第六章-ChannelHandler和pipeline-笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/09/08/2018-09/Netty-in-action%E7%AC%AC%E5%85%AD%E7%AB%A0-ChannelHandler%E5%92%8Cpipeline-%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2018-09-08T12:16:07.000Z" itemprop="datePublished">2018-09-08</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/Netty/">Netty</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/09/08/2018-09/Netty-in-action%E7%AC%AC%E5%85%AD%E7%AB%A0-ChannelHandler%E5%92%8Cpipeline-%E7%AC%94%E8%AE%B0/">Netty in action第六章-ChannelHandler和pipeline-笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="ChannelHandler和ChannelPipeline"><a href="#ChannelHandler和ChannelPipeline" class="headerlink" title="ChannelHandler和ChannelPipeline"></a>ChannelHandler和ChannelPipeline</h1><h2 id="Channel生命周期-状态自动机"><a href="#Channel生命周期-状态自动机" class="headerlink" title="Channel生命周期 / 状态自动机"></a>Channel生命周期 / 状态自动机</h2><p><code>ChannelUnregisterd</code>=&gt;<code>ChannelRegistered</code> =&gt; <code>ChannelActive</code> =&gt; <code>ChannelInactive</code> =&gt; <code>ChannelUnregisterd</code><br>每一个状态转化都会产生相应事件。</p>
-<blockquote>
-<p>ChannelUnregistered：刚创建;<br>ChannelRegistered: (创建以后),已注册到EventLoop;<br>ChannelActive: 已经连接到远程节点;<br>ChannelInactive: 没有连接到远程节点。</p>
-</blockquote>
-<h2 id="ChannelHeadler-生命周期"><a href="#ChannelHeadler-生命周期" class="headerlink" title="ChannelHeadler 生命周期"></a>ChannelHeadler 生命周期</h2><blockquote>
-<p>handlerAdded: ChannelHeadler添加到pipeline时调用;<br>handlerRemoved: 移除时;<br>exceptionCaught: 发生错误时。</p>
-</blockquote>
-<h2 id="ChannelInboundHandler接口-入站事件"><a href="#ChannelInboundHandler接口-入站事件" class="headerlink" title="ChannelInboundHandler接口 (入站事件)"></a>ChannelInboundHandler接口 (入站事件)</h2><p><strong>省略别的常见事件:</strong></p>
-<blockquote>
-<p>ChannelWritabilityChanged: 可写状态发生改变事件<br>userEventTriggered: 调用ChannelInboundHandler.fireUserEventTriggered()时触发。用于用户自定义事件。</p>
-</blockquote>
-<h3 id="可写状态与高低水位"><a href="#可写状态与高低水位" class="headerlink" title="可写状态与高低水位:"></a>可写状态与高低水位:</h3><p><code>high watermark</code>机制: 写太快时达到高水位线时，转变为不可写;<br>// is_full()是根据当前是否大于等于high water mark来判断，如果full会wait。<br><code>low watermark</code>机制: 达到低水位线时，转变为可写。</p>
-<p>// 其他地方<code>low watermark</code>的含义: 设定最小时间戳，低于低水位线的数据不再接收。</p>
-<h3 id="高低水位设置"><a href="#高低水位设置" class="headerlink" title="高低水位设置:"></a>高低水位设置:</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Channel.config.setWriteHighWaterMark();</span><br><span class="line">Channel.config.setWriteLowWaterMark();</span><br></pre></td></tr></table></figure>
-
-<p><code>ChannelConfig</code>默认的水位配置为低水位32K，高水位64K。</p>
-<h3 id="资源释放"><a href="#资源释放" class="headerlink" title="资源释放"></a>资源释放</h3><p>第五章里提到了<code>bufferBuf</code>的释放问题:<br><code>pipeline</code>里最后一个<code>Handler</code>要负责释放收到的数据:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">bufferBuf.release();</span><br></pre></td></tr></table></figure>
-
-<p>落实到入站事件中, 如果重写了<code>ChannelRead()</code>事件,这个方法需要负责释放池化的<code>ByteBuf</code>:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">channelRead</span><span class="params">(ChannelHandlerContext ctx, Object msg)</span> </span>&#123;</span><br><span class="line">    <span class="comment">//通过调用 ReferenceCountUtil.release()方法释放资源</span></span><br><span class="line">    ReferenceCountUtil.release(msg);</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// 底层调的是这个:</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">boolean</span> <span class="title">release</span><span class="params">(Object msg)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (msg <span class="keyword">instanceof</span> ReferenceCounted) &#123;</span><br><span class="line">            <span class="keyword">return</span> ((ReferenceCounted) msg).release();</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">false</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-
-<h2 id="SimpleChannelInboundHandler的自动释放"><a href="#SimpleChannelInboundHandler的自动释放" class="headerlink" title="SimpleChannelInboundHandler的自动释放"></a>SimpleChannelInboundHandler的自动释放</h2><p>如果不想每次在<code>ChannelRead()</code>方法里释放消息,可以直接使用<code>SimpleChannelInboundHandler</code>,它会自动释放收到的消息。<br>相对的，由于有了自动释放,后续就无法再访问到了,因此使用<code>SimpleChannelInboundHandler</code>的时候消息引用会失效。</p>
-<p>小结:</p>
-<blockquote>
-<ol>
-<li>不使用SimpleChannelInboundHandler: 记得在一个ChannelRead释放消息数据;</li>
-<li>使用SimpleChannelInboundHandler: 注意会被自动释放，引用会失效。</li>
-</ol>
-</blockquote>
-<h2 id="ChannelOutboundHandler接口-出站事件"><a href="#ChannelOutboundHandler接口-出站事件" class="headerlink" title="ChannelOutboundHandler接口(出站事件)"></a>ChannelOutboundHandler接口(出站事件)</h2><p>类似的，出站事件也有很多，省略一些常见，列出几个特别的:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">flush: 将数据冲刷到远程节点时被调用;</span><br><span class="line">write: 将数据写到远程节点时被调用;</span><br><span class="line">&#x2F;&#x2F; 一旦ByteBuf 被写入到远程端， 它立即自动地放回原来的buffer池中.</span><br></pre></td></tr></table></figure>
-
-<p>与入站事件相对的,需要在<code>write</code>方法中释放消息:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">write</span><span class="params">(ChannelHandlerContext ctx,</span></span></span><br><span class="line"><span class="function"><span class="params">    Object msg, ChannelPromise promise)</span> </span>&#123;</span><br><span class="line">    ReferenceCountUtil.release(msg);</span><br><span class="line">    <span class="comment">//通知 ChannelPromise数据已经被处理了</span></span><br><span class="line">    promise.setSuccess();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>注意到<code>write</code>方法比<code>channelRead</code>多一个<code>ChannelPromise</code>参数:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ChannelPromise(子接口) -&gt; ChannelFuture(父接口)</span><br></pre></td></tr></table></figure>
-
-<h2 id="ChannelPromise与ChannelFuture"><a href="#ChannelPromise与ChannelFuture" class="headerlink" title="ChannelPromise与ChannelFuture"></a>ChannelPromise与ChannelFuture</h2><p><code>设计模式</code>:<br>实际上出站事件基本都多了这个<code>ChannelPromise</code>参数。<br>为了避免程序员写<code>bug</code>，netty4用<code>ChannelPromise</code>接口来更改任务完成状态,<br>而在那些只需要读/查询的场景，返回<code>ChannelFuture</code>接口。</p>
-<p>此外,<code>ChannelFuture</code>中比jdk的普通<code>Future</code>多了一些信息,状态有4种:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Uncompleted =&gt; success/fail/cancelled</span><br></pre></td></tr></table></figure>
-<p>每种状态的判定:(其实就是字面上的意思,猜也知道)</p>
-<table>
-<thead>
-<tr>
-<th align="center">状态</th>
-<th align="left">判定条件</th>
-</tr>
-</thead>
-<tbody><tr>
-<td align="center">Uncompleted</td>
-<td align="left">isDone():false,isSuccess():false,isCancelled():false,cause():null</td>
-</tr>
-<tr>
-<td align="center">success</td>
-<td align="left">isDone():ture,isSuccess():ture</td>
-</tr>
-<tr>
-<td align="center">fail</td>
-<td align="left">isDone():ture,isSuccess():false,cause():non-null</td>
-</tr>
-<tr>
-<td align="center">cancelled</td>
-<td align="left">isDone():ture,isCancelled():true</td>
-</tr>
-</tbody></table>
-<h1 id="入站事件和出站事件的区别"><a href="#入站事件和出站事件的区别" class="headerlink" title="入站事件和出站事件的区别"></a>入站事件和出站事件的区别</h1><p>再次强调一件事: </p>
-<blockquote>
-<p>出站事件基本比入站事件都多了1个<code>ChannelPromise</code>参数。</p>
-</blockquote>
-<p>本质上也就是出站事件要多一个通知机制:<br><code>ChannelPromise</code>,<code>ChannelFuture</code>与<code>ChannelFutureListener</code>。</p>
-<ul>
-<li>那么为什么两者要这样区别呢?<br>根本原因是出站中有<code>write</code>,<code>flush</code>这样的<code>io</code>操作，比较费时而且依赖于复杂因素，需要设计成异步的。<br>而入站事件基本都是在自己的内存里搞定，同步就够用了。</li>
-</ul>
-<p>理解了这一点，我们就能心平气和地接受出站事件的通知机制了。</p>
-<h2 id="通知机制"><a href="#通知机制" class="headerlink" title="通知机制"></a>通知机制</h2><blockquote>
-<ol>
-<li>每个出站操作返回一个<code>ChannelFuture</code>，注册到它的<code>ChannelFutureListener</code>将在操作完成的时候被通知成功还是失败；</li>
-<li>出站操作传入一个<code>ChannelPromise</code>,可以进行立即通知(更改状态): <code>setSuccess</code>/<code>setFailure</code>。</li>
-</ol>
-</blockquote>
-<p>注册<code>ChannelFutureListener</code>的两种姿势:</p>
-<ol>
-<li>对channel进行操作,获取<code>ChannelFuture</code>,然后注册<code>Listener</code>; // 可以用于某一次写的定制化操作;</li>
-<li>出站事件中,在传入的<code>ChannelPromise</code>上注册<code>Listener</code>。 // 应用于某类型的所有操作。</li>
-</ol>
-<p>相应的代码如下:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 方法1:</span></span><br><span class="line">io.netty.channel.ChannelFuture future = channel.write(someMessage);</span><br><span class="line">        future.addListener(<span class="keyword">new</span> ChannelFutureListener() &#123;</span><br><span class="line">            <span class="meta">@Override</span></span><br><span class="line">            <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">operationComplete</span><span class="params">(io.netty.channel.ChannelFuture f)</span> </span>&#123;</span><br><span class="line">                <span class="keyword">if</span> (!f.isSuccess()) &#123;</span><br><span class="line">                    f.cause().printStackTrace();</span><br><span class="line">                    f.channel().close();</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;);</span><br><span class="line"><span class="comment">// 方法2:</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">OutboundExceptionHandler</span> <span class="keyword">extends</span> <span class="title">ChannelOutboundHandlerAdapter</span> </span>&#123;</span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">write</span><span class="params">(ChannelHandlerContext ctx, Object msg,</span></span></span><br><span class="line"><span class="function"><span class="params">        ChannelPromise promise)</span> </span>&#123;</span><br><span class="line">        promise.addListener(<span class="keyword">new</span> ChannelFutureListener() &#123;</span><br><span class="line">            <span class="meta">@Override</span></span><br><span class="line">            <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">operationComplete</span><span class="params">(ChannelFuture f)</span> </span>&#123;</span><br><span class="line">                <span class="keyword">if</span> (!f.isSuccess()) &#123;</span><br><span class="line">                    f.cause().printStackTrace();</span><br><span class="line">                    f.channel().close();</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h2 id="ChannelHandler适配器"><a href="#ChannelHandler适配器" class="headerlink" title="ChannelHandler适配器"></a>ChannelHandler适配器</h2><p>netty提供了<code>handler</code>的基本实现:<code>ChannelInboundHandlerAdapter</code>和<code>ChannelOutboundHandlerAdapter。</code>（入站和出站）</p>
-<h1 id="ChannelPipeline接口"><a href="#ChannelPipeline接口" class="headerlink" title="ChannelPipeline接口"></a>ChannelPipeline接口</h1><blockquote>
-<p>1个Channel &lt;=&gt; 对应1个固定的ChannelPipeline</p>
-</blockquote>
-<p>在一个<code>ChannelHandler</code>中如何访问<code>pipeline</code>?:</p>
-<blockquote>
-<p>通过context获取到pipeline即可。</p>
-</blockquote>
-<h3 id="传播事件"><a href="#传播事件" class="headerlink" title="传播事件"></a>传播事件</h3><p>测试下一个<code>ChannelHandler</code>的类型是否与方向一致。</p>
-<h3 id="pipeline编排"><a href="#pipeline编排" class="headerlink" title="pipeline编排"></a>pipeline编排</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">modifyPipeline</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    ChannelPipeline pipeline = CHANNEL_PIPELINE_FROM_SOMEWHERE; <span class="comment">// get reference to pipeline;</span></span><br><span class="line">    <span class="comment">//创建一个 FirstHandler 的实例</span></span><br><span class="line">    FirstHandler firstHandler = <span class="keyword">new</span> FirstHandler();</span><br><span class="line">    <span class="comment">//将该实例作为"handler1"添加到ChannelPipeline 中</span></span><br><span class="line">    pipeline.addLast(<span class="string">"handler1"</span>, firstHandler);</span><br><span class="line">    <span class="comment">//将一个 SecondHandler的实例作为"handler2"添加到 ChannelPipeline的第一个槽中。这意味着它将被放置在已有的"handler1"之前</span></span><br><span class="line">    pipeline.addFirst(<span class="string">"handler2"</span>, <span class="keyword">new</span> SecondHandler());</span><br><span class="line">    <span class="comment">//将一个 ThirdHandler 的实例作为"handler3"添加到 ChannelPipeline 的最后一个槽中</span></span><br><span class="line">    pipeline.addLast(<span class="string">"handler3"</span>, <span class="keyword">new</span> ThirdHandler());</span><br><span class="line">    <span class="comment">//...</span></span><br><span class="line">    <span class="comment">//通过名称移除"handler3"</span></span><br><span class="line">    pipeline.remove(<span class="string">"handler3"</span>);</span><br><span class="line">    <span class="comment">//通过引用移除FirstHandler（它是唯一的，所以不需要它的名称）</span></span><br><span class="line">    pipeline.remove(firstHandler);</span><br><span class="line">    <span class="comment">//将 SecondHandler("handler2")替换为 FourthHandler:"handler4"</span></span><br><span class="line">    pipeline.replace(<span class="string">"handler2"</span>, <span class="string">"handler4"</span>, <span class="keyword">new</span> FourthHandler());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h2 id="pipeline的事件API"><a href="#pipeline的事件API" class="headerlink" title="pipeline的事件API"></a>pipeline的事件API</h2><p>主要用于触发下一个<code>handler</code>的事件,触发下一个入站事件一般带个前缀<code>fire</code>，触发出站事件则没有这个前缀。<br>例如:<br><code>fireChannelRegistered</code>: 触发pipeline中下一个channelInboundHandler的<code>channelRegistered</code>事件。(注意是<code>Inbound</code>)<br><code>connect</code>: 将channel连接到一个远程地址，将调用下一个<code>channelOutboundHandler</code>的connect方法。(注意是<code>outbound</code>)</p>
-<h1 id="ChannelHandlerContext接口"><a href="#ChannelHandlerContext接口" class="headerlink" title="ChannelHandlerContext接口"></a>ChannelHandlerContext接口</h1><p><code>ChannelHandlerContext</code>记录<code>channelHandler</code>和<code>channel</code>的联系，类似于一个弱实体。<br>它也有很多事件API，含义与其他类的不同，是基于当前上下文的，也就是说:<br>从当前关联的<code>ChannelHandler</code>开始，传播给<strong>下一个</strong>。</p>
-<p><code>ChannelHandlerContext</code>部分API:<br>// Channel相关:<br><code>alloc</code>: 返回<code>Channel</code>的<code>ByteBufAllocator</code>;<br><code>executor</code>: 返回调度事件的<code>EventExecutor</code>;<br>// handler相关:<br><code>fireChannelRead</code>: 触发下一个<code>InboundHanlder</code>的<code>ChannelRead</code>方法;(入站)<br><code>write</code>: 通过当前实例写入消息,并经过pipeline。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">ChannelHandlerContext</span> <span class="keyword">extends</span> <span class="title">AttributeMap</span>, <span class="title">ChannelInboundInvoker</span>, <span class="title">ChannelOutboundInvoker</span></span></span><br></pre></td></tr></table></figure>
-<p>如上所示,这个接口其实继承了inbound和outbound,所以出站方法也有。</p>
-<img src="/images/2018-09/6.5.jpg" class="" width="400" height="600" title="事件传递">
-<p>综上所述，如果要从某一个<code>ChannelHandler</code>A开始传递事件，要先获得它的上一个handler的context。如上图所示，调用<code>pipeline</code>或者<code>channel</code>上的事件的话，事件就会从1号位置开始流动,调用<code>channelContext</code>上的事件则会从2,3号位置(也就是下一个)开始流动。</p>
-<p>优势:</p>
-<ol>
-<li>减少事件传播开销;</li>
-<li>避开一些<code>handler</code>的处理。</li>
-</ol>
-<p>上述API可能的具体用途:</p>
-<ol>
-<li>动态切换协议. </li>
-<li>其他用途(暂时不知道还有啥)</li>
-</ol>
-<h2 id="Sharable"><a href="#Sharable" class="headerlink" title="Sharable"></a>Sharable</h2><p>可以将一个<code>ChannelHandler</code>绑定到多个<code>pipeline</code>(此时会产生多个<code>ChannelHandlerContext</code>)。这样做的场景: 比如需要收集跨越多个<code>Channel</code>的统计信息时。</p>
-<p>加上<code>@Sharable</code>注解的<code>ChannelHandler</code>(语法上)可以绑定到多个<code>pipeline</code>上，但程序员需要注意解决线程安全的问题。// 要么无状态不可变，要么加锁，要么CAS，要么threadlocal。</p>
-<h1 id="异常处理"><a href="#异常处理" class="headerlink" title="异常处理"></a>异常处理</h1><p>参考前文中出站事件的通知机制，因此出站事件中的异常也是封装在<code>ChannelFuture</code>中的，而不是像入站事件用<code>exceptionCaught</code>。<br>// 换言之, <code>ChannelOutboundHandler</code>没有<code>exceptionCaught</code>API。</p>
-<p>入站事件异常:// 消费完异常才不会向尾端传播</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">exceptionCaught</span><span class="params">(ChannelHandlerContext ctx,</span></span></span><br><span class="line"><span class="function"><span class="params">        Throwable cause)</span> </span>&#123;</span><br><span class="line">        cause.printStackTrace();</span><br><span class="line">        ctx.close();</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
-
-<p>出站事件异常:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">operationComplete</span><span class="params">(io.netty.channel.ChannelFuture f)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (!f.isSuccess()) &#123;</span><br><span class="line">        f.cause().printStackTrace();</span><br><span class="line">        f.channel().close();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/09/08/2018-09/Netty-in-action%E7%AC%AC%E5%85%AD%E7%AB%A0-ChannelHandler%E5%92%8Cpipeline-%E7%AC%94%E8%AE%B0/" data-id="ck96cxpok00dhmaamad304ln4" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Netty/" rel="tag">Netty</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-2018-09/Netty-in-action第五章-ByteBuf笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/09/01/2018-09/Netty-in-action%E7%AC%AC%E4%BA%94%E7%AB%A0-ByteBuf%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2018-09-01T10:40:59.000Z" itemprop="datePublished">2018-09-01</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/Netty/">Netty</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/09/01/2018-09/Netty-in-action%E7%AC%AC%E4%BA%94%E7%AB%A0-ByteBuf%E7%AC%94%E8%AE%B0/">Netty in Action第五章-ByteBuf笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>目录</p>
-<blockquote>
-<p>ByteBuf-Netty的数据容器<br>API详细信息<br>用例<br>内存分配</p>
-</blockquote>
-<p><code>ByteBuffer</code>: JAVA NIO使用的字节容器，使用复杂；<br><code>ByteBuf</code>:  Netty提供的字节容器，更简单灵活。</p>
-<h1 id="ByteBuf-API"><a href="#ByteBuf-API" class="headerlink" title="ByteBuf API"></a>ByteBuf API</h1><p><strong>优点</strong></p>
-<ul>
-<li>用户可以自定义缓冲区类型扩展</li>
-<li>透明的零拷贝</li>
-<li>容量按需增长</li>
-<li>读写切换不需要<code>flip()</code>方法</li>
-<li>读写使用不同索引</li>
-<li>支持方法链式调用</li>
-<li>支持引用计数 </li>
-<li>支持池化</li>
-</ul>
-<h1 id="外部接口"><a href="#外部接口" class="headerlink" title="外部接口:"></a>外部接口:</h1><ol>
-<li>从<code>Channel</code>或者<code>ctx</code>获取<code>ByteBuffAllocator</code>，然后再分配；</li>
-<li>用<code>Unpooled</code>工具类直接创建。<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 1. 从channel:</span></span><br><span class="line">Channel channel = ...;</span><br><span class="line">ByteBufAllocator allocator = channel.alloc(); <span class="comment">//1</span></span><br><span class="line">ByteBuf buf=allocator.heapBuffer();</span><br><span class="line"><span class="comment">// 2. 从ctx:</span></span><br><span class="line">ChannelHandlerContext ctx = ...;</span><br><span class="line">ByteBufAllocator allocator2 = ctx.alloc(); <span class="comment">//2</span></span><br><span class="line">ByteBuf buf=allocator.heapBuffer();</span><br><span class="line"><span class="comment">// 3. </span></span><br><span class="line">ByteBuf buf=Unpooled.buffer();</span><br></pre></td></tr></table></figure>
-
-</li>
-</ol>
-<h1 id="内部工作机制"><a href="#内部工作机制" class="headerlink" title="内部工作机制"></a>内部工作机制</h1><img src="/images/2018-09/5.1.jpg" class="" width="400" height="600" title="读写索引">
-<p>维护两个索引: <code>readerIndex</code>,<code>writerIndex</code><br>// 这样就省得用<code>flip</code>来回切换读写状态了。</p>
-<p>如上图,起始为空，读的时候发现<code>readerIndex</code>&gt;=<code>writerIndex</code>,因此失败。</p>
-<h1 id="使用模式"><a href="#使用模式" class="headerlink" title="使用模式"></a>使用模式</h1><h2 id="堆缓冲区-使用模式-也称支撑数组backing-array"><a href="#堆缓冲区-使用模式-也称支撑数组backing-array" class="headerlink" title="堆缓冲区-使用模式 (也称支撑数组backing array)"></a>堆缓冲区-使用模式 (也称支撑数组backing array)</h2><h2 id="（heap-buffer）"><a href="#（heap-buffer）" class="headerlink" title="（heap buffer）"></a>（heap buffer）</h2><p>最常用，将数据存储在<code>JVM</code>堆中。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">static</span> Random random = <span class="keyword">new</span> Random();</span><br><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> ByteBuf BYTE_BUF_FROM_SOMEWHERE = Unpooled.buffer(<span class="number">1024</span>);</span><br><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> Channel CHANNEL_FROM_SOMEWHERE = <span class="keyword">new</span> NioSocketChannel();</span><br><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> ChannelHandlerContext CHANNEL_HANDLER_CONTEXT_FROM_SOMEWHERE = DUMMY_INSTANCE;</span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">heapBuffer</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    ByteBuf heapBuf = BYTE_BUF_FROM_SOMEWHERE; <span class="comment">//get reference form somewhere</span></span><br><span class="line">    <span class="comment">//检查 ByteBuf 是否有一个支撑数组</span></span><br><span class="line">    <span class="keyword">if</span> (heapBuf.hasArray()) &#123;</span><br><span class="line">        <span class="comment">//如果有，则获取对该数组的引用</span></span><br><span class="line">        <span class="keyword">byte</span>[] array = heapBuf.array();</span><br><span class="line">        <span class="comment">//计算第一个字节的偏移量</span></span><br><span class="line">        <span class="keyword">int</span> offset = heapBuf.arrayOffset() + heapBuf.readerIndex();</span><br><span class="line">        <span class="comment">//获得可读字节数</span></span><br><span class="line">        <span class="keyword">int</span> length = heapBuf.readableBytes();</span><br><span class="line">        <span class="comment">//使用数组、偏移量和长度作为参数调用你的方法</span></span><br><span class="line">        handleArray(array, offset, length);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h2 id="直接缓冲区-使用模式"><a href="#直接缓冲区-使用模式" class="headerlink" title="直接缓冲区-使用模式"></a>直接缓冲区-使用模式</h2><h2 id="（direct-buffer）"><a href="#（direct-buffer）" class="headerlink" title="（direct buffer）"></a>（direct buffer）</h2><p>堆外内存，<code>directBuffer</code>,性能最好，省去一次复制。<br>缺点时要注意管理堆外内存。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">directBuffer</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    ByteBuf directBuf = BYTE_BUF_FROM_SOMEWHERE; <span class="comment">//get reference form somewhere</span></span><br><span class="line">    <span class="comment">//检查 ByteBuf 是否由数组支撑。如果不是，则这是一个直接缓冲区</span></span><br><span class="line">    <span class="keyword">if</span> (!directBuf.hasArray()) &#123;</span><br><span class="line">        <span class="comment">//获取可读字节数</span></span><br><span class="line">        <span class="keyword">int</span> length = directBuf.readableBytes();</span><br><span class="line">        <span class="comment">//分配一个新的数组来保存具有该长度的字节数据</span></span><br><span class="line">        <span class="keyword">byte</span>[] array = <span class="keyword">new</span> <span class="keyword">byte</span>[length];</span><br><span class="line">        <span class="comment">//将字节复制到该数组</span></span><br><span class="line">        directBuf.getBytes(directBuf.readerIndex(), array);</span><br><span class="line">        <span class="comment">//使用数组、偏移量和长度作为参数调用你的方法</span></span><br><span class="line">        handleArray(array, <span class="number">0</span>, length);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h2 id="复合缓冲区-使用模式"><a href="#复合缓冲区-使用模式" class="headerlink" title="复合缓冲区-使用模式"></a>复合缓冲区-使用模式</h2><h2 id="（composite-buffer）"><a href="#（composite-buffer）" class="headerlink" title="（composite buffer）"></a>（composite buffer）</h2><p>把上述两个模式复合，把多个<code>ByteBuf</code>聚合成一个视图处理。<br>消除了没有必要的复制，同时对外是一个通用的接口。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"> <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">byteBufComposite</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    CompositeByteBuf messageBuf = Unpooled.compositeBuffer();</span><br><span class="line">    ByteBuf headerBuf = BYTE_BUF_FROM_SOMEWHERE; <span class="comment">// can be backing or direct</span></span><br><span class="line">    ByteBuf bodyBuf = BYTE_BUF_FROM_SOMEWHERE;   <span class="comment">// can be backing or direct</span></span><br><span class="line">    <span class="comment">//将 ByteBuf 实例追加到 CompositeByteBuf</span></span><br><span class="line">    messageBuf.addComponents(headerBuf, bodyBuf);</span><br><span class="line">    <span class="comment">//...</span></span><br><span class="line">    <span class="comment">//删除位于索引位置为 0（第一个组件）的 ByteBuf</span></span><br><span class="line">    messageBuf.removeComponent(<span class="number">0</span>); <span class="comment">// remove the header</span></span><br><span class="line">    <span class="comment">//循环遍历所有的 ByteBuf 实例</span></span><br><span class="line">    <span class="keyword">for</span> (ByteBuf buf : messageBuf) &#123;</span><br><span class="line">        System.out.println(buf.toString());</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">byteBufCompositeArray</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    CompositeByteBuf compBuf = Unpooled.compositeBuffer();</span><br><span class="line">    <span class="comment">//获得可读字节数</span></span><br><span class="line">    <span class="keyword">int</span> length = compBuf.readableBytes();</span><br><span class="line">    <span class="comment">//分配一个具有可读字节数长度的新数组</span></span><br><span class="line">    <span class="keyword">byte</span>[] array = <span class="keyword">new</span> <span class="keyword">byte</span>[length];</span><br><span class="line">    <span class="comment">//将字节读到该数组中</span></span><br><span class="line">    compBuf.getBytes(compBuf.readerIndex(), array);</span><br><span class="line">    <span class="comment">//使用偏移量和长度作为参数使用该数组</span></span><br><span class="line">    handleArray(array, <span class="number">0</span>, array.length);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p><code>CompositeByteBuf</code>附加了许多功能。</p>
-<h1 id="字节级操作"><a href="#字节级操作" class="headerlink" title="字节级操作"></a>字节级操作</h1><h2 id="随机访问-（可以重复消费）-getXXX之类的方法"><a href="#随机访问-（可以重复消费）-getXXX之类的方法" class="headerlink" title="随机访问 （可以重复消费）(getXXX之类的方法)"></a>随机访问 （可以重复消费）(getXXX之类的方法)</h2><p><code>ByteBuf</code>的随机访问与普通数组类似:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span>(<span class="keyword">int</span> i;i&lt;buffer.capacity();i++)&#123;</span><br><span class="line">    <span class="keyword">byte</span> b=buffer.getByte(i);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>普通访问不会改变<code>readerIndex</code>和<code>writerIndex</code>。<br>要改变需要调用<code>readerIndex(index)</code>和<code>writerIndex(index)</code>。</p>
-<h2 id="顺序访问-（不会重复消费）-readXXX-skipXXX之类的方法"><a href="#顺序访问-（不会重复消费）-readXXX-skipXXX之类的方法" class="headerlink" title="顺序访问 （不会重复消费）(readXXX/skipXXX之类的方法)"></a>顺序访问 （不会重复消费）(readXXX/skipXXX之类的方法)</h2><img src="/images/2018-09/5.4.png" class="" width="400" height="600" title="读写索引">
-<p>如上图所示，这种访问方式可以看作消费数据，通过移动readerIndex，扩大了可丢弃字节（已读），减少了可读字节。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//迭代缓冲区的可读字节。</span></span><br><span class="line"> ByteBuf buffer = ...;</span><br><span class="line"> <span class="keyword">while</span> (buffer.isReadable()) &#123;</span><br><span class="line">     System.out.println(buffer.readByte());</span><br><span class="line"> &#125;</span><br></pre></td></tr></table></figure>
-
-<h2 id="丢弃discardable-bytes-类似于compact-gc"><a href="#丢弃discardable-bytes-类似于compact-gc" class="headerlink" title="丢弃discardable bytes(类似于compact/gc)"></a>丢弃discardable bytes(类似于compact/gc)</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//调用:</span></span><br><span class="line">byteBuf.discardReadBytes();</span><br></pre></td></tr></table></figure>
-<p>丢弃已读部分回收空间，本质上是扩大了可写字节。<br>底层的实现是把可读的数据移动到首部，<code>readerIndex=0;writerIndex-=readerIndex.</code>，因此导致内存复制，有性能开销，所以尽量不要调用。</p>
-<h2 id="顺序写入"><a href="#顺序写入" class="headerlink" title="顺序写入:"></a>顺序写入:</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 1.</span></span><br><span class="line">byteBuf.writeBytes(otherByteBuf);</span><br><span class="line"><span class="comment">// 2.</span></span><br><span class="line">byteBuf.writeInt(<span class="number">26</span>);</span><br></pre></td></tr></table></figure>
-
-<h2 id="索引修改"><a href="#索引修改" class="headerlink" title="索引修改"></a>索引修改</h2><p><code>readerIndex</code>和<code>writerIndex</code>这俩变量，除了因为上述数据操作而间接发生改变，也可以直接强行改它们而不管数据：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">markReaderIndex()<span class="comment">// 标记为x</span></span><br><span class="line">resetReaderIndex()<span class="comment">// 回到x,注意不是0</span></span><br><span class="line">markWriterIndex() <span class="comment">// 标记为y</span></span><br><span class="line">resetWriterIndex()<span class="comment">// 回到y,注意不是0</span></span><br><span class="line">clear() <span class="comment">// 这个才是双双清0</span></span><br><span class="line">readerIndex(<span class="keyword">int</span>)</span><br><span class="line">writerIndex(<span class="keyword">int</span>)</span><br><span class="line"></span><br><span class="line"><span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> ByteBuf <span class="title">markReaderIndex</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        markedReaderIndex = readerIndex;</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">this</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> ByteBuf <span class="title">resetReaderIndex</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        readerIndex(markedReaderIndex);</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">this</span>;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
-<p>这些操作不改变数据，所以是O(1)的。</p>
-<h2 id="查找（类似于Scan-And-Filter操作"><a href="#查找（类似于Scan-And-Filter操作" class="headerlink" title="查找（类似于Scan And Filter操作)"></a>查找（类似于Scan And Filter操作)</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//1:</span></span><br><span class="line"><span class="keyword">int</span> index = byteBuf.indexOf(xxx)</span><br><span class="line"><span class="comment">//2.</span></span><br><span class="line"><span class="keyword">int</span> index = byteBuf.forEachByte(ByteBufProcessor.FIND_CR);</span><br><span class="line"><span class="comment">// ByteBufProcessor 4.1版本改为 io.netty.util.ByteProcessor</span></span><br></pre></td></tr></table></figure>
-
-<h2 id="派生缓冲区-类似于视图，可读写-浅拷贝"><a href="#派生缓冲区-类似于视图，可读写-浅拷贝" class="headerlink" title="派生缓冲区(类似于视图，可读写) // 浅拷贝"></a>派生缓冲区(类似于视图，可读写) // 浅拷贝</h2><p>创建的方法:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">duplicate()</span><br><span class="line">slice(<span class="keyword">int</span>,<span class="keyword">int</span>)</span><br><span class="line">Unpooled.unmodifiableBuffer(...)</span><br><span class="line">order(ByteOrder)</span><br><span class="line">readSlice(<span class="keyword">int</span>)</span><br></pre></td></tr></table></figure>
-<p>这些派生的<code>ByteBuf</code>实例，底层数据是和原来共享的，只是有自己的读写索引。</p>
-<h2 id="深拷贝"><a href="#深拷贝" class="headerlink" title="深拷贝"></a>深拷贝</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">copy(<span class="keyword">int</span>,<span class="keyword">int</span>)</span><br></pre></td></tr></table></figure>
-
-<h1 id="ByteBufHolder接口"><a href="#ByteBufHolder接口" class="headerlink" title="ByteBufHolder接口"></a>ByteBufHolder接口</h1><p><code>ByteBufHolder</code>接口就是把<code>ButeBuf</code>再封装一层，只暴露几个大的API:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">ByteBuf <span class="title">content</span><span class="params">()</span><span class="comment">// 返回持有的ByteBuf</span></span></span><br><span class="line"><span class="function"><span class="title">copy</span><span class="params">()</span></span></span><br><span class="line"><span class="function"><span class="title">duplicate</span><span class="params">()</span><span class="comment">// 浅拷贝</span></span></span><br></pre></td></tr></table></figure>
-<p>这样只需要声明实现这个接口，相当于宣布这个类内部有成员变量是<code>ByteBuf</code>，换言之就是一个承载数据的对象了。</p>
-<h1 id="ByteBuf分配"><a href="#ByteBuf分配" class="headerlink" title="ByteBuf分配"></a>ByteBuf分配</h1><h2 id="按需分配-ByteBufAllocator接口"><a href="#按需分配-ByteBufAllocator接口" class="headerlink" title="按需分配: ByteBufAllocator接口"></a>按需分配: ByteBufAllocator接口</h2><p>从<code>channel</code>或者<code>ctx</code>获得<code>ByteBufAllocator</code>，降低分配和释放内存的开销。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 1. 从channel:</span></span><br><span class="line">Channel channel = ...;</span><br><span class="line">ByteBufAllocator allocator = channel.alloc(); <span class="comment">//1</span></span><br><span class="line"><span class="comment">// 2. 从ctx:</span></span><br><span class="line">ChannelHandlerContext ctx = ...;</span><br><span class="line">ByteBufAllocator allocator2 = ctx.alloc(); <span class="comment">//2</span></span><br></pre></td></tr></table></figure>
-<p>拿到分配器以后，可以进行的操作:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Buffer()</span><br><span class="line">heapBuffer() </span><br><span class="line">directBuffer() </span><br><span class="line">compositeBuffer()</span><br><span class="line">...<span class="comment">// 总之就是各种创建ByteBuf的方法</span></span><br></pre></td></tr></table></figure>
-<p>netty的两个<code>ByteBufAllocator</code>的实现:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">PooledByteBufAllocator  <span class="comment">// 池化的,性能最高 </span></span><br><span class="line">UnpooledByteBufAllocator <span class="comment">// 非池化的</span></span><br></pre></td></tr></table></figure>
-<p><code>Channel</code>具体返回的分配器是池化还是非池化,可以通过<code>ChannelConfig</code>配置，或者设定<code>bootstrap</code>参数。</p>
-<h2 id="Unpooled缓冲区"><a href="#Unpooled缓冲区" class="headerlink" title="Unpooled缓冲区"></a>Unpooled缓冲区</h2><p>非网络项目时，或其他不能从<code>channel</code>,<code>ctx</code>获取<code>BufAllocator</code>时，可以用<code>Unpooled</code>工具类来创建未池化的<code>ByteBuf</code>实例。<br>它的方法与上述两个类似，只不过去掉了<code>heapBuf</code>,用<code>buffer()</code>方法代替，默认直接返回堆内存buf。</p>
-<h2 id="ByteBufUtil类"><a href="#ByteBufUtil类" class="headerlink" title="ByteBufUtil类"></a>ByteBufUtil类</h2><p>顾名思义，有一些用于<code>ByteBuf</code>的辅助方法，看起来比较有用包括:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">firstIndexof</span><br><span class="line">lastIndexof</span><br><span class="line">hexdump()<span class="comment">// 打印</span></span><br><span class="line">equals(buf1,buf2)</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
-
-<h2 id="引用计数-ReferenceCounted"><a href="#引用计数-ReferenceCounted" class="headerlink" title="引用计数 // ReferenceCounted"></a>引用计数 // ReferenceCounted</h2><p>由于<code>ByteBuf</code>一般比较大，所以实际数据一般只会存一份，引用却会有很多。<br>然后引用的生命周期一般很长，。<br>所以<code>netty</code>除了<code>gcroot</code>的方法管理，还用了原始的引用计数:<br><code>ReferenceCounted</code>接口。<br>上文中的<code>ByteBufHolder</code>接口就是它的子接口。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">ByteBufHolder =&gt; ReferenceCounted</span><br><span class="line"><span class="comment">// 引用计数:</span></span><br><span class="line">ByteBuf buf=allocator.directBuffer();</span><br><span class="line"><span class="keyword">assert</span> buffer.refCnt()==<span class="number">1</span>; </span><br><span class="line"><span class="comment">// 释放:</span></span><br><span class="line"><span class="keyword">boolean</span> released = buffer.release();</span><br></pre></td></tr></table></figure>
-
-<p>四种<code>ByteBuf</code>:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">UnpooledHeapByteBuf: 堆内存，可以被jvm gc；</span><br><span class="line">UnpooledDirectByteBuf:  堆外，可以被jvm gc，但最好自己回收;</span><br><span class="line">PooledHeapByteBuf: 不可以被jvm gc <span class="comment">// 因为在池子里头</span></span><br><span class="line">PooledDirectByteBuf: 不可以被jvm gc. <span class="comment">// 因为在池子里头</span></span><br></pre></td></tr></table></figure>
-<p>换言之：<br>池化的jvm不管；<br>非池化的jvm可以管。</p>
-<p>增加计数器的操作:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">retain()</span><br><span class="line"><span class="comment">//或者刚出生的时候会有1.</span></span><br></pre></td></tr></table></figure>
-<p>减少计数器的操作:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">release()</span><br></pre></td></tr></table></figure>
-
-<p>编程规范:</p>
-<blockquote>
-<ol>
-<li>pipeline里最后一个处理者要负责release()</li>
-<li>中间某一个抛异常了，不往下传了，也要负责release()。 </li>
-<li>中间某一个往下传了别的数据，要负责release传入的原来那个数据。</li>
-</ol>
-</blockquote>
-<p>内存泄露提示:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">LEAK: ByteBuf.release() was not called before it’s garbage-collected. Enable advanced leak reporting to find out where the leak occurred. To enable advanced leak reporting, specify the JVM option ‘-Dio.netty.leakDetectionLevel=advanced’ or call ResourceLeakDetector.setLevel()</span><br></pre></td></tr></table></figure>
-<p>出现了这个说明有地方没有<code>release()</code>.可以提高检测级别打印出具体泄露点。</p>
-<p>参考:<br><a href="http://chen-tao.github.io/2015/10/03/netty/" target="_blank" rel="noopener">http://chen-tao.github.io/2015/10/03/netty/</a><br><a href="http://calvin1978.blogcn.com/articles/directbytebuffer.html" target="_blank" rel="noopener">http://calvin1978.blogcn.com/articles/directbytebuffer.html</a></p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/09/01/2018-09/Netty-in-action%E7%AC%AC%E4%BA%94%E7%AB%A0-ByteBuf%E7%AC%94%E8%AE%B0/" data-id="ck96cxpoi00dbmaam4dug4m4k" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Netty/" rel="tag">Netty</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-2018-08/Netty-in-action第四章-传输-笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/08/19/2018-08/Netty-in-action%E7%AC%AC%E5%9B%9B%E7%AB%A0-%E4%BC%A0%E8%BE%93-%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2018-08-19T12:07:49.000Z" itemprop="datePublished">2018-08-19</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/Netty/">Netty</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/08/19/2018-08/Netty-in-action%E7%AC%AC%E5%9B%9B%E7%AB%A0-%E4%BC%A0%E8%BE%93-%E7%AC%94%E8%AE%B0/">Netty in action第四章-传输-笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="Netty通用api"><a href="#Netty通用api" class="headerlink" title="Netty通用api"></a>Netty通用api</h1><p><code>Netty</code>为<code>oio</code>/<code>nio</code>的传输实现封装了一个通用<code>api</code>。<br>方便用户低成本切换。<br>代码见:<br><a href="https://github.com/xiaoyue26/netty-in-action-cn/blob/ChineseVersion/chapter4/" target="_blank" rel="noopener">https://github.com/xiaoyue26/netty-in-action-cn/blob/ChineseVersion/chapter4/</a></p>
-<p>使用<code>netty</code>的话,阻塞和非阻塞实现的切换只需两行:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// oio</span></span><br><span class="line">NioEventLoopGroup group = <span class="keyword">new</span> NioEventLoopGroup();</span><br><span class="line">b.group(group).channel(OioServerSocketChannel<span class="class">.<span class="keyword">class</span>)</span></span><br><span class="line"><span class="class"></span></span><br><span class="line"><span class="class">// <span class="title">nio</span></span></span><br><span class="line"><span class="class"><span class="title">NioEventLoopGroup</span> <span class="title">group</span> </span>= <span class="keyword">new</span> NioEventLoopGroup();</span><br><span class="line">b.group(group).channel(NioServerSocketChannel<span class="class">.<span class="keyword">class</span>)</span></span><br></pre></td></tr></table></figure>
-<p>也就是把<code>EvenLoopGroup</code>和<code>SeverSocketChannel</code>的实现换一下。</p>
-<h2 id="Channel接口"><a href="#Channel接口" class="headerlink" title="Channel接口"></a>Channel接口</h2><img src="/images/2018-08/4.1.jpg" class="" width="400" height="600" title="Channel接口">
-<p><code>Channel</code>接口的父接口包括:</p>
-<blockquote>
-<p>Comparable<Channel>: 每个Channel是独一无二的,不可以相等,但是可以排序;<br>AttributeMap: 获得各种属性</p>
-</blockquote>
-<p>依赖的接口:</p>
-<blockquote>
-<p>ChannelPipeLine: 有个方法返回它的pipeline;// 实现上大多有这个成员<br>ChannelConfig: 有个方法返回它的config;</p>
-</blockquote>
-<p>子接口:</p>
-<blockquote>
-<p>ServerChannel<br>AbstractChannel: 如果引用不相等，保证当hash值相同时,CompareTo方法会抛出Error。</p>
-</blockquote>
-<p>相关代码：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">final</span> <span class="keyword">int</span> <span class="title">compareTo</span><span class="params">(Channel o)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (<span class="keyword">this</span> == o) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">long</span> ret = hashCode - o.hashCode();</span><br><span class="line">        <span class="keyword">if</span> (ret &gt; <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="number">1</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> (ret &lt; <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="keyword">return</span> -<span class="number">1</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        ret = System.identityHashCode(<span class="keyword">this</span>) - System.identityHashCode(o);</span><br><span class="line">        <span class="keyword">if</span> (ret != <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="keyword">return</span> (<span class="keyword">int</span>) ret;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">// Jackpot! - different objects with same hashes</span></span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> Error();</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
-
-
-
-
-
-<p><code>ChannelPipeLine</code>中的设计模式: 拦截过滤器.(类似于Unix管道命令)</p>
-<p>Netty提供的<code>Channel</code>实现都是线程安全的，可以支持多个线程并发写一个<code>Channel</code>。</p>
-<h2 id="Netty提供的传输实现"><a href="#Netty提供的传输实现" class="headerlink" title="Netty提供的传输实现"></a>Netty提供的传输实现</h2><p>包括:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">NIO  : 基于选择器</span><br><span class="line">Epoll: JNI驱动，支持linux上才有的特性,比NIO更快;</span><br><span class="line">OIO :  阻塞流</span><br><span class="line">Local: VM内部通过管道进行通信</span><br><span class="line">Embedded: 测试时使用。</span><br></pre></td></tr></table></figure>
-
-<h3 id="NIO传输实现"><a href="#NIO传输实现" class="headerlink" title="NIO传输实现"></a>NIO传输实现</h3><img src="/images/2018-08/4.2.jpg" class="" width="400" height="600" title="Channel接口">
-<p>实现上基于选择器，类似于一个注册表，用户注册各种事件的处理函数。<br>可能的状态变化包括:<br>op_accept: 接受新连接并创建<code>channel</code>时;<br>op_connect: 建立一个连接时；<br>op_read: 可以读时；<br>op_write: 可以写时。</p>
-<h3 id="Epoll传输实现"><a href="#Epoll传输实现" class="headerlink" title="Epoll传输实现"></a>Epoll传输实现</h3><p>性能比NIO更高。代码更改:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">EpollEventLoopGroup</span><br><span class="line">EpollServerSocketChannel<span class="class">.<span class="keyword">class</span></span></span><br></pre></td></tr></table></figure>
-
-<h3 id="水平触发LT"><a href="#水平触发LT" class="headerlink" title="水平触发LT"></a>水平触发LT</h3><blockquote>
-<p>只要有事件没消费完就一直提醒。(底层把没处理完的回调重新加入readylist)</p>
-</blockquote>
-<h3 id="边缘触发ET"><a href="#边缘触发ET" class="headerlink" title="边缘触发ET"></a>边缘触发ET</h3><blockquote>
-<p>有新事件才提醒。（底层省略了重新加入readylist那一步）</p>
-</blockquote>
-<p>优缺点对比:</p>
-<table>
-<thead>
-<tr>
-<th align="center">属性</th>
-<th align="left">水平触发(LT)</th>
-<th align="center">边缘触发(ET)</th>
-</tr>
-</thead>
-<tbody><tr>
-<td align="center">开销</td>
-<td align="left">较大</td>
-<td align="center">较小</td>
-</tr>
-<tr>
-<td align="center">时效性</td>
-<td align="left">时效性高</td>
-<td align="center">时效性较低</td>
-</tr>
-<tr>
-<td align="center">数据安全</td>
-<td align="left">无遗漏</td>
-<td align="center">需要小心编程，否则有遗漏风险</td>
-</tr>
-</tbody></table>
-<p>单线程时: 水平触发时效性好一些；<br>高并发时: 边缘触发并发度好一些。</p>
-<p>jdk实现: 水平触发<br>netty实现: 边缘触发</p>
-<h3 id="OIO传输实现"><a href="#OIO传输实现" class="headerlink" title="OIO传输实现"></a>OIO传输实现</h3><p>Netty使用超时机制来让OIO和NIO的API统一。</p>
-<h3 id="Local传输实现"><a href="#Local传输实现" class="headerlink" title="Local传输实现"></a>Local传输实现</h3><p>用于在同一个JVM中运行的客户端和服务端之间的通信。<br>服务端并不绑定物理网络地址，也不接受真正的网络流量。<br>可以一开始先使用<code>Local</code>传输实现，方便以后有需求的时候迁移到<code>NIO</code>,<code>Epoll</code>实现。</p>
-<h3 id="Embedded传输实现"><a href="#Embedded传输实现" class="headerlink" title="Embedded传输实现"></a>Embedded传输实现</h3><p>用途： 创建单元测试。</p>
-<h2 id="传输的用例"><a href="#传输的用例" class="headerlink" title="传输的用例"></a>传输的用例</h2><p>Netty4支持的网络协议:</p>
-<table>
-<thead>
-<tr>
-<th align="center">传输实现</th>
-<th align="left">TCP</th>
-<th align="center">UDP</th>
-<th align="center">SCTP</th>
-<th align="center">UDT</th>
-</tr>
-</thead>
-<tbody><tr>
-<td align="center">NIO</td>
-<td align="left">√</td>
-<td align="center">√</td>
-<td align="center">√</td>
-<td align="center">√</td>
-</tr>
-<tr>
-<td align="center">Epoll</td>
-<td align="left">√</td>
-<td align="center">√</td>
-<td align="center">X</td>
-<td align="center">X</td>
-</tr>
-<tr>
-<td align="center">OIO</td>
-<td align="left">√</td>
-<td align="center">√</td>
-<td align="center">√</td>
-<td align="center">√</td>
-</tr>
-<tr>
-<td align="center">网络协议备注</td>
-<td align="left"></td>
-<td align="center"></td>
-<td align="center">串流控制传输协议，较冷门，目前主要应用在电信领域</td>
-<td align="center">基于UDP的可靠传输</td>
-</tr>
-</tbody></table>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/08/19/2018-08/Netty-in-action%E7%AC%AC%E5%9B%9B%E7%AB%A0-%E4%BC%A0%E8%BE%93-%E7%AC%94%E8%AE%B0/" data-id="ck96cxpod00csmaama7v53sj5" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Netty/" rel="tag">Netty</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1521,23 +1301,23 @@ r3是关键的加密保护的随机数，r1,r2,r3一起生成key。<br>r1,r2的�
       <ul>
         
           <li>
+            <a href="/2021/02/22/2021-02/%E5%A4%9A%E9%A1%B9%E7%9B%AE%E5%85%B1%E4%BA%AB%E4%BB%A3%E7%A0%81%E4%B9%8B%E2%80%94%E2%80%94git-subtree/">多项目共享代码之——git subtree</a>
+          </li>
+        
+          <li>
+            <a href="/2020/12/27/2020-12/%E8%B7%A8%E5%9F%9F%E7%9B%B8%E5%85%B3/">跨域相关</a>
+          </li>
+        
+          <li>
+            <a href="/2020/12/20/2020-12/%E7%BA%BF%E4%B8%8A%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-%E6%9F%A5%E7%9C%8B%E6%96%B9%E6%B3%95%E7%BA%A7%E8%80%97%E6%97%B6/">线上性能debug-查看方法级耗时</a>
+          </li>
+        
+          <li>
+            <a href="/2020/12/19/2020-12/%E5%8D%87%E7%BA%A7HTTP2%E7%AC%94%E8%AE%B0/">升级HTTP2笔记</a>
+          </li>
+        
+          <li>
             <a href="/2020/07/22/2020-07/ES%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0/">ES实战笔记</a>
-          </li>
-        
-          <li>
-            <a href="/2020/06/19/2020-06/tcp%E8%B0%83%E4%BC%98/">tcp调优</a>
-          </li>
-        
-          <li>
-            <a href="/2020/06/15/2020-06/jdk11%E4%B8%8Bg1%E6%94%B6%E9%9B%86%E5%99%A8%E4%BD%BF%E7%94%A8/">jdk11下g1收集器使用</a>
-          </li>
-        
-          <li>
-            <a href="/2020/06/08/2020-06/mysql%E5%8F%AF%E9%87%8D%E5%A4%8D%E8%AF%BB%E4%B8%8B%E7%94%A8for-update%E5%AF%BC%E8%87%B4%E7%9A%84%E6%AD%BB%E9%94%81/">mysql可重复读下用for update导致的死锁</a>
-          </li>
-        
-          <li>
-            <a href="/2020/05/05/2020-05/BeanCopier%E6%B5%8B%E8%AF%84%E6%8A%A5%E5%91%8A/">BeanCopier测评报告</a>
           </li>
         
       </ul>
@@ -1555,7 +1335,7 @@ r3是关键的加密保护的随机数，r1,r2,r3一起生成key。<br>r1,r2的�
   
   <div class="outer">
     <div id="footer-left">
-      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      &copy; 2014 - 2021 风梦七&nbsp;|&nbsp;
       主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
     </div>
      <div id="footer-right">

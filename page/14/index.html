@@ -72,6 +72,375 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-01/java并发编程实战笔记-15-16章" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/01/07/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-15-16%E7%AB%A0/" class="article-date">
+  <time datetime="2018-01-07T12:15:33.000Z" itemprop="datePublished">2018-01-07</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/01/07/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-15-16%E7%AB%A0/">java并发编程实战-15-16章</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="第十五章-原子变量与非阻塞同步机制"><a href="#第十五章-原子变量与非阻塞同步机制" class="headerlink" title="第十五章 原子变量与非阻塞同步机制"></a>第十五章 原子变量与非阻塞同步机制</h1><p>并发包里的工具(如信号量<code>Semaphore</code>和<code>ConcurrentLinkedQueue</code>)<br>比<code>synchronized</code>性能更好,伸缩性更好.<br>原因是使用了<code>原子变量与非阻塞同步机制</code>.</p>
+<p>非阻塞的底层: CAS操作. (compare and swap)<br>没有锁,<code>Lock free</code>,因此更接近完美.<br>因此没有活跃性问题.</p>
+<h2 id="15-1-锁的劣势"><a href="#15-1-锁的劣势" class="headerlink" title="15.1 锁的劣势"></a>15.1 锁的劣势</h2><p>性能不行.</p>
+<h2 id="15-2-硬件对并发的支持"><a href="#15-2-硬件对并发的支持" class="headerlink" title="15.2 硬件对并发的支持"></a>15.2 硬件对并发的支持</h2><p>独占锁: 基于悲观假设,不互斥的话会出事.(悲观锁)<br>乐观方法: 特殊指令: 包括, Test And Set , Fetch and Increment, CAS, 条件存储.</p>
+<h2 id="15-2-CAS-比较并交换"><a href="#15-2-CAS-比较并交换" class="headerlink" title="15.2 CAS 比较并交换"></a>15.2 CAS 比较并交换</h2><p><code>CAS</code>包括三个操作数: 内存位置,旧值,新值.<br>//类似对应java中<code>map</code>的<code>replace</code>操作的三个操作数: key,旧值,新值.</p>
+<p>CAS操作失败的线程不会挂,会获得失败信息.(同步非阻塞)<br>可以反复重试. (类似于<code>poll</code>的轮询)</p>
+<p>CAS的缺点:<br>需要调用者自己处理竞争问题.// 重试,回退,放弃.<br>CAS实现的非阻塞算法通常比用锁写复杂一些.</p>
+<h2 id="15-3-原子变量类"><a href="#15-3-原子变量类" class="headerlink" title="15.3 原子变量类"></a>15.3 原子变量类</h2><p>包括<code>AtomicInteger</code>等等.提供各种原子操作,如CAS,自增等.<br>它和一样保证写后读,但还保证内容是原子更新的.(比如两块内存看似一起更新)</p>
+<ul>
+<li>tip:<blockquote>
+<p>原子变量类不适合作为容器的Key.<br>容器的Key一般要是Immutable对象.(如Integer,String)</p>
+</blockquote>
+</li>
+</ul>
+<h2 id="15-4-具体案例"><a href="#15-4-具体案例" class="headerlink" title="15.4 具体案例"></a>15.4 具体案例</h2><p>这一节用CAS实现了链表,栈,原子的域更新器.<br>需要看着源码学习.</p>
+<h3 id="15-4-4-ABA问题"><a href="#15-4-4-ABA问题" class="headerlink" title="15.4.4 ABA问题"></a>15.4.4 ABA问题</h3><p>CAS(V,A,B)需要判断V位置是否为A,然后替换为B.<br>但如果V位置发生变化: A-&gt;B-&gt;A.<br>这样其实和我们希望的条件已经不同了,本质上是变化了,只不过值没变,版本号变了.<br>实例来说,就是链表节点引用没变,引用的值已经变了.</p>
+<p>解决方案:<br>使用<code>AtomicStampedReference</code>(以及<code>AtomicMarkableReference</code>)支持在两个变量上执行原子的条件更新. </p>
+<ul>
+<li><p><code>AtomicStampedReference</code><br>[对象,引用]二元组,在引用上加上版本号. </p>
+</li>
+<li><p><code>AtomicMarkableReference</code><br>[对象引用,布尔值]二元组,可标记节点为已删除的节点.</p>
+</li>
+</ul>
+<h1 id="第十六章-java内存模型"><a href="#第十六章-java内存模型" class="headerlink" title="第十六章 java内存模型"></a>第十六章 java内存模型</h1><h2 id="16-1-概念"><a href="#16-1-概念" class="headerlink" title="16.1 概念"></a>16.1 概念</h2><p>为了性能,会进行指令重排,预测执行等等.<br>内存模型: <code>JMM</code>.<br>内存模型规定,优化(重排)时应该遵守哪些约束.</p>
+<ul>
+<li>串行一致性:<br>如果约束够用,执行结果就会和串行一样.</li>
+</ul>
+<h2 id="16-1-1-平台的内存模型"><a href="#16-1-1-平台的内存模型" class="headerlink" title="16.1.1 平台的内存模型"></a>16.1.1 平台的内存模型</h2><p>平台给出内存模型,约束自己,向外界保证xx条件下会发生什么.<br>提供接口/指令: 如内存栅栏,提供协调存储的接口.</p>
+<h2 id="16-1-3-JAVA内存模型"><a href="#16-1-3-JAVA内存模型" class="headerlink" title="16.1.3 JAVA内存模型"></a>16.1.3 JAVA内存模型</h2><ol>
+<li>程序顺序: 同一个线程里按源码顺序执行;</li>
+<li>监视器锁: 解锁会在加锁之前;(A线程释放了,B线程才能获得锁)</li>
+<li>volatile: 写后读. (原子变量也是)</li>
+<li>线程启动: Thread.start之后才会有run等其他操作发生.</li>
+<li>中断规则: (1)A线程中断B线程;(2)B检测到中断. 保证(1)在(2)前面. </li>
+<li>终结器:   构造函数在终结器之前执行完成.</li>
+<li>传递性:   上述规则可以传递.</li>
+</ol>
+<p>1是针对单一线程的,2-7都是针对多个线程之间的代码顺序.<br>口诀: 程锁原线中终传. </p>
+<h2 id="16-1-4-借助同步"><a href="#16-1-4-借助同步" class="headerlink" title="16.1.4 借助同步"></a>16.1.4 借助同步</h2><p>也就是借助上述7个已有的约束设计代码,达到同步效果.<br>比如我们平时用的锁,就是利用用了第二条,监视器锁规则.</p>
+<p>类库中提供的约束:</p>
+<ol>
+<li>线程安全容器: 写后读. </li>
+<li><code>CountDownLatch</code>: 倒数操作在await返回之前.</li>
+<li><code>Semaphore</code>: PV操作,V释放在P获得之前. (别人释放了,你才能获得)</li>
+<li><code>Future</code>: get返回之前,任务的代码会执行完.</li>
+<li><code>Executor</code>: 提交任务操作,将在执行任务操作之前.</li>
+<li><code>CyclicBarrier</code>: (1)线程A到达栅栏;(2)其他线程离开栅栏. (1)会在(2)前面.换句话说,大家伙会等线程A到了才离开.<br>… </li>
+</ol>
+<h2 id="16-2-发布"><a href="#16-2-发布" class="headerlink" title="16.2 发布"></a>16.2 发布</h2><p>错误示例:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@NotThreadSafe</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">A</span></span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> Resource resource;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> Resource <span class="title">getInstance</span><span class="params">()</span></span>&#123;</span><br><span class="line">        <span class="keyword">if</span>(resource==<span class="keyword">null</span>)&#123;<span class="comment">// 显然多个线程会在这里冲突.</span></span><br><span class="line">            resource=<span class="keyword">new</span> Resource();</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> resource;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>安全但是慢:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@ThreadSafe</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">B</span></span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> Resource resource;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">synchronized</span> <span class="keyword">static</span> Resource <span class="title">getInstance</span><span class="params">()</span></span>&#123;<span class="comment">// 方法级同步</span></span><br><span class="line">        <span class="keyword">if</span>(resource==<span class="keyword">null</span>)&#123;</span><br><span class="line">            resource=<span class="keyword">new</span> Resource();</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> resource;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>直接静态初始化:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@ThreadSafe</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">C</span></span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> Resource resource=<span class="keyword">new</span> Resource();</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> Resource <span class="title">getInstance</span><span class="params">()</span></span>&#123;</span><br><span class="line">        <span class="keyword">return</span> resource;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>占位符技术: 延迟静态初始化:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@ThreadSafe</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">D</span></span>&#123; </span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">ResourceHolder</span></span>&#123; <span class="comment">// 懒汉,完美. </span></span><br><span class="line">        <span class="keyword">public</span> <span class="keyword">static</span> Resource resource=<span class="keyword">new</span> Resource();</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> Resource <span class="title">getInstance</span><span class="params">()</span></span>&#123;</span><br><span class="line">        <span class="keyword">return</span> ResourceHolder.resource;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>双检(DCL): 不推荐. 慢,繁琐. </p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@ThreadSafe</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">E</span></span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">volatile</span> <span class="keyword">static</span> Resource resource; <span class="comment">// volatile</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> Resource <span class="title">getInstance</span><span class="params">()</span></span>&#123;</span><br><span class="line">        <span class="keyword">if</span>(resource==<span class="keyword">null</span>)&#123;</span><br><span class="line">            <span class="keyword">synchronized</span>(E<span class="class">.<span class="keyword">class</span>)</span>&#123; <span class="comment">// Class对象锁.</span></span><br><span class="line">                <span class="keyword">if</span>(resource==<span class="keyword">null</span>)&#123;</span><br><span class="line">                    resource=<span class="keyword">new</span> Resource();</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> resource;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// 之所以需要volatile,是为了保证resource变量的写操作立即刷新到内存,起码在读之前. (StoreLoad屏障)</span></span><br></pre></td></tr></table></figure>
+
+
+
+<h2 id="初始化安全域"><a href="#初始化安全域" class="headerlink" title="初始化安全域:"></a>初始化安全域:</h2><p>对象的初始引用不会被重排序到构造函数之前.</p>
+<ul>
+<li><code>final</code>:<br><code>final</code>域能够安全发布,通过<code>final</code>域可达的变量\容器的写入操作安全发布.</li>
+</ul>
+<p>示例:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@ThreadSafe</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">SafeStates</span></span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> Map&lt;String,String&gt;States;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">SafeStates</span><span class="params">()</span></span>&#123;</span><br><span class="line">        states= <span class="keyword">new</span> HashMap&lt;&gt;();</span><br><span class="line">        states.put(<span class="string">"alaska"</span>,<span class="string">"AK"</span>);</span><br><span class="line">        <span class="comment">//...</span></span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="function"><span class="keyword">public</span> String <span class="title">getV</span><span class="params">(String s)</span></span>&#123;</span><br><span class="line">        <span class="keyword">return</span> states.get(s);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>线程A创建的SafeStates对象,线程B能安全得访问getV方法.</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/01/07/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-15-16%E7%AB%A0/" data-id="ck96cxpnp009omaam6pwnfbf3" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2018-01/java并发编程实战笔记-10-11章" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/01/04/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-10-11%E7%AB%A0/" class="article-date">
+  <time datetime="2018-01-04T14:28:55.000Z" itemprop="datePublished">2018-01-04</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/01/04/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-10-11%E7%AB%A0/">java并发编程实战笔记-10-11章</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>第十章主要介绍活跃性危险,也就是安全性和活跃性的权衡.锁不多不少.<br>安全性: 就是正确性.锁要够多,不然数据并发访问就错了.<br>活跃性: 就是性能.  锁不能太多,死锁了,或者太卡了.  </p>
+<h1 id="10-1-死锁"><a href="#10-1-死锁" class="headerlink" title="10.1 死锁"></a>10.1 死锁</h1><p>哲学家问题: 循环等待死锁.<br>数据库服务器如何解决事务死锁:</p>
+<blockquote>
+<ol>
+<li>检测到等待关系有向图有环;</li>
+<li>选一个牺牲者kill了. </li>
+<li>应用程序自己重试被kill的事务.</li>
+</ol>
+</blockquote>
+<h2 id="10-1-1-锁顺序死锁"><a href="#10-1-1-锁顺序死锁" class="headerlink" title="10.1.1 锁顺序死锁"></a>10.1.1 锁顺序死锁</h2><p>避免死锁的手段1:</p>
+<blockquote>
+<p>控制获取锁的顺序.</p>
+</blockquote>
+<p>如果所有线程获取锁(资源)的顺序一样,就不会死锁. </p>
+<h2 id="10-1-2-动态的锁顺序死锁"><a href="#10-1-2-动态的锁顺序死锁" class="headerlink" title="10.1.2 动态的锁顺序死锁"></a>10.1.2 动态的锁顺序死锁</h2><p>锁顺序很难处理. 比如两个账户转账.<br>一种方法是使用俩账户的hash码,比较顺序.<br>当遇到hash码冲突的时候,使用加时赛:</p>
+<blockquote>
+<ol>
+<li>定义一个新的锁;</li>
+<li>冲突的线程轮流申请这个锁,然后再申请账户锁.</li>
+</ol>
+</blockquote>
+<p>相当于冲突的线程串行执行.</p>
+<p>(其实我觉得对于这个问题,账户肯定有唯一id,用id排序就好了.)</p>
+<h2 id="10-1-3-协作对象之间的死锁"><a href="#10-1-3-协作对象之间的死锁" class="headerlink" title="10.1.3 协作对象之间的死锁"></a>10.1.3 协作对象之间的死锁</h2><p>如果获取多个锁的操作不在唯一的同一个方法里, 问题变得麻烦.<br>成因:<br>方法1: 持有锁时调用外部方法,而外部方法请求了另一个锁.<br>方法2: 同上.</p>
+<p>方法1,方法2获取锁的顺序相反时,可能死锁.</p>
+<p>解决方法:<br>收缩<code>synchronized</code>的范围从方法级缩小到块级.</p>
+<h2 id="10-1-4-开放调用"><a href="#10-1-4-开放调用" class="headerlink" title="10.1.4 开放调用"></a>10.1.4 开放调用</h2><p>开放调用: 调用方法时不需要持有锁.<br>也就是方法上没有加<code>synchronized</code>,而是在里头某一个块里用了.</p>
+<h2 id="10-1-5-资源死锁"><a href="#10-1-5-资源死锁" class="headerlink" title="10.1.5 资源死锁"></a>10.1.5 资源死锁</h2><p>资源不够死锁. 如线程资源\数据库连接资源.</p>
+<ul>
+<li>解决方案:<br>书里没写, 我觉得可以考虑前文说的”选取牺牲者”方法.</li>
+</ul>
+<h1 id="10-2-死锁的避免与诊断"><a href="#10-2-死锁的避免与诊断" class="headerlink" title="10.2 死锁的避免与诊断"></a>10.2 死锁的避免与诊断</h1><ol>
+<li>每个线程只获取一个锁. //比较不现实,涉及原子性的实现.</li>
+<li>顺序获取.</li>
+<li>支持定时的锁. // 代替内置锁</li>
+</ol>
+<h2 id="10-2-2-死锁的诊断"><a href="#10-2-2-死锁的诊断" class="headerlink" title="10.2.2 死锁的诊断"></a>10.2.2 死锁的诊断</h2><p>通过Thread Dump信息.<br>方法: 向JVM发送SIGQUIT信号.<br>命令行:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kill -3 [id]</span><br></pre></td></tr></table></figure>
+<p>jdk1.5: 有内置锁信息, 无显式锁信息;<br>jdk1.6: 有内置锁信息, 少量显式锁信息.<br>(?那岂不是意味着尽量不要使用显式锁?)</p>
+<h1 id="10-3-其他活跃性危险"><a href="#10-3-其他活跃性危险" class="headerlink" title="10.3 其他活跃性危险"></a>10.3 其他活跃性危险</h1><p>活跃性危险: 太卡<br>包括: 死锁,饥饿,丢失信号,活锁.</p>
+<h2 id="10-3-1-饥饿"><a href="#10-3-1-饥饿" class="headerlink" title="10.3.1 饥饿"></a>10.3.1 饥饿</h2><p>如短作业优先调度的时候,长作业就会饥饿.</p>
+<h2 id="10-3-2-糟糕的响应性"><a href="#10-3-2-糟糕的响应性" class="headerlink" title="10.3.2 糟糕的响应性"></a>10.3.2 糟糕的响应性</h2><p>GUI线程优先级太低, 响应性就会差.</p>
+<h2 id="10-3-3-活锁"><a href="#10-3-3-活锁" class="headerlink" title="10.3.3 活锁"></a>10.3.3 活锁</h2><p>重复的失败.<br>如线程不停得获取锁,释放锁,似乎能完成,但其实总也完成不了,无间地狱,死循环.</p>
+<ul>
+<li>案例1: 华龙道<br>发数据包碰撞. 重试算法一样,总是在相同的路口再碰撞.<br>解决方法:<br>增加随机性. 重试时间加一个随机参数.</li>
+</ul>
+<ul>
+<li>案例2:<br>过度的错误恢复.<br>解决方法:<br>不过度.</li>
+</ul>
+<h1 id="第十一章-性能与可伸缩性"><a href="#第十一章-性能与可伸缩性" class="headerlink" title="第十一章 性能与可伸缩性"></a>第十一章 性能与可伸缩性</h1><p>线程的使用<br>目的: 提高性能.<br>缺陷: 提高复杂性.<br>场景: 多cpu系统,任务不是cpu密集的.<br>衡量手段: 看cpu使用情况图.</p>
+<h2 id="11-1-1-可伸缩性"><a href="#11-1-1-可伸缩性" class="headerlink" title="11.1.1 可伸缩性"></a>11.1.1 可伸缩性</h2><p>可伸缩性: 当增加资源时(cpu,内存等等),程序吞吐量/处理能力增加比例适中.</p>
+<p>可伸缩性与性能往往矛盾.<br>单线程的性能优化方法 往往导致=&gt; 可伸缩性下降. </p>
+<h2 id="11-2-Amdahl定律"><a href="#11-2-Amdahl定律" class="headerlink" title="11.2 Amdahl定律"></a>11.2 Amdahl定律</h2><p>增加计算资源时,程序理论上能实现的最高加速比.</p>
+<p>Speedup &lt;= 1/ ( F + (1-F)/N )<br>N: N个处理器<br>F: 必须串行的任务比例. </p>
+<p>N趋近于无穷大时,加速比为 1/F.<br>(F为50%时,加速比最大为2.)</p>
+<p>提高可伸缩性方法总结:</p>
+<ol>
+<li>缩小锁的粒度;</li>
+<li>减少锁的持有时间(好像和上一条差不多);</li>
+<li>尽量使用非独占锁. </li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/01/04/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-10-11%E7%AB%A0/" data-id="ck96cxpnr009wmaam63sqf43c" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2018-01/java并发编程实战笔记-8章" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/01/01/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-8%E7%AB%A0/" class="article-date">
+  <time datetime="2018-01-01T07:34:18.000Z" itemprop="datePublished">2018-01-01</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/01/01/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-8%E7%AB%A0/">java并发编程实战笔记-8章</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="线程池的使用"><a href="#线程池的使用" class="headerlink" title="线程池的使用"></a>线程池的使用</h1><p>这章介绍实际应用中配置调优的一些高级选项. 以及各种坑.</p>
+<h1 id="8-1-任务与执行策略的隐形耦合"><a href="#8-1-任务与执行策略的隐形耦合" class="headerlink" title="8.1  任务与执行策略的隐形耦合"></a>8.1  任务与执行策略的隐形耦合</h1><p>有些任务需要指定执行策略:</p>
+<ol>
+<li>依赖性任务: 就是任务之间不独立</li>
+<li>线程不封闭的: 就是只能单线程跑的.</li>
+<li>对响应时间敏感的: 如GUI. </li>
+<li>使用ThreadLocal的: 线程池会重用线程. 因此可能有风险.</li>
+</ol>
+<h2 id="8-1-1-死锁"><a href="#8-1-1-死锁" class="headerlink" title="8.1.1 死锁"></a>8.1.1 死锁</h2><p>有界线程池不能无限提交. 如果里头的任务都死锁了,线程池也死锁了.</p>
+<h2 id="8-1-2-响应时间"><a href="#8-1-2-响应时间" class="headerlink" title="8.1.2 响应时间"></a>8.1.2 响应时间</h2><p>如果任务都很慢,线程池的响应时间自然也慢.<br>可以限时或者增大线程池容量.</p>
+<h1 id="8-2-线程池大小公式"><a href="#8-2-线程池大小公式" class="headerlink" title="8.2 线程池大小公式"></a>8.2 线程池大小公式</h1><p>N = cpu数量 = Runtime.getRuntime().availableProcessors();<br>U = 目标cpu利用率<br>W/C= 等待时间和执行时间的比率 (响应度)<br>SIZE = N*U/(1+W/C) </p>
+<h1 id="8-3-配置ThreadPoolExecutor"><a href="#8-3-配置ThreadPoolExecutor" class="headerlink" title="8.3 配置ThreadPoolExecutor"></a>8.3 配置ThreadPoolExecutor</h1><p>可以通过Executors获取jdk设计好的一些线程池实现.</p>
+<h2 id="8-3-1-线程的创建与取消"><a href="#8-3-1-线程的创建与取消" class="headerlink" title="8.3.1 线程的创建与取消"></a>8.3.1 线程的创建与取消</h2><p>基本大小: 没有任务时候的线程大小.<br>最大大小: 上限.<br>存活时间: 线程空闲时间达到存活时间,则被回收.</p>
+<h2 id="8-3-2-管理队列任务"><a href="#8-3-2-管理队列任务" class="headerlink" title="8.3.2 管理队列任务"></a>8.3.2 管理队列任务</h2><p>线程池满了以后,提交的任务进入等待队列.<br>newFixedThreadPool: 无界等待队列 LinkedBlockingQueue<br>newSingleThreadExecutor: 无界等待队列 LinkedBlockingQueue</p>
+<p>有界等待队列的话,需要饱和策略. </p>
+<h2 id="8-3-3-饱和策略"><a href="#8-3-3-饱和策略" class="headerlink" title="8.3.3 饱和策略"></a>8.3.3 饱和策略</h2><ol>
+<li>中止(默认): abort. 抛异常.</li>
+<li>调用者运行: 让主线程自己干. 拥塞会外延到TCP层. </li>
+<li>丢弃: 抛弃该任务. 不抛异常.</li>
+<li>丢弃最老: 丢弃下一个将要执行的.(如果用了优先级队列,就是抛弃优先级最高的,会造成错误.)</li>
+</ol>
+<h1 id="8-4-扩展ThreadPoolExecutor"><a href="#8-4-扩展ThreadPoolExecutor" class="headerlink" title="8.4 扩展ThreadPoolExecutor"></a>8.4 扩展ThreadPoolExecutor</h1><p>需要实际需求和应用案例才能学会. </p>
+<h1 id="8-5-递归算法的并行化"><a href="#8-5-递归算法的并行化" class="headerlink" title="8.5 递归算法的并行化"></a>8.5 递归算法的并行化</h1><p>首先循环可以并行化:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span>(<span class="keyword">final</span> Ele e: eles)&#123;</span><br><span class="line">    exec.execute(</span><br><span class="line">    <span class="keyword">new</span> Runnable()&#123;</span><br><span class="line">      <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span></span>&#123;process(e);&#125;</span><br><span class="line">    &#125;</span><br><span class="line">    );</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>递归也一样, 遍历依然是递归的, 但把每一个节点的计算收集到线程池中,异步计算.</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">dfs(node,exec,results)&#123;</span><br><span class="line"> exec.execute(...);</span><br><span class="line"> dfs(node.children());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<p>第九章是图形界面,略过.</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/01/01/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-8%E7%AB%A0/" data-id="ck96cxpnu00aemaam6euicert" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2017-12/hive调优之数据倾斜" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2017/12/26/2017-12/hive%E8%B0%83%E4%BC%98%E4%B9%8B%E6%95%B0%E6%8D%AE%E5%80%BE%E6%96%9C/" class="article-date">
+  <time datetime="2017-12-26T11:35:00.000Z" itemprop="datePublished">2017-12-26</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/hadoop/">hadoop</a>►<a class="article-category-link" href="/categories/hadoop/hive/">hive</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2017/12/26/2017-12/hive%E8%B0%83%E4%BC%98%E4%B9%8B%E6%95%B0%E6%8D%AE%E5%80%BE%E6%96%9C/">hive调优之数据倾斜</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>上一篇中记录了hive调优的一些常规手段. 但对于某些数据集, 常规手段是无能为力的, 例如数据倾斜时.</p>
+<p>对于hive而言,数据倾斜就是某个reducer跑得特别慢,这一点可以从日志中reducer开在99%或某个值很久看出,也可以从web ui中查看:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">运行后:</span><br><span class="line">http:&#x2F;&#x2F;xxx:19888&#x2F;jobhistory&#x2F;tasks&#x2F;job_1472710912354_3070682&#x2F;r</span><br><span class="line">运行前:</span><br><span class="line">http:&#x2F;&#x2F;xxx:8088&#x2F;proxy&#x2F;application_1472710912354_3070684&#x2F;mapreduce&#x2F;tasks&#x2F;job_1472710912354_3070684&#x2F;r</span><br></pre></td></tr></table></figure>
+<p>如果具体看日志的话,会发现大部分时间在进行外排.<br>对于这种任务最重要的是消除外排,有如下几种优化手段:</p>
+<h2 id="1-加内存"><a href="#1-加内存" class="headerlink" title="1. 加内存"></a>1. 加内存</h2><p>最简单粗暴就是给reduce加内存了. 让它别外排:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">set</span> mapreduce.reduce.memory.mb=<span class="number">10240</span>;</span><br></pre></td></tr></table></figure>
+<p>类似的,如果mapper内存不够,可以减小每个mapper处理的数据量,增大mapper的数量:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">set</span> mapreduce.input.fileinputformat.split.maxsize=<span class="number">64000000</span>;</span><br></pre></td></tr></table></figure>
+
+<h2 id="2-倾斜key单独处理"><a href="#2-倾斜key单独处理" class="headerlink" title="2. 倾斜key单独处理"></a>2. 倾斜key单独处理</h2><p>第二种手段也比较简单, 就是把出现倾斜的key找出来,假如很少的话,可以把它们摘出来,单独处理(或遗弃). 开启hive自动消除数据倾斜:(效果有效)</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">set</span> hive.optimize.skewjoin = <span class="literal">true</span>;</span><br><span class="line"><span class="keyword">set</span> hive.skewjoin.key=<span class="number">1000</span>;</span><br><span class="line"><span class="keyword">set</span> hive.groupby.skewindata=<span class="literal">true</span>;</span><br><span class="line"><span class="keyword">set</span> hive.groupby.mapaggr.checkinterval=<span class="number">100</span>;</span><br></pre></td></tr></table></figure>
+
+<h2 id="3-局部聚合-1-相同value聚合"><a href="#3-局部聚合-1-相同value聚合" class="headerlink" title="3. 局部聚合(1): 相同value聚合"></a>3. 局部聚合(1): 相同value聚合</h2><p>(没有什么优化是增加一个阶段不能解决的.如果有,就再加一个阶段)<br>为了减少最后汇聚到reducer上的数据量,可以在之前增加一个阶段,对某个key的数据进行局部聚合. </p>
+<p>以某次需求为例,需要求各个省市区维度下的丢包率\延迟的50,90,99分位数.数据量每天200G. 分位数计算极其耗时, 尤其是计算周统计数据时, 数据量达到TB级. </p>
+<p>在使用了前一篇优化笔记手段以及上述手段后,依然耗时4小时.原来查询最耗时的部分如下:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span>  es</span><br><span class="line">       ,province</span><br><span class="line">       ,city</span><br><span class="line">       ,ipOprator</span><br><span class="line">       ,percentile(xxx,<span class="number">0.5</span>,<span class="number">0.9</span>,<span class="number">0.99</span>)</span><br><span class="line"><span class="keyword">FROM</span> ttt</span><br><span class="line"><span class="keyword">GROUP</span> <span class="keyword">BY</span> es,province,ipOprator <span class="keyword">with</span> <span class="keyword">cube</span></span><br></pre></td></tr></table></figure>
+<p>查看hive的percentile源码实现,其对于同一个key的处理逻辑大致这么几步:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">(依次输入每个value)</span><br><span class="line">1. O(n)</span><br><span class="line">把所有value放进一个Map&lt;value,LongWriteable&gt;里,相同的value则增加map中的计数值;</span><br><span class="line">2. O(nlogn)</span><br><span class="line">在reduce中把map中的所有entry放入一个List中,然后对List根据value值进行全排序(&#96;Collections.sort(entriesList, new MyComparator());&#96;);</span><br><span class="line">3. O(n)</span><br><span class="line">从头开始扫一遍上一步的List, 根据计数器的值总和,分位数,定位到对应的分位数,返回.</span><br></pre></td></tr></table></figure>
+<p>将其重写为可以进行局部聚合, 从而略去第一步:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span>  es</span><br><span class="line">       ,province</span><br><span class="line">       ,city</span><br><span class="line">       ,ipOprator</span><br><span class="line">      ,percent_new(c1,<span class="keyword">num</span>,<span class="number">0.5</span>,<span class="number">0.9</span>,<span class="number">0.99</span>)</span><br><span class="line"><span class="keyword">FROM</span> (<span class="keyword">select</span> es,province,ipOprator,c1,<span class="keyword">count</span>(<span class="number">1</span>) <span class="keyword">as</span> <span class="keyword">num</span></span><br><span class="line">    <span class="keyword">FROM</span> xxx</span><br><span class="line">    <span class="keyword">GROUP</span> <span class="keyword">BY</span> es,province,ipOprator,c1</span><br><span class="line">) <span class="keyword">as</span> t </span><br><span class="line"><span class="keyword">GROUP</span> <span class="keyword">BY</span> es,province,ipOprator <span class="keyword">with</span> <span class="keyword">cube</span></span><br></pre></td></tr></table></figure>
+<p>优化后,时间缩短到30分钟.</p>
+<ul>
+<li>TODO:<br>优化第二步中的全排序. </li>
+</ul>
+<h2 id="4-局部聚合2-相同key聚合"><a href="#4-局部聚合2-相同key聚合" class="headerlink" title="4. 局部聚合2: 相同key聚合"></a>4. 局部聚合2: 相同key聚合</h2><p>由于上一案例中的聚合函数是分位数计算,聚合的粒度只能达到相同value聚合,对于其他聚合函数,如最大值,最小值等,如果语义上能对相同key先聚合,问题的规模就可以进一步缩小. 方法是先把相同key的数据分拆成不同的key,加上前缀或后缀 如:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">key -&gt; key_1</span><br><span class="line">key -&gt; key_2</span><br><span class="line">...</span><br><span class="line">key -&gt; key_10</span><br></pre></td></tr></table></figure>
+<p>分拆的数量等于并行度,取决于原有的数据集, 然后先进行一阶段聚合,最后去掉前缀后缀,再进行一次聚合得到最后的结果.<br>这种方法的关键就是要求同一个key的聚合计算可以分拆.</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2017/12/26/2017-12/hive%E8%B0%83%E4%BC%98%E4%B9%8B%E6%95%B0%E6%8D%AE%E5%80%BE%E6%96%9C/" data-id="ck96cxpnk0090maam4d5qhboj" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/hive/" rel="tag">hive</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2017-12/hive调优" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2017/12/25/2017-12/hive%E8%B0%83%E4%BC%98/" class="article-date">
@@ -494,677 +863,6 @@
 
 
   
-    <article id="post-2017-11/grep笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2017/11/28/2017-11/grep%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2017-11-28T12:24:57.000Z" itemprop="datePublished">2017-11-28</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/shell/">shell</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2017/11/28/2017-11/grep%E7%AC%94%E8%AE%B0/">grep笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>grep语法:</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">grep [OPTION]... PATTEN [FILE]...</span><br></pre></td></tr></table></figure>
-
-<p>OPTION参数:</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">-i: 忽略大小写</span><br><span class="line">-v: 反转查找</span><br><span class="line">-w: 只显示全字符合的列</span><br><span class="line">-c或--count: 计算符合范本样式的列数.</span><br></pre></td></tr></table></figure>
-
-<p>示例1:</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 计算处于init状态的mysql线程有多少个.</span></span><br><span class="line">pipe -e 'show processlist \G' | grep -c 'State: init'</span><br></pre></td></tr></table></figure>
-
-<p>示例2:</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 查找目录/etc/acpi及其目录下所有文件中包含<span class="string">"update"</span>的文件:</span></span><br><span class="line">grep -r update /etc/acpi</span><br></pre></td></tr></table></figure>
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2017/11/28/2017-11/grep%E7%AC%94%E8%AE%B0/" data-id="ck96cxpng008lmaamg8jw5h33" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/shell/" rel="tag">shell</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-2017-11/epoll相关基础知识" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2017/11/06/2017-11/epoll%E7%9B%B8%E5%85%B3%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86/" class="article-date">
-  <time datetime="2017-11-06T11:52:23.000Z" itemprop="datePublished">2017-11-06</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2017/11/06/2017-11/epoll%E7%9B%B8%E5%85%B3%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86/">epoll相关基础知识</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="背景"><a href="#背景" class="headerlink" title="背景:"></a>背景:</h1><p>C10K问题. 并发访问量&gt;=10K =&gt; 维持TCP连接的进程数超过上限.</p>
-<ul>
-<li>远古解决方案:</li>
-</ul>
-<ol>
-<li>用<code>UDP</code>. (腾讯QQ)</li>
-<li><code>select</code>模式. 每个TCP连接占用一个文件描述符, 所以进程能处理的连接最大不能超过1024. </li>
-<li><code>poll</code>模式. 每次收到数据需要遍历每一个连接查看哪个连接有数据请求。</li>
-</ol>
-<p>2002年左右开始的解决方案:</p>
-<blockquote>
-<p><code>kqueue</code>: FreeBSD<br><code>epoll</code>:  Linux (2.5.44内核)<br><code>IOCP</code>: Windows</p>
-</blockquote>
-<ul>
-<li><p>epoll的编程模型:<br>异步非阻塞回调. <code>Reactor</code>,事件驱动,事件轮询(<code>EventLoop</code>).</p>
-</li>
-<li><p>新的问题<br><code>epoll</code>编程太繁琐,层层回调/嵌套.</p>
-</li>
-<li><p>解决方案:</p>
-</li>
-</ul>
-<ol>
-<li>默默忍受: 性能最优.</li>
-<li>协程,<code>coroutine</code>: 需要解决某个协程密集计算带来的问题.</li>
-</ol>
-<ul>
-<li>协程<br>封装了事件回调,底层库通过保存状态(代码行数,局部变量的值),替程序猿进行回调. 程序猿可以就像一切刚开始的时候那样只写仿佛同步阻塞的代码.</li>
-</ul>
-<p><code>go</code>语言中具体代码:</p>
-<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">go</span> doSomething();</span><br><span class="line"><span class="comment">// 类似于 threadPool.submit(new Thread(new Runnable()&#123;run()&#123;doSomething();&#125;&#125;))的效果</span></span><br></pre></td></tr></table></figure>
-<p>会提交一个协程到go语言自带的协程池子里。由于go语言每个函数可以作为一个协程，所以语法显得非常简练方便，而且无需操心线程池。<br>此外<code>go</code>中<code>main</code>函数也是一个协程，而且不是守护的。（java中main函数是守护的,会等待所有其他线程运行结束）<br>协程的同步依然需要自己管理，一般是用channel(管道)进行。<br>语法上,协程提供了一个写非阻塞操作的非常简洁的关键字(<code>go</code>)。<br>实现上,协程提供了非常方便的协程池,而且由于是用户态线程,因此每个协程的开销足够小,小到可以将每个函数这么小的粒度作为协程。 </p>
-<p>缺陷:<br>由于实现上是使用用户态线程/进程,当某一个协程中有密集计算时,其他协程就不运行了. 每个线程上装配的协程的切换是需要在每次协程中发生中断时进行判断的。</p>
-<p>解决方案:</p>
-<ul>
-<li><code>GoLang</code>: 用户在密集计算的代码中自己<code>yield</code>. </li>
-<li><code>ErLang</code>: 无需关心. 由于底层有<code>ErLang</code>自己开发的VM,会自动检测并进行切换.(<code>rabbitmq</code>)</li>
-</ul>
-<h1 id="具体实现"><a href="#具体实现" class="headerlink" title="具体实现"></a>具体实现</h1><ul>
-<li>问题的本质:<br>一个进程处理一个连接, 导致进程开销太大.<br>因此解决思路就是一个进程处理多个连接.也就是:<br><code>IO多路复用</code>. </li>
-</ul>
-<p>实现1:</p>
-<blockquote>
-<p>每个进程循环处理多个连接.<br>缺点: 其中一个连接处理卡住会阻塞整个应用. </p>
-</blockquote>
-<h2 id="select模式"><a href="#select模式" class="headerlink" title="select模式"></a>select模式</h2><p>实现2: (<code>select</code>模式)</p>
-<blockquote>
-<p>维护一个fd_set状态结构体.<br>阻塞的原因是IO资源的争用,如某个文件句柄是否可读,可写.(锁)<br>告诉内核该进程关心的文件句柄, 让内核检查多个文件句柄.</p>
-</blockquote>
-<p>进程发送句柄列表=&gt;内核逐个检查状态是否可用. </p>
-<p>缺陷:</p>
-<blockquote>
-<ol>
-<li>每个进程有关注的文件句柄上限;</li>
-<li>需要重复初始化关心的文件句柄结构体;</li>
-<li>逐个排查连接效率低.</li>
-</ol>
-</blockquote>
-<h2 id="poll模式"><a href="#poll模式" class="headerlink" title="poll模式"></a>poll模式</h2><p>实现3:(<code>poll模式</code>)</p>
-<blockquote>
-<p>设计新的数据结构.<br>通过pollfd数组向内核传递需要关注的事件: 消除文件句柄上限;<br>不同字段区分关注事件和发生事件: 避免重复初始化.</p>
-</blockquote>
-<p>缺陷:</p>
-<blockquote>
-<ol>
-<li>逐个排查连接效率低.</li>
-</ol>
-</blockquote>
-<h2 id="epoll模式"><a href="#epoll模式" class="headerlink" title="epoll模式"></a>epoll模式</h2><p>实现4: (<code>epoll</code>模式)<br>内核升级到能对每个FD注册回调,进程能够直接知道是哪个句柄状态变化,而不用轮询,监听回调就行了.<br>(linux 2.5.44新增<code>api</code>)<br>事件模型.</p>
-<h2 id="epoll具体实现细节"><a href="#epoll具体实现细节" class="headerlink" title="epoll具体实现细节"></a>epoll具体实现细节</h2><p><strong>架构:</strong></p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;&#x2F; 一堆事情(IO访问),需要切换到内核态访问相应地址空间.例如把数据从内核地址空间拷贝到用户地址空间. 拷贝完以后触发一个读可用事件.</span><br><span class="line">用户进程-&gt;内核(</span><br><span class="line">    readyList</span><br><span class="line">   ,红黑树&lt;文件描述符(如Socket)&gt;</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
-<p><strong>工作流程:</strong></p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">1. 用户进程调用epoll_create;</span><br><span class="line">2. 内核创建readyList,红黑树;</span><br><span class="line">3. 用户进程调用epoll_ctrl,传递监控的句柄(如Socket),以及在上面关注的事件;</span><br><span class="line">4. 内核将句柄插入红黑树;</span><br><span class="line">5. 内核的中断处理程序注册一个回调,如果红黑树中某个句柄的中断到了,</span><br><span class="line">把它对应的事件放到ReadyList. </span><br><span class="line"></span><br><span class="line">--- 另一个流程 --- </span><br><span class="line">1. 用户进程调用epoll_wait</span><br><span class="line">2. 内核从ReadyList返回可回调的事件.</span><br></pre></td></tr></table></figure>
-
-<p><strong>LT模式与ET模式</strong><br>LT模式: 水平触发(JAVA NIO默认),一个句柄上的事件一次没处理完,会再下次调用epoll_wait的时候依然返回它;<br>ET模式: 边缘触发,仅在第一次返回.</p>
-<p>LT模式:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. 用户进程调用epoll_wait;</span><br><span class="line">2. 内核从ReadyList返回数据;&#x2F;&#x2F; 就绪的Socket拷贝到用户态内存</span><br><span class="line">3. 清空ReadyList;</span><br><span class="line">4. 检查Socket句柄,如果有未处理完的事件(数据没读完),将句柄加入ReadyList.</span><br></pre></td></tr></table></figure>
-<p>ET模式没有上述的第四步.</p>
-<p><strong>LT模式注意事项</strong></p>
-<blockquote>
-<p>不需要写的话,不要关注写事件.<br>长期关注写事件会导致CPU100%问题. </p>
-</blockquote>
-<p><strong>ET模式注意事项</strong></p>
-<blockquote>
-<p>每次都要读到返回EWOULDBLOCK为止. (要读干净)</p>
-</blockquote>
-<p><strong>epoll为什么使用红黑树</strong><br>因为epoll要求快速找到某个句柄,因此首先是一个Map接口,候选实现:</p>
-<ol>
-<li>哈希表 O(1)</li>
-<li>红黑树 O(lgn)</li>
-<li>跳表 近似O(lgn)<br>据说老版本的内核和FreeBSD的Kqueue使用的是哈希表. </li>
-</ol>
-<p>个人理解现在内核使用红黑树的原因:</p>
-<ol>
-<li>哈希表. 空间因素,可伸缩性.<br>(1)频繁增删. 哈希表需要预估空间大小, 这个场景下无法做到.<br>间接影响响应时间,假如要resize,原来的数据还得移动.即使用了一致性哈希算法,<br>也难以满足非阻塞的timeout时间限制.(时间不稳定)<br>(2) 百万级连接,哈希表有镂空的空间,太浪费内存.</li>
-<li>跳表. 慢于红黑树. 空间也高. </li>
-<li>红黑树. 经验判断,内核的其他地方如防火墙也使用红黑树,实践上看性能最优.</li>
-</ol>
-<p><strong>数据结构:</strong></p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="keyword">union</span> epoll_data &#123;</span><br><span class="line">     <span class="keyword">void</span> *ptr;</span><br><span class="line">     <span class="keyword">int</span> fd; </span><br><span class="line">     <span class="keyword">__uint32_t</span> u32;</span><br><span class="line">     <span class="keyword">__uint64_t</span> u64; </span><br><span class="line">&#125;<span class="keyword">epoll_data_t</span>;  <span class="comment">// &lt;=</span></span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">epoll_event</span> &#123;</span> </span><br><span class="line">    <span class="keyword">__uint32_t</span> events; <span class="comment">/* Epoll events */</span> </span><br><span class="line">    <span class="keyword">epoll_data_t</span> data;<span class="comment">/* User data variable */</span></span><br><span class="line"> &#125;;</span><br></pre></td></tr></table></figure>
-<p>C库的API:</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">epoll_create</span><span class="params">(<span class="keyword">int</span> <span class="built_in">size</span>)</span></span>; <span class="comment">// size: 最大句柄数</span></span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">epoll_ctl</span><span class="params">(<span class="keyword">int</span> epfd, <span class="keyword">int</span> op, <span class="keyword">int</span> fd, struct epoll_event *event)</span></span>;  </span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">epoll_wait</span><span class="params">(<span class="keyword">int</span> epfd, struct epoll_event *events,<span class="keyword">int</span> maxevents, <span class="keyword">int</span> timeout)</span></span>;</span><br></pre></td></tr></table></figure>
-<p>具体语义:</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">epoll_create: 让内核创建一个epoll item;</span><br><span class="line">epoll_ctl: 修改epoll item: 增加socket句柄,或删除socket句柄,注册回调事件;</span><br><span class="line">epoll_wait: 等待注册的事件发生. </span><br><span class="line">传入的参数epoll_event会从内核那捞回结果.(被回调的事件)</span><br></pre></td></tr></table></figure>
-
-
-<h2 id="实现5-libevent库"><a href="#实现5-libevent库" class="headerlink" title="实现5: libevent库"></a>实现5: libevent库</h2><p>封装<code>epoll</code>. 统一不同平台api.<br>使用方式:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">1. 初始化事件event,定义回调函数f;</span><br><span class="line">2. 将事件加入系统监控事件列表;</span><br><span class="line">3. 监听事件及分发.</span><br></pre></td></tr></table></figure>
-
-<p><strong>NIO的epoll bug</strong><br>部分Linux的2.6的kernel中，poll和epoll对于突然中断的连接socket会对返回的eventSet事件集合置为POLLHUP，也可能是POLLERR，eventSet事件集合发生了变化，这就可能导致Selector会被唤醒。<br>进一步导致jdk中NIO实现中某段代码的死循环.</p>
-<p>Netty的解决方案:</p>
-<ol>
-<li>将select返回值为0进行计数,直到大于阈值<code>EPOLL_BUG_WORKAROUND</code>;</li>
-<li>重建Selector. </li>
-</ol>
-<h1 id="C10M问题"><a href="#C10M问题" class="headerlink" title="C10M问题"></a>C10M问题</h1><ol>
-<li><p>数据包经过linux内核协议栈导致性能巨大下降.<br>解决方案:<br>(1)intel的DPDK框架. 直接接管网卡收到的数据包传递到业务代码中进行处理.</p>
-</li>
-<li><p>存储访问时间消耗. 切换消耗:<br>解决方案:<br>(1) 重新设计操作系统, 包括内存池,cache,内存分页,cpu管理等等.</p>
-</li>
-</ol>
-<h1 id="术语-概念"><a href="#术语-概念" class="headerlink" title="术语/概念"></a>术语/概念</h1><h2 id="缓存IO"><a href="#缓存IO" class="headerlink" title="缓存IO"></a>缓存IO</h2><p>标准IO. 操作系统先将IO数据缓存到文件系统的页缓存(page cache)中,然后再从操作系统内核的缓冲区拷贝到应用程序的地址空间.<br>缺点:<br>重复拷贝带来很大的CPU/内存开销. </p>
-<ul>
-<li><p>阻塞/非阻塞: </p>
-<blockquote>
-<p>内核会不会立即回答;</p>
-</blockquote>
-</li>
-<li><p>同步/异步: </p>
-<blockquote>
-<p>进程会不会等内核回答. </p>
-</blockquote>
-</li>
-</ul>
-<h2 id="IO模式"><a href="#IO模式" class="headerlink" title="IO模式"></a>IO模式</h2><ol>
-<li>阻塞IO</li>
-<li>非阻塞IO</li>
-<li>IO多路复用</li>
-<li>信号驱动IO</li>
-<li>异步IO</li>
-</ol>
-<h2 id="阻塞IO"><a href="#阻塞IO" class="headerlink" title="阻塞IO"></a>阻塞IO</h2><ol>
-<li>进程请求IO数据;</li>
-<li>进程阻塞;</li>
-<li>内核准备数据,拷贝到内核空间;</li>
-<li>拷贝到进程地址;</li>
-<li>解除阻塞.</li>
-</ol>
-<h2 id="非阻塞IO"><a href="#非阻塞IO" class="headerlink" title="非阻塞IO"></a>非阻塞IO</h2><ul>
-<li>轮询</li>
-</ul>
-<ol>
-<li>进程请求IO数据;</li>
-<li>内核回答不OK;</li>
-<li>进程不断轮询;</li>
-<li>内核终于准备好了数据,回答OK. </li>
-</ol>
-<h2 id="IO多路复用"><a href="#IO多路复用" class="headerlink" title="IO多路复用"></a>IO多路复用</h2><p>包括: select,poll,epoll</p>
-<blockquote>
-<p>一次轮询多个socket,任何一个socket数据搞定的话,内核都会回复一次. </p>
-</blockquote>
-<h2 id="异步非阻塞IO"><a href="#异步非阻塞IO" class="headerlink" title="异步非阻塞IO"></a>异步非阻塞IO</h2><p>类似于非阻塞, 取消了轮询.<br>进程不等待内核的回复.<br>内核完成准备数据后会通知进程.</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2017/11/06/2017-11/epoll%E7%9B%B8%E5%85%B3%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86/" data-id="ck96cxpnf008kmaam77ut6s95" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%B9%B6%E5%8F%91/" rel="tag">并发</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-2017-11/库带来的智子攻击" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2017/11/01/2017-11/%E5%BA%93%E5%B8%A6%E6%9D%A5%E7%9A%84%E6%99%BA%E5%AD%90%E6%94%BB%E5%87%BB/" class="article-date">
-  <time datetime="2017-11-01T11:56:10.000Z" itemprop="datePublished">2017-11-01</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/%E6%97%A5%E5%BF%97/">日志</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2017/11/01/2017-11/%E5%BA%93%E5%B8%A6%E6%9D%A5%E7%9A%84%E6%99%BA%E5%AD%90%E6%94%BB%E5%87%BB/">库带来的智子攻击</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <ul>
-<li>智子攻击: <blockquote>
-<p>&lt;&lt;三体&gt;&gt;中的三体人为了封锁地球科技,使用智子干扰微观粒子的行为,影响人类对于基础科学的实验与研究. </p>
-</blockquote>
-</li>
-</ul>
-<p>对于程序猿来说,由于现成代码库封装了底层实现,同时引入了很多术语\名词,隐藏了问题的本质, 影响了程序猿真正学会相关技术, 以及超越原有实现.<br>由于前人对于某一个问题, 往往会根据自己的理解, 创建相关的DSL(领域特定语言),<br>后人想理解原本一个基础原理,往往不得不先理解这些或简洁或奇怪的术语,越过重重迷雾最后才能接触到真相.</p>
-<p>解决方案:</p>
-<ol>
-<li>堆砌时间: 每周研究一次库的底层实现.</li>
-</ol>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2017/11/01/2017-11/%E5%BA%93%E5%B8%A6%E6%9D%A5%E7%9A%84%E6%99%BA%E5%AD%90%E6%94%BB%E5%87%BB/" data-id="ck96cxpni008rmaamc46phijp" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E6%97%A5%E5%BF%97/" rel="tag">日志</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-spring实战笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2017/10/24/spring%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2017-10-24T11:38:24.000Z" itemprop="datePublished">2017-10-24</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/spring/">spring</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2017/10/24/spring%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0/">spring实战笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="第一章-主要特性"><a href="#第一章-主要特性" class="headerlink" title="第一章 主要特性"></a>第一章 主要特性</h1><h1 id="DI"><a href="#DI" class="headerlink" title="DI"></a>DI</h1><ul>
-<li>依赖注入.<blockquote>
-<p>让Spring容器来管理对象的创建和销毁,注入;依赖关系更为明确,耦合程度降低.<br>以前是bean工厂,现在是各种ApplicationContext容器.</p>
-</blockquote>
-</li>
-</ul>
-<h1 id="AOP"><a href="#AOP" class="headerlink" title="AOP"></a>AOP</h1><ul>
-<li>切面.<blockquote>
-<p>声明切点,注入before,after事件,降低代码耦合.</p>
-</blockquote>
-<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">aop:config</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">aop:aspect</span> <span class="attr">ref</span>=<span class="string">"minstrel"</span>&gt;</span></span><br><span class="line">      <span class="tag">&lt;<span class="name">aop:pointcut</span> <span class="attr">id</span>=<span class="string">"embark"</span></span></span><br><span class="line"><span class="tag">          <span class="attr">expression</span>=<span class="string">"execution(* *.embarkOnQuest(..))"</span>/&gt;</span></span><br><span class="line">        </span><br><span class="line">      <span class="tag">&lt;<span class="name">aop:before</span> <span class="attr">pointcut-ref</span>=<span class="string">"embark"</span> </span></span><br><span class="line"><span class="tag">          <span class="attr">method</span>=<span class="string">"singBeforeQuest"</span>/&gt;</span></span><br><span class="line"></span><br><span class="line">      <span class="tag">&lt;<span class="name">aop:after</span> <span class="attr">pointcut-ref</span>=<span class="string">"embark"</span> </span></span><br><span class="line"><span class="tag">          <span class="attr">method</span>=<span class="string">"singAfterQuest"</span>/&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">aop:aspect</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;/<span class="name">aop:config</span>&gt;</span></span><br></pre></td></tr></table></figure>
-
-</li>
-</ul>
-<h1 id="模板"><a href="#模板" class="headerlink" title="模板"></a>模板</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">jdbcTemplate+RowMapper, 简化jdbc查询.</span><br><span class="line">&#x2F;&#x2F; 用JPA的话就不用写RowMapper了.</span><br></pre></td></tr></table></figure>
-
-<h2 id="bean的生命周期"><a href="#bean的生命周期" class="headerlink" title="bean的生命周期"></a>bean的生命周期</h2><ol>
-<li>实例化</li>
-<li>填充属性</li>
-<li>setBeanName</li>
-<li>setBeanFactory</li>
-<li>setApplicationContext</li>
-<li>调用BeanPostProcessor的预初始化方法</li>
-<li>调用InitializingBean的afterProperties set方法</li>
-<li>调用自定义的初始化方法</li>
-<li>调用BeanPostProcessor的初始化后方法</li>
-<li>—— bean的使用</li>
-<li>—— 容器关闭</li>
-<li>调用DisposableBean的destroy方法</li>
-<li>调用自定义的销毁方法</li>
-</ol>
-<h1 id="第二章-DI"><a href="#第二章-DI" class="headerlink" title="第二章 DI"></a>第二章 DI</h1><p>讲了一下声明和使用Bean的方法. 与Springboot实战相同,略过.</p>
-<h1 id="第三章-条件化配置-高级装配"><a href="#第三章-条件化配置-高级装配" class="headerlink" title="第三章 条件化配置\高级装配"></a>第三章 条件化配置\高级装配</h1><p>各种profile切换,条件bean,配置注入等等,与Springboot实战相同,略过.</p>
-<h1 id="第四章-AOP"><a href="#第四章-AOP" class="headerlink" title="第四章 AOP"></a>第四章 AOP</h1><p>具体实现机制:</p>
-<blockquote>
-<p>Spring 采用jdk动态代理模式来实现Aop机制。Spring AOP采用动态代理过程：1.将切面使用动态代理的方式动态织入到目标对象，形成一个代理对象。2.目标对象如果没有实现代理接口，那么spring会采用CGLib来生成代理对象，该代理对象是目标对象的子类。3.目标对象如果是final类，也没有实现接口，就不能运用AOP</p>
-</blockquote>
-<p>AspectJ是AOP的一个实现,Spring借鉴了AspectJ.(有合作)</p>
-<h2 id="术语"><a href="#术语" class="headerlink" title="术语"></a>术语</h2><ul>
-<li><p>Advice : 通知(增强)(Before,After,Around)</p>
-<blockquote>
-<p>描述横切逻辑和方法的具体织入点（方法前、方法后、方法的两端等）</p>
-</blockquote>
-</li>
-<li><p>PointCut: 切点(例子中的切点是execution表达式规定的方法)</p>
-<blockquote>
-<p>指定在哪些类的哪些方法上织入横切逻辑.</p>
-</blockquote>
-</li>
-<li><p>JoinPoint: 连接点 (粒度是方法)</p>
-</li>
-<li><p>Advisor(切面): </p>
-<blockquote>
-<p>将Pointcut和Advice两者组装起来。有了Advisor的信息，Spring就可以利用JDK或CGLib的动态代理技术采用统一的方式为目标Bean创建织入切面的代理对象了</p>
-</blockquote>
-</li>
-</ul>
-<p>例子:</p>
-<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">aop:config</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">aop:aspect</span> <span class="attr">ref</span>=<span class="string">"minstrel"</span>&gt;</span></span><br><span class="line">      <span class="tag">&lt;<span class="name">aop:pointcut</span> <span class="attr">id</span>=<span class="string">"embark"</span></span></span><br><span class="line"><span class="tag">          <span class="attr">expression</span>=<span class="string">"execution(* *.embarkOnQuest(..))"</span>/&gt;</span></span><br><span class="line">        </span><br><span class="line">      <span class="tag">&lt;<span class="name">aop:before</span> <span class="attr">pointcut-ref</span>=<span class="string">"embark"</span> </span></span><br><span class="line"><span class="tag">          <span class="attr">method</span>=<span class="string">"singBeforeQuest"</span>/&gt;</span></span><br><span class="line"></span><br><span class="line">      <span class="tag">&lt;<span class="name">aop:after</span> <span class="attr">pointcut-ref</span>=<span class="string">"embark"</span> </span></span><br><span class="line"><span class="tag">          <span class="attr">method</span>=<span class="string">"singAfterQuest"</span>/&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">aop:aspect</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;/<span class="name">aop:config</span>&gt;</span></span><br></pre></td></tr></table></figure>
-
-<ul>
-<li>spring支持的AspectJ切点表达式(挺多的记不住,就不列全了):<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">arg()</span><br><span class="line"><span class="keyword">this</span></span><br><span class="line">target</span><br><span class="line">execution</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
-
-</li>
-</ul>
-<p>用切点表达式来选取某个方法示例:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">execution(* concert.Performance.perform(..))</span><br><span class="line"><span class="comment">// * :  返回任意类型</span></span><br><span class="line"><span class="comment">// 方法所属的类是: concert.Performance</span></span><br><span class="line"><span class="comment">// 具体方法名是: perform</span></span><br><span class="line"><span class="comment">// 方法参数是: 任意参数(两个点..)</span></span><br></pre></td></tr></table></figure>
-
-<p>简单总结一下步骤(用注解):</p>
-<ol>
-<li>写一个config,把观众和演员都注册为Bean.加上<code>@EnableAspectJAutoProxy</code>.</li>
-<li>观众类上加<code>@Aspect</code>,写各种@Before,@After方法;</li>
-</ol>
-<p>代码见:<br><a href="https://github.com/xiaoyue26/spring-gradle/tree/master/src/main/java/com/xiaoyue/nov/practice/concert" target="_blank" rel="noopener">https://github.com/xiaoyue26/spring-gradle/tree/master/src/main/java/com/xiaoyue/nov/practice/concert</a></p>
-<p>书里还提供了一个思路,通过AOP扩展原来的类,而不改动原来的源代码.</p>
-<h2 id="原理总结"><a href="#原理总结" class="headerlink" title="原理总结"></a>原理总结</h2><ul>
-<li><p>动态代理</p>
-<blockquote>
-<p><code>JDK动态代理</code>：只能为接口创建动态代理实例，而不能针对类 。<br><code>CGLib</code> :<br>（Code GenerationLibrary）动态代理：可以为任何类创建织入横切逻辑代理对象，主要是对指定的类生成一个子类，覆盖其中的方法，因为是继承，所以该类或方法最好不要声明成final。</p>
-</blockquote>
-</li>
-<li><p>原理对比：(尽量用接口,不用final)</p>
-</li>
-</ul>
-<p>JDK动态代理：(只能是接口)</p>
-<blockquote>
-<p>JDK动态代理技术。通过需要代理的目标类的getClass().getInterfaces()方法获取到接口信息（这里实际上是使用了Java反射技术。getClass()和getInterfaces()函数都在Class类中，Class对象描述的是一个正在运行期间的Java对象的类和接口信息），通过读取这些代理接口信息生成一个实现了代理接口的动态代理Class（动态生成代理类的字节码），然后通过反射机制获得动态代理类的构造函数，并利用该构造函数生成该Class的实例对象（InvokeHandler作为构造函数的入参传递进去），在调用具体方法前调用InvokeHandler来处理。</p>
-</blockquote>
-<ul>
-<li><p>CGLib动态代理：(不能是final类)</p>
-<blockquote>
-<p>字节码技术。利用asm开源包，把代理对象类的class文件加载进来，通过修改其字节码生成子类来处理。采用非常底层的字节码技术，为一个类创建子类，并在子类中采用方法拦截的技术拦截所有父类方法的调用，并顺势织入横切逻辑。</p>
-</blockquote>
-</li>
-<li><p>两种配置切换:<br>1、如果目标对象实现了接口，默认情况下会采用JDK的动态代理实现AOP<br>2、如果目标对象实现了接口，可以强制使用CGLIB实现AOP<br>3、如果目标对象没有实现接口，必须采用CGLIB库，spring会自动在JDK动态代理和CGLIB之间转换</p>
-</li>
-</ul>
-<h1 id="第二部分-WEB"><a href="#第二部分-WEB" class="headerlink" title="第二部分 WEB"></a>第二部分 WEB</h1><h1 id="第五章-构建"><a href="#第五章-构建" class="headerlink" title="第五章 构建"></a>第五章 构建</h1><h1 id="第六第七章-SpringMVC"><a href="#第六第七章-SpringMVC" class="headerlink" title="第六第七章 SpringMVC"></a>第六第七章 SpringMVC</h1><p>内容,比较繁琐</p>
-<h1 id="第八章-Spring-Web-Flow"><a href="#第八章-Spring-Web-Flow" class="headerlink" title="第八章 Spring Web Flow"></a>第八章 Spring Web Flow</h1><p>stackoverflow上有个帖子详细解释了为啥不能用这个框架.<br><a href="https://stackoverflow.com/questions/29750720/what-are-the-spring-web-flow-advantages" target="_blank" rel="noopener">https://stackoverflow.com/questions/29750720/what-are-the-spring-web-flow-advantages</a><br>包括:</p>
-<ol>
-<li>xml配置难用;</li>
-<li>不直观;</li>
-<li>与第三方库(如模板引擎)整合复杂;<br>… // 看了前三个缺点就没耐心看后几个缺点了…<br>核心还是难用,比普通spring的xml配置复杂得多,几乎没有人能坚持看十分钟攻略.</li>
-</ol>
-<h1 id="第九章-安全-Spring-Security"><a href="#第九章-安全-Spring-Security" class="headerlink" title="第九章 安全 Spring Security"></a>第九章 安全 Spring Security</h1><p>原理:</p>
-<ol>
-<li>用的filter. (AOP用的interpretor)</li>
-</ol>
-<p>antMatchers用的是<br>ant pattern,和普通的通配符有点不一样,是专门用于url的通配符:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">? 匹配任何单字符 </span><br><span class="line">* 匹配0或者任意数量的字符 </span><br><span class="line">** 匹配0或者更多的目录</span><br></pre></td></tr></table></figure>
-<p>其实就是:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">* 匹配任何字符，不含 “&#x2F;”</span><br><span class="line">** 匹配任何字符，含 “&#x2F;”</span><br></pre></td></tr></table></figure>
-
-<p>匹配上路径以后,配置能够做什么.</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">access(<span class="string">"hasRole('READER')"</span>) 设置SpEL表达式为<span class="keyword">true</span>时允许访问;</span><br><span class="line">anonymous()  允许匿名访问</span><br><span class="line">authenticated() 允许认证过的用户访问</span><br><span class="line">denyAll() 拒绝所有</span><br><span class="line">fullyAuthenticated() 允许认证过的,但排除remember-me的</span><br><span class="line">hasAnyAuthority(String...) 具备某个权限</span><br><span class="line">hasAnyRole(String ...) 具有某个Role</span><br><span class="line">hasAuthority(String) 某有某个权限</span><br><span class="line">hasRole(String) 具有某个Role</span><br><span class="line">hasIpAddress(String) 具有某个IP</span><br><span class="line">not() 对其他访问方法的结果取反</span><br><span class="line">permitAll() 允许所有</span><br><span class="line">rememberMe() 允许通过Remember-me的.</span><br></pre></td></tr></table></figure>
-<p>最后的default条件就是 <code>anyRequest().denyAll()</code>. </p>
-<p><code>SpEL</code>: <code>Spring Expression Language</code>:</p>
-<blockquote>
-<p>access方法里头使用,可以代替其他方法,如:<br>access(“hasRole(‘ROLE_READER’ and hasIpAddress(‘192.168.1.2’))”);</p>
-</blockquote>
-<h2 id="Authentication与Authorization区别"><a href="#Authentication与Authorization区别" class="headerlink" title="Authentication与Authorization区别"></a>Authentication与Authorization区别</h2><p><code>Authentication</code>: 鉴权,用户是谁.<br><code>Authorization</code>: 授权,是否可以.</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 获得用户是谁: 如果没有鉴权就是null</span></span><br><span class="line">SecurityContextHolder.getContext().getAuthentication()</span><br><span class="line"><span class="comment">// 获得用户的权限:</span></span><br><span class="line">SecurityContextHolder.getContext().getAuthentication().getAuthorities()</span><br></pre></td></tr></table></figure>
-
-
-
-<h2 id="其他概念-自顶向下"><a href="#其他概念-自顶向下" class="headerlink" title="其他概念(自顶向下)"></a>其他概念(自顶向下)</h2><p><code>SecurityContextHolder</code>:<br>    为使用者提供全局的SecurityContext//ThreadLocal变量,每个线程唯一.<br><code>SecurityContext</code>:<br>    为了hold住Authentication<br><code>Authentication</code>:// 鉴权<br>    主要负责两方面信息，一个是当前用户的详细信息(Principal、UserDetails)，一个是用户鉴权时需要的信息。<br><code>Principal</code>: 安全主体<br><code>Authorization</code>: 授权,访问控制.<br><code>GrantedAuthority</code>:<br>    提供当前用户(UserDetails)所获得的系统范围内的授权。<br><code>UserDetails</code>:<br>    提供了用户的详细信息，主要被用来构建Authentication。<br><code>UserDetailsService</code>:<br>    这个接口的实现主要是负责通过用户名查找并提供用户的详细信息(UserDetails)。</p>
-<p>密码的比较:<br>由<code>AuthenticationManager</code>以及<code>AuthenticationProvider</code>负责.</p>
-<h2 id="鉴权流程"><a href="#鉴权流程" class="headerlink" title="鉴权流程"></a>鉴权流程</h2><ol>
-<li>用户名,密码 =&gt; <code>UsernamePasswordAuthenticationToken</code>对象;<br>//<code>Authentication</code>的一个实现.</li>
-<li>=&gt; <code>AuthenticationManager</code>对它进行验证;</li>
-<li>=&gt; 提取<code>UserDetails</code>,<code>GrantedAuthority</code> =&gt; <code>Authentication</code>对象</li>
-<li><code>Authentication</code>=&gt; <code>SecurityContextHolder.getContext().setAuthentication</code>.</li>
-</ol>
-<p>其中第一步在:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">UsernamePasswordAuthenticationFilter类中:</span><br><span class="line">UsernamePasswordAuthenticationToken authRequest &#x3D; new UsernamePasswordAuthenticationToken(</span><br><span class="line">				username, password);</span><br></pre></td></tr></table></figure>
-
-<h1 id="第十章-模板方法设计模式"><a href="#第十章-模板方法设计模式" class="headerlink" title="第十章 模板方法设计模式"></a>第十章 模板方法设计模式</h1><p>实现分为: 模板(template,固定部分)和回调(callback,可变部分)<br>Spring提供的模板包括:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">jdbcTemplate</span><br><span class="line">SimpleJdbcTemplate -- Spring3后已废弃</span><br><span class="line">HibernateTemplate</span><br><span class="line">JdoTemplate</span><br><span class="line">JpaTemplate</span><br></pre></td></tr></table></figure>
-
-<h1 id="第十一章-ORM"><a href="#第十一章-ORM" class="headerlink" title="第十一章 ORM"></a>第十一章 ORM</h1><ol>
-<li>DSL<br>JPA repository的DSL(黑话):<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">readSpitterByFirstnameOrLastnameOrderByLastname();</span><br><span class="line"></span><br><span class="line">动词: read,get,find,count. &#x2F;&#x2F; 前三个等效</span><br><span class="line">Spitter: 主题 &#x2F;&#x2F; 还可以加Distinct</span><br><span class="line">断言: 还可以有: isAfter,isNull,isLike,IgnoringCase等等.</span><br></pre></td></tr></table></figure>
-只要按这个模式命名方法名,就会自动被实现.</li>
-</ol>
-<p>2.<code>@Query</code>自定义查询</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Query</span>(<span class="string">"select username,password,fullname from Reader"</span>)</span><br><span class="line">    <span class="function">List&lt;Reader&gt; <span class="title">findAllGmailReaders</span><span class="params">()</span></span>;</span><br></pre></td></tr></table></figure>
-
-<p>3.混合自定义实现<br>上述情况都是声明一个<code>ReaderRepository</code>接口,<br>继承JPARepository&lt;Reader,String&gt;<br>(对象和对象主键类型),<br>Spring就会自动生成一个Impl,根据定义的方法名自动生成实现.(类似于用iBatis时,工具生成map)<br>如果有比较复杂的自定义SQL操作,可以创建一个<code>ReaderRepositoryImpl</code>,<br>和原来的名字相比增加<code>Impl</code>后缀,(这个是默认后缀,可以通过注解配置调整),<br>然后继承同一个接口(比如都继承/实现<code>ReaderSweeper</code>).<br>Spring就会混合自动生成的实现和自定义的实现.</p>
-<p>//详见github.</p>
-<h1 id="第十二章-NoSQL"><a href="#第十二章-NoSQL" class="headerlink" title="第十二章 NoSQL"></a>第十二章 NoSQL</h1><ol>
-<li>MongoDb 及其template</li>
-<li>note4j 及其template</li>
-<li>redis 及其template<br>依赖:</li>
-</ol>
-<figure class="highlight groovy"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">compile <span class="string">"redis.clients:jedis:2.9.0"</span></span><br><span class="line">compile <span class="string">'org.springframework.boot:spring-boot-starter-data-redis'</span></span><br></pre></td></tr></table></figure>
-<p>yaml配置:</p>
-<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">spring:</span></span><br><span class="line">  <span class="attr">redis:</span></span><br><span class="line">    <span class="attr">host:</span> <span class="string">localhost</span></span><br><span class="line">    <span class="attr">password:</span> <span class="string">redis123</span></span><br><span class="line">    <span class="attr">port:</span> <span class="number">6379</span></span><br></pre></td></tr></table></figure>
-<p>配置:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Bean</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> RedisTemplate&lt;String, Product&gt; <span class="title">redisTemplate</span><span class="params">(RedisConnectionFactory cf)</span> </span>&#123;</span><br><span class="line">        RedisTemplate&lt;String, Product&gt; redis = <span class="keyword">new</span> RedisTemplate&lt;&gt;();</span><br><span class="line">        redis.setConnectionFactory(cf);</span><br><span class="line">        <span class="keyword">return</span> redis;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
-<p>最后一步如果用不着template的话,甚至可以不用配.还蛮简单的.</p>
-<h2 id="序列化相关"><a href="#序列化相关" class="headerlink" title="序列化相关:"></a>序列化相关:</h2><p>Spring Data Redis提供的序列化器:</p>
-<ol>
-<li><code>RedisTemplate</code>会使用<code>JdkSerializationRedisSerializer</code>;</li>
-<li><code>StringRedisTemplate</code>默认会使用<code>StringRedis-Serializer</code>;</li>
-<li>可以在创建<code>RedisTemplate</code>的时候配置其他序列化器:<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Bean</span></span><br><span class="line">   <span class="function"><span class="keyword">public</span> RedisTemplate&lt;String, Product&gt; <span class="title">redisTemplate</span><span class="params">(RedisConnectionFactory cf)</span> </span>&#123;</span><br><span class="line">       RedisTemplate&lt;String, Product&gt; redis = <span class="keyword">new</span> RedisTemplate&lt;&gt;();</span><br><span class="line">       redis.setConnectionFactory(cf);</span><br><span class="line">       redis.setStringSerializer(<span class="keyword">new</span> StringRedisSerializer());</span><br><span class="line">       redis.setValueSerializer(<span class="keyword">new</span> Jackson2JsonRedisSerializer&lt;Product&gt;(Product<span class="class">.<span class="keyword">class</span>))</span>;</span><br><span class="line">       <span class="keyword">return</span> redis;</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
-
-</li>
-</ol>
-<h1 id="第十三章-缓存技术-切面实现"><a href="#第十三章-缓存技术-切面实现" class="headerlink" title="第十三章 缓存技术 (切面实现)"></a>第十三章 缓存技术 (切面实现)</h1><ul>
-<li>EhCache 跳过.</li>
-</ul>
-<p>1.声明缓存管理器</p>
-<ul>
-<li>RedisCacheManager :单个缓存管理器<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Configuration</span></span><br><span class="line"><span class="meta">@EnableCaching</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">CachingConfig</span> </span>&#123;</span><br><span class="line">    <span class="meta">@Bean</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> CacheManager <span class="title">cacheManager</span><span class="params">(RedisTemplate redisTemplate)</span></span>&#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> RedisCacheManager(redisTemplate);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></li>
-<li>多个缓存管理器:CompositeCacheManager<br>会迭代查找添加的各个缓存管理器.</li>
-</ul>
-<p>2.使用缓存<br>4个相关注解: // 可用于类或方法级别.</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">@Cacheable : 先找之前缓存的值,没有则调用.</span><br><span class="line">@CachePut :  只是放到缓存里,始终调用. &#x2F;&#x2F; 一般用于save方法.</span><br><span class="line">@CacheEvict : 清除n个缓存</span><br><span class="line">@Caching : 分组</span><br></pre></td></tr></table></figure>
-
-<p><code>@CachePut</code>:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@CachePut</span>(value=<span class="string">"spittleCache"</span>, key=<span class="string">"#result.id"</span>)</span><br><span class="line">  <span class="function">Spittle <span class="title">save</span><span class="params">(Spittle spittle)</span></span>;</span><br></pre></td></tr></table></figure>
-
-<ul>
-<li><p>条件缓存:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Cacheable</span>(value=<span class="string">"spittleCache"</span></span><br><span class="line">unless=<span class="string">"#result.message.contains('Nocache')"</span></span><br><span class="line">condition=<span class="string">"#id &gt;= 10"</span></span><br><span class="line"><span class="function">Spittle <span class="title">findOne</span><span class="params">(Long id)</span></span>;</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>移除缓存:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@CacheEvict</span>(<span class="string">"spittleCache"</span>)</span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">remove</span><span class="params">(<span class="keyword">long</span> spittleid)</span></span>;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>组合缓存操作:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Caching</span>(   <span class="comment">// 增加id查找,email查找,username查找的缓存</span></span><br><span class="line">        put = &#123;  </span><br><span class="line">                <span class="meta">@CachePut</span>(value = <span class="string">"user"</span>, key = <span class="string">"#user.id"</span>),  </span><br><span class="line">                <span class="meta">@CachePut</span>(value = <span class="string">"user"</span>, key = <span class="string">"#user.username"</span>),  </span><br><span class="line">                <span class="meta">@CachePut</span>(value = <span class="string">"user"</span>, key = <span class="string">"#user.email"</span>)  </span><br><span class="line">        &#125;  </span><br><span class="line">)  </span><br><span class="line"><span class="function"><span class="keyword">public</span> User <span class="title">save</span><span class="params">(User user)</span> </span>&#123;...&#125;;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>自定义注解:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Caching</span>(  </span><br><span class="line">        put = &#123;  </span><br><span class="line">                <span class="meta">@CachePut</span>(value = <span class="string">"user"</span>, key = <span class="string">"#user.id"</span>),  </span><br><span class="line">                <span class="meta">@CachePut</span>(value = <span class="string">"user"</span>, key = <span class="string">"#user.username"</span>),  </span><br><span class="line">                <span class="meta">@CachePut</span>(value = <span class="string">"user"</span>, key = <span class="string">"#user.email"</span>)  </span><br><span class="line">        &#125;  </span><br><span class="line">)  </span><br><span class="line"><span class="meta">@Target</span>(&#123;ElementType.METHOD, ElementType.TYPE&#125;)  </span><br><span class="line"><span class="meta">@Retention</span>(RetentionPolicy.RUNTIME)  </span><br><span class="line"><span class="meta">@Inherited</span>  </span><br><span class="line"><span class="keyword">public</span> <span class="meta">@interface</span> UserSaveCache &#123;  </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-</li>
-</ul>
-<h1 id="第十四章-保护方法应用"><a href="#第十四章-保护方法应用" class="headerlink" title="第十四章 保护方法应用"></a>第十四章 保护方法应用</h1><ol>
-<li>保护方法调用 // SecuredConfig</li>
-<li>使用表达式定义安全规则 //JSR250Config</li>
-<li>创建安全表达式计算器 //  ExpressionSecurityConfig<br>详见源码chapter_14.<br>配置上:<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@EnableGlobalMethodSecurity</span>(securedEnabled=<span class="keyword">true</span>)</span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">SecuredConfig</span> <span class="keyword">extends</span> <span class="title">GlobalMethodSecurityConfiguration</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">  <span class="meta">@Override</span></span><br><span class="line">  <span class="function"><span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">configure</span><span class="params">(AuthenticationManagerBuilder auth)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">    auth</span><br><span class="line">    .inMemoryAuthentication()</span><br><span class="line">      .withUser(<span class="string">"user"</span>).password(<span class="string">"password"</span>).roles(<span class="string">"USER"</span>);</span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
-相关注解:<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">@PreAuthorize 方法调用之前,用表达式限制调用</span><br><span class="line">@PostAuthorize 方法调用之后,检查表达式,抛出异常</span><br><span class="line">@PostFilter 允许方法调用,按表达式过滤结果</span><br><span class="line">@PreFilter 允许方法调用,按表达式过滤输入值</span><br></pre></td></tr></table></figure>
-
-</li>
-</ol>
-<p>service:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Secured</span>(&#123;<span class="string">"ROLE_SPITTER"</span>, <span class="string">"ROLE_ADMIN"</span>&#125;)</span><br></pre></td></tr></table></figure>
-
-<h1 id="第十五章-远程调用"><a href="#第十五章-远程调用" class="headerlink" title="第十五章 远程调用"></a>第十五章 远程调用</h1><p>里头的RMI都是java的,不能跨语言.跳过.</p>
-<h1 id="第十六章-rest-api"><a href="#第十六章-rest-api" class="headerlink" title="第十六章 rest api"></a>第十六章 rest api</h1><ol>
-<li>内容协商 <code>Content negotiation</code>:选择一个能用的视图</li>
-<li>消息转化器 <code>Message conversion</code>:转换成客户端使用的形式</li>
-</ol>
-<h2 id="协商"><a href="#协商" class="headerlink" title="协商"></a>协商</h2><p>一维协商:// 只有视图名</p>
-<blockquote>
-<p>Controller返回 -&gt; 视图名 // 或void,原视图<br>-&gt; DispatcherServlet -&gt; 视图解析器. </p>
-</blockquote>
-<p>二维协商: // (视图名,内容类型)</p>
-<ul>
-<li><p><code>ContentNegotiatingViewResolver</code></p>
-<blockquote>
-<p>内容协商的两个步骤:<br>确定请求的媒体类型;<br>找到适合媒体类型的最佳视图.</p>
-</blockquote>
-</li>
-<li><p>确定请求的媒体类型:</p>
-</li>
-</ul>
-<p>1.查看url的文件后缀名.<br>2.使用Accept首部类型<br>3.使用默认类型.</p>
-<p>协商优点:<br>可以同时提供给人看的html和给客户端服务用的json. //重用controller<br>协商缺点:<br>客户端不能发送json或xml.<br>返回值是一个Model,也就是一个kv,比普通的多一层嵌套.</p>
-<h2 id="信息转换器"><a href="#信息转换器" class="headerlink" title="信息转换器"></a>信息转换器</h2><p>流程:<br>Accept头信息(application/json)<br>-&gt;处理方法返回的对象交给MappingJacksonHttpMessageConverter.<br>// 引入 Jackson JSON Processor库.</p>
-<p>Spring提供的HTTP信息转化器包括:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">AtomFeedHttpMessageConverter</span><br><span class="line">BufferedImages</span><br><span class="line">ByteArrayHttpMessageConverter</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
-
-<ul>
-<li><code>@ResponseBody</code>: 发送数据时使用转换器; 配合<code>produces</code><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@RequestMapping</span>(method=RequestMethod.GET, produces=<span class="string">"application/json"</span>)</span><br><span class="line">  <span class="function"><span class="keyword">public</span> List&lt;Spittle&gt; <span class="title">spittles</span><span class="params">(</span></span></span><br><span class="line"><span class="function"><span class="params">      @RequestParam(value=<span class="string">"max"</span>, defaultValue=MAX_LONG_AS_STRING)</span> <span class="keyword">long</span> max,</span></span><br><span class="line"><span class="function">      @<span class="title">RequestParam</span><span class="params">(value=<span class="string">"count"</span>, defaultValue=<span class="string">"20"</span>)</span> <span class="keyword">int</span> count) </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> spittleRepository.findSpittles(max, count);</span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure></li>
-<li><code>@RequestBody</code>: 接受数据时使用转换器. 配合<code>consumes</code><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@RequestMapping</span>(method=RequestMethod.POST, consumes=<span class="string">"application/json"</span>)</span><br><span class="line">  <span class="meta">@ResponseStatus</span>(HttpStatus.CREATED)</span><br><span class="line">  <span class="function"><span class="keyword">public</span> ResponseEntity&lt;Spittle&gt; <span class="title">saveSpittle</span><span class="params">(@RequestBody Spittle spittle, UriComponentsBuilder ucb)</span> </span>&#123;</span><br><span class="line">    Spittle saved = spittleRepository.save(spittle);</span><br><span class="line">    </span><br><span class="line">    HttpHeaders headers = <span class="keyword">new</span> HttpHeaders();</span><br><span class="line">    URI locationUri = ucb.path(<span class="string">"/spittles/"</span>)</span><br><span class="line">        .path(String.valueOf(saved.getId()))</span><br><span class="line">        .build()</span><br><span class="line">        .toUri();</span><br><span class="line">    headers.setLocation(locationUri);</span><br><span class="line">    </span><br><span class="line">    ResponseEntity&lt;Spittle&gt; responseEntity = <span class="keyword">new</span> ResponseEntity&lt;Spittle&gt;(saved, headers, HttpStatus.CREATED);</span><br><span class="line">    <span class="keyword">return</span> responseEntity;</span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
-
-
-</li>
-</ul>
-<ul>
-<li><code>@RestController</code>注解:<br>为所有方法增加@ResponseBody.方法的输入参数增加@RequestBody.<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@PathVariable</span> <span class="keyword">long</span> id</span><br><span class="line"><span class="comment">// 用路径中的&#123;id&#125;注入id; </span></span><br><span class="line"><span class="meta">@RequestParam</span>(value=<span class="string">"max"</span>, defaultValue=MAX_LONG_AS_STRING) <span class="keyword">long</span> max</span><br><span class="line"><span class="comment">// 用请求参数注入</span></span><br><span class="line"></span><br><span class="line"><span class="meta">@RequestMapping</span>(method=RequestMethod.POST, consumes=<span class="string">"application/json"</span>)</span><br><span class="line">  <span class="meta">@ResponseStatus</span>(HttpStatus.CREATED)</span><br><span class="line"> <span class="comment">// 详见chapter_16 spittr-api-message-converters源码项目</span></span><br></pre></td></tr></table></figure>
-
-</li>
-</ul>
-<h1 id="第十七章-异步消息"><a href="#第十七章-异步消息" class="headerlink" title="第十七章 异步消息"></a>第十七章 异步消息</h1><ul>
-<li>简介</li>
-<li>JMS java消息服务 略过</li>
-<li>AMQP 高级消息队列服务 (rabbitMQ)</li>
-<li>POJO</li>
-</ul>
-<h2 id="简介"><a href="#简介" class="headerlink" title="简介"></a>简介</h2><p>RMI是同步的,异步的只要投递完就返回.</p>
-<ol>
-<li>发送</li>
-</ol>
-<ul>
-<li>broker: 消息代理</li>
-<li>destination: 目的地</li>
-</ul>
-<p>dest分为两种:</p>
-<ul>
-<li>topic 主题,发布/订阅模型</li>
-<li>queue 队列,点对点模型</li>
-</ul>
-<h2 id="JMS"><a href="#JMS" class="headerlink" title="JMS"></a>JMS</h2><p>api规范.支持点对点和发布订阅.<br>//旧</p>
-<h2 id="AMQP"><a href="#AMQP" class="headerlink" title="AMQP"></a>AMQP</h2><p>高级MQ协议. 不但约束了api,还使不同实现之间可以合作.<br>加入了Exchange,Binding,解耦了队列,<br>可以灵活实现除了点对点\发布订阅以外的模型.</p>
-<p><code>Exchange</code>类型:</p>
-<ul>
-<li><p>Direct: </p>
-<blockquote>
-<p>判读消息和binding的key相等.<br>把消息路由到key相等的binding上.(binding的队列)</p>
-</blockquote>
-</li>
-<li><p>Topic:  </p>
-<blockquote>
-<p>判读消息key符合binding的通配符.<br>把消息路由到key匹配的binding上. </p>
-</blockquote>
-</li>
-<li><p>Headers: </p>
-<blockquote>
-<p>判断消息的headers与bingding参数匹配.</p>
-</blockquote>
-</li>
-<li><p>Fanout:</p>
-<blockquote>
-<p>无条件匹配. 广播到所有队列上.</p>
-</blockquote>
-</li>
-</ul>
-<p>默认会有一个没有名字的Direct Exchange, 所有队列都会绑定到这个Exchange上,并且routing key和队列名相同.</p>
-<p>使用rabbitTemplate时,如果不指定exchange<br>,就会发送到默认的exchange,也就是上面说的默认Direct Exchange. </p>
-<p>// 其他内容写入&lt;&lt; rabbitmq in action笔记 &gt;&gt; </p>
-<h1 id="第十八章-websocket"><a href="#第十八章-websocket" class="headerlink" title="第十八章 websocket"></a>第十八章 websocket</h1><p>与http同级.<br>持久连接和前端通信(浏览器).用http的话,服务端无法向客户端发消息.</p>
-<h1 id="1-直接使用websocket"><a href="#1-直接使用websocket" class="headerlink" title="1. 直接使用websocket"></a>1. 直接使用websocket</h1><p>前端: 使用ws://协议,或安全的wss://.<br>后端: 继承<code>AbstractWebSocketHandler</code>接口,引入依赖:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">compile &#39;org.springframework.boot:spring-boot-starter-websocket&#39;</span><br></pre></td></tr></table></figure>
-<p>为了防止浏览器不兼容的情况,使用sockjs:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">registry.addHandler(marcoHandler(), &quot;&#x2F;marco&quot;).withSockJS();</span><br></pre></td></tr></table></figure>
-<p>相应的,前端也引入sockjs库.</p>
-<h1 id="2-使用封装以后的STOMP"><a href="#2-使用封装以后的STOMP" class="headerlink" title="2. 使用封装以后的STOMP"></a>2. 使用封装以后的STOMP</h1><p>STOMP: Simple Text Oriented Messaging Protocol<br>简单文本的消息协议.<br>主要是加了个代理,消息流如下:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">两条消息,目的地分别为: &#x2F;app&#x2F;marco,&#x2F;topic&#x2F;polo</span><br><span class="line">&#x3D;&gt;请求通道</span><br><span class="line">&#x3D;&gt;&#x2F;app: 发送到 AnnotationMethodMessageHandler &#x3D;&gt; 代理通道</span><br><span class="line">  &#x2F;topic: SimpleBrokerMessageHandler</span><br><span class="line">  &#x2F;queue: SimpleBrokerMessageHandler</span><br><span class="line">&#x3D;&gt;响应通道</span><br></pre></td></tr></table></figure>
-<p>如果要二进制的,还有别的协议MQTT.</p>
-<h1 id="第十九章-邮件"><a href="#第十九章-邮件" class="headerlink" title="第十九章 邮件"></a>第十九章 邮件</h1><p>用qq邮箱代发即可,配置依赖以后,用springboot能自动获得相关bean,调用即可.不使用ssl的话需要配置:</p>
-<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">spring.mail.username:</span> <span class="string">xxx@qq.com</span></span><br><span class="line"><span class="attr">spring.mail.password:</span> <span class="string">password</span></span><br><span class="line"><span class="attr">spring.mail.port:</span> <span class="number">25</span> <span class="comment"># SSL  465</span></span><br><span class="line"><span class="attr">spring.mail.protocol:</span> <span class="string">smtp</span></span><br><span class="line"><span class="attr">spring.mail.host:</span> <span class="string">smtp.exmail.qq.com</span> <span class="comment"># smtp.qq.com </span></span><br><span class="line"><span class="attr">spring.mail.properties.mail.smtp.auth:</span> <span class="literal">true</span></span><br></pre></td></tr></table></figure>
-
-<h1 id="第二十章-使用JMX"><a href="#第二十章-使用JMX" class="headerlink" title="第二十章 使用JMX"></a>第二十章 使用JMX</h1><p>注册MBean到JMX中.<br>就试试Jconsole.</p>
-<h1 id="第二十一章-Springboot"><a href="#第二十一章-Springboot" class="headerlink" title="第二十一章 Springboot"></a>第二十一章 Springboot</h1><p>起步依赖具体引入了什么:</p>
-<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">spring-boot-starter-actuator=&gt;</span></span><br><span class="line"> <span class="string">spring-boot-starter</span></span><br><span class="line"><span class="string">,spring-boot-actuator</span></span><br><span class="line"><span class="string">,spring-core</span></span><br><span class="line"></span><br><span class="line"><span class="string">spring-boot-start-amqp=&gt;</span></span><br><span class="line"> <span class="string">spring-boot-start</span></span><br><span class="line"><span class="string">,spring-boot-rabbit</span></span><br><span class="line"><span class="string">,spring-core</span></span><br><span class="line"><span class="string">,spring-tx</span></span><br><span class="line"></span><br><span class="line"><span class="string">spring-boot-aop=&gt;</span></span><br><span class="line"> <span class="string">spring-boot-starter</span></span><br><span class="line"><span class="string">,spring-boot-aop</span></span><br><span class="line"><span class="string">,AspectJ</span> <span class="string">Runtime</span></span><br><span class="line"><span class="string">,AspectJ</span> <span class="string">Weaver</span></span><br><span class="line"><span class="string">,spring-core</span></span><br><span class="line"></span><br><span class="line"><span class="string">spring-boot-starter-batch</span></span><br><span class="line"> <span class="string">spring-boot-starter</span></span><br><span class="line"><span class="string">,HSQLDB</span></span><br><span class="line"><span class="string">,spring-jdbc</span></span><br><span class="line"><span class="string">,spring-batch-core</span></span><br><span class="line"><span class="string">,spring-core</span></span><br><span class="line"><span class="string">...</span> <span class="string">太多了,以后有需要再查吧.</span></span><br></pre></td></tr></table></figure>
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2017/10/24/spring%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0/" data-id="ck96cxpm0005dmaamask44c5c" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spring/" rel="tag">spring</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1191,23 +889,23 @@
       <ul>
         
           <li>
+            <a href="/2021/02/22/2021-02/%E5%A4%9A%E9%A1%B9%E7%9B%AE%E5%85%B1%E4%BA%AB%E4%BB%A3%E7%A0%81%E4%B9%8B%E2%80%94%E2%80%94git-subtree/">多项目共享代码之——git subtree</a>
+          </li>
+        
+          <li>
+            <a href="/2020/12/27/2020-12/%E8%B7%A8%E5%9F%9F%E7%9B%B8%E5%85%B3/">跨域相关</a>
+          </li>
+        
+          <li>
+            <a href="/2020/12/20/2020-12/%E7%BA%BF%E4%B8%8A%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-%E6%9F%A5%E7%9C%8B%E6%96%B9%E6%B3%95%E7%BA%A7%E8%80%97%E6%97%B6/">线上性能debug-查看方法级耗时</a>
+          </li>
+        
+          <li>
+            <a href="/2020/12/19/2020-12/%E5%8D%87%E7%BA%A7HTTP2%E7%AC%94%E8%AE%B0/">升级HTTP2笔记</a>
+          </li>
+        
+          <li>
             <a href="/2020/07/22/2020-07/ES%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0/">ES实战笔记</a>
-          </li>
-        
-          <li>
-            <a href="/2020/06/19/2020-06/tcp%E8%B0%83%E4%BC%98/">tcp调优</a>
-          </li>
-        
-          <li>
-            <a href="/2020/06/15/2020-06/jdk11%E4%B8%8Bg1%E6%94%B6%E9%9B%86%E5%99%A8%E4%BD%BF%E7%94%A8/">jdk11下g1收集器使用</a>
-          </li>
-        
-          <li>
-            <a href="/2020/06/08/2020-06/mysql%E5%8F%AF%E9%87%8D%E5%A4%8D%E8%AF%BB%E4%B8%8B%E7%94%A8for-update%E5%AF%BC%E8%87%B4%E7%9A%84%E6%AD%BB%E9%94%81/">mysql可重复读下用for update导致的死锁</a>
-          </li>
-        
-          <li>
-            <a href="/2020/05/05/2020-05/BeanCopier%E6%B5%8B%E8%AF%84%E6%8A%A5%E5%91%8A/">BeanCopier测评报告</a>
           </li>
         
       </ul>
@@ -1225,7 +923,7 @@
   
   <div class="outer">
     <div id="footer-left">
-      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      &copy; 2014 - 2021 风梦七&nbsp;|&nbsp;
       主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
     </div>
      <div id="footer-right">

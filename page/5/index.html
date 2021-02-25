@@ -72,6 +72,378 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-04/spark中RDD，Dataframe，DataSet区别对比" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/04/29/2019-04/spark%E4%B8%ADRDD%EF%BC%8CDataframe%EF%BC%8CDataSet%E5%8C%BA%E5%88%AB%E5%AF%B9%E6%AF%94/" class="article-date">
+  <time datetime="2019-04-29T02:16:54.000Z" itemprop="datePublished">2019-04-29</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/spark/">spark</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/04/29/2019-04/spark%E4%B8%ADRDD%EF%BC%8CDataframe%EF%BC%8CDataSet%E5%8C%BA%E5%88%AB%E5%AF%B9%E6%AF%94/">spark中RDD，Dataframe，DataSet区别对比</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="RDD，Dataframe，DataSet的定义"><a href="#RDD，Dataframe，DataSet的定义" class="headerlink" title="RDD，Dataframe，DataSet的定义"></a>RDD，Dataframe，DataSet的定义</h1><p><code>RDD</code>: immutable、spark的基础数据集。底层api； 1.0+, 存放java/scala对象;<br><code>Dataframe</code>: immutable、多了列名、Catalyst优化。高级api;  1.3+, 存放row对象;(有列名)<br><code>Dataset</code>: 比Dataframe多类型安全。高级api。 1.6+, 存放java/scala对象(暴露更多信息给编译期)<br>可以理解成DataSet每行存一个大对象。（比如样例中的<code>DataSet[Person]</code>）</p>
+<p>DataSet一般比DataFrame慢一点点，多了类型安全的开销（<code>Row</code>=&gt;<code>Java类型</code>）</p>
+<h2 id="这里说的类型安全是什么？"><a href="#这里说的类型安全是什么？" class="headerlink" title="这里说的类型安全是什么？"></a>这里说的类型安全是什么？</h2><blockquote>
+<p>是编译期类型安全</p>
+</blockquote>
+<p>Dataframe: 访问不存在的列名=&gt;运行时报错; （非类型安全）<br>DataSet:   访问不存在的列名=&gt;编译时报错。 （类型安全）</p>
+<p>DataSet的中每个元素都是case class之类的,完全定义类型的,因此编译时就能确定schema合法性。</p>
+<p><code>Dataset[Row]</code> = <code>DataFrame</code><br>因此Row可以看做非编译期类型安全的对象。</p>
+<h2 id="java-scala对象-lt-gt-DataFrame的row对象-DataSet的元素"><a href="#java-scala对象-lt-gt-DataFrame的row对象-DataSet的元素" class="headerlink" title="java/scala对象 &lt;=&gt; DataFrame的row对象/DataSet的元素:"></a>java/scala对象 &lt;=&gt; DataFrame的row对象/DataSet的元素:</h2><ol>
+<li>对于dataframe: 传入StructType;</li>
+<li>对于dataSet:  使用Encoder。 </li>
+</ol>
+<p>类似于hive的反序列化:</p>
+<h3 id="hive反序列化原理"><a href="#hive反序列化原理" class="headerlink" title="hive反序列化原理:"></a>hive反序列化原理:</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">HDFS files –&gt; InputFileFormat –&gt; &lt;key, value&gt; –&gt; Deserializer –&gt; Row object</span><br></pre></td></tr></table></figure>
+<h3 id="hive序列化原理-Serialize"><a href="#hive序列化原理-Serialize" class="headerlink" title="hive序列化原理(Serialize):"></a>hive序列化原理(<code>Serialize</code>):</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Row object –&gt; Serializer –&gt; &lt;key, value&gt; –&gt; OutputFileFormat –&gt; HDFS files</span><br></pre></td></tr></table></figure>
+
+<p><code>Encoder</code>: <code>Dataset[Row]</code> -&gt; <code>Dataset[T]</code><br>JVM对象和非堆自定义内存二进制数据<br>Encoders生成二进制代码来跟非堆数据交互，并且提供有需访问给独立的参数而不是对整个对象反序列化。</p>
+<h1 id="优化"><a href="#优化" class="headerlink" title="优化"></a>优化</h1><p>RDD: 没有优化, 程序员自己保证RDD运算是最优的;<br>DataFrame: 走catalyst编译优化,类似于Sql的优化。根据成本模型，逻辑执行计划优化成物理执行计划。<br>DataSet: 同DataFrame. </p>
+<p>强调一点,DataFrame底层也是用的RDD实现，因此如果程序员足够牛逼，理论上执行计划能写得比DataFrame的计划好。</p>
+<h1 id="序列化"><a href="#序列化" class="headerlink" title="序列化"></a>序列化</h1><p>shuffle的时候、或者cache写内存、磁盘的时候，需要序列化。</p>
+<p><code>RDD</code>: 使用java序列化(或者kryo)成二进制; (成本高)<br><code>DataFrame</code>: Tungsten计划优化。序列化到堆外内存，然后无须反序列化，直接根据schema操作二进制运算。(因为DataFrame比RDD多一个schema信息)<br><a href="https://github.com/hustnn/TungstenSecret" target="_blank" rel="noopener">https://github.com/hustnn/TungstenSecret</a><br><code>DataSet</code>: 基本同DataFrame，多了Encoder的概念。访问某列的时候，可以只反序列化那个局部的二进制。</p>
+<h2 id="Tungsten-binary-format"><a href="#Tungsten-binary-format" class="headerlink" title="Tungsten binary format"></a>Tungsten binary format</h2><p>钨丝计划使用的二进制格式</p>
+<h1 id="垃圾收集"><a href="#垃圾收集" class="headerlink" title="垃圾收集"></a>垃圾收集</h1><p>RDD: 由于上一节中的序列化，gc压力较大；<br>DataFrame: 放堆外内存，无需jvm对象头开销，无gc；<br>DataSet: 同df.</p>
+<h1 id="钨丝计划的秘密："><a href="#钨丝计划的秘密：" class="headerlink" title="钨丝计划的秘密："></a>钨丝计划的秘密：</h1><p><a href="https://github.com/hustnn/TungstenSecret" target="_blank" rel="noopener">https://github.com/hustnn/TungstenSecret</a></p>
+<p>总结一下钨丝计划的3大优化：</p>
+<ol>
+<li>内存管理、直接操作二进制数据：放堆外内存(避免gc开销)，不用jvm对象(减少对象头开销)。</li>
+<li>缓存友好的计算: 考虑存储体系;(flink也有) 对指针排序，根据schema访问key的二进制。(估计key只能是原生类型，其他类就得反序列化了)</li>
+<li>code generation：充分利用最新的编译期和cpu性能：把jvm对象转到堆外unsafeRow，以便利用第一点。</li>
+</ol>
+<p>比如8B的String的对象头有40B开销。<br>UnsafeShuffleManager： 直接在serialized binary data上sort而不是java objects</p>
+<h2 id="wholeStageCodeGen"><a href="#wholeStageCodeGen" class="headerlink" title="wholeStageCodeGen"></a>wholeStageCodeGen</h2><p>把transform的很多步骤，合并成一个步骤，使用字符串插值生成一份重写后的代码(逼近于手写最优解)，然后用Janino(微型运行时嵌入式java编译器)编译成字节码。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/04/29/2019-04/spark%E4%B8%ADRDD%EF%BC%8CDataframe%EF%BC%8CDataSet%E5%8C%BA%E5%88%AB%E5%AF%B9%E6%AF%94/" data-id="ck96cxppo00i6maam8bk2eis5" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spark/" rel="tag">spark</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-04/spark中的encoder" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/04/27/2019-04/spark%E4%B8%AD%E7%9A%84encoder/" class="article-date">
+  <time datetime="2019-04-27T03:23:26.000Z" itemprop="datePublished">2019-04-27</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/spark/">spark</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/04/27/2019-04/spark%E4%B8%AD%E7%9A%84encoder/">spark中的encoder</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>参考资料:<br><a href="https://stackoverflow.com/questions/53949497/why-a-encoder-is-needed-for-creating-dataset-in-spark" target="_blank" rel="noopener">https://stackoverflow.com/questions/53949497/why-a-encoder-is-needed-for-creating-dataset-in-spark</a><br><code>It also uses less memory than Kryo/Java serialization.</code></p>
+<h1 id="What-Encoder是啥"><a href="#What-Encoder是啥" class="headerlink" title="What: Encoder是啥?"></a>What: Encoder是啥?</h1><p>所有<code>DataSet</code>都需要<code>Encoder</code>。</p>
+<p><code>Encoder</code>是spark-sql用来序列化/反序列化的一个类。主要用于<code>DataSet</code>。<br>本质上每次调用<code>toDS()</code>函数的时候都调用了<code>Encoder</code>，不过有时候我们察觉不到，因为用了隐式调用(<code>import spark.implicits._</code>)。<br>可以直接看<code>Encoder</code>源码注释中的样例:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">import spark.implicits._</span><br><span class="line">val ds &#x3D; Seq(1, 2, 3).toDS() &#x2F;&#x2F; implicitly provided (spark.implicits.newIntEncoder)</span><br><span class="line">&#x2F;&#x2F; 将数字(JVM对象)转换为DataSet中的元素</span><br><span class="line">&#x2F;&#x2F; 这里由于是常见的原始类型，所以spark提供了隐式encoder的调用，隐藏了这些细节。</span><br></pre></td></tr></table></figure>
+<p>Encoder将jvm转换为堆外内存二进制，使用成员位置信息，降低反序列化的范围（反序列化需要的列即可）。<br>// (类似于Hive中的反序列化,把kv转换为row)</p>
+<p>Encoder不要求线程安全。</p>
+<h1 id="Why-为啥用Encoder"><a href="#Why-为啥用Encoder" class="headerlink" title="Why: 为啥用Encoder?"></a>Why: 为啥用Encoder?</h1><p>stackoverflow上说encoder消耗更少的内存。因为kryo把<code>dataSet</code>中的所有行都变成了一个打平的二进制对象。<br><code>10x faster than Kryo serialization (Java serialization orders of magnitude slower)</code><br>DataFrame本质上是DataSet[Row]，用的固定是RowEncoder，所以不需要传Encoder。<br>Encoder底层是钨丝计划的堆外内存优化，节省了jvm对象头、反序列化、gc的开销。</p>
+<h1 id="When-啥时候使用Encoder"><a href="#When-啥时候使用Encoder" class="headerlink" title="When: 啥时候使用Encoder"></a>When: 啥时候使用Encoder</h1><p><code>Encoder</code>适用于原始类型、case class对象(因为有默认的apply/unapply方法)、spark-sql类型。</p>
+<p>Encoder支持的类型非常多，不支持的情况：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. 如果类型是javabean，类的成员如果是容器，只能是List，不能是其他容器（还没有实现）;</span><br><span class="line">2. 不支持大于5的Tuple；</span><br><span class="line">3. 不支持&#96;Option&#96;；</span><br><span class="line">4. 不支持&#96;null&#96;值的&#96;case class&#96;。</span><br></pre></td></tr></table></figure>
+<p>不支持的时候，可以把不支持的部分用kyro-Encoder，相当于不支持的部分直接当做一个二进制，不享受优化，但其他不支持部分可以享受优化。</p>
+<h1 id="How-怎么使用Encoder"><a href="#How-怎么使用Encoder" class="headerlink" title="How: 怎么使用Encoder:"></a>How: 怎么使用Encoder:</h1><p>显式： 使用<code>Encoders</code>类(类似于utils)的静态工厂方法;<br>隐式：<code>import spark.implicits._</code>: 原始类型和<code>Product</code>类型(也就是<code>case class</code>)可以直接隐式支持。</p>
+<h2 id="1-创建DataSet时显式使用"><a href="#1-创建DataSet时显式使用" class="headerlink" title="1. 创建DataSet时显式使用:"></a>1. 创建DataSet时显式使用:</h2><p>源码注释中的样例:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// eg1: String:</span></span><br><span class="line">List&lt;String&gt; data = Arrays.asList(<span class="string">"abc"</span>, <span class="string">"abc"</span>, <span class="string">"xyz"</span>);</span><br><span class="line">Dataset&lt;String&gt; ds = context.createDataset(data, Encoders.STRING());</span><br><span class="line"><span class="comment">// eg2: 复合Tuple:</span></span><br><span class="line">Encoder&lt;Tuple2&lt;Integer, String&gt;&gt; encoder2 = Encoders.tuple(Encoders.INT(), Encoders.STRING());</span><br><span class="line">List&lt;Tuple2&lt;Integer, String&gt;&gt; data2 = Arrays.asList(<span class="keyword">new</span> scala.Tuple2(<span class="number">1</span>, <span class="string">"a"</span>);</span><br><span class="line">Dataset&lt;Tuple2&lt;Integer, String&gt;&gt; ds2 = context.createDataset(data2, encoder2);</span><br></pre></td></tr></table></figure>
+<h2 id="2-创建DataSet时隐式使用"><a href="#2-创建DataSet时隐式使用" class="headerlink" title="2. 创建DataSet时隐式使用:"></a>2. 创建DataSet时隐式使用:</h2><p>看createDataset的签名:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">def createDataset[T](data: RDD[T])(implicit arg0: Encoder[T]): Dataset[T]</span><br><span class="line">&#x2F;&#x2F; Creates a Dataset from an RDD of a given type.</span><br></pre></td></tr></table></figure>
+<p>所以Encoder其实可以隐式传:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">import spark.implicits._</span><br><span class="line">val ds &#x3D; Seq(1, 2, 3).toDS() &#x2F;&#x2F; implicitly provided</span><br></pre></td></tr></table></figure>
+<h2 id="3-UDAF中使用"><a href="#3-UDAF中使用" class="headerlink" title="3. UDAF中使用:"></a>3. UDAF中使用:</h2><p><a href="https://github.com/apache/spark/blob/master/examples/src/main/scala/org/apache/spark/examples/sql/UserDefinedTypedAggregation.scala" target="_blank" rel="noopener">https://github.com/apache/spark/blob/master/examples/src/main/scala/org/apache/spark/examples/sql/UserDefinedTypedAggregation.scala</a></p>
+<p>当我们为<code>DataSet</code>定义<code>UDAF</code>的使用。<br>语义上: 因为涉及到数据转换，不可避免地会需要使用<code>Encoder</code>，这个时候是显式使用。<br>语法上: 由于继承了<code>Aggregator</code>也必须使用<code>Encoder</code>。</p>
+<h2 id="源码阅读"><a href="#源码阅读" class="headerlink" title="源码阅读"></a>源码阅读</h2><h3 id="Encoder"><a href="#Encoder" class="headerlink" title="Encoder"></a>Encoder</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">trait Encoder[T] extends Serializable &#123;</span><br><span class="line">  &#x2F;** Returns the schema of encoding this type of object as a Row. *&#x2F;</span><br><span class="line">  def schema: StructType</span><br><span class="line">  &#x2F;**</span><br><span class="line">   * A ClassTag that can be used to construct and Array to contain a collection of &#96;T&#96;.*&#x2F;</span><br><span class="line">  def clsTag: ClassTag[T]</span><br><span class="line">  &#x2F;&#x2F; 存了ClassTag的话，就能在运行时构建泛型的数组了。</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>TypeTag</code>: 相当于scala以前的<code>Manifest</code>,用于存储泛型参数的实际类型。(泛型参数的实际类型运行时会被JVM擦除，有了<code>TypeTag</code>就能在运行时获得实际类型了)<br><code>ClassTag</code>: 相当于scala以前的<code>ClassManifest</code>,功能大致同上，但存得少些，比如如果是泛型的泛型，参数是泛型数组<code>List[T]</code>,<code>TypeTag</code>能全部存下，<code>ClassTag</code>就存一个<code>List</code>。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">classTag[List[Int]]</span><br><span class="line">&#x2F;&#x2F;scala.reflect.ClassTag[List[Int]] &#x3D;↩</span><br><span class="line">&#x2F;&#x2F;        ClassTag[class scala.collection.immutable.List]</span><br><span class="line">typeTag[List[Int]]</span><br><span class="line">&#x2F;&#x2F;</span><br><span class="line">&#x2F;&#x2F; reflect.runtime.universe.TypeTag[List[Int]] &#x3D; TypeTag[scala.List[Int]]</span><br></pre></td></tr></table></figure>
+
+
+<h2 id="ExpressionEncoder"><a href="#ExpressionEncoder" class="headerlink" title="ExpressionEncoder"></a>ExpressionEncoder</h2><p>Encoder的内置唯一实现类。<br><code>jvm对象&lt;=&gt;内部行格式</code>: 钨丝计划unsafeRow、expressions提取case class的变量名。<br>可以支持Tupple但不支持<code>Option</code>和<code>和null</code>值的<code>case class</code>。</p>
+<p>它会生成变量名name和位置的绑定，以便钨丝计划的<code>code gen</code>使用<code>unsafe row</code>.<br>Tupple最多到5.</p>
+<p><code>Serializer</code>: raw object=&gt;InternalRow, 用expression解析提取对象值；<br><code>Deserializer</code>: InternalRow=&gt;raw object,用expression构造对象。<br>因为unsafeRow是二进制存放在堆外，所以转换成row看做序列化。</p>
+<h3 id="Encoders"><a href="#Encoders" class="headerlink" title="Encoders"></a>Encoders</h3><p>(注意比Encoder多一个s)<br>提供了很多静态工厂方法获得Encoder(实际上目前获得的都是<code>ExpressionEncoder</code>)<br>大致可以分为几类:</p>
+<ol>
+<li>java原始类型:  <code>Encoders.BOOLEAN</code>等</li>
+<li>scala原始类型: <code>Encoders.scalaBoolean</code>等.(多一个scala前缀)</li>
+<li>javaBean类型: <code>bean[T](beanClass: Class[T])</code>。但目前成员只支持List容器，不支持其他的容器。支持原始类型或嵌套javaBean。</li>
+<li>kryo序列化类型: <code>kryo[T: ClassTag]</code>；</li>
+<li>java序列化类型: <code>javaSerialization[T: ClassTag]</code>；</li>
+<li>Tuple类型: 从Tuple2到Tuple5.</li>
+<li>Product类型: 也就是<code>case class</code>.</li>
+</ol>
+<p>其中前三种是直接调用<code>ExpressionEncoder</code>，第四第五种本质上是间接调用了<code>ExpressionEncoder</code>:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">ExpressionEncoder[T](</span><br><span class="line">      schema &#x3D; new StructType().add(&quot;value&quot;, BinaryType),</span><br><span class="line">      flat &#x3D; true,</span><br><span class="line">      serializer &#x3D; Seq(</span><br><span class="line">        EncodeUsingSerializer(</span><br><span class="line">          BoundReference(0, ObjectType(classOf[AnyRef]), nullable &#x3D; true), kryo &#x3D; useKryo)),</span><br><span class="line">      deserializer &#x3D;</span><br><span class="line">        DecodeUsingSerializer[T](</span><br><span class="line">          Cast(GetColumnByOrdinal(0, BinaryType), BinaryType),</span><br><span class="line">          classTag[T],</span><br><span class="line">          kryo &#x3D; useKryo),</span><br><span class="line">      clsTag &#x3D; classTag[T]</span><br><span class="line">    )</span><br></pre></td></tr></table></figure>
+<p>因此第四第五后两种序列化本质上是把整个对象看做一个二进制类型，不利于后续优化和减少反序列化。</p>
+<p>原始类型还包括:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">java的:</span><br><span class="line">byte,short,int,long,float,double,java.math.BigDecimal,java.sql.Date,java.sql.Timestamp</span><br><span class="line">scala的:</span><br><span class="line">Array[Byte],byte,short,int,long,float,double</span><br></pre></td></tr></table></figure>
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/04/27/2019-04/spark%E4%B8%AD%E7%9A%84encoder/" data-id="ck96cxppp00i9maam5qixbnbe" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spark/" rel="tag">spark</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-04/2019年的人们如何生成HTTPS证书" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/04/14/2019-04/2019%E5%B9%B4%E7%9A%84%E4%BA%BA%E4%BB%AC%E5%A6%82%E4%BD%95%E7%94%9F%E6%88%90HTTPS%E8%AF%81%E4%B9%A6/" class="article-date">
+  <time datetime="2019-04-14T11:59:09.000Z" itemprop="datePublished">2019-04-14</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/http/">http</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/04/14/2019-04/2019%E5%B9%B4%E7%9A%84%E4%BA%BA%E4%BB%AC%E5%A6%82%E4%BD%95%E7%94%9F%E6%88%90HTTPS%E8%AF%81%E4%B9%A6/">2019年的人们如何生成HTTPS证书</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>由于配置相关的教程总是有年限限制，过期就不能用了，本教程至少保证2019.4.14还可用。<br>环境: centos,nginx,chrome<br>备注: 可以避免chrome的<code>NET::ERR_CERT_COMMON_NAME_INVALID</code>错误。</p>
+<p><strong>摘要</strong></p>
+<blockquote>
+<p>从HTTP升级到HTTPS: 用openssl命令创建本地的CA,然后自签证书，然后配置到nginx中，最后信任一下本地CA即可。</p>
+</blockquote>
+<h1 id="需求"><a href="#需求" class="headerlink" title="需求"></a>需求</h1><p>从HTTP协议升级到HTTPS。<br>用HTTPS可以防止会话内容被拦截解析,同时防止中间人攻击，防止他人伪装称你的网站，欺骗你的客户。<br>SSL协议的详细含义可以参见:<br><a href="https://xiaoyue26.github.io/2018/09/26/2018-09/%E9%80%9A%E4%BF%97%E7%90%86%E8%A7%A3SSL-TLS%E5%8D%8F%E8%AE%AE%E5%8C%BA%E5%88%AB%E4%B8%8E%E5%8E%9F%E7%90%86/">https://xiaoyue26.github.io/2018/09/26/2018-09/%E9%80%9A%E4%BF%97%E7%90%86%E8%A7%A3SSL-TLS%E5%8D%8F%E8%AE%AE%E5%8C%BA%E5%88%AB%E4%B8%8E%E5%8E%9F%E7%90%86/</a></p>
+<h1 id="现有架构"><a href="#现有架构" class="headerlink" title="现有架构"></a>现有架构</h1><p>请求=&gt;nginx服务器=&gt;后端网站服务</p>
+<h1 id="改造思路-原理"><a href="#改造思路-原理" class="headerlink" title="改造思路/原理"></a>改造思路/原理</h1><p>原理上只需要让nginx负责SSL协议的部分即可，不需要动后端网站服务。<br>客户端发送HTTPS请求到nginx服务器，nginx服务器转发HTTP请求到后端网站服务。<br>（封装的思想，上层变动对底层HTTP服务透明）<br><strong>HTTPS中断、TLS中断：</strong><br>nginx直接负责搞定ssl部分，netty等后端服务只需要负责http部分就好了。<br>如果依赖nginx的话，netty的SslHandler什么的都可以废掉了XD</p>
+<p>所以我们只需要关心架构中的前半部分:<br>请求=&gt;nginx服务器</p>
+<p>再分解一下这部分的话:<br>用户=&gt;浏览器(chrome)==https请求=&gt;nginx服务器</p>
+<p><strong>整个架构中我们需要修改的部分:</strong></p>
+<ol>
+<li>nginx配置. </li>
+</ol>
+<p>是的，就这么一项。所以改造成本很低。<br>当然了，如果不想花钱买官方CA证书的话，也就是自己弄一个CA, 然后给自己的网站颁发证书的话，还需要改动用户浏览器的信任CA，那么需要修改的部分就增加一项了:</p>
+<ol>
+<li>nginx配置;</li>
+<li>用户浏览器信任CA。 </li>
+</ol>
+<p>这里的证书、CA是个啥概念呢？<br>证书: 就好比我们网站的身份证；<br>CA  : 就好比派发身份证的派出所。<br>本质上是一个信任传递、担保的过程，用户浏览器会默认信任几个官方的CA，只要官方CA承认的网站，信任传递一下，用户就可以也信任了。<br>参见下图可以通过chrome右键”检查”的<code>security</code>面板查看证书的详细信息。</p>
+<img src="/images/2019-04/ca.png" class="" width="800" height="1200" title="ca">
+
+<p>所以如果花钱让官方CA帮我们签发证书的话，用户可以直接默认信任我们的证书；<br>而如果我们自己弄的CA的话，好比自己开的黑作坊，用户不可能直接信任黑作坊签发的身份证的，就需要修改用户浏览器配置了，加入我们的私人CA证书。</p>
+<h1 id="公网HTTPS"><a href="#公网HTTPS" class="headerlink" title="公网HTTPS"></a>公网HTTPS</h1><h2 id="生成数字证书"><a href="#生成数字证书" class="headerlink" title="生成数字证书"></a>生成数字证书</h2><p>可以参考:<br><a href="http://www.ruanyifeng.com/blog/2016/08/migrate-from-http-to-https.html" target="_blank" rel="noopener">http://www.ruanyifeng.com/blog/2016/08/migrate-from-http-to-https.html</a><br>从<br><a href="https://www.gogetssl.com/" target="_blank" rel="noopener">https://www.gogetssl.com/</a><br><a href="https://www.ssls.com/" target="_blank" rel="noopener">https://www.ssls.com/</a><br><a href="https://sslmate.com/" target="_blank" rel="noopener">https://sslmate.com/</a><br>购买SSL证书。</p>
+<p>免费的:<br><a href="https://certbot.eff.org/" target="_blank" rel="noopener">https://certbot.eff.org/</a><br>可以用这个工具，选择转发服务器和操作系统，生成证书:<br><a href="https://certbot.eff.org/lets-encrypt" target="_blank" rel="noopener">https://certbot.eff.org/lets-encrypt</a></p>
+<h2 id="配置nginx"><a href="#配置nginx" class="headerlink" title="配置nginx"></a>配置nginx</h2><p>把原来nginx配置中的:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">listen       80;</span><br></pre></td></tr></table></figure>
+<p>改成:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">listen 443 ssl;</span><br><span class="line">ssl_certificate &#x2F;usr&#x2F;local&#x2F;nginx&#x2F;ssl&#x2F;private&#x2F;server.crt;</span><br><span class="line">ssl_certificate_key &#x2F;usr&#x2F;local&#x2F;nginx&#x2F;ssl&#x2F;private&#x2F;device.key;</span><br></pre></td></tr></table></figure>
+<p>这里的service.crt就是数字证书了。<br>如果要支持http和https同时可以访问，就把<code>listen 80</code>再加上。</p>
+<p>如果要强制https，即使访问了http也强制跳转https(一般都需要这样搞),可以增加rewrite配置:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">server &#123;</span><br><span class="line">        listen       80;</span><br><span class="line">        server_name localhost;</span><br><span class="line">        rewrite ^(.*) https:&#x2F;&#x2F;$server_name$1 permanent;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h1 id="局域网HTTPS"><a href="#局域网HTTPS" class="headerlink" title="局域网HTTPS"></a>局域网HTTPS</h1><p>公网https起码要买个域名,买个服务器(阿里云),如果只是局域网玩玩、或者自签证书,可以如下操作:</p>
+<ol>
+<li>本地生成一个CA;</li>
+<li>用这个CA给自己网站的数字证书签名，生成网站数字证书;</li>
+<li>修改nginx配置;</li>
+<li>配置用户chrome信任第一步中的CA。</li>
+</ol>
+<p>可以看出多了1，2两步来生成证书,代替购买证书;<br>多了第4步来强制用户信任非官方CA.</p>
+<h2 id="1-本地生成CA"><a href="#1-本地生成CA" class="headerlink" title="1. 本地生成CA"></a>1. 本地生成CA</h2><p>找个干净的目录开始操作:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">openssl genrsa -des3 -out rootCA.key 2048</span><br><span class="line">openssl req -x509 -new -nodes -key rootCA.key -sha256 -days 1024 -out rootCA.pem</span><br></pre></td></tr></table></figure>
+<p>里面可以填下密码，email地址和ca的名字。其他的可以留空。</p>
+<p>第一条命令: 生成本地CA的密钥<code>rootCA.key</code>(要记住你设置的密码,比如我的是<code>staythenight</code>)；<br>第二条命令: 用这个密钥进行签名，生成一张CA的证书<code>rootCA.pem</code>.<br>(这里设置的过期时间为1024天).</p>
+<h2 id="2-生成网站数字证书-用这个CA给自己网站的数字证书签名"><a href="#2-生成网站数字证书-用这个CA给自己网站的数字证书签名" class="headerlink" title="2. 生成网站数字证书(用这个CA给自己网站的数字证书签名)"></a>2. 生成网站数字证书(用这个CA给自己网站的数字证书签名)</h2><p>为了避免chrome的<code>NET::ERR_CERT_COMMON_NAME_INVALID</code>错误，需要在网站证书里填一些额外的信息。<br>首先创建文件<code>server.csr.cnf</code>:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">[req]</span><br><span class="line">default_bits &#x3D; 2048</span><br><span class="line">prompt &#x3D; no</span><br><span class="line">default_md &#x3D; sha256</span><br><span class="line">distinguished_name &#x3D; dn</span><br><span class="line"></span><br><span class="line">[dn]</span><br><span class="line">C&#x3D;US</span><br><span class="line">ST&#x3D;RandomState</span><br><span class="line">L&#x3D;RandomCity</span><br><span class="line">O&#x3D;RandomOrganization</span><br><span class="line">OU&#x3D;RandomOrganizationUnit</span><br><span class="line">emailAddress&#x3D;296671657@qq.com # 修改成自己的email</span><br><span class="line">CN &#x3D; kandiandata.oa.com # 修改成自己的域名</span><br></pre></td></tr></table></figure>
+
+<p>然后创建文件<code>v3.ext</code>:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">authorityKeyIdentifier&#x3D;keyid,issuer</span><br><span class="line">basicConstraints&#x3D;CA:FALSE</span><br><span class="line">keyUsage &#x3D; digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment</span><br><span class="line">subjectAltName &#x3D; @alt_names</span><br><span class="line"></span><br><span class="line">[alt_names]</span><br><span class="line">DNS.1 &#x3D; kandiandata.oa.com # 修改成自己的域名</span><br><span class="line">DNS.2 &#x3D; localhost</span><br></pre></td></tr></table></figure>
+
+<p>创建证书:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">openssl req -new -sha256 -nodes -out server.csr -newkey rsa:2048 -keyout device.key -config server.csr.cnf</span><br><span class="line"></span><br><span class="line">openssl x509 -req -in server.csr \</span><br><span class="line">-CA rootCA.pem \</span><br><span class="line">-CAkey rootCA.key \</span><br><span class="line">-CAcreateserial -out server.crt -days 1800 -sha256 -extfile v3.ext</span><br></pre></td></tr></table></figure>
+<p>第一条命令: 用<code>server.csr.cnf</code>配置生成网站证书<code>server.csr</code>,同时生成网站私钥<code>device.key</code>(给nginx用的)。<br>第二条命令: 用CA私钥<code>rootCA.key</code>以CA的名义(<code>rootCA.pem</code>)️给网站证书签名，生成CA签名后的证书<code>server.crt</code>，同时加上<code>v3.ext</code>中的配置（防止chrome报错）。</p>
+<p>到这里我们就准备好了下一步nginx要用到的两个文件:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">server.crt</span><br><span class="line">device.key</span><br></pre></td></tr></table></figure>
+<p><code>server.crt</code>: 网站的数字证书;<br><code>device.key</code>: 网站的私钥，用来解开用户发过来的通信密码。详细原理参见:<br><a href="http://xiaoyue26.github.io/2018/09/26/2018-09/%E9%80%9A%E4%BF%97%E7%90%86%E8%A7%A3SSL-TLS%E5%8D%8F%E8%AE%AE%E5%8C%BA%E5%88%AB%E4%B8%8E%E5%8E%9F%E7%90%86/">http://xiaoyue26.github.io/2018/09/26/2018-09/%E9%80%9A%E4%BF%97%E7%90%86%E8%A7%A3SSL-TLS%E5%8D%8F%E8%AE%AE%E5%8C%BA%E5%88%AB%E4%B8%8E%E5%8E%9F%E7%90%86/</a></p>
+<h2 id="3-配置nginx"><a href="#3-配置nginx" class="headerlink" title="3. 配置nginx"></a>3. 配置nginx</h2><p>这里和之前的一样,打开ssl支持，监听443:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">listen 443 ssl;</span><br><span class="line">ssl_certificate &#x2F;usr&#x2F;local&#x2F;nginx&#x2F;ssl&#x2F;private&#x2F;server.crt;</span><br><span class="line">ssl_certificate_key &#x2F;usr&#x2F;local&#x2F;nginx&#x2F;ssl&#x2F;private&#x2F;device.key;</span><br></pre></td></tr></table></figure>
+<p>加上监听80+重定向:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">server &#123;</span><br><span class="line">        listen       80;</span><br><span class="line">        server_name localhost;</span><br><span class="line">        rewrite ^(.*) https:&#x2F;&#x2F;$server_name$1 permanent;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<h2 id="4-配置用户chrome信任第一步中的CA"><a href="#4-配置用户chrome信任第一步中的CA" class="headerlink" title="4. 配置用户chrome信任第一步中的CA"></a>4. 配置用户chrome信任第一步中的CA</h2><p>将第一步中的<code>rootCA.pem</code>发送给用户，让它安装即可。<br>(千万不要发错了。)<br>如果是mac系统，可以直接双击安装到钥匙串中:</p>
+<img src="/images/2019-04/rootca_pem.png" class="" width="800" height="1200" title="rootca_pem">
+<p>在钥匙串中选择<code>系统</code>=&gt;<code>证书</code>,然后完全信任ca的证书即可:</p>
+<img src="/images/2019-04/permit_ca.png" class="" width="800" height="1200" title="permit_ca">
+
+<p>最后得到chrome的承认:</p>
+<img src="/images/2019-04/chrome_safe.png" class="" width="800" height="1200" title="chrome_safe">
+
+
+<h2 id="其他"><a href="#其他" class="headerlink" title="其他"></a>其他</h2><p>还可以查看openssl支持的ssl/tls版本:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">openssl ciphers -v | awk &#39;&#123;print $2&#125;&#39; | sort | uniq</span><br></pre></td></tr></table></figure>
+<p>查看本地的443端口是否支持tls1.2协商:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">openssl s_client -connect localhost:443 -tls1_2</span><br></pre></td></tr></table></figure>
+<p>成功的话会返回一大段内容，包括:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"># 前面一大堆</span><br><span class="line">---</span><br><span class="line">Certificate chain</span><br><span class="line"> 0 s:&#x2F;C&#x3D;US&#x2F;ST&#x3D;RandomState&#x2F;L&#x3D;RandomCity&#x2F;O&#x3D;RandomOrganization&#x2F;OU&#x3D;RandomOrganizationUnit&#x2F;emailAddress&#x3D;296671657@qq.com&#x2F;CN&#x3D;kandiandata.oa.com</span><br><span class="line">   i:&#x2F;C&#x3D;XX&#x2F;L&#x3D;Default City&#x2F;O&#x3D;tencent&#x2F;OU&#x3D;kandian&#x2F;CN&#x3D;pipe_ca&#x2F;emailAddress&#x3D;296671657@qq.com</span><br><span class="line">---</span><br><span class="line">Server certificate</span><br><span class="line"># 后面一大堆</span><br></pre></td></tr></table></figure>
+<p>失败的话:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">---</span><br><span class="line">no peer certificate available</span><br><span class="line">---</span><br><span class="line">No client certificate CA names sent</span><br><span class="line">---</span><br></pre></td></tr></table></figure>
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/04/14/2019-04/2019%E5%B9%B4%E7%9A%84%E4%BA%BA%E4%BB%AC%E5%A6%82%E4%BD%95%E7%94%9F%E6%88%90HTTPS%E8%AF%81%E4%B9%A6/" data-id="ck96cxppn00i2maamg3y52508" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/https/" rel="tag">https</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/nginx/" rel="tag">nginx</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/ssl/" rel="tag">ssl</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-03/mysql统计信息更新" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/03/31/2019-03/mysql%E7%BB%9F%E8%AE%A1%E4%BF%A1%E6%81%AF%E6%9B%B4%E6%96%B0/" class="article-date">
+  <time datetime="2019-03-31T11:38:49.000Z" itemprop="datePublished">2019-03-31</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/03/31/2019-03/mysql%E7%BB%9F%E8%AE%A1%E4%BF%A1%E6%81%AF%E6%9B%B4%E6%96%B0/">mysql统计信息更新</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <blockquote>
+<p>本文只关注innodb。 </p>
+</blockquote>
+<p>mysql优化器选择执行计划的时候需要依据一定的采样统计信息，不然对数据完全不了解的话，就无法选择成本低的执行计划了。</p>
+<p>统计信息的配置有以下几个自由度:</p>
+<ol>
+<li>是否持久化;</li>
+<li>更新统计信息的时机;</li>
+<li>采样多少个page。 </li>
+</ol>
+<h1 id="是否持久化"><a href="#是否持久化" class="headerlink" title="是否持久化"></a>是否持久化</h1><p>采样统计信息可以有两种选择：</p>
+<ol>
+<li>持久化: 默认是持久化，也就是存磁盘。</li>
+<li>非持久化.</li>
+</ol>
+<p>控制的选项:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">show variables like &#39;%innodb_stats_persistent%&#39;;</span><br></pre></td></tr></table></figure>
+<p>默认是on，也就是持久化。<br>具体存哪里呢，主要是存mysql库和information_schema库下(5.6.x):</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">INFORMATION_SCHEMA.TABLES</span><br><span class="line">INFORMATION_SCHEMA.STATISTICS</span><br><span class="line">mysql.innodb_table_stats</span><br><span class="line">mysql.innodb_index_stats</span><br></pre></td></tr></table></figure>
+
+<h1 id="更新统计信息的时机"><a href="#更新统计信息的时机" class="headerlink" title="更新统计信息的时机"></a>更新统计信息的时机</h1><p>相关参数:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">innodb_stats_on_metadata: 是否每次都重新计算统计信息(配合非持久化使用),默认off;</span><br><span class="line">innodb_stats_auto_recalc: 插入数据量超过原表10%的时候更新统计信息,默认on。</span><br></pre></td></tr></table></figure>
+<p>总结一下mysql更新统计信息的时机:</p>
+<ol>
+<li>手动运行触发语句如<code>analyze table xx</code>的时候;</li>
+<li>如果<code>innodb_stats_auto_recalc</code>为on: 插入数据量超过原表10%的时候更新统计信息;</li>
+<li>如果<code>innodb_stats_on_metadata</code>为on: 每次查询schema.table表的是更新统计信息(一般不开启，性能太差)。</li>
+</ol>
+<h1 id="采样page数量"><a href="#采样page数量" class="headerlink" title="采样page数量"></a>采样page数量</h1><p>相关参数:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">| innodb_stats_sample_pages            | 8     |</span><br><span class="line">| innodb_stats_persistent_sample_pages | 20    |</span><br><span class="line">| innodb_stats_transient_sample_pages  | 8     |</span><br></pre></td></tr></table></figure>
+<p><code>innodb_stats_sample_pages</code>废弃改成了<code>innodb_stats_persistent_sample_pages</code>和<code>innodb_stats_transient_sample_pages</code>,灵活控制持久化和非持久化下的采样page数。</p>
+<p>可以看出默认情况持久化采样20个page。 </p>
+<h2 id="单表配置"><a href="#单表配置" class="headerlink" title="单表配置"></a>单表配置</h2><p>上述所有都是全局配置，还可以为每个表单独3个参数:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">STATS_PERSISTENT  : 1: 持久化统计信息;</span><br><span class="line">STATS_AUTO_RECALC : 超过10%更新统计信息。</span><br><span class="line">STATS_SAMPLE_PAGES: 采样页数。</span><br></pre></td></tr></table></figure>
+<p>可以看出为每个表设置的参数依然是这3个自由度: 是否持久化、更新统计信息时机、采样页数。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/03/31/2019-03/mysql%E7%BB%9F%E8%AE%A1%E4%BF%A1%E6%81%AF%E6%9B%B4%E6%96%B0/" data-id="ck96cxppi00hhmaam20j0cn5z" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2019-03/spark语法概要" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/03/31/2019-03/spark%E8%AF%AD%E6%B3%95%E6%A6%82%E8%A6%81/" class="article-date">
@@ -609,360 +981,6 @@
 
 
   
-    <article id="post-2019-02/nginx笔记-编译安装" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E7%BC%96%E8%AF%91%E5%AE%89%E8%A3%85/" class="article-date">
-  <time datetime="2019-02-28T07:08:23.000Z" itemprop="datePublished">2019-02-28</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/nginx/">nginx</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E7%BC%96%E8%AF%91%E5%AE%89%E8%A3%85/">nginx笔记-编译安装</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>参考资料：<br><a href="https://www.jianshu.com/p/5eab0f83e3b4" target="_blank" rel="noopener">https://www.jianshu.com/p/5eab0f83e3b4</a></p>
-<h1 id="架构"><a href="#架构" class="headerlink" title="架构"></a>架构</h1><img src="/images/2019-02/master-worker.png" class="" width="800" height="1200" title="master-worker">
-<p>master+worker架构。</p>
-<p>master: 管理<code>nginx.conf</code>,同步到worker;<br>worker: 单线程绑定cpu，实际处理/转发请求;</p>
-<p>master咋同步配置到worker呢？<br>直接用新conf起新worker,旧worker处理完手头的活就kill掉。</p>
-<h1 id="常用命令"><a href="#常用命令" class="headerlink" title="常用命令"></a>常用命令</h1><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 启动:</span></span><br><span class="line">nginx -c nginx配置文件地址   </span><br><span class="line"><span class="meta">#</span><span class="bash"> 重新载入配置:</span></span><br><span class="line">nginx -s reload</span><br><span class="line"><span class="meta">#</span><span class="bash"> 检查配置（或查看配置地址）：</span></span><br><span class="line">nginx -t</span><br><span class="line"><span class="meta">#</span><span class="bash"> 停止：</span></span><br><span class="line">nginx -s stop</span><br></pre></td></tr></table></figure>
-<p>比如如果想知道当前nginx的配置文件在哪里，可以运行<code>nginx -t</code>,就能看到了。</p>
-<h1 id="编译安装"><a href="#编译安装" class="headerlink" title="编译安装"></a>编译安装</h1><p>下载解压缩:<br><a href="http://nginx.org/en/download.html" target="_blank" rel="noopener">http://nginx.org/en/download.html</a><br><strong>配置</strong></p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> KERNEL_BITS=64</span><br><span class="line">./configure --user=mengqifeng \</span><br><span class="line">--group=staff \</span><br><span class="line">--prefix=/usr/<span class="built_in">local</span>/nginx \</span><br><span class="line">--pid-path=/var/run/nginx.pid \</span><br><span class="line">--lock-path=/var/lock/nginx.lock \</span><br><span class="line">--with-http_ssl_module \</span><br><span class="line">--with-http_dav_module \</span><br><span class="line">--with-http_flv_module \</span><br><span class="line">--with-http_realip_module \</span><br><span class="line">--with-http_gzip_static_module \</span><br><span class="line">--with-http_stub_status_module \</span><br><span class="line">--with-mail --with-mail_ssl_module \</span><br><span class="line">--with-debug \</span><br><span class="line">--with-http_auth_request_module \</span><br><span class="line">--http-client-body-temp-path=/var/tmp/nginx/client \</span><br><span class="line">--http-proxy-temp-path=/var/tmp/nginx/proxy \</span><br><span class="line">--http-fastcgi-temp-path=/var/tmp/nginx/fastcgi \</span><br><span class="line">--http-uwsgi-temp-path=/var/tmp/nginx/uwsgi \</span><br><span class="line">--http-scgi-temp-path=/var/tmp/nginx/scgi \</span><br><span class="line">--with-pcre=/Users/mengqifeng/Public/build_home/pcre-8.42 \</span><br><span class="line">--with-openssl=/Users/mengqifeng/Public/build_home/openssl \</span><br><span class="line">--with-zlib=/Users/mengqifeng/Public/build_home/zlib-1.2.11</span><br></pre></td></tr></table></figure>
-<p>其中最后3行要看情况,先不加。<br>报错以后下载pcre和openssl,加上参数提供给nginx.<br><strong>编译</strong></p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">make</span><br></pre></td></tr></table></figure>
-<p><strong>安装</strong></p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo make install</span><br></pre></td></tr></table></figure>
-
-<p>最后设置一下环境变量: (<code>/etc/profile.d/nginx.sh</code>)</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> NGINX_HOME=/usr/<span class="built_in">local</span>/nginx</span><br><span class="line"><span class="built_in">export</span> PATH=<span class="variable">$PATH</span>:<span class="variable">$NGINX_HOME</span>/sbin</span><br></pre></td></tr></table></figure>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E7%BC%96%E8%AF%91%E5%AE%89%E8%A3%85/" data-id="ck96cxpp400ftmaamg67s4hg3" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/nginx/" rel="tag">nginx</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-2019-02/redis设计与实现笔记8-sentinel哨兵模式" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/02/24/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B08-sentinel%E5%93%A8%E5%85%B5%E6%A8%A1%E5%BC%8F/" class="article-date">
-  <time datetime="2019-02-24T12:46:55.000Z" itemprop="datePublished">2019-02-24</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/redis/">redis</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/02/24/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B08-sentinel%E5%93%A8%E5%85%B5%E6%A8%A1%E5%BC%8F/">redis设计与实现笔记8-sentinel哨兵模式</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h2 id="使用场景"><a href="#使用场景" class="headerlink" title="使用场景:"></a>使用场景:</h2><p>用几个节点开启sentinel组成一个哨兵集群，负责监控另外一些redis的master/slave集群的健康状态，协助进行故障恢复(master挂了的时候，升级某个slave为新master)。</p>
-<h2 id="思考"><a href="#思考" class="headerlink" title="思考:"></a>思考:</h2><p>如果有1个master,10个slave，数据均已经完全同步。<br>这个时候，连续挂两次master，是不是所有数据就都没了？<br>第1次: 除新master以外的节点，执行新slaveof命令，清空数据准备同步新master;<br>第2次: 新master挂了，其他节点是空的。</p>
-<h2 id="答案："><a href="#答案：" class="headerlink" title="答案："></a>答案：</h2><p>不会这么脆弱。<br>两个机制提升了这个过程的可靠性：<br>(1)确认接受到完整rdb后，从库才清空旧数据库;<br>(2)确认所有从库完成同步后，才更新master的地址和端口，完成故障恢复流程。（master/slave换代操作会在故障恢复完全完成后进行。）</p>
-<p>第1次： 除候选master以外的节点，执行slaveof命令，但清空数据会在确认接收到完整rdb文件后进行。（详见代码<a href="https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/replication.c的1036行。）" target="_blank" rel="noopener">https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/replication.c的1036行。）</a><br>第2次：候选master挂了，重新推举候选master，换代没有完全完成，则不会更新master字段，因此其他slave都还在候选集中。</p>
-<p>相关参数: </p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 执行故障转移操作时，可以同时对新master进行同步的从库数量:</span></span><br><span class="line">SENTINEL parallel-syncs &lt;master-name&gt; &lt;number&gt;</span><br></pre></td></tr></table></figure>
-
-<h1 id="哨兵模式-Sentinel"><a href="#哨兵模式-Sentinel" class="headerlink" title="哨兵模式:Sentinel"></a>哨兵模式:Sentinel</h1><img src="/images/2019-02/sentinel.png" class="" width="800" height="1200" title="sentinel">
-<p>redis的高可用模式，一主多从+sentinel集群进行监控和故障恢复，主挂的时间达到设置，则选取一个从库升级为主库。</p>
-<h2 id="sentinel启动命令"><a href="#sentinel启动命令" class="headerlink" title="sentinel启动命令"></a>sentinel启动命令</h2><p>一个节点用redis代码可以用3种身份(模式)启动：</p>
-<ol>
-<li>master: 负责写命令；</li>
-<li>slave: 负责同步、从库，可以执行读命令；</li>
-<li>sentinel：负责监控上述两者，进行故障恢复。<br>使用哨兵模式：<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">redis-sentinel sentinel.conf</span><br><span class="line"><span class="comment"># 或:</span></span><br><span class="line">redis-server sentinel.conf --sentinel</span><br></pre></td></tr></table></figure>
-之后发生的事情:</li>
-<li>初始化服务器：不载入rdb,aof;（因为不需要负责实际数据）</li>
-<li>redis服务器切换成Sentinel专用代码;（默认端口26379，只载入部分命令表,客户端只能执行7个命令: <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">PING</span><br><span class="line">SENTINEL</span><br><span class="line">INFO</span><br><span class="line">Subscribe</span><br><span class="line">unSubscribe</span><br><span class="line">PSubscribe</span><br><span class="line">PUnSubscribe</span><br></pre></td></tr></table></figure></li>
-<li>初始化sentinel状态；</li>
-<li>根据配置文件，初始化Sentinel的主库列表；</li>
-<li>创建与主库的网络连接。</li>
-</ol>
-<h2 id="sentinel相关的网络连接图"><a href="#sentinel相关的网络连接图" class="headerlink" title="sentinel相关的网络连接图"></a>sentinel相关的网络连接图</h2><p>引入sentinel后的redis主从架构网络连接较多：</p>
-<ol>
-<li>sentinel节点与master: 命令连接+订阅连接;</li>
-<li>sentinel节点与slave:  命令连接+订阅连接;</li>
-<li>sentinel节点与sentinel: 命令连接。<br>相关的连接图如下:<img src="/images/2019-02/sentinel-master.png" class="" width="800" height="1200" title="sentinel-master"></li>
-</ol>
-<p><strong>master地址与端口</strong>：<code>需要配置</code><br>sentinel需要订阅master的心跳，同时在需要的时候向master发送命令，因此需要两种连接：订阅连接+命令连接。</p>
-<img src="/images/2019-02/sentinel-slave.png" class="" width="800" height="1200" title="sentinel-slave">
-<p><strong>slave地址与端口</strong>：<code>不需要配置</code><br>sentinel通过master获取到slave的地址与端口，因此不需要给sentinel配置slavel信息了。<br>sentinel需要订阅slave的心跳，同时在需要的时候向slave发送命令，因此需要两种连接：订阅连接+命令连接。（同master类似）</p>
-<img src="/images/2019-02/sentinel-sentinel.png" class="" width="800" height="1200" title="sentinel-sentinel">
-<p><strong>其他sentinel的地址与端口</strong>: <code>不需要配置</code><br>sentinel通过master获取到其他sentinel的地址与端口，因此不需要给sentinel配置信息了。sentinel订阅频道的信息里有连接到同一个master的sentinel信息。</p>
-<p>由于心跳消息由master帮sentinel完成了，不需要再订阅其他sentinel的心跳了。<br>每两个sentinel之间都有双向的命令连接（完全图），方便互相发送命令。（客观下线、主观下线、选举leader等命令）</p>
-<h2 id="一份可能的sentinel配置文件"><a href="#一份可能的sentinel配置文件" class="headerlink" title="一份可能的sentinel配置文件"></a>一份可能的sentinel配置文件</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">## master1 conf:</span><br><span class="line">sentinel monitor master1 127.0.0.1 6379 2 # 需要2票(quorum)才能客观下线</span><br><span class="line">sentinel down-after-milliseconds master1 30000 # 30秒才算主观下线(包括master&#x2F;slave和其他sentinel)</span><br><span class="line">sentinel parallel-syncs master1 1  # 同时可以有1个从库进行同步</span><br><span class="line">sentinel failover-timeout master1 90000 # 刷新故障迁移状态的最大时限</span><br><span class="line">## master2 conf:</span><br><span class="line">sentinel monitor master2 127.0.0.1 12345 5 # 需要5票才能客观下线</span><br><span class="line">sentinel down-after-milliseconds master2 50000</span><br><span class="line">sentinel parallel-syncs master2 5 </span><br><span class="line">sentinel failover-timeout master2 450000</span><br></pre></td></tr></table></figure>
-
-<h3 id="初始化sentinel状态"><a href="#初始化sentinel状态" class="headerlink" title="初始化sentinel状态"></a>初始化sentinel状态</h3><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">sentinelState</span>&#123;</span></span><br><span class="line">    <span class="comment">// 当前纪元</span></span><br><span class="line">    <span class="keyword">uint64_t</span> current_epoch;</span><br><span class="line">    <span class="comment">// 保存所有被这个sentinel监视的master:</span></span><br><span class="line">    dict *master;<span class="comment">// &lt;master_name,sentinelRedisInstance&gt;</span></span><br><span class="line">&#125;sentinel;</span><br></pre></td></tr></table></figure>
-<p>其中master值<code>sentinelRedisInstance</code>的结构如下:</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">sentinelRedisInstance</span>&#123;</span></span><br><span class="line">    <span class="comment">// 实例类型、状态:</span></span><br><span class="line">    <span class="keyword">int</span> flags;</span><br><span class="line">    <span class="keyword">char</span> * name; <span class="comment">// "127.0.0.1:26379"</span></span><br><span class="line">    <span class="keyword">char</span> * runid; </span><br><span class="line">    <span class="keyword">uint64_t</span> config_epoch;</span><br><span class="line">    <span class="comment">// 实例的地址:</span></span><br><span class="line">    sentinelAddr *addr;<span class="comment">// ip,port</span></span><br><span class="line">    <span class="comment">// 无响应多少毫秒后判断为主观下线:</span></span><br><span class="line">    <span class="keyword">mstime_t</span> down_after_period;</span><br><span class="line">    <span class="comment">// 判断客观下线所需的支持票数:</span></span><br><span class="line">    <span class="keyword">int</span> quorum;</span><br><span class="line">    <span class="comment">// 故障转移时,可以同时对新主服务器进行同步的从服务器数量:</span></span><br><span class="line">    <span class="keyword">int</span> parallel_syncs;</span><br><span class="line">    <span class="comment">// 刷新故障迁移状态的最大时限:</span></span><br><span class="line">    <span class="keyword">mstime_t</span> failover_timeout;</span><br><span class="line">&#125;sentinelRedisInstance;</span><br></pre></td></tr></table></figure>
-
-<h3 id="创建网络连接"><a href="#创建网络连接" class="headerlink" title="创建网络连接"></a>创建网络连接</h3><p>sentinel向<strong>每个</strong>监视的master创建两个连接:</p>
-<ol>
-<li>命令连接: 用于向master发送、接受命令;</li>
-<li>订阅连接: 订阅master的<strong>sentinel</strong>:hello消息。</li>
-</ol>
-<h2 id="命令连接与订阅连接"><a href="#命令连接与订阅连接" class="headerlink" title="命令连接与订阅连接"></a>命令连接与订阅连接</h2><h3 id="连向master-slave的命令连接：-4种命令："><a href="#连向master-slave的命令连接：-4种命令：" class="headerlink" title="连向master/slave的命令连接： 4种命令："></a>连向master/slave的命令连接： 4种命令：</h3><ol>
-<li>每10秒一次的INFO命令：获取master和slave的最新配置信息；</li>
-<li>每2秒一次的订阅命令: 获取<strong>sentinel</strong>:hello频道信息，得到其他sentinel的信息。</li>
-<li>每1秒一次的PING命令:<br>获取master/slave/sentinel的心跳信息。</li>
-<li>故障恢复的时候的slaveof命令。</li>
-</ol>
-<h3 id="订阅连接"><a href="#订阅连接" class="headerlink" title="订阅连接:"></a>订阅连接:</h3><p>master/slave向所有sentinel发送它们订阅的<strong>sentinel</strong>:hello频道信息。</p>
-<h3 id="sentinel之间的命令连接"><a href="#sentinel之间的命令连接" class="headerlink" title="sentinel之间的命令连接"></a>sentinel之间的命令连接</h3><p>用于检查客观下线、选举leader、故障恢复。<br>故障恢复流程：</p>
-<ol>
-<li><code>主观下线</code>: 某个sentinel用ping命令检查master: 超过<code>down-after-milliseconds</code>配置没有回复，该sentinel主观地认为：这个master挂了——它把这个master标记为主观下线状态；</li>
-<li><code>客观下线</code>: 这个sentinel通过<code>is-master-down-by-addr</code>命令询问其他sentinel的意见。超过<code>quorum</code>数量sentinel同意，则进入客观下线状态；</li>
-<li><code>选举leader</code>: leader负责接下来的故障恢复。每次选举结束后(无论成败)，<code>epoch</code>纪元都会+1。进入客观下线分支的sentinel会要求其他人选自己，同时它会投第一个向自己要求选票的sentinel一票。所有sentinel会回复其他sentinel自己的选择，因此大家都能确定有谁的票数过半，或者都没有过半，也就是leader选举的成败是确定可知的。（奇数个sentinel的raft算法）</li>
-<li><code>leader</code>选取新候选master:<br>（1）下线原master；（但master结构中依然记录旧地址、端口，不急着更新）<br>（2）断开候选者slaveof;<br>（3）其他slave执行slaveof候选者；（同步并行度由参数决定）<br>（4）当其他slave完成同步，正式任命候选者为master，更新信息到内存。见代码<a href="https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/sentinel.c中`sentinelHandleDictOfRedisInstances`函数和`sentinelFailoverSwitchToPromotedSlave`函数。" target="_blank" rel="noopener">https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/sentinel.c中`sentinelHandleDictOfRedisInstances`函数和`sentinelFailoverSwitchToPromotedSlave`函数。</a><br>这个过程中如果候选者挂了，会重新选一个候选者。</li>
-</ol>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">sentinelHandleDictOfRedisInstances</span><span class="params">(dict *instances)</span> </span>&#123;</span><br><span class="line">    dictIterator *di;</span><br><span class="line">    dictEntry *de;</span><br><span class="line">    sentinelRedisInstance *switch_to_promoted = <span class="literal">NULL</span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* There are a number of things we need to perform against every master. */</span></span><br><span class="line">    <span class="comment">// 遍历多个实例，这些实例可以是多个主服务器、多个从服务器或者多个 sentinel</span></span><br><span class="line">    di = dictGetIterator(instances);</span><br><span class="line">    <span class="keyword">while</span>((de = dictNext(di)) != <span class="literal">NULL</span>) &#123;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 取出实例对应的实例结构</span></span><br><span class="line">        sentinelRedisInstance *ri = dictGetVal(de);</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 执行调度操作</span></span><br><span class="line">        sentinelHandleRedisInstance(ri);</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 如果被遍历的是主服务器，那么递归地遍历该主服务器的所有从服务器</span></span><br><span class="line">        <span class="comment">// 以及所有 sentinel</span></span><br><span class="line">        <span class="keyword">if</span> (ri-&gt;flags &amp; SRI_MASTER) &#123;</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 所有从服务器</span></span><br><span class="line">            sentinelHandleDictOfRedisInstances(ri-&gt;slaves);</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 所有 sentinel</span></span><br><span class="line">            sentinelHandleDictOfRedisInstances(ri-&gt;sentinels);</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 对已下线主服务器（ri）的故障迁移已经完成</span></span><br><span class="line">            <span class="comment">// ri 的所有从服务器都已经同步到新主服务器</span></span><br><span class="line">            <span class="keyword">if</span> (ri-&gt;failover_state == SENTINEL_FAILOVER_STATE_UPDATE_CONFIG) &#123;</span><br><span class="line">                <span class="comment">// 已选出新的主服务器</span></span><br><span class="line">                switch_to_promoted = ri;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 将原主服务器（已下线）从主服务器表格中移除，并使用新主服务器代替它</span></span><br><span class="line">    <span class="keyword">if</span> (switch_to_promoted)</span><br><span class="line">        sentinelFailoverSwitchToPromotedSlave(switch_to_promoted);</span><br><span class="line"></span><br><span class="line">    dictReleaseIterator(di);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-<p>选取候选者的大致逻辑：</p>
-<ol>
-<li>删除网络条件差的；</li>
-<li>考虑因素的顺序：优先级、复制偏移量、运行ID小的。<br>详见<a href="https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/sentinel.c代码中的`sentinelSelectSlave`函数。" target="_blank" rel="noopener">https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/sentinel.c代码中的`sentinelSelectSlave`函数。</a></li>
-</ol>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/02/24/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B08-sentinel%E5%93%A8%E5%85%B5%E6%A8%A1%E5%BC%8F/" data-id="ck96cxppc00gsmaam508b80xs" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-2019-02/redis设计与实现笔记7-复制" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/02/24/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B07-%E5%A4%8D%E5%88%B6/" class="article-date">
-  <time datetime="2019-02-24T12:46:10.000Z" itemprop="datePublished">2019-02-24</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/redis/">redis</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/02/24/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B07-%E5%A4%8D%E5%88%B6/">redis设计与实现笔记7-复制</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="第15章-复制"><a href="#第15章-复制" class="headerlink" title="第15章 复制"></a>第15章 复制</h1><p>redis服务器B执行slave of命令后可变成另一台服务器的从库：</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">127.0.0.1:12345&gt; SLAVEOF 127.0.0.1 6379</span><br><span class="line"><span class="comment"># 12345端口就变成6379的从库了。</span></span><br></pre></td></tr></table></figure>
-
-<h2 id="旧版复制功能的实现"><a href="#旧版复制功能的实现" class="headerlink" title="旧版复制功能的实现"></a>旧版复制功能的实现</h2><ol>
-<li>同步(<code>sync</code>): 更新从库状态；</li>
-<li>传播(<code>propagate</code>): 持续维持一致性。</li>
-</ol>
-<h3 id="同步"><a href="#同步" class="headerlink" title="同步"></a>同步</h3><p>主库发RDB文件给从库，从库载入一下。</p>
-<p>旧版缺点：<br>每次断线后，重新同步，也就是重新生成RDB文件，重新全量载入。</p>
-<h2 id="新版复制功能的实现-2-8-版本"><a href="#新版复制功能的实现-2-8-版本" class="headerlink" title="新版复制功能的实现(2.8+版本)"></a>新版复制功能的实现(2.8+版本)</h2><p>引入<code>PSYNC</code>命令，它有两种模式:</p>
-<ol>
-<li>完整重同步: 初次复制；</li>
-<li>部分重同步：断线重连。</li>
-</ol>
-<h3 id="部分重同步："><a href="#部分重同步：" class="headerlink" title="部分重同步："></a>部分重同步：</h3><ol>
-<li>主从库的复制偏移量;(replication offset)</li>
-<li>主库的复制积压缓冲区;(replication backlog):默认1MB，FIFO队列。</li>
-<li>服务器的运行id(run ID)。</li>
-</ol>
-<p>如果重连时，需要的数据还在缓冲区，就部分同步；<br>如果重连时，需要的数据已经被删除，就完全同步。</p>
-<p>所以缓冲区设置稍微大一些最好。</p>
-<h3 id="复制流程"><a href="#复制流程" class="headerlink" title="复制流程"></a>复制流程</h3><ol>
-<li>从库:记录主库地址端口等信息到内存；</li>
-<li>建立套接字连接；</li>
-<li>从库: PING 主库: PONG，确认连接健康；</li>
-<li>身份验证：(是否需要认证，密码)，两个维度都需要相同才能继续；</li>
-<li>从库=&gt;主库: 请用xxx端口联系从库;</li>
-<li>同步： 主库从库互为客户端：<br>完全同步： 主库=&gt;从库: 保存在缓冲区的写命令;<br>部分同步： 主库=&gt;从库: 保存在复制积压缓冲区的写命令。</li>
-<li>命令传播： 主库=&gt;从库: 新的写命令。</li>
-</ol>
-<h3 id="心跳检测"><a href="#心跳检测" class="headerlink" title="心跳检测"></a>心跳检测</h3><p>从库=&gt;主库: </p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">REPLCONF ACK &lt;replication_offset&gt; <span class="comment"># 从库当前复制偏移量</span></span><br></pre></td></tr></table></figure>
-<p>三个作用：</p>
-<ol>
-<li>主库确定各个从库的健康状态；</li>
-<li>检测命令丢失：主库检测从库有没有漏的复制，漏则重发；</li>
-<li><code>min_slave_to_write</code>参数：如果配置了这个，主库可以在从库太少的时候拒绝写命令。</li>
-</ol>
-<h1 id="slaveof命令源码细节"><a href="#slaveof命令源码细节" class="headerlink" title="slaveof命令源码细节"></a>slaveof命令源码细节</h1><p>从库确认收到主库的完整rdb文件后，才清空旧数据库。<br>(而不是说不分青红皂白上来就把自己清空了，那就太傻了。)<br>相关代码(<a href="https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/replication.c" target="_blank" rel="noopener">https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/replication.c</a>):</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* Check if the transfer is now complete */</span></span><br><span class="line">    <span class="comment">// 检查 RDB 是否已经传送完毕</span></span><br><span class="line">    <span class="comment">// 1036行: </span></span><br><span class="line">    <span class="keyword">if</span> (server.repl_transfer_read == server.repl_transfer_size) &#123;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 完毕，将临时文件改名为 dump.rdb</span></span><br><span class="line">        <span class="keyword">if</span> (rename(server.repl_transfer_tmpfile,server.rdb_filename) == <span class="number">-1</span>) &#123;</span><br><span class="line">            redisLog(REDIS_WARNING,<span class="string">"Failed trying to rename the temp DB into dump.rdb in MASTER &lt;-&gt; SLAVE synchronization: %s"</span>, strerror(errno));</span><br><span class="line">            replicationAbortSyncTransfer();</span><br><span class="line">            <span class="keyword">return</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 先清空旧数据库</span></span><br><span class="line">        redisLog(REDIS_NOTICE, <span class="string">"MASTER &lt;-&gt; SLAVE sync: Flushing old data"</span>);</span><br><span class="line">        signalFlushedDb(<span class="number">-1</span>);</span><br><span class="line">        emptyDb(replicationEmptyDbCallback);</span><br></pre></td></tr></table></figure>
-
-
-
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/02/24/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B07-%E5%A4%8D%E5%88%B6/" data-id="ck96cxpp900ggmaamg7s40wnv" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-2019-02/redis设计与实现笔记6-客户端与服务器" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/02/21/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B06-%E5%AE%A2%E6%88%B7%E7%AB%AF%E4%B8%8E%E6%9C%8D%E5%8A%A1%E5%99%A8/" class="article-date">
-  <time datetime="2019-02-21T13:55:54.000Z" itemprop="datePublished">2019-02-21</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/redis/">redis</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/02/21/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B06-%E5%AE%A2%E6%88%B7%E7%AB%AF%E4%B8%8E%E6%9C%8D%E5%8A%A1%E5%99%A8/">redis设计与实现笔记6-客户端与服务器</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="客户端"><a href="#客户端" class="headerlink" title="客户端"></a>客户端</h1><p>服务端保存的客户端状态:(<code>redisClient</code>)</p>
-<ol>
-<li>套接字;</li>
-<li>客户端名字</li>
-<li>标志值flag;</li>
-<li>正在使用的数据库指针\号码;</li>
-<li>客户端当前要执行的命令、参数..;</li>
-<li>客户端输入、输出缓冲区；</li>
-<li>复制状态信息；</li>
-<li>事务状态；</li>
-<li>身份验证标志：0未通过；1：已经通过身份验证；</li>
-<li>创建时间、最后一次通信时间；</li>
-<li>其他。</li>
-</ol>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">redisServer</span>&#123;</span></span><br><span class="line">    <span class="comment">// 所有客户端状态的链表</span></span><br><span class="line">    <span class="built_in">list</span> *clients;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h2 id="相关命令"><a href="#相关命令" class="headerlink" title="相关命令"></a>相关命令</h2><p>列出客户端:</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">127.0.0.1:6379&gt; client list</span><br><span class="line">id=489 addr=127.0.0.1:57480 fd=5 name= age=6151 idle=582 flags=N db=0 sub=0 psub=0 multi=-1 qbuf=0 qbuf-free=0 obl=0 oll=0 omem=0 events=r cmd=get</span><br><span class="line">id=490 addr=127.0.0.1:38584 fd=6 name= age=15 idle=0 flags=N db=0 sub=0 psub=0 multi=-1 qbuf=0 qbuf-free=32768 obl=0 oll=0 omem=0 events=r cmd=client</span><br></pre></td></tr></table></figure>
-
-<h2 id="套接字fd"><a href="#套接字fd" class="headerlink" title="套接字fd"></a>套接字fd</h2><p>fd=-1: 伪客户端:加载AOF或执行Lua脚本；<br>fd&gt;-1: 普通客户端。</p>
-<h2 id="名字-name"><a href="#名字-name" class="headerlink" title="名字(name)"></a>名字(name)</h2><p>默认都没有名字，可以使用<code>client setname</code>命令设置。</p>
-<h2 id="客户端关闭"><a href="#客户端关闭" class="headerlink" title="客户端关闭"></a>客户端关闭</h2><p>关闭的原因：</p>
-<ol>
-<li>客户端进程退出、被杀死(<code>Client kill</code>)，网络连接断开；</li>
-<li>客户端发送了不符合协议格式的命令，被关闭；</li>
-<li>空转时间超过<code>timeout</code>配置;</li>
-<li>发送命令大小超过输入缓冲区限制；</li>
-<li>回复命令大小超过输出缓冲区限制。</li>
-</ol>
-<p>输出缓冲区需满足的两个限制：</p>
-<ol>
-<li>硬性限制：超出硬性限制大小，立即关闭；</li>
-<li>软性限制：最多可以超出软性限制持续时长xxx秒。</li>
-</ol>
-<p>示例配置：</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 普通客户端硬性限制和软性限制都不限制:</span></span><br><span class="line">client-output-buffer-limit normal 0 0 0</span><br><span class="line"><span class="meta">#</span><span class="bash"> 从服务器客户端硬性限制为256MB,软性限制为64MB、60秒：</span></span><br><span class="line">client-output-buffer-limit slave 256mb 64mb 60</span><br><span class="line"><span class="meta">#</span><span class="bash"> 执行发布与订阅功能的客户端：硬性限制32mb,软性限制8mb 60秒:</span></span><br><span class="line">client-output-buffer-limit 32mb 8mb 60</span><br></pre></td></tr></table></figure>
-
-<h1 id="服务端"><a href="#服务端" class="headerlink" title="服务端"></a>服务端</h1><h2 id="命令的执行流程"><a href="#命令的执行流程" class="headerlink" title="命令的执行流程"></a>命令的执行流程</h2><ol>
-<li>用户=&gt;客户端: 输入命令；</li>
-<li>客户端=&gt;服务端: 命令按通信协议传输到服务器输入缓冲区；</li>
-<li>服务端: 等待可读事件发生后，读输入缓冲区，解析命令；</li>
-<li>服务端：执行命令，将回复写入输出缓冲区；</li>
-<li>服务端=&gt;客户端：等待可写事件发生后，从输出缓冲区传输给客户端。</li>
-<li>客户端=&gt;用户: 回显命令结果。</li>
-</ol>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/02/21/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B06-%E5%AE%A2%E6%88%B7%E7%AB%AF%E4%B8%8E%E6%9C%8D%E5%8A%A1%E5%99%A8/" data-id="ck96cxpp800gdmaam9y4n3nq6" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -989,23 +1007,23 @@
       <ul>
         
           <li>
+            <a href="/2021/02/22/2021-02/%E5%A4%9A%E9%A1%B9%E7%9B%AE%E5%85%B1%E4%BA%AB%E4%BB%A3%E7%A0%81%E4%B9%8B%E2%80%94%E2%80%94git-subtree/">多项目共享代码之——git subtree</a>
+          </li>
+        
+          <li>
+            <a href="/2020/12/27/2020-12/%E8%B7%A8%E5%9F%9F%E7%9B%B8%E5%85%B3/">跨域相关</a>
+          </li>
+        
+          <li>
+            <a href="/2020/12/20/2020-12/%E7%BA%BF%E4%B8%8A%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-%E6%9F%A5%E7%9C%8B%E6%96%B9%E6%B3%95%E7%BA%A7%E8%80%97%E6%97%B6/">线上性能debug-查看方法级耗时</a>
+          </li>
+        
+          <li>
+            <a href="/2020/12/19/2020-12/%E5%8D%87%E7%BA%A7HTTP2%E7%AC%94%E8%AE%B0/">升级HTTP2笔记</a>
+          </li>
+        
+          <li>
             <a href="/2020/07/22/2020-07/ES%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0/">ES实战笔记</a>
-          </li>
-        
-          <li>
-            <a href="/2020/06/19/2020-06/tcp%E8%B0%83%E4%BC%98/">tcp调优</a>
-          </li>
-        
-          <li>
-            <a href="/2020/06/15/2020-06/jdk11%E4%B8%8Bg1%E6%94%B6%E9%9B%86%E5%99%A8%E4%BD%BF%E7%94%A8/">jdk11下g1收集器使用</a>
-          </li>
-        
-          <li>
-            <a href="/2020/06/08/2020-06/mysql%E5%8F%AF%E9%87%8D%E5%A4%8D%E8%AF%BB%E4%B8%8B%E7%94%A8for-update%E5%AF%BC%E8%87%B4%E7%9A%84%E6%AD%BB%E9%94%81/">mysql可重复读下用for update导致的死锁</a>
-          </li>
-        
-          <li>
-            <a href="/2020/05/05/2020-05/BeanCopier%E6%B5%8B%E8%AF%84%E6%8A%A5%E5%91%8A/">BeanCopier测评报告</a>
           </li>
         
       </ul>
@@ -1023,7 +1041,7 @@
   
   <div class="outer">
     <div id="footer-left">
-      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      &copy; 2014 - 2021 风梦七&nbsp;|&nbsp;
       主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
     </div>
      <div id="footer-right">

@@ -72,6 +72,569 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-09/Netty-in-action第七章-EventLoop和线程模型-笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/09/15/2018-09/Netty-in-action%E7%AC%AC%E4%B8%83%E7%AB%A0-EventLoop%E5%92%8C%E7%BA%BF%E7%A8%8B%E6%A8%A1%E5%9E%8B-%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2018-09-15T12:34:37.000Z" itemprop="datePublished">2018-09-15</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/Netty/">Netty</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/09/15/2018-09/Netty-in-action%E7%AC%AC%E4%B8%83%E7%AB%A0-EventLoop%E5%92%8C%E7%BA%BF%E7%A8%8B%E6%A8%A1%E5%9E%8B-%E7%AC%94%E8%AE%B0/">Netty in action第七章-EventLoop和线程模型-笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="线程模型"><a href="#线程模型" class="headerlink" title="线程模型"></a>线程模型</h1><h2 id="Executor-API-java-5"><a href="#Executor-API-java-5" class="headerlink" title="Executor API(java 5)"></a>Executor API(java 5)</h2><img src="/images/2018-09/7.1.jpg" class="" width="400" height="600" title="线程池">
+<p>java 5引入的Executor的执行逻辑是：池化线程，做成一个线程池，复用线程。</p>
+<p>优点:<br>消除了创建和销毁线程的开销；</p>
+<p>缺点:<br>高负载下上下文切换开销大。</p>
+<h2 id="事件循环：-EventLoop接口"><a href="#事件循环：-EventLoop接口" class="headerlink" title="事件循环： EventLoop接口"></a>事件循环： EventLoop接口</h2><p>事件循环如下。所谓事件循环就是一个死循环,1次批量处理所有ready的事件，而不是像之前Executor接口那样每个任务切换一次。可以看出高负载的时候比较有优势，低负载的时候有cpu空转。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">executeTaskInEventLoop</span><span class="params">()</span> </span>&#123;</span><br><span class="line">       <span class="keyword">boolean</span> terminated = <span class="keyword">true</span>;</span><br><span class="line">       <span class="comment">//...</span></span><br><span class="line">       <span class="keyword">while</span> (!terminated) &#123;</span><br><span class="line">           <span class="comment">//阻塞，直到有事件已经就绪可被运行</span></span><br><span class="line">           List&lt;Runnable&gt; readyEvents = blockUntilEventsReady();</span><br><span class="line">           <span class="keyword">for</span> (Runnable ev: readyEvents) &#123;</span><br><span class="line">               <span class="comment">//循环遍历，并处理所有的事件</span></span><br><span class="line">               ev.run();</span><br><span class="line">           &#125;</span><br><span class="line">       &#125;</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
+<p>看代码可以看出一个事件循环(<code>EventLoop</code>)就是某一个线程在那死循环执行任务。<br>所以如果要有多个线程干活，就要多个<code>EventLoop</code>,就组成了<code>EventLoopGroup</code>。(可以理解成一种批处理任务的线程池)。 看类层次也能发现，<code>EventLoopGroup</code>继承自<code>AbstractExecutorService</code>。<br>相应的类层次如下:</p>
+<img src="/images/2018-09/7.2.jpg" class="" width="400" height="600" title="EventLoop类图">
+
+<h3 id="执行顺序"><a href="#执行顺序" class="headerlink" title="执行顺序"></a>执行顺序</h3><p>事件/任务执行顺序是FIFO的。</p>
+<h2 id="Netty-IO和事件处理"><a href="#Netty-IO和事件处理" class="headerlink" title="Netty IO和事件处理"></a>Netty IO和事件处理</h2><p><strong>Netty3:</strong></p>
+<blockquote>
+<p>木有EventLoop.<br>入站事件: IO线程中处理;// 类似于EventLoop<br>出站事件: 调用线程处理;</p>
+</blockquote>
+<p>缺点:<br>上下文切换开销;<br>同步困难(例如当出站事件触发入站事件)。</p>
+<p><strong>Netty4:</strong></p>
+<blockquote>
+<p>用EventLoop;<br>给定EvenLoop，一个线程处理所有事件。<br>优点:<br>无需同步（除非是Sharable）,上下文开销降低。</p>
+</blockquote>
+<h1 id="任务调度-外部接口"><a href="#任务调度-外部接口" class="headerlink" title="任务调度(外部接口)"></a>任务调度(外部接口)</h1><p>有两种方式：</p>
+<ol>
+<li>JDK API;</li>
+<li>Netty API.</li>
+</ol>
+<h2 id="1-使用JDK-API"><a href="#1-使用JDK-API" class="headerlink" title="1. 使用JDK API"></a>1. 使用JDK API</h2><p>使用<code>java.util.concurrent.Executors</code>包里的api。<br>如果要设定一个60s后执行的任务:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">schedule</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="comment">// 线程池:</span></span><br><span class="line">    ScheduledExecutorService executor =</span><br><span class="line">            Executors.newScheduledThreadPool(<span class="number">10</span>);</span><br><span class="line">    ScheduledFuture&lt;?&gt; future = executor.schedule(</span><br><span class="line">        <span class="keyword">new</span> Runnable() &#123;</span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">            System.out.println(<span class="string">"Now it is 60 seconds later"</span>);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;, <span class="number">60</span>, TimeUnit.SECONDS); </span><br><span class="line">    executor.shutdown();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>缺点:<br>高负载下性能不足。</p>
+<h2 id="使用EventLoop调度任务"><a href="#使用EventLoop调度任务" class="headerlink" title="使用EventLoop调度任务"></a>使用EventLoop调度任务</h2><p>如果要设定一个60s后执行的任务:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">scheduleViaEventLoop</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    Channel ch = CHANNEL_FROM_SOMEWHERE; <span class="comment">// get reference from somewhere</span></span><br><span class="line">    ScheduledFuture&lt;?&gt; future = ch.eventLoop().schedule(</span><br><span class="line">        <span class="keyword">new</span> Runnable() &#123;</span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">            System.out.println(<span class="string">"60 seconds later"</span>);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;, <span class="number">60</span>, TimeUnit.SECONDS); <span class="comment">// 60s后</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>由于<code>EventLoop</code>是<code>ScheduledExecutorService</code>的子接口，因此有它一样的对外接口。<br>使用起来没啥区别。</p>
+<p>如果要设定一个每隔60s运行的任务:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">scheduleFixedViaEventLoop</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    Channel ch = CHANNEL_FROM_SOMEWHERE; <span class="comment">// get reference from somewhere</span></span><br><span class="line">    ScheduledFuture&lt;?&gt; future = ch.eventLoop().scheduleAtFixedRate(</span><br><span class="line">       <span class="keyword">new</span> Runnable() &#123;</span><br><span class="line">       <span class="meta">@Override</span></span><br><span class="line">       <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">            System.out.println(<span class="string">"Run every 60 seconds"</span>);</span><br><span class="line">       &#125;</span><br><span class="line">    &#125;, <span class="number">60</span>, <span class="number">60</span>, TimeUnit.SECONDS);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h1 id="实现细节-内部细节"><a href="#实现细节-内部细节" class="headerlink" title="实现细节(内部细节)"></a>实现细节(内部细节)</h1><h2 id="线程管理"><a href="#线程管理" class="headerlink" title="线程管理"></a>线程管理</h2><p>确定当前执行的线程是否是分配给当前Channel的线程。<br>// 一个Channel的所有事件会在同一个EventLoop里头。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span>(当前线程 in 匹配EventLoop中的线程) 直接执行;</span><br><span class="line"><span class="keyword">else</span>&#123;</span><br><span class="line">    任务放入内部队列。</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<img src="/images/2018-09/7.3.jpg" class="" width="400" height="600" title="EventLoop执行逻辑">
+
+<p><strong>优点:</strong><br>(1) 避免了线程同步。(只会执行当前Channel的任务)<br>(2) 减少了上下文切换。(有时候能够不进任务队列，直接执行)</p>
+<p><strong>缺点:</strong><br>单个事件可能阻塞整个<code>Channel</code>:<br>由于一个Channel的所有事件都由同一个EventLoop处理，因此要求EventLoop不能阻塞(不然其他事件就无法处理了)。</p>
+<p><strong>解决方案</strong><br>长时间运行或阻塞的任务=&gt;创建一个<code>EventExecutor</code>来消费掉，以便从<code>EventLoop</code>中移除，Netty提供了一个默认的<code>DefaultEventExecutorGroup</code>来支持这种操作。把它add进pipeline即可。<br>// TODO</p>
+<h2 id="EventLoop-线程分配"><a href="#EventLoop-线程分配" class="headerlink" title="EventLoop/线程分配"></a>EventLoop/线程分配</h2><p>一个Channel的事件由同一个EventLoop处理。Channel和EventLoop的对应关系由<code>EventLoopGroup</code>分配。</p>
+<h2 id="异步传输"><a href="#异步传输" class="headerlink" title="异步传输"></a>异步传输</h2><p><strong>特点:</strong><br>EventLoop数量少于Channel数量。// 多个Channel共享一个EventLoop。<br>EventLoop数量固定，不新增。</p>
+<img src="/images/2018-09/7.4.jpg" class="" width="400" height="600" title="异步EventLoop">
+
+<p>因为异步，所以少量线程数就能支撑。<br>具体分配Channel的时候，用<code>round-robin</code>实现即可，比较粗糙的负载均衡。</p>
+<p><strong>限制</strong><br>由于1个EventLoop用于多个Channel, 意味着<code>Threadlocal</code>对象会被多个Channel共享。<br>需要注意这一点。</p>
+<h2 id="同步传输"><a href="#同步传输" class="headerlink" title="同步传输"></a>同步传输</h2><p><strong>特点</strong><br>EventLoop数量等于Channel数量。 // 不共享EventLoop<br>EventLoop数量不断增加，每次新增Channel，就新增EventLoop。</p>
+<img src="/images/2018-09/7.5.jpg" class="" width="400" height="600" title="同步EventLoop">
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/09/15/2018-09/Netty-in-action%E7%AC%AC%E4%B8%83%E7%AB%A0-EventLoop%E5%92%8C%E7%BA%BF%E7%A8%8B%E6%A8%A1%E5%9E%8B-%E7%AC%94%E8%AE%B0/" data-id="ck96cxpoh00d5maamcscucndh" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Netty/" rel="tag">Netty</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2018-09/Netty-in-action第六章-ChannelHandler和pipeline-笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/09/08/2018-09/Netty-in-action%E7%AC%AC%E5%85%AD%E7%AB%A0-ChannelHandler%E5%92%8Cpipeline-%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2018-09-08T12:16:07.000Z" itemprop="datePublished">2018-09-08</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/Netty/">Netty</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/09/08/2018-09/Netty-in-action%E7%AC%AC%E5%85%AD%E7%AB%A0-ChannelHandler%E5%92%8Cpipeline-%E7%AC%94%E8%AE%B0/">Netty in action第六章-ChannelHandler和pipeline-笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="ChannelHandler和ChannelPipeline"><a href="#ChannelHandler和ChannelPipeline" class="headerlink" title="ChannelHandler和ChannelPipeline"></a>ChannelHandler和ChannelPipeline</h1><h2 id="Channel生命周期-状态自动机"><a href="#Channel生命周期-状态自动机" class="headerlink" title="Channel生命周期 / 状态自动机"></a>Channel生命周期 / 状态自动机</h2><p><code>ChannelUnregisterd</code>=&gt;<code>ChannelRegistered</code> =&gt; <code>ChannelActive</code> =&gt; <code>ChannelInactive</code> =&gt; <code>ChannelUnregisterd</code><br>每一个状态转化都会产生相应事件。</p>
+<blockquote>
+<p>ChannelUnregistered：刚创建;<br>ChannelRegistered: (创建以后),已注册到EventLoop;<br>ChannelActive: 已经连接到远程节点;<br>ChannelInactive: 没有连接到远程节点。</p>
+</blockquote>
+<h2 id="ChannelHeadler-生命周期"><a href="#ChannelHeadler-生命周期" class="headerlink" title="ChannelHeadler 生命周期"></a>ChannelHeadler 生命周期</h2><blockquote>
+<p>handlerAdded: ChannelHeadler添加到pipeline时调用;<br>handlerRemoved: 移除时;<br>exceptionCaught: 发生错误时。</p>
+</blockquote>
+<h2 id="ChannelInboundHandler接口-入站事件"><a href="#ChannelInboundHandler接口-入站事件" class="headerlink" title="ChannelInboundHandler接口 (入站事件)"></a>ChannelInboundHandler接口 (入站事件)</h2><p><strong>省略别的常见事件:</strong></p>
+<blockquote>
+<p>ChannelWritabilityChanged: 可写状态发生改变事件<br>userEventTriggered: 调用ChannelInboundHandler.fireUserEventTriggered()时触发。用于用户自定义事件。</p>
+</blockquote>
+<h3 id="可写状态与高低水位"><a href="#可写状态与高低水位" class="headerlink" title="可写状态与高低水位:"></a>可写状态与高低水位:</h3><p><code>high watermark</code>机制: 写太快时达到高水位线时，转变为不可写;<br>// is_full()是根据当前是否大于等于high water mark来判断，如果full会wait。<br><code>low watermark</code>机制: 达到低水位线时，转变为可写。</p>
+<p>// 其他地方<code>low watermark</code>的含义: 设定最小时间戳，低于低水位线的数据不再接收。</p>
+<h3 id="高低水位设置"><a href="#高低水位设置" class="headerlink" title="高低水位设置:"></a>高低水位设置:</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Channel.config.setWriteHighWaterMark();</span><br><span class="line">Channel.config.setWriteLowWaterMark();</span><br></pre></td></tr></table></figure>
+
+<p><code>ChannelConfig</code>默认的水位配置为低水位32K，高水位64K。</p>
+<h3 id="资源释放"><a href="#资源释放" class="headerlink" title="资源释放"></a>资源释放</h3><p>第五章里提到了<code>bufferBuf</code>的释放问题:<br><code>pipeline</code>里最后一个<code>Handler</code>要负责释放收到的数据:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">bufferBuf.release();</span><br></pre></td></tr></table></figure>
+
+<p>落实到入站事件中, 如果重写了<code>ChannelRead()</code>事件,这个方法需要负责释放池化的<code>ByteBuf</code>:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">channelRead</span><span class="params">(ChannelHandlerContext ctx, Object msg)</span> </span>&#123;</span><br><span class="line">    <span class="comment">//通过调用 ReferenceCountUtil.release()方法释放资源</span></span><br><span class="line">    ReferenceCountUtil.release(msg);</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// 底层调的是这个:</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">boolean</span> <span class="title">release</span><span class="params">(Object msg)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (msg <span class="keyword">instanceof</span> ReferenceCounted) &#123;</span><br><span class="line">            <span class="keyword">return</span> ((ReferenceCounted) msg).release();</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">false</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<h2 id="SimpleChannelInboundHandler的自动释放"><a href="#SimpleChannelInboundHandler的自动释放" class="headerlink" title="SimpleChannelInboundHandler的自动释放"></a>SimpleChannelInboundHandler的自动释放</h2><p>如果不想每次在<code>ChannelRead()</code>方法里释放消息,可以直接使用<code>SimpleChannelInboundHandler</code>,它会自动释放收到的消息。<br>相对的，由于有了自动释放,后续就无法再访问到了,因此使用<code>SimpleChannelInboundHandler</code>的时候消息引用会失效。</p>
+<p>小结:</p>
+<blockquote>
+<ol>
+<li>不使用SimpleChannelInboundHandler: 记得在一个ChannelRead释放消息数据;</li>
+<li>使用SimpleChannelInboundHandler: 注意会被自动释放，引用会失效。</li>
+</ol>
+</blockquote>
+<h2 id="ChannelOutboundHandler接口-出站事件"><a href="#ChannelOutboundHandler接口-出站事件" class="headerlink" title="ChannelOutboundHandler接口(出站事件)"></a>ChannelOutboundHandler接口(出站事件)</h2><p>类似的，出站事件也有很多，省略一些常见，列出几个特别的:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">flush: 将数据冲刷到远程节点时被调用;</span><br><span class="line">write: 将数据写到远程节点时被调用;</span><br><span class="line">&#x2F;&#x2F; 一旦ByteBuf 被写入到远程端， 它立即自动地放回原来的buffer池中.</span><br></pre></td></tr></table></figure>
+
+<p>与入站事件相对的,需要在<code>write</code>方法中释放消息:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">write</span><span class="params">(ChannelHandlerContext ctx,</span></span></span><br><span class="line"><span class="function"><span class="params">    Object msg, ChannelPromise promise)</span> </span>&#123;</span><br><span class="line">    ReferenceCountUtil.release(msg);</span><br><span class="line">    <span class="comment">//通知 ChannelPromise数据已经被处理了</span></span><br><span class="line">    promise.setSuccess();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>注意到<code>write</code>方法比<code>channelRead</code>多一个<code>ChannelPromise</code>参数:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ChannelPromise(子接口) -&gt; ChannelFuture(父接口)</span><br></pre></td></tr></table></figure>
+
+<h2 id="ChannelPromise与ChannelFuture"><a href="#ChannelPromise与ChannelFuture" class="headerlink" title="ChannelPromise与ChannelFuture"></a>ChannelPromise与ChannelFuture</h2><p><code>设计模式</code>:<br>实际上出站事件基本都多了这个<code>ChannelPromise</code>参数。<br>为了避免程序员写<code>bug</code>，netty4用<code>ChannelPromise</code>接口来更改任务完成状态,<br>而在那些只需要读/查询的场景，返回<code>ChannelFuture</code>接口。</p>
+<p>此外,<code>ChannelFuture</code>中比jdk的普通<code>Future</code>多了一些信息,状态有4种:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Uncompleted =&gt; success/fail/cancelled</span><br></pre></td></tr></table></figure>
+<p>每种状态的判定:(其实就是字面上的意思,猜也知道)</p>
+<table>
+<thead>
+<tr>
+<th align="center">状态</th>
+<th align="left">判定条件</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">Uncompleted</td>
+<td align="left">isDone():false,isSuccess():false,isCancelled():false,cause():null</td>
+</tr>
+<tr>
+<td align="center">success</td>
+<td align="left">isDone():ture,isSuccess():ture</td>
+</tr>
+<tr>
+<td align="center">fail</td>
+<td align="left">isDone():ture,isSuccess():false,cause():non-null</td>
+</tr>
+<tr>
+<td align="center">cancelled</td>
+<td align="left">isDone():ture,isCancelled():true</td>
+</tr>
+</tbody></table>
+<h1 id="入站事件和出站事件的区别"><a href="#入站事件和出站事件的区别" class="headerlink" title="入站事件和出站事件的区别"></a>入站事件和出站事件的区别</h1><p>再次强调一件事: </p>
+<blockquote>
+<p>出站事件基本比入站事件都多了1个<code>ChannelPromise</code>参数。</p>
+</blockquote>
+<p>本质上也就是出站事件要多一个通知机制:<br><code>ChannelPromise</code>,<code>ChannelFuture</code>与<code>ChannelFutureListener</code>。</p>
+<ul>
+<li>那么为什么两者要这样区别呢?<br>根本原因是出站中有<code>write</code>,<code>flush</code>这样的<code>io</code>操作，比较费时而且依赖于复杂因素，需要设计成异步的。<br>而入站事件基本都是在自己的内存里搞定，同步就够用了。</li>
+</ul>
+<p>理解了这一点，我们就能心平气和地接受出站事件的通知机制了。</p>
+<h2 id="通知机制"><a href="#通知机制" class="headerlink" title="通知机制"></a>通知机制</h2><blockquote>
+<ol>
+<li>每个出站操作返回一个<code>ChannelFuture</code>，注册到它的<code>ChannelFutureListener</code>将在操作完成的时候被通知成功还是失败；</li>
+<li>出站操作传入一个<code>ChannelPromise</code>,可以进行立即通知(更改状态): <code>setSuccess</code>/<code>setFailure</code>。</li>
+</ol>
+</blockquote>
+<p>注册<code>ChannelFutureListener</code>的两种姿势:</p>
+<ol>
+<li>对channel进行操作,获取<code>ChannelFuture</code>,然后注册<code>Listener</code>; // 可以用于某一次写的定制化操作;</li>
+<li>出站事件中,在传入的<code>ChannelPromise</code>上注册<code>Listener</code>。 // 应用于某类型的所有操作。</li>
+</ol>
+<p>相应的代码如下:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 方法1:</span></span><br><span class="line">io.netty.channel.ChannelFuture future = channel.write(someMessage);</span><br><span class="line">        future.addListener(<span class="keyword">new</span> ChannelFutureListener() &#123;</span><br><span class="line">            <span class="meta">@Override</span></span><br><span class="line">            <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">operationComplete</span><span class="params">(io.netty.channel.ChannelFuture f)</span> </span>&#123;</span><br><span class="line">                <span class="keyword">if</span> (!f.isSuccess()) &#123;</span><br><span class="line">                    f.cause().printStackTrace();</span><br><span class="line">                    f.channel().close();</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;);</span><br><span class="line"><span class="comment">// 方法2:</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">OutboundExceptionHandler</span> <span class="keyword">extends</span> <span class="title">ChannelOutboundHandlerAdapter</span> </span>&#123;</span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">write</span><span class="params">(ChannelHandlerContext ctx, Object msg,</span></span></span><br><span class="line"><span class="function"><span class="params">        ChannelPromise promise)</span> </span>&#123;</span><br><span class="line">        promise.addListener(<span class="keyword">new</span> ChannelFutureListener() &#123;</span><br><span class="line">            <span class="meta">@Override</span></span><br><span class="line">            <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">operationComplete</span><span class="params">(ChannelFuture f)</span> </span>&#123;</span><br><span class="line">                <span class="keyword">if</span> (!f.isSuccess()) &#123;</span><br><span class="line">                    f.cause().printStackTrace();</span><br><span class="line">                    f.channel().close();</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="ChannelHandler适配器"><a href="#ChannelHandler适配器" class="headerlink" title="ChannelHandler适配器"></a>ChannelHandler适配器</h2><p>netty提供了<code>handler</code>的基本实现:<code>ChannelInboundHandlerAdapter</code>和<code>ChannelOutboundHandlerAdapter。</code>（入站和出站）</p>
+<h1 id="ChannelPipeline接口"><a href="#ChannelPipeline接口" class="headerlink" title="ChannelPipeline接口"></a>ChannelPipeline接口</h1><blockquote>
+<p>1个Channel &lt;=&gt; 对应1个固定的ChannelPipeline</p>
+</blockquote>
+<p>在一个<code>ChannelHandler</code>中如何访问<code>pipeline</code>?:</p>
+<blockquote>
+<p>通过context获取到pipeline即可。</p>
+</blockquote>
+<h3 id="传播事件"><a href="#传播事件" class="headerlink" title="传播事件"></a>传播事件</h3><p>测试下一个<code>ChannelHandler</code>的类型是否与方向一致。</p>
+<h3 id="pipeline编排"><a href="#pipeline编排" class="headerlink" title="pipeline编排"></a>pipeline编排</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">modifyPipeline</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    ChannelPipeline pipeline = CHANNEL_PIPELINE_FROM_SOMEWHERE; <span class="comment">// get reference to pipeline;</span></span><br><span class="line">    <span class="comment">//创建一个 FirstHandler 的实例</span></span><br><span class="line">    FirstHandler firstHandler = <span class="keyword">new</span> FirstHandler();</span><br><span class="line">    <span class="comment">//将该实例作为"handler1"添加到ChannelPipeline 中</span></span><br><span class="line">    pipeline.addLast(<span class="string">"handler1"</span>, firstHandler);</span><br><span class="line">    <span class="comment">//将一个 SecondHandler的实例作为"handler2"添加到 ChannelPipeline的第一个槽中。这意味着它将被放置在已有的"handler1"之前</span></span><br><span class="line">    pipeline.addFirst(<span class="string">"handler2"</span>, <span class="keyword">new</span> SecondHandler());</span><br><span class="line">    <span class="comment">//将一个 ThirdHandler 的实例作为"handler3"添加到 ChannelPipeline 的最后一个槽中</span></span><br><span class="line">    pipeline.addLast(<span class="string">"handler3"</span>, <span class="keyword">new</span> ThirdHandler());</span><br><span class="line">    <span class="comment">//...</span></span><br><span class="line">    <span class="comment">//通过名称移除"handler3"</span></span><br><span class="line">    pipeline.remove(<span class="string">"handler3"</span>);</span><br><span class="line">    <span class="comment">//通过引用移除FirstHandler（它是唯一的，所以不需要它的名称）</span></span><br><span class="line">    pipeline.remove(firstHandler);</span><br><span class="line">    <span class="comment">//将 SecondHandler("handler2")替换为 FourthHandler:"handler4"</span></span><br><span class="line">    pipeline.replace(<span class="string">"handler2"</span>, <span class="string">"handler4"</span>, <span class="keyword">new</span> FourthHandler());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="pipeline的事件API"><a href="#pipeline的事件API" class="headerlink" title="pipeline的事件API"></a>pipeline的事件API</h2><p>主要用于触发下一个<code>handler</code>的事件,触发下一个入站事件一般带个前缀<code>fire</code>，触发出站事件则没有这个前缀。<br>例如:<br><code>fireChannelRegistered</code>: 触发pipeline中下一个channelInboundHandler的<code>channelRegistered</code>事件。(注意是<code>Inbound</code>)<br><code>connect</code>: 将channel连接到一个远程地址，将调用下一个<code>channelOutboundHandler</code>的connect方法。(注意是<code>outbound</code>)</p>
+<h1 id="ChannelHandlerContext接口"><a href="#ChannelHandlerContext接口" class="headerlink" title="ChannelHandlerContext接口"></a>ChannelHandlerContext接口</h1><p><code>ChannelHandlerContext</code>记录<code>channelHandler</code>和<code>channel</code>的联系，类似于一个弱实体。<br>它也有很多事件API，含义与其他类的不同，是基于当前上下文的，也就是说:<br>从当前关联的<code>ChannelHandler</code>开始，传播给<strong>下一个</strong>。</p>
+<p><code>ChannelHandlerContext</code>部分API:<br>// Channel相关:<br><code>alloc</code>: 返回<code>Channel</code>的<code>ByteBufAllocator</code>;<br><code>executor</code>: 返回调度事件的<code>EventExecutor</code>;<br>// handler相关:<br><code>fireChannelRead</code>: 触发下一个<code>InboundHanlder</code>的<code>ChannelRead</code>方法;(入站)<br><code>write</code>: 通过当前实例写入消息,并经过pipeline。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">ChannelHandlerContext</span> <span class="keyword">extends</span> <span class="title">AttributeMap</span>, <span class="title">ChannelInboundInvoker</span>, <span class="title">ChannelOutboundInvoker</span></span></span><br></pre></td></tr></table></figure>
+<p>如上所示,这个接口其实继承了inbound和outbound,所以出站方法也有。</p>
+<img src="/images/2018-09/6.5.jpg" class="" width="400" height="600" title="事件传递">
+<p>综上所述，如果要从某一个<code>ChannelHandler</code>A开始传递事件，要先获得它的上一个handler的context。如上图所示，调用<code>pipeline</code>或者<code>channel</code>上的事件的话，事件就会从1号位置开始流动,调用<code>channelContext</code>上的事件则会从2,3号位置(也就是下一个)开始流动。</p>
+<p>优势:</p>
+<ol>
+<li>减少事件传播开销;</li>
+<li>避开一些<code>handler</code>的处理。</li>
+</ol>
+<p>上述API可能的具体用途:</p>
+<ol>
+<li>动态切换协议. </li>
+<li>其他用途(暂时不知道还有啥)</li>
+</ol>
+<h2 id="Sharable"><a href="#Sharable" class="headerlink" title="Sharable"></a>Sharable</h2><p>可以将一个<code>ChannelHandler</code>绑定到多个<code>pipeline</code>(此时会产生多个<code>ChannelHandlerContext</code>)。这样做的场景: 比如需要收集跨越多个<code>Channel</code>的统计信息时。</p>
+<p>加上<code>@Sharable</code>注解的<code>ChannelHandler</code>(语法上)可以绑定到多个<code>pipeline</code>上，但程序员需要注意解决线程安全的问题。// 要么无状态不可变，要么加锁，要么CAS，要么threadlocal。</p>
+<h1 id="异常处理"><a href="#异常处理" class="headerlink" title="异常处理"></a>异常处理</h1><p>参考前文中出站事件的通知机制，因此出站事件中的异常也是封装在<code>ChannelFuture</code>中的，而不是像入站事件用<code>exceptionCaught</code>。<br>// 换言之, <code>ChannelOutboundHandler</code>没有<code>exceptionCaught</code>API。</p>
+<p>入站事件异常:// 消费完异常才不会向尾端传播</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">exceptionCaught</span><span class="params">(ChannelHandlerContext ctx,</span></span></span><br><span class="line"><span class="function"><span class="params">        Throwable cause)</span> </span>&#123;</span><br><span class="line">        cause.printStackTrace();</span><br><span class="line">        ctx.close();</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+<p>出站事件异常:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">operationComplete</span><span class="params">(io.netty.channel.ChannelFuture f)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (!f.isSuccess()) &#123;</span><br><span class="line">        f.cause().printStackTrace();</span><br><span class="line">        f.channel().close();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/09/08/2018-09/Netty-in-action%E7%AC%AC%E5%85%AD%E7%AB%A0-ChannelHandler%E5%92%8Cpipeline-%E7%AC%94%E8%AE%B0/" data-id="ck96cxpok00dhmaamad304ln4" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Netty/" rel="tag">Netty</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2018-09/Netty-in-action第五章-ByteBuf笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/09/01/2018-09/Netty-in-action%E7%AC%AC%E4%BA%94%E7%AB%A0-ByteBuf%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2018-09-01T10:40:59.000Z" itemprop="datePublished">2018-09-01</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/Netty/">Netty</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/09/01/2018-09/Netty-in-action%E7%AC%AC%E4%BA%94%E7%AB%A0-ByteBuf%E7%AC%94%E8%AE%B0/">Netty in Action第五章-ByteBuf笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>目录</p>
+<blockquote>
+<p>ByteBuf-Netty的数据容器<br>API详细信息<br>用例<br>内存分配</p>
+</blockquote>
+<p><code>ByteBuffer</code>: JAVA NIO使用的字节容器，使用复杂；<br><code>ByteBuf</code>:  Netty提供的字节容器，更简单灵活。</p>
+<h1 id="ByteBuf-API"><a href="#ByteBuf-API" class="headerlink" title="ByteBuf API"></a>ByteBuf API</h1><p><strong>优点</strong></p>
+<ul>
+<li>用户可以自定义缓冲区类型扩展</li>
+<li>透明的零拷贝</li>
+<li>容量按需增长</li>
+<li>读写切换不需要<code>flip()</code>方法</li>
+<li>读写使用不同索引</li>
+<li>支持方法链式调用</li>
+<li>支持引用计数 </li>
+<li>支持池化</li>
+</ul>
+<h1 id="外部接口"><a href="#外部接口" class="headerlink" title="外部接口:"></a>外部接口:</h1><ol>
+<li>从<code>Channel</code>或者<code>ctx</code>获取<code>ByteBuffAllocator</code>，然后再分配；</li>
+<li>用<code>Unpooled</code>工具类直接创建。<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 1. 从channel:</span></span><br><span class="line">Channel channel = ...;</span><br><span class="line">ByteBufAllocator allocator = channel.alloc(); <span class="comment">//1</span></span><br><span class="line">ByteBuf buf=allocator.heapBuffer();</span><br><span class="line"><span class="comment">// 2. 从ctx:</span></span><br><span class="line">ChannelHandlerContext ctx = ...;</span><br><span class="line">ByteBufAllocator allocator2 = ctx.alloc(); <span class="comment">//2</span></span><br><span class="line">ByteBuf buf=allocator.heapBuffer();</span><br><span class="line"><span class="comment">// 3. </span></span><br><span class="line">ByteBuf buf=Unpooled.buffer();</span><br></pre></td></tr></table></figure>
+
+</li>
+</ol>
+<h1 id="内部工作机制"><a href="#内部工作机制" class="headerlink" title="内部工作机制"></a>内部工作机制</h1><img src="/images/2018-09/5.1.jpg" class="" width="400" height="600" title="读写索引">
+<p>维护两个索引: <code>readerIndex</code>,<code>writerIndex</code><br>// 这样就省得用<code>flip</code>来回切换读写状态了。</p>
+<p>如上图,起始为空，读的时候发现<code>readerIndex</code>&gt;=<code>writerIndex</code>,因此失败。</p>
+<h1 id="使用模式"><a href="#使用模式" class="headerlink" title="使用模式"></a>使用模式</h1><h2 id="堆缓冲区-使用模式-也称支撑数组backing-array"><a href="#堆缓冲区-使用模式-也称支撑数组backing-array" class="headerlink" title="堆缓冲区-使用模式 (也称支撑数组backing array)"></a>堆缓冲区-使用模式 (也称支撑数组backing array)</h2><h2 id="（heap-buffer）"><a href="#（heap-buffer）" class="headerlink" title="（heap buffer）"></a>（heap buffer）</h2><p>最常用，将数据存储在<code>JVM</code>堆中。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">static</span> Random random = <span class="keyword">new</span> Random();</span><br><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> ByteBuf BYTE_BUF_FROM_SOMEWHERE = Unpooled.buffer(<span class="number">1024</span>);</span><br><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> Channel CHANNEL_FROM_SOMEWHERE = <span class="keyword">new</span> NioSocketChannel();</span><br><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> ChannelHandlerContext CHANNEL_HANDLER_CONTEXT_FROM_SOMEWHERE = DUMMY_INSTANCE;</span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">heapBuffer</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    ByteBuf heapBuf = BYTE_BUF_FROM_SOMEWHERE; <span class="comment">//get reference form somewhere</span></span><br><span class="line">    <span class="comment">//检查 ByteBuf 是否有一个支撑数组</span></span><br><span class="line">    <span class="keyword">if</span> (heapBuf.hasArray()) &#123;</span><br><span class="line">        <span class="comment">//如果有，则获取对该数组的引用</span></span><br><span class="line">        <span class="keyword">byte</span>[] array = heapBuf.array();</span><br><span class="line">        <span class="comment">//计算第一个字节的偏移量</span></span><br><span class="line">        <span class="keyword">int</span> offset = heapBuf.arrayOffset() + heapBuf.readerIndex();</span><br><span class="line">        <span class="comment">//获得可读字节数</span></span><br><span class="line">        <span class="keyword">int</span> length = heapBuf.readableBytes();</span><br><span class="line">        <span class="comment">//使用数组、偏移量和长度作为参数调用你的方法</span></span><br><span class="line">        handleArray(array, offset, length);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="直接缓冲区-使用模式"><a href="#直接缓冲区-使用模式" class="headerlink" title="直接缓冲区-使用模式"></a>直接缓冲区-使用模式</h2><h2 id="（direct-buffer）"><a href="#（direct-buffer）" class="headerlink" title="（direct buffer）"></a>（direct buffer）</h2><p>堆外内存，<code>directBuffer</code>,性能最好，省去一次复制。<br>缺点时要注意管理堆外内存。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">directBuffer</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    ByteBuf directBuf = BYTE_BUF_FROM_SOMEWHERE; <span class="comment">//get reference form somewhere</span></span><br><span class="line">    <span class="comment">//检查 ByteBuf 是否由数组支撑。如果不是，则这是一个直接缓冲区</span></span><br><span class="line">    <span class="keyword">if</span> (!directBuf.hasArray()) &#123;</span><br><span class="line">        <span class="comment">//获取可读字节数</span></span><br><span class="line">        <span class="keyword">int</span> length = directBuf.readableBytes();</span><br><span class="line">        <span class="comment">//分配一个新的数组来保存具有该长度的字节数据</span></span><br><span class="line">        <span class="keyword">byte</span>[] array = <span class="keyword">new</span> <span class="keyword">byte</span>[length];</span><br><span class="line">        <span class="comment">//将字节复制到该数组</span></span><br><span class="line">        directBuf.getBytes(directBuf.readerIndex(), array);</span><br><span class="line">        <span class="comment">//使用数组、偏移量和长度作为参数调用你的方法</span></span><br><span class="line">        handleArray(array, <span class="number">0</span>, length);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="复合缓冲区-使用模式"><a href="#复合缓冲区-使用模式" class="headerlink" title="复合缓冲区-使用模式"></a>复合缓冲区-使用模式</h2><h2 id="（composite-buffer）"><a href="#（composite-buffer）" class="headerlink" title="（composite buffer）"></a>（composite buffer）</h2><p>把上述两个模式复合，把多个<code>ByteBuf</code>聚合成一个视图处理。<br>消除了没有必要的复制，同时对外是一个通用的接口。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"> <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">byteBufComposite</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    CompositeByteBuf messageBuf = Unpooled.compositeBuffer();</span><br><span class="line">    ByteBuf headerBuf = BYTE_BUF_FROM_SOMEWHERE; <span class="comment">// can be backing or direct</span></span><br><span class="line">    ByteBuf bodyBuf = BYTE_BUF_FROM_SOMEWHERE;   <span class="comment">// can be backing or direct</span></span><br><span class="line">    <span class="comment">//将 ByteBuf 实例追加到 CompositeByteBuf</span></span><br><span class="line">    messageBuf.addComponents(headerBuf, bodyBuf);</span><br><span class="line">    <span class="comment">//...</span></span><br><span class="line">    <span class="comment">//删除位于索引位置为 0（第一个组件）的 ByteBuf</span></span><br><span class="line">    messageBuf.removeComponent(<span class="number">0</span>); <span class="comment">// remove the header</span></span><br><span class="line">    <span class="comment">//循环遍历所有的 ByteBuf 实例</span></span><br><span class="line">    <span class="keyword">for</span> (ByteBuf buf : messageBuf) &#123;</span><br><span class="line">        System.out.println(buf.toString());</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">byteBufCompositeArray</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    CompositeByteBuf compBuf = Unpooled.compositeBuffer();</span><br><span class="line">    <span class="comment">//获得可读字节数</span></span><br><span class="line">    <span class="keyword">int</span> length = compBuf.readableBytes();</span><br><span class="line">    <span class="comment">//分配一个具有可读字节数长度的新数组</span></span><br><span class="line">    <span class="keyword">byte</span>[] array = <span class="keyword">new</span> <span class="keyword">byte</span>[length];</span><br><span class="line">    <span class="comment">//将字节读到该数组中</span></span><br><span class="line">    compBuf.getBytes(compBuf.readerIndex(), array);</span><br><span class="line">    <span class="comment">//使用偏移量和长度作为参数使用该数组</span></span><br><span class="line">    handleArray(array, <span class="number">0</span>, array.length);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>CompositeByteBuf</code>附加了许多功能。</p>
+<h1 id="字节级操作"><a href="#字节级操作" class="headerlink" title="字节级操作"></a>字节级操作</h1><h2 id="随机访问-（可以重复消费）-getXXX之类的方法"><a href="#随机访问-（可以重复消费）-getXXX之类的方法" class="headerlink" title="随机访问 （可以重复消费）(getXXX之类的方法)"></a>随机访问 （可以重复消费）(getXXX之类的方法)</h2><p><code>ByteBuf</code>的随机访问与普通数组类似:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span>(<span class="keyword">int</span> i;i&lt;buffer.capacity();i++)&#123;</span><br><span class="line">    <span class="keyword">byte</span> b=buffer.getByte(i);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>普通访问不会改变<code>readerIndex</code>和<code>writerIndex</code>。<br>要改变需要调用<code>readerIndex(index)</code>和<code>writerIndex(index)</code>。</p>
+<h2 id="顺序访问-（不会重复消费）-readXXX-skipXXX之类的方法"><a href="#顺序访问-（不会重复消费）-readXXX-skipXXX之类的方法" class="headerlink" title="顺序访问 （不会重复消费）(readXXX/skipXXX之类的方法)"></a>顺序访问 （不会重复消费）(readXXX/skipXXX之类的方法)</h2><img src="/images/2018-09/5.4.png" class="" width="400" height="600" title="读写索引">
+<p>如上图所示，这种访问方式可以看作消费数据，通过移动readerIndex，扩大了可丢弃字节（已读），减少了可读字节。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//迭代缓冲区的可读字节。</span></span><br><span class="line"> ByteBuf buffer = ...;</span><br><span class="line"> <span class="keyword">while</span> (buffer.isReadable()) &#123;</span><br><span class="line">     System.out.println(buffer.readByte());</span><br><span class="line"> &#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="丢弃discardable-bytes-类似于compact-gc"><a href="#丢弃discardable-bytes-类似于compact-gc" class="headerlink" title="丢弃discardable bytes(类似于compact/gc)"></a>丢弃discardable bytes(类似于compact/gc)</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//调用:</span></span><br><span class="line">byteBuf.discardReadBytes();</span><br></pre></td></tr></table></figure>
+<p>丢弃已读部分回收空间，本质上是扩大了可写字节。<br>底层的实现是把可读的数据移动到首部，<code>readerIndex=0;writerIndex-=readerIndex.</code>，因此导致内存复制，有性能开销，所以尽量不要调用。</p>
+<h2 id="顺序写入"><a href="#顺序写入" class="headerlink" title="顺序写入:"></a>顺序写入:</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 1.</span></span><br><span class="line">byteBuf.writeBytes(otherByteBuf);</span><br><span class="line"><span class="comment">// 2.</span></span><br><span class="line">byteBuf.writeInt(<span class="number">26</span>);</span><br></pre></td></tr></table></figure>
+
+<h2 id="索引修改"><a href="#索引修改" class="headerlink" title="索引修改"></a>索引修改</h2><p><code>readerIndex</code>和<code>writerIndex</code>这俩变量，除了因为上述数据操作而间接发生改变，也可以直接强行改它们而不管数据：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">markReaderIndex()<span class="comment">// 标记为x</span></span><br><span class="line">resetReaderIndex()<span class="comment">// 回到x,注意不是0</span></span><br><span class="line">markWriterIndex() <span class="comment">// 标记为y</span></span><br><span class="line">resetWriterIndex()<span class="comment">// 回到y,注意不是0</span></span><br><span class="line">clear() <span class="comment">// 这个才是双双清0</span></span><br><span class="line">readerIndex(<span class="keyword">int</span>)</span><br><span class="line">writerIndex(<span class="keyword">int</span>)</span><br><span class="line"></span><br><span class="line"><span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> ByteBuf <span class="title">markReaderIndex</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        markedReaderIndex = readerIndex;</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">this</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> ByteBuf <span class="title">resetReaderIndex</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        readerIndex(markedReaderIndex);</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">this</span>;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+<p>这些操作不改变数据，所以是O(1)的。</p>
+<h2 id="查找（类似于Scan-And-Filter操作"><a href="#查找（类似于Scan-And-Filter操作" class="headerlink" title="查找（类似于Scan And Filter操作)"></a>查找（类似于Scan And Filter操作)</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//1:</span></span><br><span class="line"><span class="keyword">int</span> index = byteBuf.indexOf(xxx)</span><br><span class="line"><span class="comment">//2.</span></span><br><span class="line"><span class="keyword">int</span> index = byteBuf.forEachByte(ByteBufProcessor.FIND_CR);</span><br><span class="line"><span class="comment">// ByteBufProcessor 4.1版本改为 io.netty.util.ByteProcessor</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="派生缓冲区-类似于视图，可读写-浅拷贝"><a href="#派生缓冲区-类似于视图，可读写-浅拷贝" class="headerlink" title="派生缓冲区(类似于视图，可读写) // 浅拷贝"></a>派生缓冲区(类似于视图，可读写) // 浅拷贝</h2><p>创建的方法:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">duplicate()</span><br><span class="line">slice(<span class="keyword">int</span>,<span class="keyword">int</span>)</span><br><span class="line">Unpooled.unmodifiableBuffer(...)</span><br><span class="line">order(ByteOrder)</span><br><span class="line">readSlice(<span class="keyword">int</span>)</span><br></pre></td></tr></table></figure>
+<p>这些派生的<code>ByteBuf</code>实例，底层数据是和原来共享的，只是有自己的读写索引。</p>
+<h2 id="深拷贝"><a href="#深拷贝" class="headerlink" title="深拷贝"></a>深拷贝</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">copy(<span class="keyword">int</span>,<span class="keyword">int</span>)</span><br></pre></td></tr></table></figure>
+
+<h1 id="ByteBufHolder接口"><a href="#ByteBufHolder接口" class="headerlink" title="ByteBufHolder接口"></a>ByteBufHolder接口</h1><p><code>ByteBufHolder</code>接口就是把<code>ButeBuf</code>再封装一层，只暴露几个大的API:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">ByteBuf <span class="title">content</span><span class="params">()</span><span class="comment">// 返回持有的ByteBuf</span></span></span><br><span class="line"><span class="function"><span class="title">copy</span><span class="params">()</span></span></span><br><span class="line"><span class="function"><span class="title">duplicate</span><span class="params">()</span><span class="comment">// 浅拷贝</span></span></span><br></pre></td></tr></table></figure>
+<p>这样只需要声明实现这个接口，相当于宣布这个类内部有成员变量是<code>ByteBuf</code>，换言之就是一个承载数据的对象了。</p>
+<h1 id="ByteBuf分配"><a href="#ByteBuf分配" class="headerlink" title="ByteBuf分配"></a>ByteBuf分配</h1><h2 id="按需分配-ByteBufAllocator接口"><a href="#按需分配-ByteBufAllocator接口" class="headerlink" title="按需分配: ByteBufAllocator接口"></a>按需分配: ByteBufAllocator接口</h2><p>从<code>channel</code>或者<code>ctx</code>获得<code>ByteBufAllocator</code>，降低分配和释放内存的开销。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 1. 从channel:</span></span><br><span class="line">Channel channel = ...;</span><br><span class="line">ByteBufAllocator allocator = channel.alloc(); <span class="comment">//1</span></span><br><span class="line"><span class="comment">// 2. 从ctx:</span></span><br><span class="line">ChannelHandlerContext ctx = ...;</span><br><span class="line">ByteBufAllocator allocator2 = ctx.alloc(); <span class="comment">//2</span></span><br></pre></td></tr></table></figure>
+<p>拿到分配器以后，可以进行的操作:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Buffer()</span><br><span class="line">heapBuffer() </span><br><span class="line">directBuffer() </span><br><span class="line">compositeBuffer()</span><br><span class="line">...<span class="comment">// 总之就是各种创建ByteBuf的方法</span></span><br></pre></td></tr></table></figure>
+<p>netty的两个<code>ByteBufAllocator</code>的实现:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">PooledByteBufAllocator  <span class="comment">// 池化的,性能最高 </span></span><br><span class="line">UnpooledByteBufAllocator <span class="comment">// 非池化的</span></span><br></pre></td></tr></table></figure>
+<p><code>Channel</code>具体返回的分配器是池化还是非池化,可以通过<code>ChannelConfig</code>配置，或者设定<code>bootstrap</code>参数。</p>
+<h2 id="Unpooled缓冲区"><a href="#Unpooled缓冲区" class="headerlink" title="Unpooled缓冲区"></a>Unpooled缓冲区</h2><p>非网络项目时，或其他不能从<code>channel</code>,<code>ctx</code>获取<code>BufAllocator</code>时，可以用<code>Unpooled</code>工具类来创建未池化的<code>ByteBuf</code>实例。<br>它的方法与上述两个类似，只不过去掉了<code>heapBuf</code>,用<code>buffer()</code>方法代替，默认直接返回堆内存buf。</p>
+<h2 id="ByteBufUtil类"><a href="#ByteBufUtil类" class="headerlink" title="ByteBufUtil类"></a>ByteBufUtil类</h2><p>顾名思义，有一些用于<code>ByteBuf</code>的辅助方法，看起来比较有用包括:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">firstIndexof</span><br><span class="line">lastIndexof</span><br><span class="line">hexdump()<span class="comment">// 打印</span></span><br><span class="line">equals(buf1,buf2)</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+
+<h2 id="引用计数-ReferenceCounted"><a href="#引用计数-ReferenceCounted" class="headerlink" title="引用计数 // ReferenceCounted"></a>引用计数 // ReferenceCounted</h2><p>由于<code>ByteBuf</code>一般比较大，所以实际数据一般只会存一份，引用却会有很多。<br>然后引用的生命周期一般很长，。<br>所以<code>netty</code>除了<code>gcroot</code>的方法管理，还用了原始的引用计数:<br><code>ReferenceCounted</code>接口。<br>上文中的<code>ByteBufHolder</code>接口就是它的子接口。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">ByteBufHolder =&gt; ReferenceCounted</span><br><span class="line"><span class="comment">// 引用计数:</span></span><br><span class="line">ByteBuf buf=allocator.directBuffer();</span><br><span class="line"><span class="keyword">assert</span> buffer.refCnt()==<span class="number">1</span>; </span><br><span class="line"><span class="comment">// 释放:</span></span><br><span class="line"><span class="keyword">boolean</span> released = buffer.release();</span><br></pre></td></tr></table></figure>
+
+<p>四种<code>ByteBuf</code>:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">UnpooledHeapByteBuf: 堆内存，可以被jvm gc；</span><br><span class="line">UnpooledDirectByteBuf:  堆外，可以被jvm gc，但最好自己回收;</span><br><span class="line">PooledHeapByteBuf: 不可以被jvm gc <span class="comment">// 因为在池子里头</span></span><br><span class="line">PooledDirectByteBuf: 不可以被jvm gc. <span class="comment">// 因为在池子里头</span></span><br></pre></td></tr></table></figure>
+<p>换言之：<br>池化的jvm不管；<br>非池化的jvm可以管。</p>
+<p>增加计数器的操作:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">retain()</span><br><span class="line"><span class="comment">//或者刚出生的时候会有1.</span></span><br></pre></td></tr></table></figure>
+<p>减少计数器的操作:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">release()</span><br></pre></td></tr></table></figure>
+
+<p>编程规范:</p>
+<blockquote>
+<ol>
+<li>pipeline里最后一个处理者要负责release()</li>
+<li>中间某一个抛异常了，不往下传了，也要负责release()。 </li>
+<li>中间某一个往下传了别的数据，要负责release传入的原来那个数据。</li>
+</ol>
+</blockquote>
+<p>内存泄露提示:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">LEAK: ByteBuf.release() was not called before it’s garbage-collected. Enable advanced leak reporting to find out where the leak occurred. To enable advanced leak reporting, specify the JVM option ‘-Dio.netty.leakDetectionLevel=advanced’ or call ResourceLeakDetector.setLevel()</span><br></pre></td></tr></table></figure>
+<p>出现了这个说明有地方没有<code>release()</code>.可以提高检测级别打印出具体泄露点。</p>
+<p>参考:<br><a href="http://chen-tao.github.io/2015/10/03/netty/" target="_blank" rel="noopener">http://chen-tao.github.io/2015/10/03/netty/</a><br><a href="http://calvin1978.blogcn.com/articles/directbytebuffer.html" target="_blank" rel="noopener">http://calvin1978.blogcn.com/articles/directbytebuffer.html</a></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/09/01/2018-09/Netty-in-action%E7%AC%AC%E4%BA%94%E7%AB%A0-ByteBuf%E7%AC%94%E8%AE%B0/" data-id="ck96cxpoi00dbmaam4dug4m4k" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Netty/" rel="tag">Netty</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2018-08/Netty-in-action第四章-传输-笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/08/19/2018-08/Netty-in-action%E7%AC%AC%E5%9B%9B%E7%AB%A0-%E4%BC%A0%E8%BE%93-%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2018-08-19T12:07:49.000Z" itemprop="datePublished">2018-08-19</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/Netty/">Netty</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/08/19/2018-08/Netty-in-action%E7%AC%AC%E5%9B%9B%E7%AB%A0-%E4%BC%A0%E8%BE%93-%E7%AC%94%E8%AE%B0/">Netty in action第四章-传输-笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="Netty通用api"><a href="#Netty通用api" class="headerlink" title="Netty通用api"></a>Netty通用api</h1><p><code>Netty</code>为<code>oio</code>/<code>nio</code>的传输实现封装了一个通用<code>api</code>。<br>方便用户低成本切换。<br>代码见:<br><a href="https://github.com/xiaoyue26/netty-in-action-cn/blob/ChineseVersion/chapter4/" target="_blank" rel="noopener">https://github.com/xiaoyue26/netty-in-action-cn/blob/ChineseVersion/chapter4/</a></p>
+<p>使用<code>netty</code>的话,阻塞和非阻塞实现的切换只需两行:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// oio</span></span><br><span class="line">NioEventLoopGroup group = <span class="keyword">new</span> NioEventLoopGroup();</span><br><span class="line">b.group(group).channel(OioServerSocketChannel<span class="class">.<span class="keyword">class</span>)</span></span><br><span class="line"><span class="class"></span></span><br><span class="line"><span class="class">// <span class="title">nio</span></span></span><br><span class="line"><span class="class"><span class="title">NioEventLoopGroup</span> <span class="title">group</span> </span>= <span class="keyword">new</span> NioEventLoopGroup();</span><br><span class="line">b.group(group).channel(NioServerSocketChannel<span class="class">.<span class="keyword">class</span>)</span></span><br></pre></td></tr></table></figure>
+<p>也就是把<code>EvenLoopGroup</code>和<code>SeverSocketChannel</code>的实现换一下。</p>
+<h2 id="Channel接口"><a href="#Channel接口" class="headerlink" title="Channel接口"></a>Channel接口</h2><img src="/images/2018-08/4.1.jpg" class="" width="400" height="600" title="Channel接口">
+<p><code>Channel</code>接口的父接口包括:</p>
+<blockquote>
+<p>Comparable<Channel>: 每个Channel是独一无二的,不可以相等,但是可以排序;<br>AttributeMap: 获得各种属性</p>
+</blockquote>
+<p>依赖的接口:</p>
+<blockquote>
+<p>ChannelPipeLine: 有个方法返回它的pipeline;// 实现上大多有这个成员<br>ChannelConfig: 有个方法返回它的config;</p>
+</blockquote>
+<p>子接口:</p>
+<blockquote>
+<p>ServerChannel<br>AbstractChannel: 如果引用不相等，保证当hash值相同时,CompareTo方法会抛出Error。</p>
+</blockquote>
+<p>相关代码：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">final</span> <span class="keyword">int</span> <span class="title">compareTo</span><span class="params">(Channel o)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (<span class="keyword">this</span> == o) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">long</span> ret = hashCode - o.hashCode();</span><br><span class="line">        <span class="keyword">if</span> (ret &gt; <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="number">1</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> (ret &lt; <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="keyword">return</span> -<span class="number">1</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        ret = System.identityHashCode(<span class="keyword">this</span>) - System.identityHashCode(o);</span><br><span class="line">        <span class="keyword">if</span> (ret != <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="keyword">return</span> (<span class="keyword">int</span>) ret;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">// Jackpot! - different objects with same hashes</span></span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> Error();</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+
+
+
+
+<p><code>ChannelPipeLine</code>中的设计模式: 拦截过滤器.(类似于Unix管道命令)</p>
+<p>Netty提供的<code>Channel</code>实现都是线程安全的，可以支持多个线程并发写一个<code>Channel</code>。</p>
+<h2 id="Netty提供的传输实现"><a href="#Netty提供的传输实现" class="headerlink" title="Netty提供的传输实现"></a>Netty提供的传输实现</h2><p>包括:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">NIO  : 基于选择器</span><br><span class="line">Epoll: JNI驱动，支持linux上才有的特性,比NIO更快;</span><br><span class="line">OIO :  阻塞流</span><br><span class="line">Local: VM内部通过管道进行通信</span><br><span class="line">Embedded: 测试时使用。</span><br></pre></td></tr></table></figure>
+
+<h3 id="NIO传输实现"><a href="#NIO传输实现" class="headerlink" title="NIO传输实现"></a>NIO传输实现</h3><img src="/images/2018-08/4.2.jpg" class="" width="400" height="600" title="Channel接口">
+<p>实现上基于选择器，类似于一个注册表，用户注册各种事件的处理函数。<br>可能的状态变化包括:<br>op_accept: 接受新连接并创建<code>channel</code>时;<br>op_connect: 建立一个连接时；<br>op_read: 可以读时；<br>op_write: 可以写时。</p>
+<h3 id="Epoll传输实现"><a href="#Epoll传输实现" class="headerlink" title="Epoll传输实现"></a>Epoll传输实现</h3><p>性能比NIO更高。代码更改:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">EpollEventLoopGroup</span><br><span class="line">EpollServerSocketChannel<span class="class">.<span class="keyword">class</span></span></span><br></pre></td></tr></table></figure>
+
+<h3 id="水平触发LT"><a href="#水平触发LT" class="headerlink" title="水平触发LT"></a>水平触发LT</h3><blockquote>
+<p>只要有事件没消费完就一直提醒。(底层把没处理完的回调重新加入readylist)</p>
+</blockquote>
+<h3 id="边缘触发ET"><a href="#边缘触发ET" class="headerlink" title="边缘触发ET"></a>边缘触发ET</h3><blockquote>
+<p>有新事件才提醒。（底层省略了重新加入readylist那一步）</p>
+</blockquote>
+<p>优缺点对比:</p>
+<table>
+<thead>
+<tr>
+<th align="center">属性</th>
+<th align="left">水平触发(LT)</th>
+<th align="center">边缘触发(ET)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">开销</td>
+<td align="left">较大</td>
+<td align="center">较小</td>
+</tr>
+<tr>
+<td align="center">时效性</td>
+<td align="left">时效性高</td>
+<td align="center">时效性较低</td>
+</tr>
+<tr>
+<td align="center">数据安全</td>
+<td align="left">无遗漏</td>
+<td align="center">需要小心编程，否则有遗漏风险</td>
+</tr>
+</tbody></table>
+<p>单线程时: 水平触发时效性好一些；<br>高并发时: 边缘触发并发度好一些。</p>
+<p>jdk实现: 水平触发<br>netty实现: 边缘触发</p>
+<h3 id="OIO传输实现"><a href="#OIO传输实现" class="headerlink" title="OIO传输实现"></a>OIO传输实现</h3><p>Netty使用超时机制来让OIO和NIO的API统一。</p>
+<h3 id="Local传输实现"><a href="#Local传输实现" class="headerlink" title="Local传输实现"></a>Local传输实现</h3><p>用于在同一个JVM中运行的客户端和服务端之间的通信。<br>服务端并不绑定物理网络地址，也不接受真正的网络流量。<br>可以一开始先使用<code>Local</code>传输实现，方便以后有需求的时候迁移到<code>NIO</code>,<code>Epoll</code>实现。</p>
+<h3 id="Embedded传输实现"><a href="#Embedded传输实现" class="headerlink" title="Embedded传输实现"></a>Embedded传输实现</h3><p>用途： 创建单元测试。</p>
+<h2 id="传输的用例"><a href="#传输的用例" class="headerlink" title="传输的用例"></a>传输的用例</h2><p>Netty4支持的网络协议:</p>
+<table>
+<thead>
+<tr>
+<th align="center">传输实现</th>
+<th align="left">TCP</th>
+<th align="center">UDP</th>
+<th align="center">SCTP</th>
+<th align="center">UDT</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">NIO</td>
+<td align="left">√</td>
+<td align="center">√</td>
+<td align="center">√</td>
+<td align="center">√</td>
+</tr>
+<tr>
+<td align="center">Epoll</td>
+<td align="left">√</td>
+<td align="center">√</td>
+<td align="center">X</td>
+<td align="center">X</td>
+</tr>
+<tr>
+<td align="center">OIO</td>
+<td align="left">√</td>
+<td align="center">√</td>
+<td align="center">√</td>
+<td align="center">√</td>
+</tr>
+<tr>
+<td align="center">网络协议备注</td>
+<td align="left"></td>
+<td align="center"></td>
+<td align="center">串流控制传输协议，较冷门，目前主要应用在电信领域</td>
+<td align="center">基于UDP的可靠传输</td>
+</tr>
+</tbody></table>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/08/19/2018-08/Netty-in-action%E7%AC%AC%E5%9B%9B%E7%AB%A0-%E4%BC%A0%E8%BE%93-%E7%AC%94%E8%AE%B0/" data-id="ck96cxpod00csmaama7v53sj5" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Netty/" rel="tag">Netty</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-08/Netty实战第三章-外部接口笔记" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/08/18/2018-08/Netty%E5%AE%9E%E6%88%98%E7%AC%AC%E4%B8%89%E7%AB%A0-%E5%A4%96%E9%83%A8%E6%8E%A5%E5%8F%A3%E7%AC%94%E8%AE%B0/" class="article-date">
@@ -551,365 +1114,6 @@
 
 
   
-    <article id="post-2018-07/sparkstreaming调优小结" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/07/22/2018-07/sparkstreaming%E8%B0%83%E4%BC%98%E5%B0%8F%E7%BB%93/" class="article-date">
-  <time datetime="2018-07-22T13:10:41.000Z" itemprop="datePublished">2018-07-22</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/spark/">spark</a>►<a class="article-category-link" href="/categories/spark/streaming/">streaming</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/07/22/2018-07/sparkstreaming%E8%B0%83%E4%BC%98%E5%B0%8F%E7%BB%93/">sparkstreaming调优小结</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>需求：</p>
-<blockquote>
-<ol>
-<li>消费速度必须高于生产速度;(天哪)</li>
-<li>即使有峰值也不能挂;</li>
-<li>资源占用尽量少，其中cores比内存稀缺;</li>
-<li>必须使用receiver模式，不提供direct接口。(天哪)</li>
-</ol>
-</blockquote>
-<p>措施:</p>
-<blockquote>
-<ol>
-<li>receiver数量与分区数一致，与executor数一致； </li>
-<li>duartion调优；</li>
-<li>persist选memory_and_disk；</li>
-<li>每个executor分3个core、6g内存;</li>
-<li>代码对于每个partition保存一次数据;</li>
-<li>关闭backpressure.enabled;</li>
-<li>receiver.maxRate设得超大。</li>
-</ol>
-</blockquote>
-<p>可能挂的场景：</p>
-<blockquote>
-<ol>
-<li>处理速度跟不上，缓存的数据失效了，rdd失联退出；</li>
-<li>delay越积越多，OOM。</li>
-</ol>
-</blockquote>
-<ol>
-<li><code>maxRate</code>与<code>backpressure.enabled false</code><br>由于底层架构不可控，api被别的部门重新封装，只开放了receiver模式，而且也不给zk连，因此只能使用receiver模式。</li>
-</ol>
-<p>这个模式的特点就是会先保存一份数据到wal，相当于所有数据会有两份。<br>当然也有优点就是编程简单，不用自己维护offset了。</p>
-<p>为了保证消费速度高于生产速度，设置了与分区数一致的receiver数量，并且：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">backpressure.enabled false</span><br><span class="line">receiver.maxRate	149600</span><br></pre></td></tr></table></figure>
-<p>前者true的话，意思是发现处理不过来的时候，会帮忙降低消费的速度；<br>后者就是设置最大消费速度。</p>
-<ol start="2">
-<li><p>为了使处理速度够快，设置了3个核，6g内存，相当于每个核2g内存。<br>由于receiver占用一个核，相当于每个executor上能有两个核同时处理task。</p>
-</li>
-<li><p>由于receiver模式接受到数据会首先缓存一份rdd。<br>默认所有rdd会继承dstream的缓存级别，而dstream的缓存级别默认是<code>MEMORY_ONLY_SER</code>。（题外话，spark任务的rdd默认缓存级别是<code>memory_only</code>）<br><code>MEMORY_ONLY_SER</code>级别的特点是占用内存少，而牺牲一点计算时间。<br>由于我们比较不缺内存，因此将存储级别改成<code>memory_and_disk</code>。<br>两个改变：<br>（1） 取消了反序列化的时间；<br>（2） 存不下的放disk，应对峰值可能出现的极端情况。</p>
-</li>
-<li><p>duration调优。<br>duration设置得小的话，内存占用小（缓存rdd），但是提交任务频繁，默认的启动计算开销占比大。<br>duration设置得大的话，内存占用大（缓存rdd），启动计算开销占比小。</p>
-</li>
-</ol>
-<p>最小资源占比：处理时间正好稍小于duration。<br>我的设置： 平时处理时间是duartion的1/3，以应对峰值。</p>
-<ol start="5">
-<li><p>保存数据时候的代码优化。<br>（1）每个partition保存一次；<br>（2）在executor上保存：<br>试了一下collect到driver上保存，发现慢了很多，出现了单点瓶颈。于是还是改到在每个executor上保存，每个executor上的线程访问自己的<code>threadlocal</code>对象，减少竞态条件。</p>
-</li>
-<li><p>gc时间：<br>使用CMS收集器，查看exector的gc日志，2小时内没有full gc,3秒一次gc。<br>gc总时间占task时间的4%：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">XX:MaxPermSize&#x3D;256m -XX:SurvivorRatio&#x3D;4 -XX:+UseMembar -XX:+UseConcMarkSweepGC -XX:+CMSParallelRemarkEnabled -XX:+CMSScavengeBeforeRemark -XX:ParallelCMSThreads&#x3D;4 -XX:+UseCMSCompactAtFullCollection -XX:+CMSClassUnloadingEnabled -XX:CMSInitiatingOccupancyFraction&#x3D;50 -XX:+UseCompressedOops</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>序列化类<br><code>spark.serializer</code>已经是<code>kyro</code>了。</p>
-</li>
-</ol>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/07/22/2018-07/sparkstreaming%E8%B0%83%E4%BC%98%E5%B0%8F%E7%BB%93/" data-id="ck96cxpo900cemaam29togwze" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spark/" rel="tag">spark</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/streaming/" rel="tag">streaming</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-2018-07/LinkedTransferQueue笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/07/14/2018-07/LinkedTransferQueue%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2018-07-14T12:48:42.000Z" itemprop="datePublished">2018-07-14</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/07/14/2018-07/LinkedTransferQueue%E7%AC%94%E8%AE%B0/">LinkedTransferQueue笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>本文主要讨论两个容器: <code>SynchronousQueue</code>和<code>LinkedTransferQueue</code>。重点是<code>LinkedTransferQueue</code>.<br>背景:</p>
-<blockquote>
-<p><a href="https://stackoverflow.com/questions/5102570/implementation-of-blockingqueue-what-are-the-differences-between-synchronousque" target="_blank" rel="noopener">https://stackoverflow.com/questions/5102570/implementation-of-blockingqueue-what-are-the-differences-between-synchronousque</a><br>有了LinkedBlockingQueue,为啥还要使用SynchronousQueue呢?<br>队列元素较少情况下: SynchronousQueue优于LinkedBlockingQueue<br>队列元素较多情况下: LinkedBlockingQueue优于SynchronousQueue。</p>
-</blockquote>
-<p><code>LinkedTransferQueue</code>的意义在于兼顾了可读性,易用性和高性能。</p>
-<blockquote>
-<p>高性能,无锁: <code>SynchronousQueue</code>,<code>ConcurrentLinkedQueue</code><br>可读性,易用性,有锁: <code>LinkedBlockingQueue</code><br>兼顾上述优点: <code>LinkedTransferQueue</code></p>
-</blockquote>
-<p><code>BlockingQueue</code>的实现:<br>大多是锁整个队列，并发量大的时候，锁比较耗费资源和时间。</p>
-<p><code>SynchronousQueue</code>:<br>无锁，只是传递元素，性能远高于<code>LinkedBlockingQueue</code>。</p>
-<p><code>ConcurrentLinkedQueue</code>:<br>无锁,性能高用CAS实现非阻塞的并发,但没有实现<code>BlockingQueue</code>接口,因此不能当阻塞队列使用(不能直接用于生产者消费者场景下).</p>
-<p>具体来说:<br><code>ConcurrentLinkedQueue</code>是<code>Queue</code>接口的一个实现.<br><code>SynchronousQueue</code>是<code>BlockingQueue</code>接口的一个实现:<br><code>LinkedTransferQueue</code>是<code>TransferQueue</code>接口的一个实现:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">LinkedTransferQueue-&gt;TransferQueue-&gt;BlockingQueue</span><br></pre></td></tr></table></figure>
-<p>具体定义(jdk1.8):</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">LinkedTransferQueue</span>&lt;<span class="title">E</span>&gt; <span class="keyword">extends</span> <span class="title">AbstractQueue</span>&lt;<span class="title">E</span>&gt;</span></span><br><span class="line"><span class="class">    <span class="keyword">implements</span> <span class="title">TransferQueue</span>&lt;<span class="title">E</span>&gt;, <span class="title">java</span>.<span class="title">io</span>.<span class="title">Serializable</span> </span>&#123;</span><br></pre></td></tr></table></figure>
-
-<h2 id="SynchronousQueue"><a href="#SynchronousQueue" class="headerlink" title="SynchronousQueue"></a>SynchronousQueue</h2><p>它本身不存在容量,只能进行线程之间的元素传送。由于对于传递性场景进行了某种充分的优化，其中最重要的是不需要锁，因此在只需要同步，不需要大量存储元素的场景下吞吐量很高。</p>
-<blockquote>
-<p>优势: 无锁,吞吐量大；<br>缺点: 无容量,只能用于传递性场景。</p>
-</blockquote>
-<p><em>todo: 具体是什么样神奇的优化。</em></p>
-<h2 id="ConcurrentLinkedQueue"><a href="#ConcurrentLinkedQueue" class="headerlink" title="ConcurrentLinkedQueue"></a>ConcurrentLinkedQueue</h2><p>详见之前的博客:<br><a href="http://xiaoyue26.github.io/2018/05/19/2018-05/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC%E5%85%AD%E7%AB%A02LinkedQueue/">java并发编程的艺术-第六章2LinkedQueue</a></p>
-<h2 id="LinkedTransferQueue"><a href="#LinkedTransferQueue" class="headerlink" title="LinkedTransferQueue"></a>LinkedTransferQueue</h2><p>本质上是多了<code>TransferQueue</code>接口的实现:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">transfer</span><span class="params">(E e)</span> <span class="keyword">throws</span> InterruptedException</span>;<span class="comment">// 阻塞</span></span><br><span class="line"><span class="function"><span class="keyword">boolean</span> <span class="title">tryTransfer</span><span class="params">(E e)</span></span>;</span><br><span class="line"><span class="function"><span class="keyword">boolean</span> <span class="title">tryTransfer</span><span class="params">(E e, <span class="keyword">long</span> timeout, TimeUnit unit)</span> <span class="keyword">throws</span> InterruptedException</span>;<span class="comment">// 一段时间阻塞</span></span><br><span class="line"><span class="function"><span class="keyword">boolean</span> <span class="title">hasWaitingConsumer</span><span class="params">()</span></span>;</span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">getWaitingConsumerCount</span><span class="params">()</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">/**一般来说，不抛`InterruptedException`异常的是不阻塞的方法;</span></span><br><span class="line"><span class="comment">抛`InterruptedException`异常的是阻塞,或者定时阻塞的方法.</span></span><br><span class="line"><span class="comment">*/</span></span><br></pre></td></tr></table></figure>
-<p>综合了<code>ConcurrentLinkedQueue</code>和<code>SynchronousQueue</code>的高吞吐量优点和<code>LinkedTransferQueue</code>的能存储大量元素的优点。</p>
-<ol>
-<li><code>transfer(E e)</code>：若当前存在一个正在等待获取的消费者线程，即立刻移交之；否则，会插入当前元素e到队列尾部，并且等待进入阻塞状态，到有消费者线程取走该元素。</li>
-<li><code>tryTransfer(E e)</code>：若当前存在一个正在等待获取的消费者线程（使用take()或者poll()函数），使用该方法会即刻转移/传输对象元素e；若不存在，则返回false，并且不进入队列。这是一个不阻塞的操作。</li>
-<li><code>tryTransfer(E e, long timeout, TimeUnit unit)</code>：若当前存在一个正在等待获取的消费者线程，会立即传输给它;否则将插入元素e到队列尾部，并且等待被消费者线程获取消费掉；若在指定的时间内元素e无法被消费者线程获取，则返回false，同时该元素被移除。</li>
-<li><code>hasWaitingConsumer()</code>：判断是否存在消费者线程。</li>
-<li><code>getWaitingConsumerCount()</code>：获取所有等待获取元素的消费线程数量。</li>
-</ol>
-<p>需要看看xfer的4个参数:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> NOW   = <span class="number">0</span>; <span class="comment">// 即使没有可以用的空间或者可用的数据,也立即返回。</span></span><br><span class="line"><span class="comment">// for 不计时的poll和tryTransfer</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> ASYNC = <span class="number">1</span>; <span class="comment">// 异步/非阻塞/立即返回. </span></span><br><span class="line"><span class="comment">// for offer, put, add</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> SYNC  = <span class="number">2</span>; <span class="comment">// 同步/阻塞/无限制等待.</span></span><br><span class="line"><span class="comment">// for transfer, take</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> TIMED = <span class="number">3</span>; <span class="comment">// 可以等待一定时间.</span></span><br><span class="line"><span class="comment">// for 计时的poll和 tryTransfer</span></span><br></pre></td></tr></table></figure>
-<p>这里要注意<code>take</code>和<code>poll</code>的区别,<code>take</code>阻塞到有元素,<code>poll</code>没元素的话,直接返回<code>null</code>即可,不会死等。</p>
-<p>参考资料:<br><a href="http://www.cnblogs.com/rockman12352/p/3790245.html" target="_blank" rel="noopener">http://www.cnblogs.com/rockman12352/p/3790245.html</a><br><a href="http://cmsblogs.com/?p=2433" target="_blank" rel="noopener">http://cmsblogs.com/?p=2433</a></p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/07/14/2018-07/LinkedTransferQueue%E7%AC%94%E8%AE%B0/" data-id="ck96cxpo700c7maam75y71rs8" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%B9%B6%E5%8F%91/" rel="tag">并发</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-2018-07/java中的代理" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/07/08/2018-07/java%E4%B8%AD%E7%9A%84%E4%BB%A3%E7%90%86/" class="article-date">
-  <time datetime="2018-07-08T12:24:16.000Z" itemprop="datePublished">2018-07-08</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/">设计模式</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/07/08/2018-07/java%E4%B8%AD%E7%9A%84%E4%BB%A3%E7%90%86/">java代理汇总</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="1-静态代理"><a href="#1-静态代理" class="headerlink" title="1. 静态代理"></a>1. 静态代理</h1><ol>
-<li>接口A;</li>
-<li>实现a1,实现A中的方法;</li>
-<li>代理a2,<br>(<code>AProxy implement A</code>),成员中有a1,这样实际干活的是a1,但是a2可以夹带一些私货,比如打上日志什么的。<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">AProxy</span> <span class="keyword">implements</span> <span class="title">AInterface</span> </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> A1 a1;</span><br><span class="line"> </span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">AProxy</span><span class="params">(A1 a1)</span> </span>&#123;<span class="comment">// 包裹一个实现</span></span><br><span class="line">        <span class="keyword">this</span>.a1 = a1;</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">doSomething</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        System.out.println(<span class="string">"代理类方法，进行了增强。。。"</span>);</span><br><span class="line">        System.out.println(<span class="string">"事务开始。。。"</span>);</span><br><span class="line">        <span class="comment">// 调用委托类的方法;</span></span><br><span class="line">        a1.doSomething();</span><br><span class="line">        System.out.println(<span class="string">"处理结束。。。"</span>);</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-</li>
-</ol>
-<h1 id="2-jdk动态代理"><a href="#2-jdk动态代理" class="headerlink" title="2. jdk动态代理"></a>2. jdk动态代理</h1><p>上述静态代理的特点是，如果有n个接口要代理，那么相应的静态代理a2也会有很多。<br>动态代理的方法就是用反射来动态生成一个代理。而不用每次写非常相似的代码。</p>
-<ol>
-<li>接口A;</li>
-<li>实现a1,实现A中的方法;</li>
-<li>动态代理,传入a1,通过反射创建一个与a1接口一样的类A2,并生成一个对象a2。<br>然后定义每次invoke的时候需要夹带的私货(打日志)。</li>
-</ol>
-<p>外界使用的时候,比静态代理多一步。<br>静态代理: 1.传入a1,得到一个代理a2.<br>动态代理: 2.传入a1,得到一个handler,再从handler中获取代理a2.（getProxy）</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> java.lang.reflect.InvocationHandler;</span><br><span class="line"><span class="keyword">import</span> java.lang.reflect.Method;</span><br><span class="line"><span class="keyword">import</span> java.lang.reflect.Proxy;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">DynamicProxyTest</span> </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">AHandler</span> <span class="keyword">implements</span> <span class="title">InvocationHandler</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 目标对象</span></span><br><span class="line">        <span class="keyword">private</span> Object a1Impl;</span><br><span class="line"></span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="title">AHandler</span><span class="params">(Object a1Impl)</span> </span>&#123;</span><br><span class="line">            <span class="keyword">super</span>();</span><br><span class="line">            <span class="keyword">this</span>.a1Impl = a1Impl;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">/**</span></span><br><span class="line"><span class="comment">         * 创建代理实例</span></span><br><span class="line"><span class="comment">         *</span></span><br><span class="line"><span class="comment">         * <span class="doctag">@return</span> proxy Object</span></span><br><span class="line"><span class="comment">         * <span class="doctag">@throws</span> Throwable e</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> Object <span class="title">getProxy</span><span class="params">()</span> <span class="keyword">throws</span> Throwable </span>&#123;</span><br><span class="line">            <span class="comment">// 实现1: 进行代理:</span></span><br><span class="line">            <span class="keyword">return</span> Proxy.newProxyInstance(Thread.currentThread()</span><br><span class="line">                    .getContextClassLoader(), <span class="keyword">this</span>.a1Impl.getClass()</span><br><span class="line">                    .getInterfaces(), <span class="keyword">this</span>);</span><br><span class="line">            <span class="comment">// 实现2: 不进行代理,依然使用默认实现:</span></span><br><span class="line">            <span class="comment">// 这样写只返回了目标对象，没有生成代理对象。</span></span><br><span class="line">            <span class="comment">// return a1Impl;</span></span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">/**</span></span><br><span class="line"><span class="comment">         * 实现InvocationHandler接口方法</span></span><br><span class="line"><span class="comment">         * 执行目标对象的方法，并进行增强</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> Object <span class="title">invoke</span><span class="params">(Object proxy, Method method, Object[] args)</span> <span class="keyword">throws</span> Throwable </span>&#123;</span><br><span class="line">            <span class="comment">// 使用代理proxy,调用方法method,参数为args</span></span><br><span class="line">            Object result;</span><br><span class="line">            System.out.println(<span class="string">"代理类方法，进行了增强。。。"</span>);</span><br><span class="line">            System.out.println(<span class="string">"事务开始。。。"</span>);</span><br><span class="line">            <span class="comment">// 执行目标方法对象</span></span><br><span class="line">            <span class="comment">// 调用a1Impl的method方法,参数为args</span></span><br><span class="line">            result = method.invoke(a1Impl, args);</span><br><span class="line">            System.out.println(<span class="string">"事务结束。。。"</span>);</span><br><span class="line">            <span class="keyword">return</span> result;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> <span class="keyword">throws</span> Throwable </span>&#123;</span><br><span class="line">        A a1 = <span class="keyword">new</span> A1();</span><br><span class="line">        AHandler handler = <span class="keyword">new</span> AHandler(a1);</span><br><span class="line">        <span class="comment">// 根据目标生成代理对象</span></span><br><span class="line">        A a2 = (A) handler.getProxy();</span><br><span class="line">        a2.doSomething();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-<h1 id="3-cglib动态代理"><a href="#3-cglib动态代理" class="headerlink" title="3. cglib动态代理"></a>3. cglib动态代理</h1><p>上述jdk的静态代理和动态代理,本质上都是用接口指针存放实现的对象,然后偷偷用包装了a1的代理a2,替换指针里的对象。<br>初始化时,代理a2的接口声明和a1一样即可。</p>
-<blockquote>
-<p>因此jdk的静态代理和动态代理都要求被代理的实现对象声明实现了某一个接口。</p>
-</blockquote>
-<p>cglib代理则不同,用的是基类指针存放子类对象,因此并不要求一定要声明实现某一个接口,但必须要是一个可以被继承的类。对于java来说，也就是不能是final类。</p>
-<blockquote>
-<p>jdk代理: 接口引用存放代理对象; 要求实现某接口.<br>cglib代理: 原类的引用存放代理对象; 要求不是final,可以继承。</p>
-</blockquote>
-<p>具体cglib代理的写法:</p>
-<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">&lt;!-- https://mvnrepository.com/artifact/cglib/cglib --&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>cglib<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>cglib<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br></pre></td></tr></table></figure>
-
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">AImpl</span> </span>&#123;<span class="comment">// 并不继承接口,但不是final的(可以有子类)</span></span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">doSomething</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        System.out.println(<span class="string">"AImpl doSomething"</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> java.lang.reflect.Method;</span><br><span class="line"><span class="keyword">import</span> net.sf.cglib.proxy.Enhancer;</span><br><span class="line"><span class="keyword">import</span> net.sf.cglib.proxy.MethodInterceptor;</span><br><span class="line"><span class="keyword">import</span> net.sf.cglib.proxy.MethodProxy;</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@author</span> xiaoyue26</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">AInterceptor</span> <span class="keyword">implements</span> <span class="title">MethodInterceptor</span> </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> Object target;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 创建代理实例</span></span><br><span class="line"><span class="comment">     *</span></span><br><span class="line"><span class="comment">     * <span class="doctag">@param</span> target</span></span><br><span class="line"><span class="comment">     * <span class="doctag">@return</span></span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> Object <span class="title">getInstance</span><span class="params">(Object target)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.target = target;</span><br><span class="line">        Enhancer enhancer = <span class="keyword">new</span> Enhancer();</span><br><span class="line">        enhancer.setSuperclass(<span class="keyword">this</span>.target.getClass());<span class="comment">// 继承传入的对象</span></span><br><span class="line">        <span class="comment">// 设置回调方法</span></span><br><span class="line">        enhancer.setCallback(<span class="keyword">this</span>);</span><br><span class="line">        <span class="comment">// 创建代理对象</span></span><br><span class="line">        <span class="keyword">return</span> enhancer.create();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 实现MethodInterceptor接口要重写的方法。</span></span><br><span class="line"><span class="comment">     * 回调方法</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> Object <span class="title">intercept</span><span class="params">(Object obj, Method method</span></span></span><br><span class="line"><span class="function"><span class="params">            , Object[] args, MethodProxy proxy)</span> <span class="keyword">throws</span> Throwable </span>&#123;</span><br><span class="line">        System.out.println(<span class="string">"事务开始。。。"</span>);</span><br><span class="line">        Object result = proxy.invokeSuper(obj, args);<span class="comment">// 调用父类对象(调用原实现)</span></span><br><span class="line">        System.out.println(<span class="string">"事务结束。。。"</span>);</span><br><span class="line">        <span class="keyword">return</span> result;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">        AInterceptor aInterceptor = <span class="keyword">new</span> AInterceptor();</span><br><span class="line">        AImpl a1 = (AImpl) aInterceptor.getInstance(<span class="keyword">new</span> AImpl());</span><br><span class="line">        a1.doSomething();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>与jdk动态代理很相似,只是概念术语换一下:<br>创建一个方法拦截器,传入实现a1,获取一个代理a2。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/07/08/2018-07/java%E4%B8%AD%E7%9A%84%E4%BB%A3%E7%90%86/" data-id="ck96cxpo800cbmaamfjo2dki5" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/" rel="tag">设计模式</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-2018-06/java并发编程的艺术-Executor框架-第十章" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/06/24/2018-06/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-Executor%E6%A1%86%E6%9E%B6-%E7%AC%AC%E5%8D%81%E7%AB%A0/" class="article-date">
-  <time datetime="2018-06-24T12:32:38.000Z" itemprop="datePublished">2018-06-24</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/06/24/2018-06/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-Executor%E6%A1%86%E6%9E%B6-%E7%AC%AC%E5%8D%81%E7%AB%A0/">java并发编程的艺术-Executor框架-第十章</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <ul>
-<li>两级调度:<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">上层调度: Executor框架控制;</span><br><span class="line">下层调度: 操作系统内核控制。</span><br></pre></td></tr></table></figure>
-
-</li>
-</ul>
-<h1 id="Executor框架"><a href="#Executor框架" class="headerlink" title="Executor框架"></a>Executor框架</h1><p>3大部分:</p>
-<h2 id="1-任务"><a href="#1-任务" class="headerlink" title="1. 任务"></a>1. 任务</h2><blockquote>
-<p>Runnable/Callable接口。</p>
-</blockquote>
-<h2 id="2-任务的执行"><a href="#2-任务的执行" class="headerlink" title="2. 任务的执行"></a>2. 任务的执行</h2><blockquote>
-<p>Executor、ExecutorService。<br>具体实现包括: ThreadPoolExecutor,ScheduledThreadExecutor…</p>
-</blockquote>
-<h2 id="3-任务的结果-异步计算的结果"><a href="#3-任务的结果-异步计算的结果" class="headerlink" title="3. 任务的结果(异步计算的结果)"></a>3. 任务的结果(异步计算的结果)</h2><blockquote>
-<p>Future接口/FutureTask类。</p>
-</blockquote>
-<h2 id="不同线程池适用场景"><a href="#不同线程池适用场景" class="headerlink" title="不同线程池适用场景"></a>不同线程池适用场景</h2><ul>
-<li>SingleThreadExecutor<br>单线程，适用于需要保证顺序执行，而且只允许单线程执行的场景；</li>
-<li>CachedThreadExecutor<br>大小无界，适用于负载较轻，或执行很多短期异步小任务；</li>
-<li>FixedThreadExecutor<br>大小固定，适用于负载较重的服务器。</li>
-</ul>
-<h2 id="周期线程池"><a href="#周期线程池" class="headerlink" title="周期线程池"></a>周期线程池</h2><ul>
-<li>ScheduledThreadPoolExecutor<br>大小固定；</li>
-<li>SingleThreadScheduledExetor<br>单线程。</li>
-</ul>
-<h2 id="Future接口"><a href="#Future接口" class="headerlink" title="Future接口"></a>Future接口</h2><p>submit任务到Executor后，返回一个Future接口对象，目前jdk的实现是FutureTask类对象，以后不一定。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&lt;T&gt;Future&lt;T&gt;submit(Callable&lt;T&gt;task)</span><br></pre></td></tr></table></figure>
-
-<h1 id="ThreadPoolExecutor"><a href="#ThreadPoolExecutor" class="headerlink" title="ThreadPoolExecutor"></a>ThreadPoolExecutor</h1><p>四大组件:</p>
-<ol>
-<li>corePool: 核心线程池大小</li>
-<li>maximumPool: 最大线程池大小</li>
-<li>BlockingQueue: 暂时保存任务的工作队列</li>
-<li>RejectedExecutionHandler: 线程池已经关闭或饱和(达到最大线程池大小且工作队列已满),execute方法调用的Handler。</li>
-</ol>
-<p>线程池通用的工作流程:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. 预热: 接到任务就新建线程，直到达到corePoolSize;</span><br><span class="line">2. 正式工作: 接到任务先扔到BlockingQueue，核心线程池的线程不停从BlockingQueue中取任务执行; </span><br><span class="line">3. 扩容: Blocking满,扩大corePool到maximunPool.</span><br><span class="line">4. 饱和: Blocking满,且达到maximumPool,调用rejectedExecutorHandler.</span><br></pre></td></tr></table></figure>
-
-<h2 id="创建线程池的方法"><a href="#创建线程池的方法" class="headerlink" title="创建线程池的方法:"></a>创建线程池的方法:</h2><ol>
-<li>使用<code>ExecutorService</code>中提供的定制好的线程池:<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Executors.newFixedThreadPool(<span class="number">1</span>);</span><br><span class="line">Executors.newSingleThreadExecutor();</span><br><span class="line">Executors.newCachedThreadPool();</span><br><span class="line">ExecutorService es = Executors.newCachedThreadPool();</span><br></pre></td></tr></table></figure></li>
-<li>自己用<code>ThreadPoolExecutor</code>定制一个线程池:<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 手动自定义详细参数:</span></span><br><span class="line">ExecutorService es2 = <span class="keyword">new</span> ThreadPoolExecutor(<span class="number">10</span>, <span class="number">10</span></span><br><span class="line">, <span class="number">101</span>, TimeUnit.SECONDS</span><br><span class="line">, <span class="keyword">new</span> LinkedBlockingQueue&lt;Runnable&gt;(<span class="number">2000</span>));</span><br></pre></td></tr></table></figure>
-
-</li>
-</ol>
-<p>其中的继承关系是:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">ThreadPoolExecutor-&gt;AbstractExecutorService-&gt;ExecutorService</span><br><span class="line">ThreadPoolExecutor extends AbstractExecutorService</span><br><span class="line"><span class="keyword">abstract</span> <span class="class"><span class="keyword">class</span> <span class="title">AbstractExecutorService</span> <span class="keyword">implements</span> <span class="title">ExecutorService</span></span></span><br></pre></td></tr></table></figure>
-
-
-
-<h2 id="FixedThreadPool"><a href="#FixedThreadPool" class="headerlink" title="FixedThreadPool"></a>FixedThreadPool</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// ThreadPoolExecutor实现类中的通用方法:</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">ThreadPoolExecutor</span><span class="params">(<span class="keyword">int</span> corePoolSize,</span></span></span><br><span class="line"><span class="function"><span class="params">                              <span class="keyword">int</span> maximumPoolSize,</span></span></span><br><span class="line"><span class="function"><span class="params">                              <span class="keyword">long</span> keepAliveTime,</span></span></span><br><span class="line"><span class="function"><span class="params">                              TimeUnit unit,</span></span></span><br><span class="line"><span class="function"><span class="params">                              BlockingQueue&lt;Runnable&gt; workQueue)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>(corePoolSize, maximumPoolSize, keepAliveTime, unit, workQueue,</span><br><span class="line">             Executors.defaultThreadFactory(), defaultHandler);</span><br><span class="line">    &#125;</span><br><span class="line"><span class="comment">//  Executors工具类中的FixedThreadPool:</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> ExecutorService <span class="title">newFixedThreadPool</span><span class="params">(<span class="keyword">int</span> nThread)</span></span>&#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">new</span> ThreadPoolExecutor(nThread,nThread,<span class="number">0L</span>,TimeUnit.MILLISECENDS</span><br><span class="line">    ,<span class="keyword">new</span> LinkedBlockingQueue&lt;Runnable&gt;());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>可以看出最大池和核心池都是n,也就是固定大小，不再扩容。<br>keekAlive时间为0，因此多余空闲线程立刻被终止。<br>最后一个参数用的是无界队列，因此没有饱和状态，只有shutdown状态。</p>
-<h2 id="SingleThreadExecutor"><a href="#SingleThreadExecutor" class="headerlink" title="SingleThreadExecutor"></a>SingleThreadExecutor</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> ExecutorService <span class="title">newSingleThreadExecutor</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> FinalizableDelegatedExecutorService</span><br><span class="line">            (<span class="keyword">new</span> ThreadPoolExecutor(<span class="number">1</span>, <span class="number">1</span>,</span><br><span class="line">                                    <span class="number">0L</span>, TimeUnit.MILLISECONDS,</span><br><span class="line">                                    <span class="keyword">new</span> LinkedBlockingQueue&lt;Runnable&gt;()));</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
-
-<h2 id="CachedThreadPool"><a href="#CachedThreadPool" class="headerlink" title="CachedThreadPool"></a>CachedThreadPool</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> ExecutorService <span class="title">newCachedThreadPool</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> ThreadPoolExecutor(<span class="number">0</span>, Integer.MAX_VALUE</span><br><span class="line">            ,<span class="number">60L</span>, TimeUnit.SECONDS</span><br><span class="line">            ,<span class="keyword">new</span> SynchronousQueue&lt;Runnable&gt;());</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
-<p>SynchronousQueue: 同步传递任务的阻塞队列。(容量为0,就是个传球手,总是满状态)</p>
-<p>上述三个实现都没有饱和状态，前两者是因为BlockingQueue无界，<br>CachedThreadPool是因为maximumPool太大了(Integer.MAX_VALUE)。<br><em>最近太忙了…to be continue…</em></p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/06/24/2018-06/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-Executor%E6%A1%86%E6%9E%B6-%E7%AC%AC%E5%8D%81%E7%AB%A0/" data-id="ck96cxpo700c4maambb371fzl" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%B9%B6%E5%8F%91/" rel="tag">并发</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -936,23 +1140,23 @@
       <ul>
         
           <li>
+            <a href="/2021/02/22/2021-02/%E5%A4%9A%E9%A1%B9%E7%9B%AE%E5%85%B1%E4%BA%AB%E4%BB%A3%E7%A0%81%E4%B9%8B%E2%80%94%E2%80%94git-subtree/">多项目共享代码之——git subtree</a>
+          </li>
+        
+          <li>
+            <a href="/2020/12/27/2020-12/%E8%B7%A8%E5%9F%9F%E7%9B%B8%E5%85%B3/">跨域相关</a>
+          </li>
+        
+          <li>
+            <a href="/2020/12/20/2020-12/%E7%BA%BF%E4%B8%8A%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-%E6%9F%A5%E7%9C%8B%E6%96%B9%E6%B3%95%E7%BA%A7%E8%80%97%E6%97%B6/">线上性能debug-查看方法级耗时</a>
+          </li>
+        
+          <li>
+            <a href="/2020/12/19/2020-12/%E5%8D%87%E7%BA%A7HTTP2%E7%AC%94%E8%AE%B0/">升级HTTP2笔记</a>
+          </li>
+        
+          <li>
             <a href="/2020/07/22/2020-07/ES%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0/">ES实战笔记</a>
-          </li>
-        
-          <li>
-            <a href="/2020/06/19/2020-06/tcp%E8%B0%83%E4%BC%98/">tcp调优</a>
-          </li>
-        
-          <li>
-            <a href="/2020/06/15/2020-06/jdk11%E4%B8%8Bg1%E6%94%B6%E9%9B%86%E5%99%A8%E4%BD%BF%E7%94%A8/">jdk11下g1收集器使用</a>
-          </li>
-        
-          <li>
-            <a href="/2020/06/08/2020-06/mysql%E5%8F%AF%E9%87%8D%E5%A4%8D%E8%AF%BB%E4%B8%8B%E7%94%A8for-update%E5%AF%BC%E8%87%B4%E7%9A%84%E6%AD%BB%E9%94%81/">mysql可重复读下用for update导致的死锁</a>
-          </li>
-        
-          <li>
-            <a href="/2020/05/05/2020-05/BeanCopier%E6%B5%8B%E8%AF%84%E6%8A%A5%E5%91%8A/">BeanCopier测评报告</a>
           </li>
         
       </ul>
@@ -970,7 +1174,7 @@
   
   <div class="outer">
     <div id="footer-left">
-      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      &copy; 2014 - 2021 风梦七&nbsp;|&nbsp;
       主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
     </div>
      <div id="footer-right">

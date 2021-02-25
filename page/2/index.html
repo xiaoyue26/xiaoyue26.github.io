@@ -72,6 +72,303 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2020-03/利用UTF-8编码的特性进行优化" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/03/26/2020-03/%E5%88%A9%E7%94%A8UTF-8%E7%BC%96%E7%A0%81%E7%9A%84%E7%89%B9%E6%80%A7%E8%BF%9B%E8%A1%8C%E4%BC%98%E5%8C%96/" class="article-date">
+  <time datetime="2020-03-26T08:29:11.000Z" itemprop="datePublished">2020-03-26</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2020/03/26/2020-03/%E5%88%A9%E7%94%A8UTF-8%E7%BC%96%E7%A0%81%E7%9A%84%E7%89%B9%E6%80%A7%E8%BF%9B%E8%A1%8C%E4%BC%98%E5%8C%96/">利用UTF-8编码的特性进行优化</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="引子"><a href="#引子" class="headerlink" title="引子"></a>引子</h1><p>做性能优化的时候，画出火焰图（<code>async-profiler</code>）来看，发现耗时很多花在了<code>utf-8</code>的编码解码上了,所以需要思考一下如何优化这部分。<br>(采样30秒:<code>./profiler.sh -d 30 -f profile.svg [pid]</code>)</p>
+<img src="/images/2020-03/fire1.png" class="" width="800" height="1200" title="fire1">
+<img src="/images/2020-03/fire2.png" class="" width="800" height="1200" title="fire2">
+
+<h1 id="What-什么是UTF-8编码"><a href="#What-什么是UTF-8编码" class="headerlink" title="What: 什么是UTF-8编码"></a>What: 什么是UTF-8编码</h1><p>UTF-8编码就是对于字节流(一串二进制)的解释，解释成字符串。<br>类似的还有: ASCII编码，就是把1B字节解释成128种字符。(范围是0-127,包括英文字母、数字)</p>
+<p>UTF-8编码下，一个字符可以由1B~4B二进制组成。</p>
+<h2 id="UTF-8格式"><a href="#UTF-8格式" class="headerlink" title="UTF-8格式"></a>UTF-8格式</h2><p>合法的格式包括4种:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">0xxxxxxx 				                0-127 (ASCII)</span><br><span class="line">110xxxxx 10xxxxxx 			            128-2047</span><br><span class="line">1110xxxx 10xxxxxx 10xxxxxx              2048-65535</span><br><span class="line">11110xxx 10xxxxxx 10xxxxxx 10xxxxxx 	65536-0x10ffff</span><br></pre></td></tr></table></figure>
+<p>它的首字节的前缀码会指出这个字符会占用多少字节。<br>合法的前缀码有4种:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">0X:    占1B;</span><br><span class="line">110X:  占2B;</span><br><span class="line">1110:  占3B;</span><br><span class="line">11110: 占4B;</span><br></pre></td></tr></table></figure>
+<p>显然还有一种<code>10X</code>不在其中。这是因为<code>10X</code>不属于合法的首字节的前缀码，只能在第2、3、4个字节中出现。如果我们随机选择<code>utf-8</code>二进制流中的一个字节来看的话，可能的情况有5种:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">0X:     首字节,这个字符总长1B</span><br><span class="line">10X:    非首字节.</span><br><span class="line">110X:   首字节,这个字符总长2B</span><br><span class="line">1110X:  首字节,这个字符总长3B</span><br><span class="line">11110X: 首字节,这个字符总长4B</span><br></pre></td></tr></table></figure>
+
+<h3 id="utf-8特性"><a href="#utf-8特性" class="headerlink" title="utf-8特性"></a>utf-8特性</h3><ol>
+<li>兼容性:  0-127和<code>ascii</code>码是一样的,而且在其他字节不可能出现,因此和<code>ascii</code>完全兼容;</li>
+<li>自同步性: 基于上面讨论的前缀码特性,从任意位置开始读,可以定位到合法位置开始解码。</li>
+</ol>
+<h3 id="优化方案"><a href="#优化方案" class="headerlink" title="优化方案"></a>优化方案</h3><p>基于上述两点洞察，再考虑到我此次工作只需要解析字母数字部分，再直接分发二进制流即可。因此可以做两点优化:</p>
+<ol>
+<li>读取时: 不解码,直接理解二进制的每个字节;</li>
+<li>利用自同步性: 并发解析; 原先只能顺序解码,并发解析可以从任意位置开始;</li>
+<li>输出时: 不编码,直接输出二进制;</li>
+</ol>
+<h3 id="结果"><a href="#结果" class="headerlink" title="结果"></a>结果</h3><p>取消编码、解码后这部分耗时下降了12%;<br>并发处理则大幅提速,提速了一倍以上。</p>
+<img src="/images/2020-03/res.png" class="" width="800" height="1200" title="res">
+
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2020/03/26/2020-03/%E5%88%A9%E7%94%A8UTF-8%E7%BC%96%E7%A0%81%E7%9A%84%E7%89%B9%E6%80%A7%E8%BF%9B%E8%A1%8C%E4%BC%98%E5%8C%96/" data-id="ck96cxpqm00lgmaam9g05a433" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/utf8/" rel="tag">utf8</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E7%BC%96%E7%A0%81/" rel="tag">编码</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2020-03/linux自连接" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/03/24/2020-03/linux%E8%87%AA%E8%BF%9E%E6%8E%A5/" class="article-date">
+  <time datetime="2020-03-24T02:02:26.000Z" itemprop="datePublished">2020-03-24</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E7%BD%91%E7%BB%9C/">网络</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2020/03/24/2020-03/linux%E8%87%AA%E8%BF%9E%E6%8E%A5/">linux自连接</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>linux支持自连接，也就是同一个ip，同一个机器，自己起一个server、client互相连接。<br>例如使用命令:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">nc localhost $port -p $port</span><br></pre></td></tr></table></figure>
+<p>对应TCP协议中的合法设定，同时打开:</p>
+<img src="/images/2020-03/open_now.png" class="" width="800" height="1200" title="open_now">
+
+<h2 id="误触可能"><a href="#误触可能" class="headerlink" title="误触可能"></a>误触可能</h2><p>虽然这是linux的一个feature，但是我们平时遇到这种情况一般是因为bug，也就是误触。</p>
+<p>一种可能：<br>进程1: listen端口A，然后挂掉，释放端口A；<br>进程2: 源端口A, 连接端口A。</p>
+<h2 id="触发bug条件"><a href="#触发bug条件" class="headerlink" title="触发bug条件"></a>触发bug条件</h2><p>listen端口选择了<code>net.ipv4.ip_local_port_range</code>范围；</p>
+<p><code>net.ipv4.ip_local_port_range</code>范围里的端口是linux连接目标端口时，选择源端口的范围。可以通过修改<code>/etc/sysctl.conf</code>调整。（如果要调大connect并发度）</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">// 查看:</span><br><span class="line">cat /proc/sys/net/ipv4/ip_local_port_range</span><br><span class="line">// 生效:</span><br><span class="line">sysctl -p /etc/sysctl.conf</span><br></pre></td></tr></table></figure>
+<p>因为connect使用的端口会从这个范围取，所以如果listen也用了这个范围，就很可能冲突，形成自连接。</p>
+<h3 id="并发度"><a href="#并发度" class="headerlink" title="并发度"></a>并发度</h3><p>内核3.2以前:  需保证<code>源ip,源端口</code>2元组不同,并发度更低; (随机选择端口)<br>内核3.2以后:  需保证<code>源ip,源端口,目标ip,目标端口</code>4元组不同即可,并发度更大； (顺序选择端口)</p>
+<h3 id="恶化bug条件"><a href="#恶化bug条件" class="headerlink" title="恶化bug条件"></a>恶化bug条件</h3><ol>
+<li>使用连接池，自连接无法释放；</li>
+<li>Linux内核&gt;=3.10: 2.6是随机选择端口,3.10是顺序递增选择；</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2020/03/24/2020-03/linux%E8%87%AA%E8%BF%9E%E6%8E%A5/" data-id="ck96cxpqj00l4maamg8c9cfx2" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/tcp/" rel="tag">tcp</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2020-03/redis大key问题" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/03/23/2020-03/redis%E5%A4%A7key%E9%97%AE%E9%A2%98/" class="article-date">
+  <time datetime="2020-03-23T06:22:37.000Z" itemprop="datePublished">2020-03-23</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2020/03/23/2020-03/redis%E5%A4%A7key%E9%97%AE%E9%A2%98/">redis大key问题</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <ol start="0">
+<li>为啥不能有大key;</li>
+<li>有一些方法，避免大key;</li>
+<li>有大key，安全删除大key;</li>
+</ol>
+<h1 id="what：-什么是大key问题"><a href="#what：-什么是大key问题" class="headerlink" title="what： 什么是大key问题"></a>what： 什么是大key问题</h1><p>就是一个key的value特别大，比如一个hashmap中存了超多k,v;<br>或者一个列表key中存了超长列表，等等；<br>多大算大： hashmap中有100w的k,v =&gt; 1s延迟；<br>删除大Key的时间复杂度: O(N), N代表大key里的值数量，因为redis是单线程一个个删。<br>所以删大key也会卡qps。</p>
+<h2 id="开发规范"><a href="#开发规范" class="headerlink" title="开发规范"></a>开发规范</h2><h3 id="单key大小"><a href="#单key大小" class="headerlink" title="单key大小"></a>单key大小</h3><p>Redis限制每个String类型value大小不超过512MB， 实际开发中，不要超过10KB，否则会对CPU和网卡造成极大负载。 hash、list、set、zset元素个数不要超过5000。</p>
+<p>理论上限: 每个hashset里头元素数量&lt; 2^32. </p>
+<h3 id="key的数量"><a href="#key的数量" class="headerlink" title="key的数量"></a>key的数量</h3><p>官方评测： 单实例2.5亿<br>理论上限: 32位，2^32。约40亿</p>
+<h2 id="测试删除大key"><a href="#测试删除大key" class="headerlink" title="测试删除大key"></a>测试删除大key</h2><p>可以用<code>slowlog</code>命令来查看删除耗时:</p>
+<figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">DEL big_key1</span><br><span class="line">SLOWLOG GET <span class="number">2</span></span><br></pre></td></tr></table></figure>
+
+
+<h1 id="why-为啥不能有大key"><a href="#why-为啥不能有大key" class="headerlink" title="why: 为啥不能有大key"></a>why: 为啥不能有大key</h1><p>redis的基础假设是每个操作都很快，所以设计成单线程处理；<br>所以如果有大key，基础设计就不成立了，会阻塞；</p>
+<p>问题： </p>
+<ol>
+<li>数据倾斜，部分redis分片节点存储占用很高；</li>
+<li>查询突然很慢，qps降低；</li>
+</ol>
+<h1 id="How-如何避免大key"><a href="#How-如何避免大key" class="headerlink" title="How: 如何避免大key"></a>How: 如何避免大key</h1><p>分治法，加一些key前缀\后置分解（如时间、哈希前缀、用户id后缀）;</p>
+<h1 id="安全删除大key"><a href="#安全删除大key" class="headerlink" title="安全删除大key"></a>安全删除大key</h1><ol>
+<li>首先要找到大key才能删除;</li>
+<li>如何删除；</li>
+</ol>
+<h2 id="找到大key、删除大Key"><a href="#找到大key、删除大Key" class="headerlink" title="找到大key、删除大Key"></a>找到大key、删除大Key</h2><h3 id="当版本-lt-4-0"><a href="#当版本-lt-4-0" class="headerlink" title="当版本&lt;4.0"></a>当版本&lt;4.0</h3><p> 1、导出rdb文件分析: <code>bgsave</code>, <code>redis-rdb-tool</code>;<br> 2、命令: <code>redis-cli --bigkeys</code>,找出最大的key；<br> 3、自己写脚本扫描;<br> 4、单个key查看: <code>debug object key</code>： 查看某个key序列化后的长度，每次看1个key的信息,比较没效率。</p>
+<h3 id="删除大Key"><a href="#删除大Key" class="headerlink" title="删除大Key:"></a>删除大Key:</h3><p>分解删除操作：<br>list: 逐步ltrim;<br>zset: 逐步zremrangebyscore;<br>hset: hscan出500个，然后hdel删除；<br>set: sscan扫描出500个，然后srem删除；<br>依次类推；</p>
+<h3 id="当版本-gt-4-0"><a href="#当版本-gt-4-0" class="headerlink" title="当版本&gt;=4.0"></a>当版本&gt;=4.0</h3><h4 id="寻找大key"><a href="#寻找大key" class="headerlink" title="寻找大key"></a>寻找大key</h4><p>命令: <code>memory usage</code></p>
+<h4 id="删除大key：-lazyfree机制"><a href="#删除大key：-lazyfree机制" class="headerlink" title="删除大key： lazyfree机制"></a>删除大key： lazyfree机制</h4><p><code>unlink</code>命令：代替DEL命令；<br>会把对应的大key放到<code>BIO_LAZY_FREE</code>后台线程任务队列，然后在后台异步删除；</p>
+<p>类似的异步删除命令:</p>
+<figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">flushdb async: 异步清空数据库</span><br><span class="line">flushall async: 异步清空所有数据库</span><br></pre></td></tr></table></figure>
+<p>异步删除配置:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">slave-lazy-flush: slave接受完rdb文件后，异步清空数据库；</span><br><span class="line">lazyfree-lazy-eviction: 异步淘汰key;</span><br><span class="line">lazyfree-lazy-expire:   异步key过期;</span><br><span class="line">lazyfree-lazy-server-del: 异步内部删除key；生效于rename命令</span><br><span class="line">## rename命令: RENAME mykey new_name </span><br><span class="line">## 如果new_name已经存在，会先删除new_name，此时触发上述lazy机制</span><br></pre></td></tr></table></figure>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2020/03/23/2020-03/redis%E5%A4%A7key%E9%97%AE%E9%A2%98/" data-id="ck96cxpqk00l8maam082dboea" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2020-03/分布式事务" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/03/23/2020-03/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/" class="article-date">
+  <time datetime="2020-03-23T06:20:40.000Z" itemprop="datePublished">2020-03-23</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2020/03/23/2020-03/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/">分布式事务</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <blockquote>
+<p>参考:<br><a href="https://segmentfault.com/a/1190000016397619#item-1-1" target="_blank" rel="noopener">https://segmentfault.com/a/1190000016397619#item-1-1</a><br><a href="https://www.cnblogs.com/duanxz/p/5226316.html" target="_blank" rel="noopener">https://www.cnblogs.com/duanxz/p/5226316.html</a></p>
+</blockquote>
+<p>文中提到的主要是微信支付数据库层面的分布式事务优化。</p>
+<h2 id="优化前"><a href="#优化前" class="headerlink" title="优化前"></a>优化前</h2><p>架构上分为:<br>客户端;<br>CN: Coordinator,协调节点, 类似于对外的服务接口、代理，帮忙协调锁资源;<br>GTM： Global Transaction Manager, 类似于全局锁，全局事务管理器<br>DN: 具体数据节点; </p>
+<p>逻辑很简单，就是CN每次向GTM申请锁，确保分布式事务的安全；<br>CN估计有多个，可能是react模式。<br>这种锁就像直接synchronized了全局，并发纯靠GTM单点纵向拓展。</p>
+<h2 id="优化后"><a href="#优化后" class="headerlink" title="优化后"></a>优化后</h2><p>锁下放到DN层。</p>
+<h1 id="分布式事务"><a href="#分布式事务" class="headerlink" title="分布式事务"></a>分布式事务</h1><p>分布式事务： 多个子系统一致成功、或一致失败回滚。</p>
+<p>4种类型: </p>
+<ol>
+<li>优先考虑避免分布式事务：可以将两个子系统的数据库表放在同一个从库下时：直接使用mysql事务，避免分布式事务;</li>
+<li>无法放在同一个从库下时: 使用TCC;</li>
+<li>特殊限制下: TCC+MQ;</li>
+<li>只要求最终一致性时: 使用MQ异步处理，反复重试。</li>
+</ol>
+<p>2PC和TCC的区别:<br>2PC: 数据库层，性能差(数据库锁)；<br>TCC: 应用层，性能高，开发成本高(需要保证幂等性)。</p>
+<h1 id="TCC"><a href="#TCC" class="headerlink" title="TCC"></a>TCC</h1><p>TCC： Try-Cancel-Commit<br>开源实现: <code>ByteTCC</code></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">1、Try：尝试执行业务。</span><br><span class="line">完成所有业务检查(一致性)</span><br><span class="line">预留必须业务资源(准隔离性)</span><br><span class="line"></span><br><span class="line">2、Confirm：确认执行业务。</span><br><span class="line">真正执行业务</span><br><span class="line">不做任何业务检查</span><br><span class="line">只使用Try阶段预留的业务资源</span><br><span class="line"></span><br><span class="line">3、Cancel：取消执行业务</span><br><span class="line">释放Try阶段预留的业务资源</span><br></pre></td></tr></table></figure>
+<p>其中Confirm和cancel接口需要是幂等的。</p>
+<img src="/images/2020-03/tcc.png" class="" width="800" height="1200" title="tcc">
+<p>每个子事务实现TCC的几个幂等接口。</p>
+<ol>
+<li>使用try锁定资源;</li>
+<li>所有子事务: 写redo日志(持久化)\undo日志(回滚), 执行操作;</li>
+<li>所有子事务: commit提交;</li>
+<li>失败则cancel取消。</li>
+</ol>
+<h2 id="特例"><a href="#特例" class="headerlink" title="特例"></a>特例</h2><p>最后一个子事务可以只实现TryCommit合并:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">IF(代金券.Try) &#123;</span><br><span class="line">    IF(现金支付.TryAndCommit) &#123;</span><br><span class="line">        代金券.Commit</span><br><span class="line">    &#125;  &#123;</span><br><span class="line">        代金券.Cancel</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<h1 id="特殊限制下"><a href="#特殊限制下" class="headerlink" title="特殊限制下"></a>特殊限制下</h1><p>超强一致性：两个从库之间转账。<br>特殊限制： </p>
+<p>加钱: 可以try\commit\cancel;<br>减钱: 不能try，只能tryCommit(也就是一步到位,不能打日志反复重试(不让记录redo log(什么？你想记录用户的密码？))，不能cancel(有undo日志也无法回滚)),能失败。</p>
+<h3 id="方案"><a href="#方案" class="headerlink" title="方案"></a>方案</h3><p>方案1： 从库A先+100，然后从库B-100，最后都提交。<br>方案2： 从库B先-100，然后从库A+100，最后都提交。</p>
+<p>方案1, 需要平台先垫钱，肯定是不行的。<br>方案2, 如果-100的操作是无法try的(比如依赖银行系统)，只能直接tryCommit，也就是只能位于末尾，否则就无法符合TCC的模式了。</p>
+<p>方案3：<br>从库A+100:  Try;<br>从库B-100： TryCommit;<br>从库A+100:  Commit;</p>
+<p>方案3可行，略麻烦。<br>方案3的简化：<br>从库B-100: TryCommit;<br>发布事件到MQ;<br>从库A订阅事件，反复重试+100。 </p>
+<h1 id="最终一致性"><a href="#最终一致性" class="headerlink" title="最终一致性"></a>最终一致性</h1><p>将只需要最终一致性的子事务全部放在MQ中。<br>(类似发通知之类的事件)<br>发布事件到MQ，反复异步重试直到成功（削峰、错峰重试(随机探测)）</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2020/03/23/2020-03/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/" data-id="ck96cxpql00lcmaamb3uahuf3" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/" rel="tag">分布式事务</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%B9%B6%E5%8F%91/" rel="tag">并发</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2020-01/ThreadLocal的线性探测" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2020/01/12/2020-01/ThreadLocal%E7%9A%84%E7%BA%BF%E6%80%A7%E6%8E%A2%E6%B5%8B/" class="article-date">
@@ -585,677 +882,6 @@
 
 
   
-    <article id="post-2019-11/java8笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/11/03/2019-11/java8%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2019-11-03T12:56:11.000Z" itemprop="datePublished">2019-11-03</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/11/03/2019-11/java8%E7%AC%94%E8%AE%B0/">java8笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="lambda语法"><a href="#lambda语法" class="headerlink" title="lambda语法"></a>lambda语法</h1><p><code>i-&gt;{return &quot;xxx&quot;;}</code><br>本质上是借用匿名类来实现,并没有超脱原来的java的解题思路。</p>
-<p>这种类似于传一个函数指针的模式，底层是<code>@FunctionalInterface</code>注解的接口，因此我们可以自己声明一个接口作为方法的行参:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@FunctionalInterface</span></span><br><span class="line">   <span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">GetIdataFunction</span> </span>&#123;</span><br><span class="line">       <span class="function"><span class="keyword">int</span> <span class="title">getI</span><span class="params">(<span class="keyword">int</span> i)</span></span>;</span><br><span class="line"></span><br><span class="line">       <span class="function"><span class="keyword">default</span> String <span class="title">getInfo</span><span class="params">()</span> </span>&#123;</span><br><span class="line">           <span class="keyword">return</span> <span class="string">"找下标为i的数据"</span>;</span><br><span class="line">       &#125;</span><br><span class="line"></span><br><span class="line">   &#125;</span><br><span class="line"></span><br><span class="line">   <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">searchMatrix</span><span class="params">(<span class="keyword">int</span>[][] matrix, <span class="keyword">int</span> target)</span> </span>&#123;</span><br><span class="line">       <span class="keyword">if</span> (matrix == <span class="keyword">null</span> || matrix.length == <span class="number">0</span> || matrix[<span class="number">0</span>].length == <span class="number">0</span> || target &lt; matrix[<span class="number">0</span>][<span class="number">0</span>]) &#123;</span><br><span class="line">           <span class="keyword">return</span> <span class="keyword">false</span>;</span><br><span class="line">       &#125;</span><br><span class="line"></span><br><span class="line">       <span class="keyword">int</span> lowerBound = getLowerBound(target, <span class="number">0</span>, matrix.length - <span class="number">1</span>, i -&gt; matrix[i][<span class="number">0</span>]);</span><br><span class="line">       <span class="keyword">if</span> (lowerBound &gt;= <span class="number">0</span>) &#123;</span><br><span class="line">           <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line">       &#125;</span><br><span class="line">       <span class="keyword">final</span> <span class="keyword">int</span> finalLowerBound = -lowerBound - <span class="number">2</span>;</span><br><span class="line">       <span class="keyword">int</span> x = getLowerBound(target, <span class="number">0</span>, matrix[<span class="number">0</span>].length - <span class="number">1</span>, i -&gt; matrix[finalLowerBound][i]);</span><br><span class="line">       <span class="keyword">return</span> x &gt;= <span class="number">0</span>;</span><br><span class="line">   &#125;</span><br><span class="line"></span><br><span class="line">   <span class="function"><span class="keyword">private</span> <span class="keyword">int</span> <span class="title">getLowerBound</span><span class="params">(<span class="keyword">int</span> target, <span class="keyword">int</span> left, <span class="keyword">int</span> right, GetIdataFunction helper)</span> </span>&#123;</span><br><span class="line">       <span class="keyword">int</span> mid;</span><br><span class="line">       <span class="keyword">while</span> (left &lt;= right) &#123;</span><br><span class="line">           mid = (left + right) &gt;&gt;&gt; <span class="number">1</span>;</span><br><span class="line">           <span class="keyword">int</span> midVal = helper.getI(mid);</span><br><span class="line">           <span class="keyword">if</span> (target &lt; midVal) &#123;</span><br><span class="line">               right = mid - <span class="number">1</span>;</span><br><span class="line">           &#125; <span class="keyword">else</span> <span class="keyword">if</span> (target &gt; midVal) &#123;</span><br><span class="line">               left = mid + <span class="number">1</span>;</span><br><span class="line">           &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">               <span class="keyword">return</span> mid;</span><br><span class="line">           &#125;</span><br><span class="line">       &#125;</span><br><span class="line">       <span class="keyword">return</span> -left - <span class="number">1</span>;</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
-
-<h1 id="现成的Function声明汇总"><a href="#现成的Function声明汇总" class="headerlink" title="现成的Function声明汇总"></a>现成的Function声明汇总</h1><p>java8给了一些统一的描述术语(DSL)来分类这些函数接口:</p>
-<table>
-<thead>
-<tr>
-<th>接口</th>
-<th>lambda</th>
-<th>含义</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>Predicate&lt; T&gt;</td>
-<td>T-&gt;boolean</td>
-<td>类似于filter，接收T类型返回boolean</td>
-</tr>
-<tr>
-<td>Consumer&lt; T&gt;</td>
-<td>T-&gt;void</td>
-<td>类似于foreach，接收T类型返回void</td>
-</tr>
-<tr>
-<td>Function&lt; T,R&gt;</td>
-<td>T-&gt;R</td>
-<td>类似于Map，接收T类型返回R类型</td>
-</tr>
-<tr>
-<td>Supplier&lt; T&gt;</td>
-<td>()-&gt;T</td>
-<td></td>
-</tr>
-<tr>
-<td>UnaryOperator&lt; T&gt;</td>
-<td>T-&gt;T</td>
-<td></td>
-</tr>
-<tr>
-<td>BinaryOperator&lt; T&gt;</td>
-<td>(T,T)-&gt;T</td>
-<td></td>
-</tr>
-<tr>
-<td>BiPredicate&lt; L,R&gt;</td>
-<td>(L,R)-&gt;boolean</td>
-<td></td>
-</tr>
-<tr>
-<td>BiConsumer&lt; T,U&gt;</td>
-<td>(T,U)-&gt;void</td>
-<td></td>
-</tr>
-<tr>
-<td>BiFunction&lt; T,U,R&gt;</td>
-<td>(T,U)-&gt;R</td>
-<td></td>
-</tr>
-</tbody></table>
-<p>常见的几种函数指针都可以用这些现成的声明，如果要抛异常，或者比较特殊的入参、出参，就自己用<code>@FunctionalInterface</code>注解声明个接口和相应方法即可。</p>
-<p>此外，上述接口的T,R泛型都需要类、引用，因此如果要节省装箱开销，可以用相应的原始类型声明，比如一个<code>int-&gt;int</code>的变换，相应的接口就是<code>IntUnaryOperator</code>。<br>因此上一节中的代码可以简化成:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">searchMatrix</span><span class="params">(<span class="keyword">int</span>[][] matrix, <span class="keyword">int</span> target)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (matrix == <span class="keyword">null</span> || matrix.length == <span class="number">0</span> || matrix[<span class="number">0</span>].length == <span class="number">0</span> || target &lt; matrix[<span class="number">0</span>][<span class="number">0</span>]) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="keyword">false</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">int</span> lowerBound = getLowerBound(target, <span class="number">0</span>, matrix.length - <span class="number">1</span>, i -&gt; matrix[i][<span class="number">0</span>]);<span class="comment">// 闭包捕获matrix</span></span><br><span class="line">        <span class="keyword">if</span> (lowerBound &gt;= <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">final</span> <span class="keyword">int</span> finalLowerBound = -lowerBound - <span class="number">2</span>;</span><br><span class="line">        <span class="keyword">int</span> x = getLowerBound(target, <span class="number">0</span>, matrix[<span class="number">0</span>].length - <span class="number">1</span>, i -&gt; matrix[finalLowerBound][i]);<span class="comment">// 闭包捕获matrix和finalLowerBound</span></span><br><span class="line">        <span class="keyword">return</span> x &gt;= <span class="number">0</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">private</span> <span class="keyword">int</span> <span class="title">getLowerBound</span><span class="params">(<span class="keyword">int</span> target, <span class="keyword">int</span> left, <span class="keyword">int</span> right, IntUnaryOperator helper)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">int</span> mid;</span><br><span class="line">        <span class="keyword">while</span> (left &lt;= right) &#123;</span><br><span class="line">            mid = (left + right) &gt;&gt;&gt; <span class="number">1</span>;</span><br><span class="line">            <span class="keyword">int</span> midVal = helper.applyAsInt(mid);</span><br><span class="line">            <span class="keyword">if</span> (target &lt; midVal) &#123;</span><br><span class="line">                right = mid - <span class="number">1</span>;</span><br><span class="line">            &#125; <span class="keyword">else</span> <span class="keyword">if</span> (target &gt; midVal) &#123;</span><br><span class="line">                left = mid + <span class="number">1</span>;</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                <span class="keyword">return</span> mid;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> -left - <span class="number">1</span>;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
-
-
-<p>其他的原始类型(免装箱)的现成有的声明如下:（要用的时候可以查表）</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 1. Predicate&lt;T&gt; T-&gt;boolean :</span></span><br><span class="line">IntPredicate,LongPredicate, DoublePredicate</span><br><span class="line"><span class="comment">// 2. Consumer&lt;T&gt; T-&gt;void :</span></span><br><span class="line">IntConsumer,LongConsumer, DoubleConsumer</span><br><span class="line"><span class="comment">// 3. Function&lt;T,R&gt; T-&gt;R :</span></span><br><span class="line">IntFunction&lt;R&gt;,</span><br><span class="line">IntToDoubleFunction,</span><br><span class="line">IntToLongFunction,</span><br><span class="line">LongFunction&lt;R&gt;,</span><br><span class="line">LongToDoubleFunction,</span><br><span class="line">LongToIntFunction,</span><br><span class="line">DoubleFunction&lt;R&gt;,</span><br><span class="line">ToIntFunction&lt;T&gt;,</span><br><span class="line">ToDoubleFunction&lt;T&gt;,</span><br><span class="line">ToLongFunction&lt;T&gt; </span><br><span class="line"><span class="comment">// 4. Supplier&lt;T&gt; ()-&gt;T :</span></span><br><span class="line">BooleanSupplier,IntSupplier,LongSupplier,DoubleSupplier</span><br><span class="line"><span class="comment">// 5. UnaryOperator&lt;T&gt; T-&gt;T :</span></span><br><span class="line">IntUnaryOperator,</span><br><span class="line">LongUnaryOperator,</span><br><span class="line">DoubleUnaryOperator</span><br><span class="line"><span class="comment">// 6. BinaryOperator&lt;T&gt; (T,T)-&gt;T :</span></span><br><span class="line">IntBinaryOperator,</span><br><span class="line">LongBinaryOperator,</span><br><span class="line">DoubleBinaryOperator</span><br><span class="line"><span class="comment">// 7. BiConsumer&lt;T,U&gt; (T,U)-&gt;void :</span></span><br><span class="line">ObjIntConsumer&lt;T&gt;,</span><br><span class="line">ObjLongConsumer&lt;T&gt;,</span><br><span class="line">ObjDoubleConsumer&lt;T&gt;</span><br><span class="line"><span class="comment">// 8. BiFunction&lt;T,U,R&gt; (T,U)-&gt;R :</span></span><br><span class="line">ToIntBiFunction&lt;T,U&gt;,</span><br><span class="line">ToLongBiFunction&lt;T,U&gt;,</span><br><span class="line">ToDoubleBiFunction&lt;T,U&gt;</span><br></pre></td></tr></table></figure>
-
-<h1 id="无状态"><a href="#无状态" class="headerlink" title="无状态"></a>无状态</h1><p>默认无状态的操作:  map,filter,collect; // 假如不使用外部变量(闭包)<br>有状态的操作: reduce,sum,max,sorted,distinct,skip,limit; // 有内部状态、初始值</p>
-<p>// flatmap? </p>
-<h1 id="原始类型流"><a href="#原始类型流" class="headerlink" title="原始类型流"></a>原始类型流</h1><p>原始类型流如: <code>IntStream</code></p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">IntStream intStream = menu.stream().mapToInt(Dish::getCalories);</span><br><span class="line">Stream&lt; Integer&gt; stream = intStream.boxed();</span><br></pre></td></tr></table></figure>
-
-<p>原始类型的Optional:<code>OptionalInt</code></p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">OptionalInt maxCalories = menu.stream().mapToInt(Dish::getCalories).max();</span><br></pre></td></tr></table></figure>
-
-<h1 id="java中的蜂巢结构"><a href="#java中的蜂巢结构" class="headerlink" title="java中的蜂巢结构"></a>java中的蜂巢结构</h1><p>d3中有个蜂巢结构,java8中也可以有:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">Map&lt;Dish.Type, Map&lt;CaloricLevel, List&lt;Dish&gt;&gt;&gt; dishesByTypeCaloricLevel = menu.stream().collect(</span><br><span class="line">groupingBy(Dish::getType,</span><br><span class="line">   groupingBy(dish -&gt; &#123;</span><br><span class="line">        <span class="keyword">if</span> (dish.getCalories() &lt;= <span class="number">400</span>) <span class="keyword">return</span> CaloricLevel.DIET;</span><br><span class="line">        <span class="keyword">else</span> <span class="keyword">if</span> (dish.getCalories() &lt;= <span class="number">700</span>) <span class="keyword">return</span> CaloricLevel.NORMAL;</span><br><span class="line">        <span class="keyword">else</span> <span class="keyword">return</span> CaloricLevel.FAT;</span><br><span class="line">    &#125;);</span><br><span class="line">));</span><br></pre></td></tr></table></figure>
-
-<p>还可以分组计数:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Map&lt;Dish.Type, Long&gt; typesCount = menu.stream().collect(</span><br><span class="line">                    groupingBy(Dish::getType, counting()));</span><br></pre></td></tr></table></figure>
-
-
-<h1 id="collectors中的characteristics"><a href="#collectors中的characteristics" class="headerlink" title="collectors中的characteristics"></a>collectors中的characteristics</h1><p>返回枚举值的list:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">UNORDERED: 结果不受顺序影响;</span><br><span class="line">CONCURRENT: 可以并行运行;</span><br><span class="line">IDENTITY_FINISH: 累加器和最后的结果类型是一样的,不需要再转换。</span><br></pre></td></tr></table></figure>
-<p>一般是是返回后两者,因为一般都会希望维持顺序(如<code>toList</code>):</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> Set&lt;Characteristics&gt; <span class="title">characteristics</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> Collections.unmodifiableSet(EnumSet.of(</span><br><span class="line">    IDENTITY_FINISH, CONCURRENT));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>如果是生成质数这种,实现上依赖之前已经生成的质数,有状态,则不能并行。只返回一个<code>IDENTITY_FINISH</code>.</p>
-<h1 id="Spliterator"><a href="#Spliterator" class="headerlink" title="Spliterator"></a>Spliterator</h1><p>Spliterator的特性:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">ORDERED 元素有既定的顺序（例如List），因此Spliterator在遍历和划分时也会遵循这一顺序</span><br><span class="line">DISTINCT 对于任意一对遍历过的元素x和y，x.equals(y)返回false</span><br><span class="line">SORTED 遍历的元素按照一个预定义的顺序排序</span><br><span class="line">SIZED 该Spliterator由一个已知大小的源建立（例如Set），因此estimatedSize()返回的是准确值</span><br><span class="line">NONNULL 保证遍历的元素不会为null</span><br><span class="line">IMMUTABLE Spliterator的数据源不能修改。这意味着在遍历时不能添加、删除或修改任何元素</span><br><span class="line">CONCURRENT 该Spliterator的数据源可以被其他线程同时修改而无需同步</span><br><span class="line">SUBSIZED 该Spliterator和所有从它拆分出来的Spliterator都是SIZED</span><br></pre></td></tr></table></figure>
-<p>DISTINCT和SORTED比较难达到;<br>一般是:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">int</span> <span class="title">characteristics</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> ORDERED + SIZED + SUBSIZED + NONNULL + IMMUTABLE;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h1 id="设计模式"><a href="#设计模式" class="headerlink" title="设计模式"></a>设计模式</h1><p>策略模式: 策略发生变化，只修改用到的函数。(例如输入校验策略)<br>模版方法: 修改一大段代码中其中一个函数的调用实现。(传入函数指针)<br>观察者模式: 例如GUI场景下，注册一大堆监听事件。(传入函数指针)</p>
-<h2 id="责任链模式"><a href="#责任链模式" class="headerlink" title="责任链模式:"></a>责任链模式:</h2><p>每个处理者可以增加后继处理节点,形成一个链表，每次处理的时候，调用下一个处理者。用lamda中的addThen的话:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">UnaryOperator&lt;String&gt; headerProcessing =</span><br><span class="line"> (String text) -&gt; <span class="string">"From Raoul, Mario and Alan: "</span> + text;</span><br><span class="line">UnaryOperator&lt;String&gt; spellCheckerProcessing =</span><br><span class="line"> (String text) -&gt; text.replaceAll(<span class="string">"labda"</span>, <span class="string">"lambda"</span>);</span><br><span class="line">Function&lt;String, String&gt; pipeline =</span><br><span class="line"> headerProcessing.andThen(spellCheckerProcessing);</span><br><span class="line">String result = pipeline.apply(<span class="string">"Aren't labdas really sexy?!!"</span>)</span><br></pre></td></tr></table></figure>
-<h2 id="工厂模式"><a href="#工厂模式" class="headerlink" title="工厂模式"></a>工厂模式</h2><p>可以把构造函数放map里:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> <span class="keyword">static</span> Map&lt;String, Supplier&lt;Product&gt;&gt; map = <span class="keyword">new</span> HashMap&lt;&gt;();</span><br><span class="line"><span class="keyword">static</span> &#123;</span><br><span class="line"> map.put(<span class="string">"loan"</span>, Loan::<span class="keyword">new</span>);</span><br><span class="line"> map.put(<span class="string">"stock"</span>, Stock::<span class="keyword">new</span>);</span><br><span class="line"> map.put(<span class="string">"bond"</span>, Bond::<span class="keyword">new</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h1 id="lamda方法的单元测试"><a href="#lamda方法的单元测试" class="headerlink" title="lamda方法的单元测试"></a>lamda方法的单元测试</h1><ol>
-<li>存成成员变量(函数指针);</li>
-<li>匿名方法粒度太小了，应该测试上层方法;</li>
-</ol>
-<h1 id="lambda的副作用"><a href="#lambda的副作用" class="headerlink" title="lambda的副作用"></a>lambda的副作用</h1><ol>
-<li>出错信息模糊: 错误栈缺失准确的信息；</li>
-</ol>
-<h2 id="调试技巧"><a href="#调试技巧" class="headerlink" title="调试技巧"></a>调试技巧</h2><p>使用peek函数。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">List&lt;Integer&gt; result =</span><br><span class="line"> numbers.stream()</span><br><span class="line"> .peek(x -&gt; System.out.println(<span class="string">"from stream: "</span> + x))</span><br><span class="line"> .map(x -&gt; x + <span class="number">17</span>)</span><br><span class="line"> .peek(x -&gt; System.out.println(<span class="string">"after map: "</span> + x))</span><br><span class="line"> .filter(x -&gt; x % <span class="number">2</span> == <span class="number">0</span>)</span><br><span class="line"> .peek(x -&gt; System.out.println(<span class="string">"after filter: "</span> + x))</span><br><span class="line"> .limit(<span class="number">3</span>) <span class="comment">// 只取3个. </span></span><br><span class="line"> .peek(x -&gt; System.out.println(<span class="string">"after limit: "</span> + x))</span><br><span class="line"> .collect(toList());</span><br></pre></td></tr></table></figure>
-
-<h1 id="3种兼容性"><a href="#3种兼容性" class="headerlink" title="3种兼容性"></a>3种兼容性</h1><p>二进制级兼容： 现有二进制执行文件能无缝链接；<br>源码级兼容：   现有程序能够成功编译通过；<br>函数行为级兼容：程序接受同样的输入能得到同样的结果。</p>
-<p>接口中加入新的方法：<br>二进制级兼容：兼容;(不会被调用)<br>源码级兼容：不兼容;(不符合语法)<br>函数行为级兼容: 兼容;(不影响原有函数)</p>
-<p>抽象类和有默认方法的接口区别：抽象类可以有成员、不能多继承。</p>
-<p>默认方法的接口多继承优先级问题：</p>
-<ol>
-<li>类中的实现&gt; 接口中的;</li>
-<li>子接口中实现&gt;父接口中的;</li>
-<li>上述两种无法判断时,必须显式调用,声明调用的是哪个实现:<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// class C implement B,A</span></span><br><span class="line">B.<span class="keyword">super</span>.hello(); <span class="comment">// 显式调用B接口中的方法;</span></span><br></pre></td></tr></table></figure>
-
-</li>
-</ol>
-<h1 id="Option"><a href="#Option" class="headerlink" title="Option"></a>Option</h1><p>每次新建一个类的时候，所有引用类成员都尽量搞成<code>Option</code>.<br>如果可能为null,就搞成<code>Option</code>;<br>如果不可能为null,就维持朴素类型。// 比如构造时就自动填充确定值的final</p>
-<p>相当于领域中将是否可选这个属性也封装了进去，而不是靠注释来弱约束。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 初始化可以这样:</span></span><br><span class="line">Optional&lt;Car&gt; optCar = Optional.empty();</span><br><span class="line"><span class="comment">// 根据空或非空值创建: </span></span><br><span class="line">Optional&lt;Car&gt; optCar = Optional.ofNullable(car); <span class="comment">// 推荐初始化方式</span></span><br></pre></td></tr></table></figure>
-
-<p>用了Optional以后,后续用Stream api处理(疯狂调用<code>flatMap</code>),整个过程就变成函数式,再也不需要null关键字。</p>
-<p>对于可选成员(<code>Option&lt;T&gt;</code>): 调用<code>flatMap</code>;<br>对于必选成员(<code>final String</code>): 调用<code>map</code>;</p>
-<p>Option的缺点: 无法序列化。<br>如果需要可以序列化的类,只能隐藏Option变量:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> Optional&lt;Car&gt; <span class="title">getCarAsOptional</span><span class="params">()</span> </span>&#123;</span><br><span class="line">             <span class="keyword">return</span> Optional.ofNullable(car);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>Optional不能滥用(不能序列化):(java Lambda（JSR-335）专家组考虑并拒绝了它)</p>
-<blockquote>
-<p>尽量避免将Optional用于类属性、方法参数及集合元素中，因为以上三种情况，完全可以使用null值来代替Optional，没有必要必须使用Optional，另外Optional本身为引用类型，大量使用Optional会出现类似(这样描述不完全准确)封箱、拆箱的操作，在一定程度上会影响JVM的堆内存及内存回收。<br>相关tip:<br><a href="https://segmentfault.com/a/1190000018936877?utm_source=tag-newest" target="_blank" rel="noopener">https://segmentfault.com/a/1190000018936877?utm_source=tag-newest</a></p>
-</blockquote>
-<ul>
-<li>不要放进Map里，因为Optional不是作为值类型设计的，它的<code>equals、hashcode、==</code>方法都不能保证正确性(和唯一性有关的方法)。</li>
-</ul>
-<p>最后: POJO还是保持纯粹，这样也有向前先后兼容性。</p>
-<h1 id="异步编程"><a href="#异步编程" class="headerlink" title="异步编程"></a>异步编程</h1><p>无法从线程失败中恢复的版本:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> Future&lt;Double&gt; <span class="title">getPriceAsync</span><span class="params">(String product)</span> </span>&#123;     </span><br><span class="line">        CompletableFuture&lt;Double&gt; futurePrice = <span class="keyword">new</span> CompletableFuture&lt;&gt;();          </span><br><span class="line">        <span class="keyword">new</span> Thread( () -&gt; &#123;</span><br><span class="line">           <span class="keyword">double</span> price = calculatePrice(product);</span><br><span class="line">           futurePrice.complete(price);<span class="comment">// here</span></span><br><span class="line">        &#125;).start();</span><br><span class="line">       <span class="keyword">return</span> futurePrice;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>加上try catch:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">try</span> &#123;</span><br><span class="line">    <span class="keyword">double</span> price = calculatePrice(product);</span><br><span class="line">    futurePrice.complete(price);</span><br><span class="line">&#125; <span class="keyword">catch</span> (Exception ex) &#123;</span><br><span class="line">    futurePrice.completeExceptionally(ex);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>精简后:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> Future&lt;Double&gt; <span class="title">getPriceAsync</span><span class="params">(String product)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> CompletableFuture.supplyAsync(() -&gt; calculatePrice(product));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h2 id="并行查询-无状态"><a href="#并行查询-无状态" class="headerlink" title="并行查询(无状态)"></a>并行查询(无状态)</h2><p>无状态:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">shops.parallelStream().map(shop-&gt;String.format(<span class="string">"%s price is %.2f"</span></span><br><span class="line">,shop.getName(), shop.getPrice(product)))).collect(ToList());</span><br></pre></td></tr></table></figure>
-
-<p>定制Executor:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> Executor executor =</span><br><span class="line">Executors.newFixedThreadPool(Math.min(shops.size(), <span class="number">100</span>),</span><br><span class="line">    <span class="keyword">new</span> ThreadFactory() &#123;</span><br><span class="line">     <span class="function"><span class="keyword">public</span> Thread <span class="title">newThread</span><span class="params">(Runnable r)</span> </span>&#123;</span><br><span class="line">       Thread t = <span class="keyword">new</span> Thread(r);</span><br><span class="line">        t.setDaemon(<span class="keyword">true</span>);<span class="comment">// 守护线程,主线程结束后关闭</span></span><br><span class="line">        <span class="keyword">return</span> t;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
-
-
-<p>计算密集,无IO: 使用Stream接口; // 不加线程数<br>IO密集,计算简单: 使用<code>CompletableFuture</code>,自定义线程池; // 可以疯狂加线程</p>
-<h1 id="时间api"><a href="#时间api" class="headerlink" title="时间api"></a>时间api</h1><h2 id="LocalDate和LocalTime"><a href="#LocalDate和LocalTime" class="headerlink" title="LocalDate和LocalTime"></a>LocalDate和LocalTime</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">LocalDate date = LocalDate.of(<span class="number">2014</span>, <span class="number">3</span>, <span class="number">18</span>);</span><br><span class="line">LocalDate today = LocalDate.now();</span><br><span class="line">LocalTime time = LocalTime.of(<span class="number">13</span>, <span class="number">45</span>, <span class="number">20</span>);</span><br><span class="line"><span class="comment">// 字符串:</span></span><br><span class="line">LocalDate date = LocalDate.parse(<span class="string">"2014-03-18"</span>);</span><br><span class="line">LocalTime time = LocalTime.parse(<span class="string">"13:45:20"</span>);</span><br></pre></td></tr></table></figure>
-<h2 id="复合后-LocalDateTime"><a href="#复合后-LocalDateTime" class="headerlink" title="复合后: LocalDateTime"></a>复合后: LocalDateTime</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">LocalDateTime dt1 = LocalDateTime.of(<span class="number">2014</span>, Month.MARCH, <span class="number">18</span>, <span class="number">13</span>, <span class="number">45</span>, <span class="number">20</span>); LocalDateTime dt2 = LocalDateTime.of(date, time);<span class="comment">// 复合localDate和localTime</span></span><br></pre></td></tr></table></figure>
-
-<h2 id="unix时间-java-time-Instant"><a href="#unix时间-java-time-Instant" class="headerlink" title="unix时间: java.time.Instant"></a>unix时间: <code>java.time.Instant</code></h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Instant.ofEpochSecond(<span class="number">3</span>);<span class="comment">// 3</span></span><br></pre></td></tr></table></figure>
-
-<h2 id="时间间隔-Duration"><a href="#时间间隔-Duration" class="headerlink" title="时间间隔: Duration"></a>时间间隔: Duration</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Duration d1 = Duration.between(time1, time2);</span><br><span class="line">Duration d1 = Duration.between(dateTime1, dateTime2);</span><br><span class="line">Duration d2 = Duration.between(instant1, instant2);</span><br><span class="line">Duration threeMinutes = Duration.ofMinutes(<span class="number">3</span>);</span><br></pre></td></tr></table></figure>
-
-<h2 id="天间隔-Period"><a href="#天间隔-Period" class="headerlink" title="天间隔: Period"></a>天间隔: Period</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Period tenDays = Period.between(LocalDate.of(<span class="number">2014</span>, <span class="number">3</span>, <span class="number">8</span>),</span><br><span class="line">                        LocalDate.of(<span class="number">2014</span>, <span class="number">3</span>, <span class="number">18</span>));</span><br><span class="line">Period tenDays = Period.ofDays(<span class="number">10</span>);</span><br></pre></td></tr></table></figure>
-
-<p>上述类都是不可变的。// 线程安全</p>
-<p>修改直接返回新变量:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">LocalDate date2 = date1.withYear(<span class="number">2011</span>);</span><br><span class="line">LocalDate date2 = date1.plusWeeks(<span class="number">1</span>);</span><br></pre></td></tr></table></figure>
-
-<h2 id="个性化操作-TemporalAdjuster"><a href="#个性化操作-TemporalAdjuster" class="headerlink" title="个性化操作: TemporalAdjuster"></a>个性化操作: TemporalAdjuster</h2><p>下个周日、下个工作日、本月最后一天:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> <span class="keyword">static</span> java.time.temporal.TemporalAdjusters.*;</span><br><span class="line">LocalDate date1 = LocalDate.of(<span class="number">2014</span>, <span class="number">3</span>, <span class="number">18</span>);</span><br><span class="line">LocalDate date2 = date1.with(nextOrSame(DayOfWeek.SUNDAY));</span><br><span class="line">LocalDate date3 = date2.with(lastDayOfMonth());</span><br></pre></td></tr></table></figure>
-
-<h2 id="格式化、格式转换"><a href="#格式化、格式转换" class="headerlink" title="格式化、格式转换"></a>格式化、格式转换</h2><h3 id="localData-lt-gt-String"><a href="#localData-lt-gt-String" class="headerlink" title="localData&lt;=&gt;String"></a>localData&lt;=&gt;String</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">LocalDate date = LocalDate.of(<span class="number">2014</span>, <span class="number">3</span>, <span class="number">18</span>);</span><br><span class="line">String s1 = date.format(DateTimeFormatter.BASIC_ISO_DATE); <span class="comment">// 20140318</span></span><br><span class="line">String s2 = date.format(DateTimeFormatter.ISO_LOCAL_DATE); <span class="comment">// 2014-03-18</span></span><br><span class="line"></span><br><span class="line">LocalDate date1 = LocalDate.parse(<span class="string">"20140318"</span>,</span><br><span class="line">                                 DateTimeFormatter.BASIC_ISO_DATE);</span><br><span class="line">LocalDate date2 = LocalDate.parse(<span class="string">"2014-03-18"</span>,</span><br><span class="line">                                 DateTimeFormatter.ISO_LOCAL_DATE);</span><br></pre></td></tr></table></figure>
-
-<p>定制格式:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">DateTimeFormatter formatter = DateTimeFormatter.ofPattern(<span class="string">"dd/MM/yyyy"</span>);</span><br><span class="line">LocalDate date1 = LocalDate.of(<span class="number">2014</span>, <span class="number">3</span>, <span class="number">18</span>);</span><br><span class="line">String formattedDate = date1.format(formatter);</span><br><span class="line">LocalDate date2 = LocalDate.parse(formattedDate, formatter);</span><br></pre></td></tr></table></figure>
-
-<h2 id="时区"><a href="#时区" class="headerlink" title="时区"></a>时区</h2><p><code>java.time.ZoneId</code>和<code>ZonedDateTime</code>:<br>从LocalData转换到ZonedDateTime:(其他几个也一样)</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">ZoneId romeZone = ZoneId.of(<span class="string">"Europe/Rome"</span>);</span><br><span class="line"><span class="comment">// 或者: ZoneId zoneId = TimeZone.getDefault().toZoneId();</span></span><br><span class="line">LocalDate date = LocalDate.of(<span class="number">2014</span>, Month.MARCH, <span class="number">18</span>); <span class="number">6</span></span><br><span class="line">ZonedDateTime zdt1 = date.atStartOfDay(romeZone);</span><br></pre></td></tr></table></figure>
-
-<img src="/images/2019-11/zonedDateTime.png" class="" width="800" height="1200" title="zonedDateTime">
-
-<p>时区差: <code>ZoneOffset</code></p>
-<p>其他日历系统: <code>ThaiBuddhistDate</code>,<code>MinguoDate</code>,<code>JapaneseDate</code>,<code>HijrahDate</code></p>
-<h1 id="其他tips"><a href="#其他tips" class="headerlink" title="其他tips"></a>其他tips</h1><p>ConcurrentHashMap类：<br>用<code>mappingCount</code>方法代替<code>size</code>方法;<br><code>mappingCount</code>: 返回long;<br><code>size</code>: 返回int; (实际大小超过int时无效)</p>
-<p>重复遍历流: 可以使用StreamForker,缺点本质上是存了内存。</p>
-<h1 id="lambda底层实现"><a href="#lambda底层实现" class="headerlink" title="lambda底层实现"></a>lambda底层实现</h1><h2 id="匿名类的实现"><a href="#匿名类的实现" class="headerlink" title="匿名类的实现"></a>匿名类的实现</h2><p>匿名内部类底层是生成一个<code>class$1</code>的类。(外层类名+数字)<br>缺点： 每个类都需要加载、验证的操作，如果类太多，开销太大；</p>
-<h2 id="查看字节码和常量池"><a href="#查看字节码和常量池" class="headerlink" title="查看字节码和常量池"></a>查看字节码和常量池</h2><p>使用命令:</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">javap -c -v ClassName</span><br></pre></td></tr></table></figure>
-
-
-<h2 id="lambda的实现：-InvokeDynamic"><a href="#lambda的实现：-InvokeDynamic" class="headerlink" title="lambda的实现： InvokeDynamic"></a>lambda的实现： InvokeDynamic</h2><p>本质上是在所在类里新增了一个方法。将Lambda表达式的代码体填入到运行时动态创建的<code>静态方法</code>，就完成了Lambda表达式的字节码转换。<br>动态链接方法，然后用<code>InvokeDynamic</code>调用:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">Lambda</span> </span>&#123;</span><br><span class="line">    Function&lt;Object, String&gt; f = [dynamic invocation of lambda$<span class="number">1</span>]</span><br><span class="line">     <span class="keyword">static</span> String lambda$<span class="number">1</span>(Object obj) &#123;</span><br><span class="line">        <span class="keyword">return</span> obj.toString();</span><br><span class="line">     &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>优点:</p>
-<ol>
-<li>lamda相关字节码的生成推迟到使用的时候; (懒加载)</li>
-<li>如果不是闭包：有类似于static final变量的缓存效果;(闭包的话,因为可能捕获不同的局部变量，不可以缓存)</li>
-<li>没有额外的开销;<br>如果lambda是个闭包，也就是捕获了其他作用域内的变量(当然编译时会要求是final或者实质上是final)，也很简单，就是给这个函数加一个参数即可。</li>
-</ol>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/11/03/2019-11/java8%E7%AC%94%E8%AE%B0/" data-id="ck96cxpqb00kcmaam9w6ucaoz" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-2019-10/rust入门笔记-2" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/10/06/2019-10/rust%E5%85%A5%E9%97%A8%E7%AC%94%E8%AE%B0-2/" class="article-date">
-  <time datetime="2019-10-06T10:58:26.000Z" itemprop="datePublished">2019-10-06</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/rust/">rust</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/10/06/2019-10/rust%E5%85%A5%E9%97%A8%E7%AC%94%E8%AE%B0-2/">rust入门笔记_2</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="解引用强制多态（deref-coercions）"><a href="#解引用强制多态（deref-coercions）" class="headerlink" title="解引用强制多态（deref coercions）"></a>解引用强制多态（<code>deref coercions</code>）</h1><p><code>coercions</code>的意思就是强制多态。<br>解引用强制多态的意思通俗来说就是，编译器根据目标类型，自动调用<code>deref</code>方法解引用，搜索路径来达到目标类型，最终达到节省程序员编写成本，但最后运行时开销维持最小的目标。(语法糖成本为0)</p>
-<h2 id="背景知识-智能指针的解引用"><a href="#背景知识-智能指针的解引用" class="headerlink" title="背景知识: 智能指针的解引用"></a>背景知识: 智能指针的解引用</h2><p>自定义的智能指针，实现<code>Deref trait</code>(解引用特性)后，就可以使用<code>*</code>操作符来解引用了。<br>例如:</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">use</span> std::ops::Deref;</span><br><span class="line"></span><br><span class="line"># <span class="class"><span class="keyword">struct</span> <span class="title">MyBox</span></span>&lt;T&gt;(T);</span><br><span class="line"><span class="keyword">impl</span>&lt;T&gt; Deref <span class="keyword">for</span> MyBox&lt;T&gt; &#123;</span><br><span class="line">    <span class="class"><span class="keyword">type</span> <span class="title">Target</span></span> = T;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">fn</span> <span class="title">deref</span></span>(&amp;<span class="keyword">self</span>) -&gt; &amp;T &#123; <span class="comment">// 注意这里的返回值需要是引用,以便维持所有权</span></span><br><span class="line">        &amp;<span class="keyword">self</span>.<span class="number">0</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>编译器每次遇到<code>*</code>操作符，都会尝试调用复杂类型的<code>deref</code>方法来获得基本类型的引用，以便进行解引用，也就是代码等效于:<code>*(y.deref())</code>。</p>
-<h2 id="实例"><a href="#实例" class="headerlink" title="实例"></a>实例</h2><figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">let</span> m = MyBox::new(<span class="built_in">String</span>::from(<span class="string">"Rust"</span>));</span><br><span class="line">hello(&amp;m); <span class="comment">// 这里hello的形参是&amp;str,实参是&amp;MyBox</span></span><br><span class="line"><span class="comment">// 强制解引用多态后，等效于调用了: hello(&amp;(*m)[..]);</span></span><br><span class="line"><span class="comment">// &amp;MyBox =通过deref=&gt; String =通过slice=&gt; &amp;str</span></span><br></pre></td></tr></table></figure>
-
-<h2 id="更多解引用多态规则"><a href="#更多解引用多态规则" class="headerlink" title="更多解引用多态规则"></a>更多解引用多态规则</h2><figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="number">1</span>. 当 T: Deref&lt;Target=U&gt; 时从 &amp;T 到 &amp;U。 <span class="comment">// 不可变=&gt;不可变</span></span><br><span class="line"><span class="number">2</span>. 当 T: DerefMut&lt;Target=U&gt; 时从 &amp;<span class="keyword">mut</span> T 到 &amp;<span class="keyword">mut</span> U。 <span class="comment">// 可变=&gt;可变</span></span><br><span class="line"><span class="number">3</span>. 当 T: Deref&lt;Target=U&gt; 时从 &amp;<span class="keyword">mut</span> T 到 &amp;U。 <span class="comment">// 可变=&gt;不可变</span></span><br></pre></td></tr></table></figure>
-<p>只会发生安全的转换，而<code>不可变=&gt;可变</code>这种属于不安全，因此不支持自动转换。</p>
-<p>(上面的实例属于第一种。)</p>
-<h1 id="析构函数-std-mem-drop"><a href="#析构函数-std-mem-drop" class="headerlink" title="(析构函数) std::mem::drop"></a>(析构函数) std::mem::drop</h1><p>自定义Drop trait:</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">impl</span> <span class="built_in">Drop</span> <span class="keyword">for</span> CustomSmartPointer &#123;</span><br><span class="line">    <span class="function"><span class="keyword">fn</span> <span class="title">drop</span></span>(&amp;<span class="keyword">mut</span> <span class="keyword">self</span>) &#123;</span><br><span class="line">        <span class="built_in">println!</span>(<span class="string">"Dropping CustomSmartPointer with data `&#123;&#125;`!"</span>, <span class="keyword">self</span>.data);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>定义以后drop函数不能显式调用，也不能禁用。<br>只能在离开作用域的时候自动调用。<br>如果要显式调用，只能使用标准库的函数<code>std::mem::drop</code>.<br>(默认预引入，可以直接调用drop)</p>
-<h1 id="智能指针汇总"><a href="#智能指针汇总" class="headerlink" title="智能指针汇总"></a>智能指针汇总</h1><p>Box: 没有特殊功能,类似于java中的普通引用,让编译器能确定分配空间大小;<br>Rc: 多所有权、单线程、引用计数;<br>RefCell: 单所有权、单线程、引用计数、内部可变性;<br>Arc: 多所有权、多线程、引用计数;<br>Mutex: 单所有权、多线程、引用计数、内部可变性;<br>Week: 弱引用。</p>
-<h1 id="多所有权、单线程、不可变：引用计数-gt-Rc"><a href="#多所有权、单线程、不可变：引用计数-gt-Rc" class="headerlink" title="多所有权、单线程、不可变：引用计数=&gt;Rc"></a>多所有权、单线程、不可变：引用计数=&gt;Rc<T></h1><p>多所有权示例: b,c都拥有a的所有权。</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">enum</span> <span class="title">List</span></span> &#123;</span><br><span class="line">    Cons(<span class="built_in">i32</span>, Rc&lt;List&gt;),</span><br><span class="line">    Nil,</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">use</span> List::&#123;Cons, Nil&#125;;</span><br><span class="line"><span class="keyword">use</span> std::rc::Rc;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">fn</span> <span class="title">main</span></span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> a = Rc::new(Cons(<span class="number">5</span>, Rc::new(Cons(<span class="number">10</span>, Rc::new(Nil)))));</span><br><span class="line">    <span class="keyword">let</span> b = Cons(<span class="number">3</span>, Rc::clone(&amp;a));</span><br><span class="line">    <span class="keyword">let</span> c = Cons(<span class="number">4</span>, Rc::clone(&amp;a));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>每次调用<code>Rc::clone</code>，都将引用计数加1.// 这里是浅拷贝<br>b: 3-&gt;5-&gt;10-&gt;Nil<br>c: 4-&gt;5-&gt;10-&gt;Nil</p>
-<p>打印引用数:</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">fn</span> <span class="title">main</span></span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> a = Rc::new(Cons(<span class="number">5</span>, Rc::new(Cons(<span class="number">10</span>, Rc::new(Nil)))));</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">"count after creating a = &#123;&#125;"</span>, Rc::strong_count(&amp;a));</span><br><span class="line">    <span class="keyword">let</span> b = Cons(<span class="number">3</span>, Rc::clone(&amp;a));</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">"count after creating b = &#123;&#125;"</span>, Rc::strong_count(&amp;a));</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="keyword">let</span> c = Cons(<span class="number">4</span>, Rc::clone(&amp;a));</span><br><span class="line">        <span class="built_in">println!</span>(<span class="string">"count after creating c = &#123;&#125;"</span>, Rc::strong_count(&amp;a));</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">"count after c goes out of scope = &#123;&#125;"</span>, Rc::strong_count(&amp;a));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h1 id="单一所有权、单线程、内部可变：引用计数-gt-RefCell"><a href="#单一所有权、单线程、内部可变：引用计数-gt-RefCell" class="headerlink" title="单一所有权、单线程、内部可变：引用计数=&gt;RefCell"></a>单一所有权、单线程、内部可变：引用计数=&gt;RefCell<T></h1><h2 id="借用规则"><a href="#借用规则" class="headerlink" title="借用规则"></a>借用规则</h2><ol>
-<li>每时每刻，要么有一个可变引用;要么有n个不可变引用；(这两者互斥)</li>
-<li>引用必须总是有效的。</li>
-</ol>
-<p>对于引用和<code>Box&lt;T&gt;</code>: <code>编译时</code>进行借用规则检查；(编译错误)<br>对于<code>RefCell&lt;T&gt;</code>:   <code>运行时</code>进行借用规则检查；(<code>panic</code>)</p>
-<p>引用和<code>Box&lt;T&gt;</code>: 第一级指针不可变，则级联得每一级都不可变。<br><code>RefCell</code>: 第一级指针不可变，第二级可以借用可变引用，然后修改；</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#[cfg(test)]</span></span><br><span class="line"><span class="keyword">mod</span> tests &#123;</span><br><span class="line">    <span class="keyword">use</span> super::*;</span><br><span class="line">    <span class="keyword">use</span> std::cell::RefCell;</span><br><span class="line"></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">MockMessenger</span></span> &#123;</span><br><span class="line">        sent_messages: RefCell&lt;<span class="built_in">Vec</span>&lt;<span class="built_in">String</span>&gt;&gt;,</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">impl</span> MockMessenger &#123;</span><br><span class="line">        <span class="function"><span class="keyword">fn</span> <span class="title">new</span></span>() -&gt; MockMessenger &#123;</span><br><span class="line">            MockMessenger &#123; sent_messages: RefCell::new(<span class="built_in">vec!</span>[]) &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">impl</span> Messenger <span class="keyword">for</span> MockMessenger &#123;</span><br><span class="line">        <span class="function"><span class="keyword">fn</span> <span class="title">send</span></span>(&amp;<span class="keyword">self</span>, message: &amp;<span class="built_in">str</span>) &#123;</span><br><span class="line">        <span class="comment">// 注意这里的borrow_mut，借出可变:</span></span><br><span class="line">            <span class="keyword">self</span>.sent_messages.borrow_mut().push(<span class="built_in">String</span>::from(message));</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">#[test]</span></span><br><span class="line">    <span class="function"><span class="keyword">fn</span> <span class="title">it_sends_an_over_75_percent_warning_message</span></span>() &#123;</span><br><span class="line">        <span class="comment">// --snip--</span></span><br><span class="line">#         <span class="keyword">let</span> mock_messenger = MockMessenger::new();</span><br><span class="line">#         <span class="keyword">let</span> <span class="keyword">mut</span> limit_tracker = LimitTracker::new(&amp;mock_messenger, <span class="number">100</span>);</span><br><span class="line">#         limit_tracker.set_value(<span class="number">75</span>);</span><br><span class="line">        <span class="comment">// 注意这里的borrow，借出不可变:</span></span><br><span class="line">        <span class="built_in">assert_eq!</span>(mock_messenger.sent_messages.borrow().len(), <span class="number">1</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p><code>borrow</code> 方法返回 <code>Ref</code> 类型的智能指针；<br><code>borrow_mut</code> 方法返回 <code>RefMut</code> 类型的智能指针。</p>
-<p>这两个类型都实现了 <code>Deref</code> 所以可以当作常规引用对待。<br>借用规则在运行时检查，例如同时借出两个可变引用将会panic:</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">let</span> <span class="keyword">mut</span> one_borrow = <span class="keyword">self</span>.sent_messages.borrow_mut();</span><br><span class="line"><span class="keyword">let</span> <span class="keyword">mut</span> two_borrow = <span class="keyword">self</span>.sent_messages.borrow_mut();</span><br></pre></td></tr></table></figure>
-<p>底层原理依然是引用计数。</p>
-<h2 id="结合Rc和RefCell"><a href="#结合Rc和RefCell" class="headerlink" title="结合Rc和RefCell"></a>结合Rc和RefCell</h2><p>结合Rc和RefCell的话，就可以结合多所有权和单所有权，不可变和可变:</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#[derive(Debug)]</span></span><br><span class="line"><span class="class"><span class="keyword">enum</span> <span class="title">List</span></span> &#123;</span><br><span class="line">    Cons(Rc&lt;RefCell&lt;<span class="built_in">i32</span>&gt;&gt;, Rc&lt;List&gt;),<span class="comment">// 注意这里</span></span><br><span class="line">    Nil,</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">use</span> List::&#123;Cons, Nil&#125;;</span><br><span class="line"><span class="keyword">use</span> std::rc::Rc;</span><br><span class="line"><span class="keyword">use</span> std::cell::RefCell;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">fn</span> <span class="title">main</span></span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> value = Rc::new(RefCell::new(<span class="number">5</span>));</span><br><span class="line"></span><br><span class="line">    <span class="keyword">let</span> a = Rc::new(Cons(Rc::clone(&amp;value), Rc::new(Nil)));</span><br><span class="line"></span><br><span class="line">    <span class="keyword">let</span> b = Cons(Rc::new(RefCell::new(<span class="number">6</span>)), Rc::clone(&amp;a));</span><br><span class="line">    <span class="keyword">let</span> c = Cons(Rc::new(RefCell::new(<span class="number">10</span>)), Rc::clone(&amp;a));</span><br><span class="line"></span><br><span class="line">    *value.borrow_mut() += <span class="number">10</span>;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">"a after = &#123;:?&#125;"</span>, a);</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">"b after = &#123;:?&#125;"</span>, b);</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">"c after = &#123;:?&#125;"</span>, c);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>混合使用<code>Rc</code>和<code>RefCell</code>可以构造循环引用，造成内存泄露。<br>可以用弱引用来消除这一隐患: 将 <code>Rc&lt;T&gt;</code> 变为 <code>Weak&lt;T&gt;</code>。</p>
-<h1 id="弱引用"><a href="#弱引用" class="headerlink" title="弱引用"></a>弱引用</h1><p><a href="https://rustlang-cn.org/office/rust/book/smart-pointers/ch15-06-reference-cycles.html" target="_blank" rel="noopener">https://rustlang-cn.org/office/rust/book/smart-pointers/ch15-06-reference-cycles.html</a></p>
-<h1 id="并发"><a href="#并发" class="headerlink" title="并发"></a>并发</h1><h2 id="线程模型"><a href="#线程模型" class="headerlink" title="线程模型"></a>线程模型</h2><p>rust标准库提供1:1线程，有其他第三方库提供M:N的。<br>创建线程: <code>thread::spawn</code>+闭包：</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">use</span> std::thread;</span><br><span class="line"><span class="keyword">use</span> std::time::Duration;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">fn</span> <span class="title">main</span></span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> handle = thread::spawn(|| &#123;</span><br><span class="line">        <span class="keyword">for</span> i <span class="keyword">in</span> <span class="number">1</span>..<span class="number">10</span> &#123;</span><br><span class="line">            <span class="built_in">println!</span>(<span class="string">"hi number &#123;&#125; from the spawned thread!"</span>, i);</span><br><span class="line">            thread::sleep(Duration::from_millis(<span class="number">1</span>));</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> i <span class="keyword">in</span> <span class="number">1</span>..<span class="number">5</span> &#123;</span><br><span class="line">        <span class="built_in">println!</span>(<span class="string">"hi number &#123;&#125; from the main thread!"</span>, i);</span><br><span class="line">        thread::sleep(Duration::from_millis(<span class="number">1</span>));</span><br><span class="line">    &#125;</span><br><span class="line">    handle.join().unwrap();<span class="comment">// 阻塞等待子线程</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>子线程中可以捕获主线程的变量，获得所有权. 使用<code>move</code>，以免主线程把它drop了：</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">use</span> std::thread;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">fn</span> <span class="title">main</span></span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> v = <span class="built_in">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>];</span><br><span class="line"></span><br><span class="line">    <span class="keyword">let</span> handle = thread::spawn(<span class="keyword">move</span> || &#123;</span><br><span class="line">        <span class="built_in">println!</span>(<span class="string">"Here's a vector: &#123;:?&#125;"</span>, v);</span><br><span class="line">    &#125;);</span><br><span class="line"></span><br><span class="line">    handle.join().unwrap();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h2 id="消息传递-channel"><a href="#消息传递-channel" class="headerlink" title="消息传递: channel"></a>消息传递: channel</h2><figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">use</span> std::thread;</span><br><span class="line"><span class="keyword">use</span> std::sync::mpsc;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">fn</span> <span class="title">main</span></span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> (tx, rx) = mpsc::channel();</span><br><span class="line">    <span class="comment">// tx: 发送者</span></span><br><span class="line">    <span class="comment">// rx: 接收者</span></span><br><span class="line">    thread::spawn(<span class="keyword">move</span> || &#123;</span><br><span class="line">        <span class="keyword">let</span> val = <span class="built_in">String</span>::from(<span class="string">"hi"</span>);</span><br><span class="line">        tx.send(val).unwrap();<span class="comment">// 单所有权,发送后不能再使用val</span></span><br><span class="line">    &#125;);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">let</span> received = rx.recv().unwrap();</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">"Got: &#123;&#125;"</span>, received);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>mpsc： 多生产者、单消费者<br>recv： 阻塞接收<br>try_recv: 非阻塞接收，立即返回</p>
-<p>这里之所以是多生产者，是因为可以把生产者无限克隆出去，然后发送消息：</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">let</span> tx1 = mpsc::Sender::clone(&amp;tx);</span><br></pre></td></tr></table></figure>
-
-<h2 id="共享状态并发"><a href="#共享状态并发" class="headerlink" title="共享状态并发"></a>共享状态并发</h2><h2 id="互斥器-mutex"><a href="#互斥器-mutex" class="headerlink" title="互斥器(mutex)"></a>互斥器(mutex)</h2><p>rust中的锁是一种特殊的智能指针，通过重载drop trait来确保离开作用域的时候释放锁。</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">use</span> std::sync::Mutex;</span><br><span class="line"><span class="function"><span class="keyword">fn</span> <span class="title">main</span></span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> m = Mutex::new(<span class="number">5</span>);</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="keyword">let</span> <span class="keyword">mut</span> num = m.lock().unwrap();</span><br><span class="line">        *num = <span class="number">6</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">"m = &#123;:?&#125;"</span>, m);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>由于多个线程都需要访问同一个锁，因此需要多所有权的智能指针，并且能够并发使用：</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Rc&lt;T&gt;: 单线程，多所有权；</span><br><span class="line">Arc&lt;T&gt;: 多线程，多所有权。</span><br></pre></td></tr></table></figure>
-<p>并发访问的例子:</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">use</span> std::sync::&#123;Mutex, Arc&#125;;</span><br><span class="line"><span class="keyword">use</span> std::thread;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">fn</span> <span class="title">main</span></span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> counter = Arc::new(Mutex::new(<span class="number">0</span>));<span class="comment">// 智能指针包装</span></span><br><span class="line">    <span class="keyword">let</span> <span class="keyword">mut</span> handles = <span class="built_in">vec!</span>[];</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> _ <span class="keyword">in</span> <span class="number">0</span>..<span class="number">10</span> &#123;</span><br><span class="line">        <span class="keyword">let</span> counter = Arc::clone(&amp;counter);<span class="comment">// 克隆来增加引用计数</span></span><br><span class="line">        <span class="keyword">let</span> handle = thread::spawn(<span class="keyword">move</span> || &#123; </span><br><span class="line">            <span class="keyword">let</span> <span class="keyword">mut</span> num = counter.lock().unwrap();</span><br><span class="line"></span><br><span class="line">            *num += <span class="number">1</span>; <span class="comment">// move+离开作用域,引用-1</span></span><br><span class="line">        &#125;);</span><br><span class="line">        handles.push(handle);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> handle <span class="keyword">in</span> handles &#123;</span><br><span class="line">        handle.join().unwrap();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">"Result: &#123;&#125;"</span>, *counter.lock().unwrap());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>这里可以看出Mutex具有内部可变性。同时可以用Mutex构造死锁(循环依赖)。</p>
-<h2 id="Send与Sync的trait"><a href="#Send与Sync的trait" class="headerlink" title="Send与Sync的trait"></a>Send与Sync的trait</h2><p>rust中用两个trait来标记所有权在线程中的转移以及引用的多线程访问: </p>
-<blockquote>
-<p><code>Send trait</code>:  支持多线程<code>所有权</code>转移,所有权在线程之间转移; 除Rc<T>以外的大部分类型是Send trait;<br><code>Sync trait</code>:  支持多线程访问, 线程之间可以共享值的<code>引用</code>；<br>除Rc<T>以外的大部分类型是Sync trait;</p>
-</blockquote>
-<p><code>unsafe rust</code>中的裸指针也没有实现这两个trait.</p>
-<p>绝大部分情况不需要手动实现send与sync的trait。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/10/06/2019-10/rust%E5%85%A5%E9%97%A8%E7%AC%94%E8%AE%B0-2/" data-id="ck96cxpqb00k9maamb1qe6pmi" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/rust/" rel="tag">rust</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-2019-09/rust入门笔记-1" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/09/22/2019-09/rust%E5%85%A5%E9%97%A8%E7%AC%94%E8%AE%B0-1/" class="article-date">
-  <time datetime="2019-09-22T11:20:21.000Z" itemprop="datePublished">2019-09-22</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/rust/">rust</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/09/22/2019-09/rust%E5%85%A5%E9%97%A8%E7%AC%94%E8%AE%B0-1/">rust入门笔记_1</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>周末无事看看tidb开发者说很好用的rust，觉得很有趣，原来现代编程语言就是这种感觉，有一些细节上的简化。</p>
-<p>文档参见: <a href="https://rustlang-cn.org/office/rust/book/getting-started/ch01-03-hello-cargo.html" target="_blank" rel="noopener">https://rustlang-cn.org/office/rust/book/getting-started/ch01-03-hello-cargo.html</a></p>
-<p>源码:</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">fn</span> <span class="title">main</span></span>() &#123;</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">"Hello, world!"</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>编译和运行:</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">rustc main.rs</span><br><span class="line">./main</span><br></pre></td></tr></table></figure>
-
-<p>用<code>cargo</code>(类似于<code>maven</code>)</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">cargo new hello_cargo # 创建项目</span><br><span class="line">cargo build # 生成debug程序</span><br><span class="line">cargo run # 运行debug程序, 会自动build</span><br><span class="line">cargo check # 仅检查语法</span><br><span class="line"></span><br><span class="line">cargo build --release # 生成优化后的程序(release)</span><br><span class="line"><span class="meta">#</span><span class="bash"> 类似的可以猜到run release程序的命令:</span></span><br><span class="line">cargo run --rebase # 运行relase，会自动检测改动重新编译</span><br></pre></td></tr></table></figure>
-<p>可以看到专门提供了一个<code>cargo check</code>命令来避免编译、只是检查语法，看来网上大家说rust编译慢很可能是真的。</p>
-<h1 id="变量"><a href="#变量" class="headerlink" title="变量"></a>变量</h1><figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">let</span> foo = <span class="number">5</span>; <span class="comment">// 不可变</span></span><br><span class="line"><span class="keyword">let</span> <span class="keyword">mut</span> bar = <span class="number">5</span>; <span class="comment">// 可变</span></span><br></pre></td></tr></table></figure>
-
-<p>类方法/静态函数: 在rust中叫<code>关联函数</code>（associated function）;</p>
-<h1 id="crate-库"><a href="#crate-库" class="headerlink" title="crate: 库"></a>crate: 库</h1><p>类似于mvn的中央仓库: <a href="https://crates.io/" target="_blank" rel="noopener">https://crates.io/</a><br><code>crate</code>不是创建的意思，差了一个字母，是rust的库的意思。</p>
-<h1 id="数据类型"><a href="#数据类型" class="headerlink" title="数据类型"></a>数据类型</h1><p><code>i32</code>: 32位数字；<br><code>u32</code>: 32位无符号数字；<br><code>i64</code>: 64位数字等等。</p>
-<p><code>Rust</code>默认使用<code>i32</code>.<br>但是如果你用<code>u32</code>类型和一个变量<code>a</code>比较,Rust会推断出a也是<code>u32</code>类型.</p>
-<h1 id="let关键字"><a href="#let关键字" class="headerlink" title="let关键字"></a>let关键字</h1><p><code>let</code>类似于js里的<code>let</code>，用来定义一个变量，而且支持<code>shadowing</code>。<br>比如一开始定义了一个string类型的a;<br>后来转换成数字以后，可以直接</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">let</span> a:<span class="built_in">u32</span> = a.guess.trim().parse()</span><br><span class="line">        .expect(<span class="string">"Please type a number!"</span>);</span><br></pre></td></tr></table></figure>
-<p>新的定义会覆盖以前的，这样就不用定义两个变量了（一个string_a,一个u32_a）。<br>原理上其实底层是生成了两个变量，因此可以把<code>let mut</code>覆盖成<code>let</code>，或者把不可变的覆盖成可变的。实测了一下确实也是可以的。</p>
-<h1 id="match关键字"><a href="#match关键字" class="headerlink" title="match关键字"></a>match关键字</h1><p>match和scala里的一样</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">match</span> xxx &#123;</span><br><span class="line">        Ordering::Less =&gt; <span class="built_in">println!</span>(<span class="string">"Too small!"</span>),</span><br><span class="line">        Ordering::Greater =&gt; <span class="built_in">println!</span>(<span class="string">"Too big!"</span>),</span><br><span class="line">        Ordering::Equal =&gt; <span class="built_in">println!</span>(<span class="string">"You win!"</span>),</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h1 id="通用概念-与其他编程语言核心对应的"><a href="#通用概念-与其他编程语言核心对应的" class="headerlink" title="通用概念(与其他编程语言核心对应的)"></a>通用概念(与其他编程语言核心对应的)</h1><h2 id="关键字转义"><a href="#关键字转义" class="headerlink" title="关键字转义"></a>关键字转义</h2><p>比如<code>match</code>在rust中是一个关键字,所以如果恰好有一个函数叫这个名字，需要转义以后才能调用：(用<code>r#</code>前缀)</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">r#<span class="keyword">match</span>(); <span class="comment">// 调用名为 'match' 的函数</span></span><br></pre></td></tr></table></figure>
-
-<h2 id="不可变"><a href="#不可变" class="headerlink" title="不可变"></a>不可变</h2><figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">const</span> MAX_POINTS: <span class="built_in">u32</span> = <span class="number">100_000</span>; <span class="comment">// 不可变,直接赋值;</span></span><br><span class="line"><span class="keyword">let</span> a = get_val(); <span class="comment">// 不可变,可以运行时赋值;</span></span><br><span class="line"><span class="keyword">let</span> <span class="keyword">mut</span> a = xxx;   <span class="comment">// 可变。</span></span><br></pre></td></tr></table></figure>
-
-<h2 id="数据类型-1"><a href="#数据类型-1" class="headerlink" title="数据类型"></a>数据类型</h2><p>rust会尝试推断数据类型，推断不出来则会报错；</p>
-<p>标量: 整型、浮点型、布尔类型和字符类型;</p>
-<table>
-<thead>
-<tr>
-<th>长度</th>
-<th>有符号</th>
-<th>无符号</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>8-bit</td>
-<td>i8</td>
-<td>u8</td>
-</tr>
-<tr>
-<td>16-bit</td>
-<td>i16</td>
-<td>u16</td>
-</tr>
-<tr>
-<td>32-bit</td>
-<td>i32</td>
-<td>u32</td>
-</tr>
-<tr>
-<td>64-bit</td>
-<td>i64</td>
-<td>u64</td>
-</tr>
-<tr>
-<td>arch</td>
-<td>isize</td>
-<td>usize</td>
-</tr>
-</tbody></table>
-<p>这里的<code>arch</code>: 64 位架构上它们是 64 位的， 32 位架构上它们是 32 位的。<br><code>isize</code>和<code>usize</code>主要作为索引类型。</p>
-<p>赋值的时候: (还能在中间随意加横杠<code>_</code>):</p>
-<table>
-<thead>
-<tr>
-<th>数字字面值</th>
-<th>例子</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>Decimal</td>
-<td>98_222</td>
-</tr>
-<tr>
-<td>Hex</td>
-<td>0xff</td>
-</tr>
-<tr>
-<td>Octal</td>
-<td>0o77</td>
-</tr>
-<tr>
-<td>Binary</td>
-<td>0b1111_0000</td>
-</tr>
-<tr>
-<td>Byte (u8 only)</td>
-<td>b’A’</td>
-</tr>
-</tbody></table>
-<p><code>57u8</code>表示57，数据类型是<code>u8</code>；</p>
-<p>数字溢出: debug版检查溢出并报错；<br>release版会进行溢出。<br>可以用<code>Wrapping</code>类型来使用溢出特性，以免被debug版本报错。</p>
-<p><code>f32</code>: 32位浮点数;<br><code>f64</code>: 64位浮点数. (默认类型,现代cpu下性能与f32几乎一样)<br><code>bool</code>: 布尔值。<br><code>char</code>: Unicode字符。</p>
-<h2 id="元组和数组"><a href="#元组和数组" class="headerlink" title="元组和数组"></a>元组和数组</h2><p>元组下标从0开始(和scala不同,scala从1开始)</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">let</span> tup: (<span class="built_in">i32</span>, <span class="built_in">f64</span>, <span class="built_in">u8</span>) = (<span class="number">500</span>, <span class="number">6.4</span>, <span class="number">1</span>);</span><br><span class="line"><span class="keyword">let</span> five_hundred = x.<span class="number">0</span>;</span><br></pre></td></tr></table></figure>
-<p>数组:</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">let</span> a = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>];</span><br><span class="line"><span class="comment">// 或:</span></span><br><span class="line"><span class="keyword">let</span> a: [<span class="built_in">i32</span>; <span class="number">5</span>] = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>];</span><br></pre></td></tr></table></figure>
-
-
-<h2 id="函数"><a href="#函数" class="headerlink" title="函数"></a>函数</h2><p>用fn声明. </p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">fn</span> <span class="title">main</span></span>() &#123;</span><br><span class="line">    another_function(<span class="number">5</span>, <span class="number">6</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">fn</span> <span class="title">another_function</span></span>(x: <span class="built_in">i32</span>, y: <span class="built_in">i32</span>) &#123;</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">"The value of x is: &#123;&#125;"</span>, x);</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">"The value of y is: &#123;&#125;"</span>, y);</span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="keyword">fn</span> <span class="title">five</span></span>() -&gt; <span class="built_in">i32</span> &#123; <span class="comment">// 返回i32类型</span></span><br><span class="line">    <span class="number">5</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<h2 id="表达式"><a href="#表达式" class="headerlink" title="表达式"></a>表达式</h2><p>表达式的结尾没有分号</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">let</span> y = &#123;</span><br><span class="line">        <span class="keyword">let</span> x = <span class="number">3</span>;</span><br><span class="line">        x + <span class="number">1</span> <span class="comment">// 没有分号</span></span><br><span class="line">    &#125;;</span><br><span class="line"><span class="comment">// y=4</span></span><br></pre></td></tr></table></figure>
-<h2 id="循环"><a href="#循环" class="headerlink" title="循环"></a>循环</h2><p>loop,while,for</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">let</span> result = <span class="keyword">loop</span> &#123;</span><br><span class="line">    counter += <span class="number">1</span>;</span><br><span class="line">    <span class="keyword">if</span> counter == <span class="number">10</span> &#123;</span><br><span class="line">        <span class="keyword">break</span> counter * <span class="number">2</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;;</span><br><span class="line"><span class="built_in">assert_eq!</span>(result, <span class="number">20</span>);</span><br><span class="line"><span class="keyword">while</span> index &lt; <span class="number">5</span> &#123;</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">"the value is: &#123;&#125;"</span>, a[index]);</span><br><span class="line">    index = index + <span class="number">1</span>;</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">let</span> a = [<span class="number">10</span>, <span class="number">20</span>, <span class="number">30</span>, <span class="number">40</span>, <span class="number">50</span>];</span><br><span class="line"><span class="keyword">for</span> element <span class="keyword">in</span> a.iter() &#123;</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">"the value is: &#123;&#125;"</span>, element);</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">for</span> number <span class="keyword">in</span> (<span class="number">1</span>..<span class="number">4</span>).rev() &#123;</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">"&#123;&#125;!"</span>, number);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h1 id="ownership-所有权"><a href="#ownership-所有权" class="headerlink" title="ownership 所有权"></a>ownership 所有权</h1><p>rust无需gc。<br>要学习的点包括: 借用、slice、内存布局。</p>
-<blockquote>
-<p>所有权：管理堆数据</p>
-</blockquote>
-<p>所有权的三大法则: </p>
-<blockquote>
-<ol>
-<li>Rust中的每一个值都有一个被称为其 所有者（owner）的变量。</li>
-<li>值有且只有一个所有者。</li>
-<li>当所有者（变量）离开作用域，这个值将被丢弃。</li>
-</ol>
-</blockquote>
-<p>创建一个堆上的变量:</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line"><span class="keyword">let</span> s = <span class="built_in">String</span>::from(<span class="string">"hello"</span>);</span><br><span class="line">s.push_str(<span class="string">", world!"</span>); <span class="comment">// 追加</span></span><br><span class="line">&#125;<span class="comment">// rust自动调用s的drop,回收内存(类似于free\RAII模式)</span></span><br></pre></td></tr></table></figure>
-<p>s的大小运行时可变，因此它显然分配在堆上。(栈每个slot大小相同)</p>
-<h2 id="浅拷贝、深拷贝、移动"><a href="#浅拷贝、深拷贝、移动" class="headerlink" title="浅拷贝、深拷贝、移动"></a>浅拷贝、深拷贝、移动</h2><p>rust对复杂类型默认是移动;<br>基本类型直接深拷贝。<br>rust没有浅拷贝、只有移动。</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 移动:</span></span><br><span class="line"><span class="keyword">let</span> s1 = <span class="built_in">String</span>::from(<span class="string">"hello"</span>);</span><br><span class="line"><span class="keyword">let</span> s2 = s1;</span><br><span class="line"><span class="built_in">println!</span>(<span class="string">"&#123;&#125;, world!"</span>, s1); <span class="comment">// fail,s1已经无效,被移动为s2了。</span></span><br><span class="line"><span class="comment">// 深拷贝:</span></span><br><span class="line"><span class="keyword">let</span> s1 = <span class="built_in">String</span>::from(<span class="string">"hello"</span>);</span><br><span class="line"><span class="keyword">let</span> s2 = s1.clone();</span><br><span class="line"><span class="built_in">println!</span>(<span class="string">"s1 = &#123;&#125;, s2 = &#123;&#125;"</span>, s1, s2);</span><br><span class="line"><span class="comment">// 基本类型:</span></span><br><span class="line"><span class="keyword">let</span> x = <span class="number">5</span>;</span><br><span class="line"><span class="keyword">let</span> y = x;</span><br><span class="line"><span class="built_in">println!</span>(<span class="string">"x = &#123;&#125;, y = &#123;&#125;"</span>, x, y);</span><br></pre></td></tr></table></figure>
-<p>总结就是:<br>浅拷贝: 无;<br>深拷贝: 显式调用<code>clone</code>、或者是基本类型;<br>移动:   复杂类型;</p>
-<p>如果一个类型拥有<code>Copy trait</code>,<br>一个旧的变量在将其赋值给其他变量后仍然可用。<br>rust的逻辑是，如果发现一个类型没有实现<code>Copy</code>，它就进行<code>move</code>。</p>
-<p>除了用等号，调用函数时也会发生移动或者深拷贝。<br>例如:</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">let</span> s = <span class="built_in">String</span>::from(<span class="string">"hello"</span>);  <span class="comment">// s 进入作用域</span></span><br><span class="line">takes_ownership(s);             <span class="comment">// s 的值移动到函数里 ...</span></span><br><span class="line">                                <span class="comment">// ... 所以到这里s不再有效</span></span><br></pre></td></tr></table></figure>
-<p>函数return的时候也类似于等号，也会发生移动或者深拷贝，因此可以用return再取回所有权。</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">let</span> s = <span class="built_in">String</span>::from(<span class="string">"hello"</span>);</span><br><span class="line"><span class="keyword">let</span> s = takes_back_ownership(s);</span><br></pre></td></tr></table></figure>
-<p>可以用<code>&amp;</code>号来简化这个过程:</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">let</span> s1 = <span class="built_in">String</span>::from(<span class="string">"hello"</span>);</span><br><span class="line"><span class="keyword">let</span> len = calculate_length(&amp;s1); <span class="comment">// 多一个&amp;来取回所有权</span></span><br></pre></td></tr></table></figure>
-<p>这里<code>calculate_length</code>函数没有所有权，因此是借用了s1变量。</p>
-<h2 id="借用"><a href="#借用" class="headerlink" title="借用"></a>借用</h2><p>函数借用变量s,不拥有所有权。</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">fn</span> <span class="title">main</span></span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="keyword">mut</span> s = <span class="built_in">String</span>::from(<span class="string">"hello"</span>);</span><br><span class="line">    change(&amp;<span class="keyword">mut</span> s);</span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="keyword">fn</span> <span class="title">change</span></span>(some_string: &amp;<span class="keyword">mut</span> <span class="built_in">String</span>) &#123;</span><br><span class="line">    some_string.push_str(<span class="string">", world"</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>借用并且要修改的话，要显式写上<code>&amp;mut</code>.</p>
-<h3 id="借用的竞态"><a href="#借用的竞态" class="headerlink" title="借用的竞态"></a>借用的竞态</h3><p>rust默认禁止竞态,编译不予通过:</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">let</span> <span class="keyword">mut</span> s = <span class="built_in">String</span>::from(<span class="string">"hello"</span>);</span><br><span class="line"><span class="keyword">let</span> r1 = &amp;<span class="keyword">mut</span> s;</span><br><span class="line"><span class="keyword">let</span> r2 = &amp;<span class="keyword">mut</span> s;<span class="comment">// 如果后续都用的话报错,两个变量都借用了s,而且都是可写，有竞态,在同一作用域内。</span></span><br><span class="line"><span class="comment">// 只读引用的话可以有多个:</span></span><br><span class="line"><span class="keyword">let</span> r1 = &amp;s; <span class="comment">// no problem</span></span><br><span class="line"><span class="keyword">let</span> r2 = &amp;s; <span class="comment">// no problem</span></span><br><span class="line"><span class="keyword">let</span> r3 = &amp;<span class="keyword">mut</span> s; <span class="comment">// BIG PROBLEM 有只读引用的时候，也不能再有可写引用</span></span><br></pre></td></tr></table></figure>
-<p>借用结束的话可以消除竞态:</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">let</span> <span class="keyword">mut</span> a = <span class="built_in">String</span>::from(<span class="string">"hello world"</span>);</span><br><span class="line"><span class="keyword">let</span> b = &amp;a[<span class="number">0</span>..<span class="number">4</span>];</span><br><span class="line"><span class="built_in">println!</span>(<span class="string">"&#123;&#125;"</span>, b);</span><br><span class="line">append_a(&amp;<span class="keyword">mut</span> a);<span class="comment">// 这里没问题,因为b后面没有用到。</span></span><br><span class="line"><span class="comment">// println!("&#123;&#125;", b); // 这里会报错，因为b的作用域和a的有交叉。</span></span><br></pre></td></tr></table></figure>
-
-<h3 id="悬挂指针"><a href="#悬挂指针" class="headerlink" title="悬挂指针"></a>悬挂指针</h3><p>Rust 中编译器确保永远不会有悬挂指针。<br>构造悬挂指针: </p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">fn</span> <span class="title">main</span></span>() &#123;</span><br><span class="line">    <span class="keyword">let</span> reference_to_nothing = dangle();</span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="keyword">fn</span> <span class="title">dangle</span></span>() -&gt; &amp;<span class="built_in">String</span> &#123;</span><br><span class="line">    <span class="keyword">let</span> s = <span class="built_in">String</span>::from(<span class="string">"hello"</span>);</span><br><span class="line">    &amp;s <span class="comment">// 编译失败</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h2 id="slice"><a href="#slice" class="headerlink" title="slice"></a>slice</h2><p>slice的类型多一个&amp;,属于不可变引用。<br>比如string的slice类型: <code>&amp;str</code>，<br>字符串的字面量的类型：<code>str</code><br>slice语法很简单:</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">let</span> s = <span class="built_in">String</span>::from(<span class="string">"hello"</span>);</span><br><span class="line"></span><br><span class="line"><span class="keyword">let</span> slice = &amp;s[<span class="number">0</span>..<span class="number">2</span>];</span><br><span class="line"><span class="keyword">let</span> slice = &amp;s[..<span class="number">2</span>];</span><br><span class="line"><span class="keyword">let</span> slice = &amp;s[<span class="number">0</span>..len]; <span class="comment">// 整个字符串</span></span><br><span class="line"><span class="keyword">let</span> slice = &amp;s[..]; <span class="comment">// 省略头尾</span></span><br><span class="line"><span class="comment">// 包含右端点:</span></span><br><span class="line"><span class="keyword">let</span> hello = &amp;s[<span class="number">0</span>..=<span class="number">4</span>];</span><br></pre></td></tr></table></figure>
-<p>用slice的好处是可以预防错误，因为持有了不可变引用，其他试图修改s的操作就会被阻止，因为修改s的时候会申请可变引用，根据上一节中的竞态阻止，申请可变引用会失败。</p>
-<h3 id="数组的slice"><a href="#数组的slice" class="headerlink" title="数组的slice"></a>数组的slice</h3><p>类型是 <code>&amp;[i32]</code></p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">let</span> a = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>];</span><br><span class="line"><span class="keyword">let</span> slice = &amp;a[<span class="number">1</span>..<span class="number">3</span>];</span><br><span class="line"><span class="built_in">println!</span>(<span class="string">"&#123;:?&#125;"</span>,slice);</span><br></pre></td></tr></table></figure>
-
-<h2 id="结构体struct"><a href="#结构体struct" class="headerlink" title="结构体struct"></a>结构体struct</h2><figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"># <span class="class"><span class="keyword">struct</span> <span class="title">User</span></span> &#123;</span><br><span class="line">#     username: <span class="built_in">String</span>,</span><br><span class="line">#     email: <span class="built_in">String</span>,</span><br><span class="line">#     sign_in_count: <span class="built_in">u64</span>,</span><br><span class="line">#     active: <span class="built_in">bool</span>,</span><br><span class="line"># &#125;</span><br><span class="line">#</span><br><span class="line"><span class="keyword">let</span> <span class="keyword">mut</span> user1 = User &#123;</span><br><span class="line">    email: <span class="built_in">String</span>::from(<span class="string">"someone@example.com"</span>),</span><br><span class="line">    username: <span class="built_in">String</span>::from(<span class="string">"someusername123"</span>),</span><br><span class="line">    active: <span class="literal">true</span>,</span><br><span class="line">    sign_in_count: <span class="number">1</span>,</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line">user1.email = <span class="built_in">String</span>::from(<span class="string">"anotheremail@example.com"</span>);</span><br></pre></td></tr></table></figure>
-<p>以前写代码经常会有<code>this.email=email</code>这种机械重复的代码，rust提供了简写省略的方法。<br>构造函数的简写: (<code>new</code>)</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">fn</span> <span class="title">build_user</span></span>(email: <span class="built_in">String</span>, username: <span class="built_in">String</span>) -&gt; User &#123;</span><br><span class="line">    User &#123;</span><br><span class="line">        email, <span class="comment">// 这里省略了同名输入变量</span></span><br><span class="line">        username,</span><br><span class="line">        active: <span class="literal">true</span>,</span><br><span class="line">        sign_in_count: <span class="number">1</span>,</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>类似的，结构体的update也有相应的简写:</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">let</span> user2 = User &#123;</span><br><span class="line">    email: <span class="built_in">String</span>::from(<span class="string">"another@example.com"</span>),</span><br><span class="line">    username: <span class="built_in">String</span>::from(<span class="string">"anotherusername567"</span>),</span><br><span class="line">    ..user1 <span class="comment">// 这句话的意思是其他变量都按user1的值来赋值就好</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
-
-<p>结构体的实例方法和类方法区别在于有没有第一个<code>&amp;self</code>参数,方法可以位于不同<code>impl</code>块中:</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"># <span class="meta">#[derive(Debug)]</span></span><br><span class="line"># <span class="class"><span class="keyword">struct</span> <span class="title">Rectangle</span></span> &#123;</span><br><span class="line">#     width: <span class="built_in">u32</span>,</span><br><span class="line">#     height: <span class="built_in">u32</span>,</span><br><span class="line"># &#125;</span><br><span class="line">#</span><br><span class="line"><span class="keyword">impl</span> Rectangle &#123;</span><br><span class="line">    <span class="function"><span class="keyword">fn</span> <span class="title">area</span></span>(&amp;<span class="keyword">self</span>) -&gt; <span class="built_in">u32</span> &#123; <span class="comment">// 实例方法</span></span><br><span class="line">        <span class="keyword">self</span>.width * <span class="keyword">self</span>.height</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">impl</span> Rectangle &#123;</span><br><span class="line">    <span class="function"><span class="keyword">fn</span> <span class="title">can_hold</span></span>(&amp;<span class="keyword">self</span>, other: &amp;Rectangle) -&gt; <span class="built_in">bool</span> &#123;</span><br><span class="line">        <span class="keyword">self</span>.width &gt; other.width &amp;&amp; <span class="keyword">self</span>.height &gt; other.height</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">impl</span> Rectangle &#123;</span><br><span class="line">    <span class="function"><span class="keyword">fn</span> <span class="title">square</span></span>(size: <span class="built_in">u32</span>) -&gt; Rectangle &#123;<span class="comment">// 关联方法、类方法</span></span><br><span class="line">        Rectangle &#123; width: size, height: size &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h2 id="自动解引用功能"><a href="#自动解引用功能" class="headerlink" title="自动解引用功能"></a>自动解引用功能</h2><p>统一<code>obj.xxx()</code>操作和<code>obj-&gt;xxx()</code>.<br>rust自动解引用:</p>
-<blockquote>
-<p>当使用 object.something() 调用方法时，Rust 会自动为 object 添加 &amp;、&amp;mut 或 * 以便使 object 与方法签名匹配。</p>
-</blockquote>
-<h2 id="枚举"><a href="#枚举" class="headerlink" title="枚举"></a>枚举</h2><p>枚举可以直接绑定数据类型：(类似于一种<code>typedef</code>)</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">enum</span> <span class="title">IpAddr</span></span> &#123;</span><br><span class="line">    V4(<span class="built_in">u8</span>, <span class="built_in">u8</span>, <span class="built_in">u8</span>, <span class="built_in">u8</span>),</span><br><span class="line">    V6(<span class="built_in">String</span>),</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">let</span> home = IpAddr::V4(<span class="number">127</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>);</span><br><span class="line"><span class="keyword">let</span> loopback = IpAddr::V6(<span class="built_in">String</span>::from(<span class="string">"::1"</span>));</span><br></pre></td></tr></table></figure>
-<p>也可以作为朴素的数据(数字):</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"># <span class="class"><span class="keyword">enum</span> <span class="title">IpAddrKind</span></span> &#123;</span><br><span class="line">#     V4,</span><br><span class="line">#     V6,</span><br><span class="line"># &#125;</span><br><span class="line">#</span><br><span class="line"><span class="keyword">let</span> four = IpAddrKind::V4;</span><br><span class="line"><span class="keyword">let</span> six = IpAddrKind::V6;</span><br></pre></td></tr></table></figure>
-<p><code>Option</code>也是一种枚举类型。</p>
-<h2 id="match"><a href="#match" class="headerlink" title="match"></a>match</h2><p>match的时候可以自动unapply枚举型:</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">match</span> x &#123;</span><br><span class="line">        <span class="literal">None</span> =&gt; <span class="literal">None</span>,</span><br><span class="line">        <span class="literal">Some</span>(i) =&gt; <span class="literal">Some</span>(i + <span class="number">1</span>),</span><br><span class="line">    &#125;</span><br><span class="line"><span class="comment">// 更复杂:</span></span><br><span class="line"># <span class="meta">#[derive(Debug)]</span> <span class="comment">// 支持直接打印</span></span><br><span class="line"># <span class="class"><span class="keyword">enum</span> <span class="title">UsState</span></span> &#123;</span><br><span class="line">#    Alabama,</span><br><span class="line">#    Alaska,</span><br><span class="line"># &#125;</span><br><span class="line">#</span><br><span class="line"># <span class="class"><span class="keyword">enum</span> <span class="title">Coin</span></span> &#123;</span><br><span class="line">#    Penny,</span><br><span class="line">#    Nickel,</span><br><span class="line">#    Dime,</span><br><span class="line">#    Quarter(UsState),</span><br><span class="line"># &#125;</span><br><span class="line">#</span><br><span class="line"><span class="keyword">match</span> coin &#123;</span><br><span class="line">        Coin::Penny =&gt; <span class="number">1</span>,</span><br><span class="line">        Coin::Nickel =&gt; <span class="number">5</span>,</span><br><span class="line">        Coin::Dime =&gt; <span class="number">10</span>,</span><br><span class="line">        Coin::Quarter(state) =&gt; &#123;</span><br><span class="line">            <span class="built_in">println!</span>(<span class="string">"State quarter from &#123;:?&#125;!"</span>, state);</span><br><span class="line">            <span class="number">25</span></span><br><span class="line">        &#125;,</span><br><span class="line">        _ =&gt; (), </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>这里类似于最后default兜底的值是<code>_</code>,返回值是<code>()</code>也就是<code>unit</code>类型。<br><code>if let</code>是match的语法糖:</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">let</span> <span class="keyword">mut</span> count = <span class="number">0</span>;</span><br><span class="line"><span class="keyword">if</span> <span class="keyword">let</span> Coin::Quarter(state) = coin &#123;</span><br><span class="line">    <span class="built_in">println!</span>(<span class="string">"State quarter from &#123;:?&#125;!"</span>, state);</span><br><span class="line">&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    count += <span class="number">1</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h1 id="包"><a href="#包" class="headerlink" title="包"></a>包</h1><p>package: 包。cargo的功能.<code>cargo new</code>生成,带有<code>Cargo.toml</code>文件;里面可以有多个库。<br>Crates： 库。很多模块构成的库；(或者程序)<br>Modules: 模块。</p>
-<p>包默认生成的库：</p>
-<ol>
-<li><code>src/main.rs</code>; (程序、数量任意)</li>
-<li><code>src/lib.rs</code>;  (库、最多1个)</li>
-</ol>
-<h1 id="模块"><a href="#模块" class="headerlink" title="模块"></a>模块</h1><figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">mod</span> sound &#123;<span class="comment">// 同包下可以访问</span></span><br><span class="line">    <span class="keyword">pub</span> <span class="keyword">mod</span> instrument &#123;<span class="comment">// 公有</span></span><br><span class="line">        <span class="keyword">pub</span> <span class="function"><span class="keyword">fn</span> <span class="title">clarinet</span></span>() &#123;<span class="comment">// 公有</span></span><br><span class="line">            <span class="comment">// 函数体</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="keyword">fn</span> <span class="title">main</span></span>() &#123;</span><br><span class="line">    <span class="comment">// 绝对路径</span></span><br><span class="line">    crate::sound::instrument::clarinet();</span><br><span class="line">    <span class="comment">// 相对路径</span></span><br><span class="line">    sound::instrument::clarinet();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<h2 id="super相对路径"><a href="#super相对路径" class="headerlink" title="super相对路径"></a>super相对路径</h2><figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">mod</span> sound &#123;</span><br><span class="line">    <span class="keyword">mod</span> instrument &#123;</span><br><span class="line">        <span class="function"><span class="keyword">fn</span> <span class="title">clarinet</span></span>() &#123;</span><br><span class="line">            super::breathe_in();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="function"><span class="keyword">fn</span> <span class="title">breathe_in</span></span>() &#123;</span><br><span class="line">        <span class="comment">// 函数体</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h2 id="use关键字引用"><a href="#use关键字引用" class="headerlink" title="use关键字引用"></a>use关键字引用</h2><p>类似于<code>import</code></p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">use</span> crate::sound::instrument;</span><br><span class="line"><span class="comment">// 相对路径引入:</span></span><br><span class="line"><span class="keyword">use</span> self::sound::instrument; <span class="comment">// 一般还是用绝对路径引入</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 同名冲突处理: 使用as重命名</span></span><br><span class="line"><span class="keyword">use</span> std::fmt::<span class="built_in">Result</span>;</span><br><span class="line"><span class="keyword">use</span> std::io::<span class="built_in">Result</span> <span class="keyword">as</span> IoResult;</span><br></pre></td></tr></table></figure>
-<p>默认use引入的项变成了私有，可以再加上pub让引入的项维持公有:</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">pub</span> <span class="keyword">use</span> crate::sound::instrument;</span><br></pre></td></tr></table></figure>
-
-<h2 id="访问修饰符pub"><a href="#访问修饰符pub" class="headerlink" title="访问修饰符pub"></a>访问修饰符pub</h2><p>枚举<code>enum</code>: 一旦pub，则所有字段pub;<br>结构体<code>struct</code>: 必须显式设定每个字段为pub，默认是private;</p>
-<h2 id="模块化"><a href="#模块化" class="headerlink" title="模块化"></a>模块化</h2><p>每个mod放在自己的同名文件中，其他文件中要用的时候，声明一下即可:</p>
-<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">mod</span> sound;</span><br></pre></td></tr></table></figure>
-<p>末尾是分号。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/09/22/2019-09/rust%E5%85%A5%E9%97%A8%E7%AC%94%E8%AE%B0-1/" data-id="ck96cxpq700jtmaamfyfe6f5b" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/rust/" rel="tag">rust</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-2019-09/JNI如何优雅引用so文件" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/09/08/2019-09/JNI%E5%A6%82%E4%BD%95%E4%BC%98%E9%9B%85%E5%BC%95%E7%94%A8so%E6%96%87%E4%BB%B6/" class="article-date">
-  <time datetime="2019-09-08T10:55:58.000Z" itemprop="datePublished">2019-09-08</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E6%80%A7%E8%83%BD/">性能</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/09/08/2019-09/JNI%E5%A6%82%E4%BD%95%E4%BC%98%E9%9B%85%E5%BC%95%E7%94%A8so%E6%96%87%E4%BB%B6/">JNI如何优雅引用so文件</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>JNI背景知识参见: <a href="http://xiaoyue26.github.io/2019/09/07/2019-09/JNI%E6%80%BB%E7%BB%93/">http://xiaoyue26.github.io/2019/09/07/2019-09/JNI%E6%80%BB%E7%BB%93/</a></p>
-<p>总之假设我们到了临门一脚想要引用so文件到时候,方法有很多种,大致分为两大类:</p>
-<ol>
-<li>预先把so文件部署到运行的机器特定目录,代码里使用绝对路径加载;</li>
-<li>把so文件打包到resource目录,运行时用相对路径加载。</li>
-</ol>
-<p>主要推荐绝对路径的姿势2和相对路径的姿势5.</p>
-<h2 id="优劣势"><a href="#优劣势" class="headerlink" title="优劣势:"></a>优劣势:</h2><h3 id="绝对路径"><a href="#绝对路径" class="headerlink" title="绝对路径:"></a>绝对路径:</h3><ul>
-<li>多个java程序可以引用同一个so文件,不用都打包到jar包里,降低jar包大小;  </li>
-<li>可以灵活切换so文件实现,不用重新打包jar包, 符合c++中动态链接库的思想。</li>
-</ul>
-<h3 id="相对路径"><a href="#相对路径" class="headerlink" title="相对路径:"></a>相对路径:</h3><ul>
-<li>一般一个so文件就一个java程序使用,相对路径用起来省心,不用配置多个运行环境. </li>
-<li>比较符合jvm平台无关的思想,当然so文件肯定是平台有关的。一般so文件是某个公开库,不是我们自己写的,也不需要修改其实现。</li>
-</ul>
-<p>目前我个人使用的是第5种姿势。</p>
-<h2 id="绝对路径-1"><a href="#绝对路径-1" class="headerlink" title="绝对路径"></a>绝对路径</h2><p>姿势1: 直接写死:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">System.load(<span class="string">"/opt/ld_path/libtest.so"</span>);</span><br></pre></td></tr></table></figure>
-<p>姿势2: 结合环境变量,这里第一行代码可以在运行时由命令<code>java -Djava.library.path=/opt/ld_path</code>代替:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">System.setProperty(<span class="string">"java.library.path"</span>, <span class="string">"/opt/ld_path"</span>);</span><br><span class="line"><span class="keyword">try</span> &#123;</span><br><span class="line">    Field sysPath = ClassLoader.class.getDeclaredField("sys_paths");</span><br><span class="line">    sysPath.setAccessible(<span class="keyword">true</span>);</span><br><span class="line">    sysPath.set(<span class="keyword">null</span>, <span class="keyword">null</span>);</span><br><span class="line">    <span class="comment">// System.out.println(System.mapLibraryName("dynamic"));</span></span><br><span class="line">    System.loadLibrary(<span class="string">"dynamic"</span>);</span><br><span class="line">    <span class="comment">// 注意mac需要.dylib结尾的依赖文件</span></span><br><span class="line">    <span class="comment">// linux需要.so结尾的依赖文件</span></span><br><span class="line">&#125; <span class="keyword">catch</span> (NoSuchFieldException | IllegalAccessException e) &#123;</span><br><span class="line">    System.out.println(<span class="string">"error"</span>);</span><br><span class="line">    e.printStackTrace();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h2 id="相对路径-仅在ide里可用的方法"><a href="#相对路径-仅在ide里可用的方法" class="headerlink" title="相对路径: 仅在ide里可用的方法"></a>相对路径: 仅在ide里可用的方法</h2><blockquote>
-<p>这两种方法都需要首先把<code>libdynamic.so</code>文件放到<code>resource</code>目录。</p>
-</blockquote>
-<p>姿势3:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">URL url = JNIDyn.class.getClassLoader().getResource("libdynamic.so");</span><br><span class="line">System.load(url.getPath());</span><br></pre></td></tr></table></figure>
-<p>姿势4:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">ClassPathResource resource = <span class="keyword">new</span> ClassPathResource(<span class="string">"libdynamic.so"</span>);</span><br><span class="line"><span class="comment">// System.out.println(resource.getPath());</span></span><br><span class="line"><span class="keyword">try</span> &#123;</span><br><span class="line">    File file = resource.getFile();</span><br><span class="line">    System.load(file.getAbsolutePath());</span><br><span class="line">&#125; <span class="keyword">catch</span> (IOException e) &#123;</span><br><span class="line">    e.printStackTrace();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h2 id="相对路径-ide和jar包都能用的方法"><a href="#相对路径-ide和jar包都能用的方法" class="headerlink" title="相对路径: ide和jar包都能用的方法"></a>相对路径: ide和jar包都能用的方法</h2><p>姿势5: </p>
-<blockquote>
-<p>需要首先把<code>libdynamic.so</code>文件放到<code>resource</code>目录。</p>
-</blockquote>
-<p>然后需要创建<code>NativeUtils</code>工具类;<br>加载代码:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">static</span> &#123;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        NativeUtils.loadLibraryFromJar(<span class="string">"/libnative.so"</span>);</span><br><span class="line">    &#125; <span class="keyword">catch</span> (IOException e) &#123;</span><br><span class="line">        e.printStackTrace();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>这里使用到的<code>NativeUtils</code>源码如下:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> java.io.*;</span><br><span class="line"><span class="keyword">import</span> java.nio.file.*;</span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">NativeUtils</span> </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> MIN_PREFIX_LENGTH = <span class="number">3</span>;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> String NATIVE_FOLDER_PATH_PREFIX = <span class="string">"nativeutils"</span>;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> File temporaryDir;</span><br><span class="line">    <span class="function"><span class="keyword">private</span> <span class="title">NativeUtils</span><span class="params">()</span> </span>&#123;&#125;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">loadLibraryFromJar</span><span class="params">(String path)</span> <span class="keyword">throws</span> IOException </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (<span class="keyword">null</span> == path || !path.startsWith(<span class="string">"/"</span>)) &#123;</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> IllegalArgumentException(<span class="string">"The path has to be absolute (start with '/')."</span>);</span><br><span class="line">        &#125;</span><br><span class="line">        String[] parts = path.split(<span class="string">"/"</span>);</span><br><span class="line">        String filename = (parts.length &gt; <span class="number">1</span>) ? parts[parts.length - <span class="number">1</span>] : <span class="keyword">null</span>;</span><br><span class="line">        <span class="keyword">if</span> (filename == <span class="keyword">null</span> || filename.length() &lt; MIN_PREFIX_LENGTH) &#123;</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> IllegalArgumentException(<span class="string">"The filename has to be at least 3 characters long."</span>);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> (temporaryDir == <span class="keyword">null</span>) &#123;</span><br><span class="line">            temporaryDir = createTempDirectory(NATIVE_FOLDER_PATH_PREFIX);</span><br><span class="line">            temporaryDir.deleteOnExit();</span><br><span class="line">        &#125;</span><br><span class="line">        File temp = <span class="keyword">new</span> File(temporaryDir, filename);</span><br><span class="line">        <span class="keyword">try</span> (InputStream is = NativeUtils<span class="class">.<span class="keyword">class</span>.<span class="title">getResourceAsStream</span>(<span class="title">path</span>)) </span>&#123;</span><br><span class="line">            Files.copy(is, temp.toPath(), StandardCopyOption.REPLACE_EXISTING);</span><br><span class="line">        &#125; <span class="keyword">catch</span> (IOException e) &#123;</span><br><span class="line">            temp.delete();</span><br><span class="line">            <span class="keyword">throw</span> e;</span><br><span class="line">        &#125; <span class="keyword">catch</span> (NullPointerException e) &#123;</span><br><span class="line">            temp.delete();</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> FileNotFoundException(<span class="string">"File "</span> + path + <span class="string">" was not found inside JAR."</span>);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            System.load(temp.getAbsolutePath());</span><br><span class="line">        &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">            <span class="keyword">if</span> (isPosixCompliant()) &#123;</span><br><span class="line">                temp.delete();</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                temp.deleteOnExit();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">boolean</span> <span class="title">isPosixCompliant</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            <span class="keyword">return</span> FileSystems.getDefault()</span><br><span class="line">                    .supportedFileAttributeViews()</span><br><span class="line">                    .contains(<span class="string">"posix"</span>);</span><br><span class="line">        &#125; <span class="keyword">catch</span> (FileSystemNotFoundException</span><br><span class="line">                | ProviderNotFoundException</span><br><span class="line">                | SecurityException e) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="keyword">false</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">private</span> <span class="keyword">static</span> File <span class="title">createTempDirectory</span><span class="params">(String prefix)</span> <span class="keyword">throws</span> IOException </span>&#123;</span><br><span class="line">        String tempDir = System.getProperty(<span class="string">"java.io.tmpdir"</span>);</span><br><span class="line">        File generatedDir = <span class="keyword">new</span> File(tempDir, prefix + System.nanoTime());</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (!generatedDir.mkdir())</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> IOException(<span class="string">"Failed to create temp directory "</span> + generatedDir.getName());</span><br><span class="line"></span><br><span class="line">        <span class="keyword">return</span> generatedDir;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/09/08/2019-09/JNI%E5%A6%82%E4%BD%95%E4%BC%98%E9%9B%85%E5%BC%95%E7%94%A8so%E6%96%87%E4%BB%B6/" data-id="ck96cxpq600jomaam0b6r19z1" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/JNI/" rel="tag">JNI</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1282,23 +908,23 @@
       <ul>
         
           <li>
+            <a href="/2021/02/22/2021-02/%E5%A4%9A%E9%A1%B9%E7%9B%AE%E5%85%B1%E4%BA%AB%E4%BB%A3%E7%A0%81%E4%B9%8B%E2%80%94%E2%80%94git-subtree/">多项目共享代码之——git subtree</a>
+          </li>
+        
+          <li>
+            <a href="/2020/12/27/2020-12/%E8%B7%A8%E5%9F%9F%E7%9B%B8%E5%85%B3/">跨域相关</a>
+          </li>
+        
+          <li>
+            <a href="/2020/12/20/2020-12/%E7%BA%BF%E4%B8%8A%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-%E6%9F%A5%E7%9C%8B%E6%96%B9%E6%B3%95%E7%BA%A7%E8%80%97%E6%97%B6/">线上性能debug-查看方法级耗时</a>
+          </li>
+        
+          <li>
+            <a href="/2020/12/19/2020-12/%E5%8D%87%E7%BA%A7HTTP2%E7%AC%94%E8%AE%B0/">升级HTTP2笔记</a>
+          </li>
+        
+          <li>
             <a href="/2020/07/22/2020-07/ES%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0/">ES实战笔记</a>
-          </li>
-        
-          <li>
-            <a href="/2020/06/19/2020-06/tcp%E8%B0%83%E4%BC%98/">tcp调优</a>
-          </li>
-        
-          <li>
-            <a href="/2020/06/15/2020-06/jdk11%E4%B8%8Bg1%E6%94%B6%E9%9B%86%E5%99%A8%E4%BD%BF%E7%94%A8/">jdk11下g1收集器使用</a>
-          </li>
-        
-          <li>
-            <a href="/2020/06/08/2020-06/mysql%E5%8F%AF%E9%87%8D%E5%A4%8D%E8%AF%BB%E4%B8%8B%E7%94%A8for-update%E5%AF%BC%E8%87%B4%E7%9A%84%E6%AD%BB%E9%94%81/">mysql可重复读下用for update导致的死锁</a>
-          </li>
-        
-          <li>
-            <a href="/2020/05/05/2020-05/BeanCopier%E6%B5%8B%E8%AF%84%E6%8A%A5%E5%91%8A/">BeanCopier测评报告</a>
           </li>
         
       </ul>
@@ -1316,7 +942,7 @@
   
   <div class="outer">
     <div id="footer-left">
-      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      &copy; 2014 - 2021 风梦七&nbsp;|&nbsp;
       主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
     </div>
      <div id="footer-right">

@@ -72,6 +72,542 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-02/高性能mysql第九-十章-笔记-选硬件-主备复制" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/11/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC%E4%B9%9D-%E5%8D%81%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E9%80%89%E7%A1%AC%E4%BB%B6-%E4%B8%BB%E5%A4%87%E5%A4%8D%E5%88%B6/" class="article-date">
+  <time datetime="2019-02-11T14:41:01.000Z" itemprop="datePublished">2019-02-11</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/02/11/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC%E4%B9%9D-%E5%8D%81%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E9%80%89%E7%A1%AC%E4%BB%B6-%E4%B8%BB%E5%A4%87%E5%A4%8D%E5%88%B6/">高性能mysql第九/十章-笔记-选硬件/主备复制</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>这章主要讲怎么挑mysql的硬件。</p>
+<h1 id="CPU"><a href="#CPU" class="headerlink" title="CPU"></a>CPU</h1><p>多核的</p>
+<h1 id="磁盘"><a href="#磁盘" class="headerlink" title="磁盘"></a>磁盘</h1><p>raid卡，带电，防断电的</p>
+<h2 id="iostat和vmstat用法"><a href="#iostat和vmstat用法" class="headerlink" title="iostat和vmstat用法"></a>iostat和vmstat用法</h2><p>略</p>
+<h1 id="高性能mysql第十章-笔记-复制"><a href="#高性能mysql第十章-笔记-复制" class="headerlink" title="高性能mysql第十章-笔记-复制"></a>高性能mysql第十章-笔记-复制</h1><p>使用场景：</p>
+<ol>
+<li>数据分布；</li>
+<li>负载均衡（从库可以读）；</li>
+<li>备份；</li>
+<li>高可用/故障切换；</li>
+<li>升级测试。 <img src="/images/2019-02/relay_log.png" class="" width="800" height="1200" title="relay_log">
+主库备库同步流程：</li>
+<li>主库: 生成binlog;(binlog dump线程)</li>
+<li>备库: 读取binlong放入中继日志relay log;（通过TCP/IP协议,IO线程）</li>
+<li>备库: 重放relay log。(单线程,SQL线程)</li>
+</ol>
+<h2 id="配置复制"><a href="#配置复制" class="headerlink" title="配置复制"></a>配置复制</h2><ol>
+<li>每台服务器上创建账号;</li>
+<li>配置主库和备库；</li>
+<li>通知备库连接到主库，并从主库复制数据。</li>
+</ol>
+<h3 id="第一步创建账号"><a href="#第一步创建账号" class="headerlink" title="第一步创建账号"></a>第一步创建账号</h3><p>主库、备库：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">grant</span> <span class="keyword">replication</span> <span class="keyword">slave</span>, <span class="keyword">replication</span> <span class="keyword">client</span> <span class="keyword">on</span> *.*</span><br><span class="line"><span class="keyword">to</span> repl@<span class="string">'192.168.0.%'</span> indentified <span class="keyword">by</span> <span class="string">'p4ssword'</span>,;</span><br></pre></td></tr></table></figure>
+
+<h3 id="第二步设置主库和备库"><a href="#第二步设置主库和备库" class="headerlink" title="第二步设置主库和备库"></a>第二步设置主库和备库</h3><p>主库:<br><code>[my.conf]</code>:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">log_bin &#x3D; mysql-bin</span><br><span class="line">server_id &#x3D; 10</span><br></pre></td></tr></table></figure>
+<p>重启主库。<br>检查主库完成配置:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">master</span> <span class="keyword">status</span>;</span><br><span class="line"></span><br><span class="line">+<span class="comment">------------------+-----------+--------------+------------------+-------------------+</span></span><br><span class="line">| File             | Position  | Binlog_Do_DB | Binlog_Ignore_DB | Executed_Gtid_Set |</span><br><span class="line">+<span class="comment">------------------+-----------+--------------+------------------+-------------------+</span></span><br><span class="line">| mysql-bin.000611 | 618598987 |              |                  |                   |</span><br><span class="line">+<span class="comment">------------------+-----------+--------------+------------------+-------------------+</span></span><br></pre></td></tr></table></figure>
+
+
+<p>备库配置：<br><code>[my.conf]</code></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">log_bin &#x3D; mysql-bin</span><br><span class="line">server_id &#x3D; 2 </span><br><span class="line">relay_log &#x3D; &#x2F;var&#x2F;lib&#x2F;mysql&#x2F;mysql-relay-bin</span><br><span class="line">log_slave_updates &#x3D; 1 # 备库自身的重放事件也记录到binlog中</span><br><span class="line">read_only &#x3D; 1</span><br></pre></td></tr></table></figure>
+
+<h3 id="第三步：启动复制"><a href="#第三步：启动复制" class="headerlink" title="第三步：启动复制"></a>第三步：启动复制</h3><p>备库执行sql:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">change</span> <span class="keyword">master</span> <span class="keyword">to</span> MASTER_HOST= <span class="string">'server1'</span></span><br><span class="line">,MASTER_USER=<span class="string">'reply'</span></span><br><span class="line">,MASTER_PASSWORD=<span class="string">'p4ssword'</span></span><br><span class="line">,MASTER_LOG_FILE=<span class="string">'mysql-bin.000001'</span></span><br><span class="line">,MASTER_LOG_POS=<span class="number">0</span>;</span><br></pre></td></tr></table></figure>
+<p>检查备库配置:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">slave</span> <span class="keyword">status</span> \G</span><br></pre></td></tr></table></figure>
+
+<p>让备库开始复制:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">start</span> <span class="keyword">slave</span>;</span><br></pre></td></tr></table></figure>
+
+
+
+<h2 id="binlog配置"><a href="#binlog配置" class="headerlink" title="binlog配置"></a>binlog配置</h2><h3 id="主库配置"><a href="#主库配置" class="headerlink" title="主库配置"></a>主库配置</h3><p><code>sync_binlog</code>=1: 事务提交前把binlog存到磁盘上。</p>
+<h2 id="复制的原理"><a href="#复制的原理" class="headerlink" title="复制的原理"></a>复制的原理</h2><p><code>binlog_format</code>:</p>
+<ol>
+<li>基于语句的复制(逻辑): 出错机率大,开销小;</li>
+<li>基于行的复制(物理): 几乎不出错,开销一般更大。(5.1以后开始有)</li>
+</ol>
+<p>基于语句的复制的<strong>缺点</strong>:</p>
+<ol>
+<li>不支持触发器或者存储过程：有bug;</li>
+<li>只能串行重放。</li>
+</ol>
+<p>基于行的<strong>缺点</strong>:</p>
+<ol>
+<li>可读性差，无法直接知道执行了什么SQL。<br>解决方案: <figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- 1:</span></span><br><span class="line"><span class="keyword">show</span> <span class="keyword">master</span> <span class="keyword">logs</span>;</span><br><span class="line"><span class="comment">-- 2:</span></span><br><span class="line"><span class="keyword">show</span> <span class="keyword">binlog</span> <span class="keyword">events</span> <span class="keyword">in</span> <span class="string">'mysql-bin.000643'</span> <span class="keyword">from</span> <span class="number">1073742091</span>;</span><br></pre></td></tr></table></figure>
+
+
+</li>
+</ol>
+<h2 id="复制的过滤器"><a href="#复制的过滤器" class="headerlink" title="复制的过滤器"></a>复制的过滤器</h2><p>不建议使用。</p>
+<h2 id="复制的拓扑"><a href="#复制的拓扑" class="headerlink" title="复制的拓扑"></a>复制的拓扑</h2><h3 id="1-一主多备-星形模型"><a href="#1-一主多备-星形模型" class="headerlink" title="1. 一主多备(星形模型)"></a>1. 一主多备(星形模型)</h3><h3 id="2-双主"><a href="#2-双主" class="headerlink" title="2. 双主"></a>2. 双主</h3><p>不建议使用,两个主库都可写会有很多问题</p>
+<h3 id="3-HA模式-类似于双主-但只有一个可写"><a href="#3-HA模式-类似于双主-但只有一个可写" class="headerlink" title="3. HA模式(类似于双主,但只有一个可写)"></a>3. HA模式(类似于双主,但只有一个可写)</h3><img src="/images/2019-02/HA.png" class="" width="800" height="1200" title="HA">
+<p>两个库的配置基本相同，只是其中一个库是只读的。<br>如果有Alter table等耗时操作，可以在备库上执行，然后互换两个库。<br>优点：<br>故障恢复很简单。</p>
+<p>具体设置情况:</p>
+<ol>
+<li>两个库数据相同;</li>
+<li>创建复制账号，选择不同serverid；</li>
+<li>两者启用binlog,互相跟踪;</li>
+<li>备库设置成只读，主库设置成可写。</li>
+</ol>
+<p>由于serverid，主库不会重复消费自己的变更。（忽略自己的日志）</p>
+<h3 id="确定备库追上了主库"><a href="#确定备库追上了主库" class="headerlink" title="确定备库追上了主库"></a>确定备库追上了主库</h3><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- 主库:</span></span><br><span class="line"><span class="keyword">show</span> <span class="keyword">master</span> <span class="keyword">status</span>;<span class="comment">-- 记录一下文件名和偏移量</span></span><br><span class="line"><span class="comment">-- 备库:</span></span><br><span class="line"><span class="keyword">select</span> <span class="keyword">master_pos_wait</span>(<span class="keyword">file</span>, pos[, <span class="keyword">timeout</span>])</span><br></pre></td></tr></table></figure>
+
+<h3 id="4-环形-gt-3的库成环"><a href="#4-环形-gt-3的库成环" class="headerlink" title="4. 环形(&gt;=3的库成环)"></a>4. 环形(&gt;=3的库成环)</h3><p>不建议使用，太脆弱容易死循环。</p>
+<h3 id="5-分发主库"><a href="#5-分发主库" class="headerlink" title="5. 分发主库"></a>5. 分发主库</h3><img src="/images/2019-02/fenfa_mysql.png" class="" width="800" height="1200" title="fenfa_mysql">
+<p>一主多备对于备的数量有上限，可以用分发主库来进行扩展。<br>为了避免在分发主库上执行查询，可以将它的表修改为blackhole引擎。<br>（storage_engine=blackhole）</p>
+<h3 id="6-模拟多主库"><a href="#6-模拟多主库" class="headerlink" title="6. 模拟多主库"></a>6. 模拟多主库</h3><img src="/images/2019-02/moni_multi.png" class="" width="800" height="1200" title="moni_multi">
+<p>备库可以轮流读两个主库，俩主库带blackhole即可。</p>
+<h2 id="tips"><a href="#tips" class="headerlink" title="tips"></a>tips</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">insert ...</span><br><span class="line">select ...</span><br><span class="line">-- 转换成:</span><br><span class="line">select into outfile .. </span><br><span class="line">load data infile  ...</span><br></pre></td></tr></table></figure>
+<p>这样更快(不需要加锁)</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/11/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC%E4%B9%9D-%E5%8D%81%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E9%80%89%E7%A1%AC%E4%BB%B6-%E4%B8%BB%E5%A4%87%E5%A4%8D%E5%88%B6/" data-id="ck96cxppg00h7maam081s1f7j" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-02/高性能mysql第八章-笔记-优化服务器配置" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/11/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC%E5%85%AB%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E4%BC%98%E5%8C%96%E6%9C%8D%E5%8A%A1%E5%99%A8%E9%85%8D%E7%BD%AE/" class="article-date">
+  <time datetime="2019-02-11T14:37:32.000Z" itemprop="datePublished">2019-02-11</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/02/11/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC%E5%85%AB%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E4%BC%98%E5%8C%96%E6%9C%8D%E5%8A%A1%E5%99%A8%E9%85%8D%E7%BD%AE/">高性能mysql第八章-笔记-优化服务器配置</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <blockquote>
+<p>错误配置不如维持默认配置。</p>
+</blockquote>
+<h1 id="优化服务器配置"><a href="#优化服务器配置" class="headerlink" title="优化服务器配置"></a>优化服务器配置</h1><h2 id="配置文件"><a href="#配置文件" class="headerlink" title="配置文件"></a>配置文件</h2><p>服务端读取<code>mysqld</code>分段<br>客户端可能会读取客户端分段。</p>
+<h2 id="配置级别"><a href="#配置级别" class="headerlink" title="配置级别"></a>配置级别</h2><p>全局、连接级、会话级<br><code>sort_buffer_size</code>: 每个线程都可以设置<br><code>join_buffer_size</code>: 可以为每个关联都设置一个关联缓冲。</p>
+<h2 id="tips"><a href="#tips" class="headerlink" title="tips"></a>tips</h2><p>用git管理配置文件</p>
+<h2 id="最优配置"><a href="#最优配置" class="headerlink" title="最优配置"></a>最优配置</h2><p>书上也不知道怎么配出最优配置。</p>
+<ol>
+<li>用benchmark：穷举配置成本太高；</li>
+<li>用比较低的值慢慢试探，较低的内存配置对性能影响不大（百分之几），但较高的内存配置会造成较大的性能抖动，因此尽量以较低的配置。</li>
+</ol>
+<h2 id="Buffer-pool（Innodb）"><a href="#Buffer-pool（Innodb）" class="headerlink" title="Buffer pool（Innodb）"></a>Buffer pool（Innodb）</h2><p>缓存内容:</p>
+<ol>
+<li>缓存索引;</li>
+<li>缓存行数据；</li>
+<li>缓存自适应哈希索引；</li>
+<li>插入缓冲；（延迟合并写入）</li>
+<li>锁。</li>
+</ol>
+<h2 id="Key-caches-MyIsam"><a href="#Key-caches-MyIsam" class="headerlink" title="Key caches(MyIsam)"></a>Key caches(MyIsam)</h2><p>键缓冲(键缓存)。<br>MyIsam只缓存索引，不缓存数据。</p>
+<p>查看MyIsam的索引总大小:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> <span class="keyword">sum</span>(index_length) </span><br><span class="line"><span class="keyword">from</span> information_schema.tables</span><br><span class="line"><span class="keyword">where</span> <span class="keyword">engine</span>=<span class="string">'MYISAM'</span>;</span><br><span class="line"><span class="comment">-- 也可以看看分布:</span></span><br><span class="line"><span class="keyword">select</span> <span class="keyword">engine</span>,<span class="keyword">sum</span>(index_length) </span><br><span class="line"><span class="keyword">from</span> information_schema.tables</span><br><span class="line"><span class="keyword">GROUP</span> <span class="keyword">BY</span> <span class="keyword">engine</span>;</span><br><span class="line"></span><br><span class="line">+<span class="comment">--------------------+-------------------+</span></span><br><span class="line">| engine             | sum(index_length) |</span><br><span class="line">+<span class="comment">--------------------+-------------------+</span></span><br><span class="line">| CSV                |                 0 |</span><br><span class="line">| InnoDB             |       68176035840 |</span><br><span class="line">| MEMORY             |                 0 |</span><br><span class="line">| MyISAM             |            124928 |</span><br><span class="line">| PERFORMANCE_SCHEMA |                 0 |</span><br><span class="line">+<span class="comment">--------------------+-------------------+</span></span><br></pre></td></tr></table></figure>
+<p>key cache的大小不要超过MYISAM索引总大小。</p>
+<h2 id="线程缓存"><a href="#线程缓存" class="headerlink" title="线程缓存"></a>线程缓存</h2><p><code>thread_cache_size</code>:  缓存线程数量。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">variables</span> <span class="keyword">like</span> <span class="string">'%thread_cache_size%'</span>;</span><br><span class="line"><span class="keyword">show</span> <span class="keyword">variables</span> <span class="keyword">like</span> <span class="string">'%thread%'</span>;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">+<span class="comment">-----------------------------------------+---------------------------+</span></span><br><span class="line">| Variable_name                           | Value                     |</span><br><span class="line">+<span class="comment">-----------------------------------------+---------------------------+</span></span><br><span class="line">| innodb_purge_threads                    | 1                         |</span><br><span class="line">| innodb_read_io_threads                  | 12                        |</span><br><span class="line">| innodb_thread_concurrency               | 0                         |</span><br><span class="line">| innodb_thread_sleep_delay               | 10000                     |</span><br><span class="line">| innodb_write_io_threads                 | 12                        |</span><br><span class="line">| max_delayed_threads                     | 20                        |</span><br><span class="line">| max_insert_delayed_threads              | 20                        |</span><br><span class="line">| myisam_repair_threads                   | 1                         |</span><br><span class="line">| performance_schema_max_thread_classes   | 50                        |</span><br><span class="line">| performance_schema_max_thread_instances | -1                        |</span><br><span class="line">| pseudo_thread_id                        | 4804578                   |</span><br><span class="line">| thread_cache_size                       | 512                       |</span><br><span class="line">| thread_concurrency                      | 4                         |</span><br><span class="line">| thread_handling                         | one-thread-per-connection |</span><br><span class="line">| thread_stack                            | 524288                    |</span><br><span class="line">+<span class="comment">-----------------------------------------+---------------------------+</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="表缓存"><a href="#表缓存" class="headerlink" title="表缓存"></a>表缓存</h2><p>对myisam有用，innodb用处不大。<br>算是一个已经过时的配置。</p>
+<h2 id="Buffer-Pool相关架构"><a href="#Buffer-Pool相关架构" class="headerlink" title="Buffer Pool相关架构"></a>Buffer Pool相关架构</h2><img src="/images/2019-02/buffer_pool.png" class="" width="800" height="1200" title="buffer_pool">
+<p>图中的undo日志是方便事务回滚的。<br>(redo日志是类似WAL，防断电的，利用顺序IO优化性能)</p>
+<p>事务日志(redo log)使用类似环形数组的数据结构，可以环形写入到flush过的头部，节省存储空间。</p>
+<h3 id="Log-Buffer（Redo-log-事务日志）"><a href="#Log-Buffer（Redo-log-事务日志）" class="headerlink" title="Log Buffer（Redo log/事务日志）"></a>Log Buffer（Redo log/事务日志）</h3><p>每次变更: 记录到Log Buffer(Buffer Pool =&gt; Log Buffer)</p>
+<p>Log Buffer刷盘到磁盘日志文件的时机(或者说触发事件):</p>
+<ol>
+<li>每一秒钟(定时器tick事件);</li>
+<li>或事务提交事件;</li>
+<li>或缓冲区满。</li>
+</ol>
+<p>以上是默认的三个事件，调节参数为<code>innodb_flush_log_at_trx_commit</code>,3种取值:<br>0: 事务提交:不触发;<br>1: 事务提交:刷盘到磁盘;(默认值，3种事件皆触发刷盘)<br>2: 事务提交:刷新到操作系统缓存。（能扛mysql进程挂掉，不能扛断电，断电的话会丢一秒数据。）</p>
+<p>如果缓冲区满的太频繁(1s满了很多次)，可以考虑增大缓冲区大小来减少IO次数。<br>参数:<br><code>innodb_log_buffer_size</code>: 默认1M，推荐1~8M。</p>
+<p>调节这个参数需要命令:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">engine</span> <span class="keyword">innodb</span> <span class="keyword">status</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="Innodb读写日志、数据文件配置"><a href="#Innodb读写日志、数据文件配置" class="headerlink" title="Innodb读写日志、数据文件配置"></a>Innodb读写日志、数据文件配置</h2><p>这是一个风险很高的选项，认真学习以后有必要再修改。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">global</span> <span class="keyword">variables</span> <span class="keyword">like</span> <span class="string">'%flush_method%'</span>;</span><br><span class="line"></span><br><span class="line">+<span class="comment">---------------------+----------+</span></span><br><span class="line">| Variable_name       | Value    |</span><br><span class="line">+<span class="comment">---------------------+----------+</span></span><br><span class="line">| innodb_flush_method | O_DIRECT |</span><br><span class="line">+<span class="comment">---------------------+----------+</span></span><br></pre></td></tr></table></figure>
+<p>windows用的选项:<br>async_unbuffered,unbuffered,normal.</p>
+<p>linux：</p>
+<ul>
+<li><p><code>fdatasync</code>: 默认值。用<code>fsync()</code>刷新数据和日志文件。<br><code>fdatasync()</code>函数只刷新文件的数据；<br><code>fsync()</code>函数刷新数据和日志文件。<br>配置为<code>fdatasync</code>时其实会调用<code>fsync()</code>函数。默认会合并多个文件的fsync()操作，合并IO操作。可以通过<code>innodb_file_per_table</code>选项为每个文件独立fsync()，但也会增多IO操作。</p>
+</li>
+<li><p><code>O_DIRECT</code>: 数据文件: 用<code>O_DIRECT</code>标记或<code>directio()</code>函数。<br>（不影响日志文件）<br>区别: 使用fsync()函数刷盘，但会通知操作系统不要缓存数据，也不要预读。<br>相当于关闭了操作系统缓存（读写）。<br>特例： 不影响raid卡的预读、写缓存。</p>
+</li>
+<li><p><code>ALL_O_DIRECT</code>: 影响数据和日志文件。</p>
+</li>
+<li><p><code>O_DSYNC</code>: 日志文件: 用<code>O_SYNC</code>标记，写同步（日志写到磁盘才返回）<br>（不影响数据文件）<br>区别：不禁用操作系统的缓存。</p>
+</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th align="center">配置值</th>
+<th align="center">实际调用函数</th>
+<th align="center">概述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">fdatasync</td>
+<td align="center">fsync(含义相反)</td>
+<td align="center">刷新数据和日志，有操作系统缓存</td>
+</tr>
+<tr>
+<td align="center">O_DIRECT</td>
+<td align="center"></td>
+<td align="center">刷新数据，关闭缓存</td>
+</tr>
+<tr>
+<td align="center">ALL_O_DIRECT</td>
+<td align="center"></td>
+<td align="center">刷新数据和日志，关闭缓存</td>
+</tr>
+<tr>
+<td align="center">O_DSYNC</td>
+<td align="center">O_SYNC</td>
+<td align="center">刷新日志，有操作系统缓存</td>
+</tr>
+</tbody></table>
+<p>O_DSYNC和fdatasync的区别:<br>（实际是O_SYNC和fsync的区别）fsync允许写操作累积在缓存，然后一次性刷新。<br>O_SYNC是每次都是同步IO，每次都刷盘。</p>
+<h3 id="tips-1"><a href="#tips-1" class="headerlink" title="tips"></a>tips</h3><p>如果使用raid卡带电: O_DIRECT;<br>否则: O_DIRECT或fdatasync都有可能，看业务需求。</p>
+<h2 id="Innodb表空间"><a href="#Innodb表空间" class="headerlink" title="Innodb表空间"></a>Innodb表空间</h2><p>位于<code>innodb_data_home_dir</code>目录:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">表、索引、回滚日志(undo log)、插入缓冲(Insert Buffer)、双写缓冲(DoubleWrite Buffer)。</span><br></pre></td></tr></table></figure>
+
+<p>目录下可以挂载多个设备，但不会自动做负载均衡，只有写满第一个才会写第二个，因此需要底层用raid自己做负载均衡。<br>挂载多个目录:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">innodb_data_file_path &#x3D; &#x2F;disk1&#x2F;ibdata1:1G;&#x2F;disk2&#x2F;ibdata2:1G;&#x2F;disk3&#x2F;ibdata3:1G:autoextended:max:2G</span><br></pre></td></tr></table></figure>
+
+<p>建议使用<code>innodb_file_per_table</code>选项，每个表的表空间一个文件。<br>缺点：DROP Table慢。<br>原因: </p>
+<ol>
+<li>删除文件慢；</li>
+<li>移除表空间需要Innodb锁定和扫描缓冲区，查找属于这个表空间的页。</li>
+</ol>
+<h4 id="运行时间长的事务"><a href="#运行时间长的事务" class="headerlink" title="运行时间长的事务"></a>运行时间长的事务</h4><p>缺点: undo log增长到打爆表空间、磁盘。</p>
+<h3 id="双写缓冲-Doublewrite-Buffer"><a href="#双写缓冲-Doublewrite-Buffer" class="headerlink" title="双写缓冲(Doublewrite Buffer)"></a>双写缓冲(Doublewrite Buffer)</h3><p>功能: 避免页没写完整导致的数据损坏。<br>buffer pool =&gt; Doublewrite Buffer =&gt; 磁盘</p>
+<p>写两次，但由于有<code>fsync()</code>，而且这个过程时间顺序上比较紧密，可以一次性刷到磁盘，写两次的性能损耗也就多了百分之记。</p>
+<h3 id="binlog-IO配置"><a href="#binlog-IO配置" class="headerlink" title="binlog IO配置"></a>binlog IO配置</h3><p><code>sync_binlog</code>: binlog配置。<br>N=0(默认值): 不干预，让操作系统自己决定。<br>N&gt;0: N次写以后，刷新到磁盘。（一般不会大于1)</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">show global variables like &#39;%log%&#39;;</span><br></pre></td></tr></table></figure>
+
+<p>innodb的6种日志:</p>
+<ol>
+<li>redo log(物理/WAL): 事务开始后写入缓冲区innodb_log_buffer;（存储引擎层）</li>
+<li>undo log(逻辑/版本): 事务开始后为了事务回滚准备的日志，从buffer pool=&gt;表空间;</li>
+<li>bin log(逻辑/SQL): 主从复制。或者基于时间点的还原。(类似于存了sql)。（事务提交前产生，数据库层）</li>
+<li>slow query log: 慢查询;</li>
+<li>general log: 一般日志;</li>
+<li>relay log: 中继日志。</li>
+</ol>
+<p>undo log（在表空间）: 修改前的值/版本号;<br>undo log可以配置从表空间中分离出来。</p>
+<p>redo log（在log buffer）: 类似于WAL，记录buffer pool和disk的不同。</p>
+<h3 id="回滚事务的crash恢复"><a href="#回滚事务的crash恢复" class="headerlink" title="回滚事务的crash恢复"></a>回滚事务的crash恢复</h3><ul>
+<li>redo log: 只追加写，提交到磁盘以后标记为可以被新日志覆盖。</li>
+<li>基于这个特性，即使事务已经回滚了，它的redo log依然是存在的。</li>
+<li>再基于以上这点，db crash以后，可以恢复已经回滚的事务。</li>
+</ul>
+<p>回滚事务的crash恢复,有两种策略:</p>
+<ol>
+<li>读redo log,挑已经提交的事务进行恢复;</li>
+<li>读redo log,恢复所有事务，再用undo log解决回滚的事务。</li>
+</ol>
+<p><code>innodb</code>使用的是策略2，也就是先redo,再undo。</p>
+<p>使用策略2的难点:</p>
+<ul>
+<li><p>需要redo log相应的undo log是健全的，否则就漏回滚了。<br>(1)解决方案1:确保undo log落盘早于redo log；（很麻烦，不用）<br>(2)解决方案2:将undo log也视为数据，记录到redo log中。（innodb采用）</p>
+</li>
+<li><p>总结</p>
+<blockquote>
+<p>crash恢复: 先读取执行redo log，再执行undo log，这样可以恢复未提交事务和回滚事务。<br>undo log和redo log的数据一致性: 把undo log也视为数据，写入redo log。</p>
+</blockquote>
+</li>
+</ul>
+<h3 id="日志与事务提交速度"><a href="#日志与事务提交速度" class="headerlink" title="日志与事务提交速度:"></a>日志与事务提交速度:</h3><p>redo log: 不影响事务提交速度。因为是事务进行中就产生、而且每秒刷盘了；<br>binlog: 影响事务提交速度。因为事务提交前才产生binlog、刷盘，因此如果开启了binlog，长时间的事务提交很慢。</p>
+<p>三种重要日志的写顺序:</p>
+<ol>
+<li>undo log;</li>
+<li>redo log;</li>
+<li>binlog.</li>
+</ol>
+<h2 id="MYISAM的IO配置"><a href="#MYISAM的IO配置" class="headerlink" title="MYISAM的IO配置"></a>MYISAM的IO配置</h2><p><code>delay_key_write</code>:<br>OFF: 不延迟。每次写操作后刷新键缓存;<br>ON: 延迟。对使用该选项创建的表生效;<br>ALL: 延迟。对所有表生效。<br>该选项对性能提升不大,缺点:</p>
+<ol>
+<li>索引可能损坏;</li>
+<li>关闭表时间变长;</li>
+<li>占用空间变大。</li>
+</ol>
+<p><code>myisam_use_mmap</code>: 使用内存映射，减少系统调用开销。</p>
+<h2 id="Innodb并发"><a href="#Innodb并发" class="headerlink" title="Innodb并发"></a>Innodb并发</h2><p><code>innodb_thread_concurrency</code>:<br>N=0: 不限制有多少线程进入内核;<br>N&gt;0: 同时可以有N个线程进入内核。<br>N的推荐值&lt; 2<em>cpu数</em>disk数</p>
+<p><code>innodb_commit_concurrency</code>:<br>同时可以有多少个线程提交。</p>
+<h2 id="Myisam并发"><a href="#Myisam并发" class="headerlink" title="Myisam并发"></a>Myisam并发</h2><p><code>concurrent_insert</code>:<br>0: 不允许并发插入;<br>1: 默认值。只要表中没有空洞，就允许并发插入。<br>2: 强制并发插入到Myisam表末尾，即使有空洞。（碎片会更多）</p>
+<h2 id="基于工作负载的配置"><a href="#基于工作负载的配置" class="headerlink" title="基于工作负载的配置"></a>基于工作负载的配置</h2><ol>
+<li>blob,text的表，临时表都会变成磁盘表。<br>解决方案: 使用substr。</li>
+</ol>
+<p><code>tmp_table_size</code>,<code>max_heap_table_size</code>: 临时表大小上限。<br><code>max_connections</code>: 最大连接数。<br><code>thread_cache_size</code>: 缓存线程数。</p>
+<p> 查看配置和状态:<br> <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">show variables like &#39;%thread%&#39;;</span><br><span class="line">show status like &#39;%thread%&#39;;</span><br></pre></td></tr></table></figure></p>
+<p> <code>innodb_autoinc_lock_mode</code><br> 0: 每次都锁；<br> 1: 确定需要分配多少自增值的话，可以立即释放锁；<br> 2: 每次都不锁，空洞很多。</p>
+<h2 id="两个最重要的配置"><a href="#两个最重要的配置" class="headerlink" title="两个最重要的配置"></a>两个最重要的配置</h2><p> <code>innodb_log_file_size</code>: redo log的缓冲区，如果调大了<code>innodb_buffer_pool_size</code>就要相应调大它。<br>(一种可能的值是512<em>1024</em>1024,512M,搭配2G的<code>innodb_buffer_pool_size</code>)<br>可以通过<code>show engine innodb status\G select sleep(60); show engine innodb status\G</code>,查看<code>Log sequence number</code>差，计算1个小时的redo日志写入量，大致可以设置为这个缓冲区的大小。</p>
+<p><code>innodb_buffer_pool_size</code>的大小设置就比较简单了，按服务器可用内存75%设定即可。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/11/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC%E5%85%AB%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E4%BC%98%E5%8C%96%E6%9C%8D%E5%8A%A1%E5%99%A8%E9%85%8D%E7%BD%AE/" data-id="ck96cxppf00h3maamgo769a0c" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-02/高性能mysql第七章-笔记-高级特性" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/11/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC%E4%B8%83%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E9%AB%98%E7%BA%A7%E7%89%B9%E6%80%A7/" class="article-date">
+  <time datetime="2019-02-11T14:31:10.000Z" itemprop="datePublished">2019-02-11</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/02/11/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC%E4%B8%83%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E9%AB%98%E7%BA%A7%E7%89%B9%E6%80%A7/">高性能mysql第七章-笔记-高级特性</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="高级特性"><a href="#高级特性" class="headerlink" title="高级特性"></a>高级特性</h1><p>略过: 分区表,合并表,全文索引</p>
+<h2 id="视图"><a href="#视图" class="headerlink" title="视图"></a>视图</h2><p>视图会影响优化器</p>
+<h2 id="存储过程"><a href="#存储过程" class="headerlink" title="存储过程"></a>存储过程</h2><p>在线系统: 不推荐使用;<br>离线系统: 如果代码很简单，为了批量性能可以考虑。</p>
+<h2 id="游标"><a href="#游标" class="headerlink" title="游标"></a>游标</h2><p>游标使用临时表实现。</p>
+<p>因此：</p>
+<ol>
+<li>逐行只读;</li>
+<li>会执行整个查询。</li>
+</ol>
+<p>基于2，如果只读一小部分结果，请使用limit。<br>(也就是不要使用游标来实现limit的效果，直接使用limit语句即可)</p>
+<h2 id="prepareStatement"><a href="#prepareStatement" class="headerlink" title="prepareStatement"></a>prepareStatement</h2><h3 id="流程"><a href="#流程" class="headerlink" title="流程"></a>流程</h3><ol>
+<li>客户端=&gt;服务端: SQL原型</li>
+<li>服务端: SQL原型=&gt;部分执行计划A;</li>
+<li>服务端=&gt;客户端: A的句柄;</li>
+<li>客户端=&gt;服务端: 变量、A的句柄.</li>
+</ol>
+<p>优点:</p>
+<ol>
+<li>服务端: SQL解析只需解析/优化一次;</li>
+<li>通信: 只发送参数+句柄，通信成本降低;</li>
+<li>缓存: 参数可以被缓存;</li>
+<li>安全: 无须转义、由于执行计划定了，不会被SQL注入。</li>
+</ol>
+<p><code>prepareStatement</code>的三类优化:<br>(和传入参数无关的)</p>
+<ol>
+<li>准备阶段: 根据已知条件,where条件优化;</li>
+<li>第一次执行: 简化嵌套关联,将外关联转化成内关联;</li>
+<li>每次SQL执行:<br>(1) 过滤分区;<br>(2) 尽量移除count,min,max;<br>(3) 移除常量表达式;<br>(4) 检测常量表;<br>(5) 做必要的等值传播;<br>(6) 分析和优化ref,range和索引优化等访问数据的方法;<br>(7) 优化关联顺序。</li>
+</ol>
+<h2 id="绑定变量"><a href="#绑定变量" class="headerlink" title="绑定变量"></a>绑定变量</h2><p><code>set @xxx:= 123</code><br>绑定变量是会话级的。</p>
+<h2 id="字符集和校对"><a href="#字符集和校对" class="headerlink" title="字符集和校对"></a>字符集和校对</h2><p>字符集(<code>encode</code>)： 二进制&lt;=&gt;某类编码字符<br>校对(<code>collation</code>)：某字符集的排序规则。</p>
+<p>校对集都是针对某一个字符集的。(类似于弱实体)</p>
+<p>相关设置分为两类:</p>
+<ol>
+<li>创建对象时候的默认值</li>
+<li>服务器和客户端通信的设置</li>
+</ol>
+<h3 id="1-创建对象时候的默认值"><a href="#1-创建对象时候的默认值" class="headerlink" title="1. 创建对象时候的默认值"></a>1. 创建对象时候的默认值</h3><p>(1)<code>character_set_server</code>: 服务器创建数据库默认值;<br>(2)表字符集;<br>(3)列字符集.<br>越小范围的优先级越高。</p>
+<h3 id="2-服务器和客户端通信的设置"><a href="#2-服务器和客户端通信的设置" class="headerlink" title="2. 服务器和客户端通信的设置"></a>2. 服务器和客户端通信的设置</h3><h4 id="服务端"><a href="#服务端" class="headerlink" title="服务端:"></a>服务端:</h4><img src="/images/2019-02/mysql_char.png" class="" width="800" height="1200" title="mysql_char">
+<p>(1)<code>character_set_client</code>: 服务端总是假设客户端按照<code>character_set_client</code>设置的字符集来传输数据和sql语句;<br>(2)<code>character_set_connection</code>: 服务器收到客户端sql后,转换成<code>character_set_connection</code>类型;<br>(3)<code>character_result</code>:服务端返回数据时,转换成<code>character_result</code>类型。</p>
+<h4 id="客户端"><a href="#客户端" class="headerlink" title="客户端:"></a>客户端:</h4><p>客户端: <code>jdbc:mysql://localhost:3306/exceltest1?useUnicode=true&amp;characterEncoding=UTF-8</code></p>
+<p>客户端可以使用<code>set names utf-8</code>语句来告诉服务端自己将使用<code>utf-8</code>传输数据。</p>
+<h4 id="特殊情况"><a href="#特殊情况" class="headerlink" title="特殊情况"></a>特殊情况</h4><p>诡异的<code>character_set_database</code>: 某个数据库的默认字符集。当数据库改变的时候，它也会改变。当没有指定数据库的时候，会按照<code>character_set_server</code>。</p>
+<p><code>Load Data Infile</code>:<br>数据库总是将文件中的字符按照字符集<code>character_set_database</code>来解析。<br>mysql加载数据的时候，总是以同一个字符集处理所有数据，不管表中的列是否有不同的字符集设定。</p>
+<p><code>Select Into OutFile</code>:<br>输出文件时不会自动做转码，也不能指定。唯一的方法是手动调用函数<code>convert</code>。</p>
+<h4 id="查看字符集设置"><a href="#查看字符集设置" class="headerlink" title="查看字符集设置"></a>查看字符集设置</h4><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SHOW</span> <span class="keyword">VARIABLES</span> <span class="keyword">LIKE</span> <span class="string">'character%'</span>;</span><br></pre></td></tr></table></figure>
+
+<p>查看mysql支持的校对集: <code>show collation</code></p>
+<p>一般校对集是字符集加上三种后缀:<br><code>_bin</code>: 二进制比较;<br><code>_ci</code>: 忽略大小写(ignore);<br><code>_cs</code>: 大小写敏感(sensitive)</p>
+<p>大小写敏感比二进制比较更加复杂，会有更多规则。</p>
+<h3 id="mysql如何选择字符集"><a href="#mysql如何选择字符集" class="headerlink" title="mysql如何选择字符集"></a>mysql如何选择字符集</h3><p>每个字符集有对应的默认校对集；<br>每个校对集有对应的默认字符集。（一般来说，校对集依赖于字符集）</p>
+<ol>
+<li>如果用户设置了: 那肯定按用户设置的来;</li>
+<li>如果设置了一部分: 根据用户设置找默认的。</li>
+<li>什么都没设置: 根据默认配置设置。</li>
+</ol>
+<h1 id="分布式（XA）事务"><a href="#分布式（XA）事务" class="headerlink" title="分布式（XA）事务"></a>分布式（XA）事务</h1><p>两阶段提交。<br>协调者+参与者。</p>
+<ol>
+<li>所有参与者完成准备工作；</li>
+<li>协调者收到所有参与者的回复，提交事务。</li>
+</ol>
+<p>两种XA: 内部XA,外部XA。</p>
+<h2 id="内部XA"><a href="#内部XA" class="headerlink" title="内部XA"></a>内部XA</h2><p>mysql是插件式的，因此每个存储引擎是互相独立，不知道彼此存在的。<br>他们之间协调需要分布式事务。(内部XA)</p>
+<ul>
+<li>跨存储引擎的事务需要内部XA。</li>
+</ul>
+<p>如果开启了二进制日志，日志也可以看作一种特别的存储引擎，因此也需要内部XA。</p>
+<h2 id="外部XA"><a href="#外部XA" class="headerlink" title="外部XA"></a>外部XA</h2><p>mysql对xa协议支持不完整，无法在一个XA中关联多个连接。<br>外部XA网络开销大，建议引入<code>MQ</code>解决，而不使用外部XA。</p>
+<h1 id="查询缓存"><a href="#查询缓存" class="headerlink" title="查询缓存"></a>查询缓存</h1><ol>
+<li>检查sql是不是<code>select</code>开头,如果数据源表没有更改,hash查找缓存,返回结果;</li>
+<li>如果有确定性结果,存储查询语句的结果和hash值到缓存。</li>
+</ol>
+<p>由于2(确定性结果)，所以使用<code>current_date</code>这样的函数时，sql结果不会被缓存。</p>
+<p>查询缓存的注意事项:</p>
+<ol>
+<li>不能有长时间的事务;(会引入全局锁)</li>
+<li>不要占用太大内存(过度依赖缓存)，可以直接使用redis。</li>
+</ol>
+<p>过度依赖缓存的话，缓存清理以后系统会假死很久。</p>
+<h2 id="查询缓存的配置参数"><a href="#查询缓存的配置参数" class="headerlink" title="查询缓存的配置参数"></a>查询缓存的配置参数</h2><p><code>show variables like &#39;%query_cache%&#39;</code></p>
+<h3 id="query-cache-type"><a href="#query-cache-type" class="headerlink" title="query_cache_type"></a>query_cache_type</h3><p>三种取值:</p>
+<ol>
+<li>OFF(0): 关闭,默认值。</li>
+<li>ON(1):  打开</li>
+<li>DEMAND(2): sql里写明<code>sql_cache</code>hint的语句才放入缓存。</li>
+</ol>
+<p><code>query_cache_size</code>: 查询缓存占的空间;<br><code>query_cache_limit</code>: 缓存结果集最大条数;</p>
+<p>清空缓存: <code>reset query cache</code><br>整理缓存碎片: <code>flush query cache</code>(服务僵死一段时间)</p>
+<img src="/images/2019-02/query_cache_opt.png" class="" width="800" height="1200" title="query_cache_opt">
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/11/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC%E4%B8%83%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E9%AB%98%E7%BA%A7%E7%89%B9%E6%80%A7/" data-id="ck96cxppg00hamaamd748dsy9" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-02/半小时真正理解记住paxos协议" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/01/2019-02/%E5%8D%8A%E5%B0%8F%E6%97%B6%E7%9C%9F%E6%AD%A3%E7%90%86%E8%A7%A3%E8%AE%B0%E4%BD%8Fpaxos%E5%8D%8F%E8%AE%AE/" class="article-date">
+  <time datetime="2019-02-01T01:45:14.000Z" itemprop="datePublished">2019-02-01</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F/">分布式</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/02/01/2019-02/%E5%8D%8A%E5%B0%8F%E6%97%B6%E7%9C%9F%E6%AD%A3%E7%90%86%E8%A7%A3%E8%AE%B0%E4%BD%8Fpaxos%E5%8D%8F%E8%AE%AE/">半小时真正理解记住paxos协议</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>摘要:</p>
+<blockquote>
+<p>简单浏览一遍流程，然后看半小时视频: <a href="https://www.bilibili.com/video/av36134550" target="_blank" rel="noopener">https://www.bilibili.com/video/av36134550</a><br>就OK了。</p>
+</blockquote>
+<p>paxos是分布式一致性协议，对于CAP的取舍是完全的C，较好的A，较好的P。<br>（关于CAP: <a href="http://xiaoyue26.github.io/2019/02/01/2019-02/简单解释CAP原理">http://xiaoyue26.github.io/2019/02/01/2019-02/简单解释CAP原理</a> ）</p>
+<h1 id="paxos协商流程"><a href="#paxos协商流程" class="headerlink" title="paxos协商流程"></a>paxos协商流程</h1><h2 id="两个角色"><a href="#两个角色" class="headerlink" title="两个角色"></a>两个角色</h2><p>Proposer<br>Acceptor</p>
+<h2 id="流程"><a href="#流程" class="headerlink" title="流程"></a>流程</h2><p>首先大致扫一遍下叙流程，第一遍大概率是完全懵逼看不懂的，花1分钟在脑中留下一点点印象即可:</p>
+<h3 id="准备阶段（prepare）Proposer申请epoch"><a href="#准备阶段（prepare）Proposer申请epoch" class="headerlink" title="准备阶段（prepare）Proposer申请epoch"></a>准备阶段（prepare）Proposer申请epoch</h3><p>第一阶段A：Proposer选择一个提议编号n，向所有的Acceptor广播Prepare（n）请求。</p>
+<p>第一阶段B：若Acceptor接收到Prepare（n）请求，两个选择:<br>    (1)n&gt;接受过的n_old: 接受请求,返回<code>(n_old,value_old)</code>。<br>    (2)n&lt;接受过的n_old: 拒绝请求。</p>
+<h3 id="接受阶段（提交阶段）"><a href="#接受阶段（提交阶段）" class="headerlink" title="接受阶段（提交阶段）"></a>接受阶段（提交阶段）</h3><p>第二阶段A：Proposer得到了Acceptor响应:<br>1.如果未超过半数accpetor响应，直接转为提议失败；</p>
+<p>2.如果超过多数Acceptor的承诺，又分为不同情况：<br>(1)如果所有Acceptor返回的value都是<code>null</code>，那么向所有的Acceptor发送<code>(n,value_n)</code>;<br>(2)如果存在Acceptor返回的value不为<code>null</code>，那么从所有接受过的值中选择对应的n_old最大的作为提议的值value_old，提议编号仍然为n。但此时Proposer就不能提议自己的值，只能信任Acceptor通过的值，维护一但获得确定性取值就不能更改原则: 向所有Acceptor发送<code>(n,value_old of max n_old)</code>。</p>
+<p>第二阶段B：Acceptor接收到提议<code>(n,value)</code>后：<br>(1)n!=本地保存的last_n，拒绝。<br>(2)n=本地保存的last_n，写入本地值。</p>
+<h2 id="看教学视频"><a href="#看教学视频" class="headerlink" title="看教学视频:"></a>看教学视频:</h2><p><a href="https://www.bilibili.com/video/av36134550" target="_blank" rel="noopener">https://www.bilibili.com/video/av36134550</a></p>
+<p>由于之前花1分钟浏览了流程，视频看到15分钟的时候心里就会已经有数了。<br>看完30分钟就理解记住了。</p>
+<h2 id="温习要点"><a href="#温习要点" class="headerlink" title="温习要点"></a>温习要点</h2><ol>
+<li>类似于CAS，仅当，当前值为null时，才能提议值为value。</li>
+<li>类似于jdk里的hashmap扩容，当发现有人捷足先登的时候，放下陈见开始辅助n_old完成value_old的扩散。发送(n,value_old)，以自己的名义，但是以别人的值，帮助一致性尽快达成。</li>
+<li>Acceptor对于epoch: 喜新厌旧,总是接受最大的epoch，防止Proposor单点故障死等。</li>
+<li>Proposor对于value: 喜旧厌新,总是接受更旧的value，尽快达成一致性。</li>
+</ol>
+<p>以上就是Basic Paxos。其实依然会有活锁，需要引进leader缓解。leader挂了的时候退化到Basic Paxos，出现活锁几率提升。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/01/2019-02/%E5%8D%8A%E5%B0%8F%E6%97%B6%E7%9C%9F%E6%AD%A3%E7%90%86%E8%A7%A3%E8%AE%B0%E4%BD%8Fpaxos%E5%8D%8F%E8%AE%AE/" data-id="ck96cxppb00gnmaamhyerfdxe" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/paxos/" rel="tag">paxos</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/" rel="tag">分布式</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2019-02/简单解释CAP原理" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/02/01/2019-02/%E7%AE%80%E5%8D%95%E8%A7%A3%E9%87%8ACAP%E5%8E%9F%E7%90%86/" class="article-date">
@@ -694,282 +1230,6 @@
 
 
   
-    <article id="post-2018-12/mysql意向锁" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/12/24/2018-12/mysql%E6%84%8F%E5%90%91%E9%94%81/" class="article-date">
-  <time datetime="2018-12-24T01:50:47.000Z" itemprop="datePublished">2018-12-24</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/mysql/">mysql</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/12/24/2018-12/mysql%E6%84%8F%E5%90%91%E9%94%81/">mysql意向锁</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>意向锁: 对表内现有锁的概括，可以看作一种状态信息，很有用但并不必要，用于优化性能。</p>
-<p>意向锁特点: 均为表级(因为是信息概括)，意向锁分为读意向锁和写意向锁，但意向锁之间不互斥。</p>
-<h2 id="场景1：（如果没有意向锁）"><a href="#场景1：（如果没有意向锁）" class="headerlink" title="场景1：（如果没有意向锁）"></a>场景1：（如果没有意向锁）</h2><p>事务A: 对表的某一行加了行锁（互斥锁）;<br>事务B: 希望对整表加锁，需要知道是否已经有表锁，并且需要知道表中任意一样是否有行锁（因为锁定范围有重合，而且是互斥锁），这个时候如果没有意向锁，事务B就只能扫全表了。</p>
-<h2 id="场景2：（引入意向锁后）"><a href="#场景2：（引入意向锁后）" class="headerlink" title="场景2：（引入意向锁后）"></a>场景2：（引入意向锁后）</h2><p>事务A: 先申请表的意向锁，然后申请行锁；<br>事务B：先申请表的意向锁（成功），然后申请表锁，这个时候由于上一步，立即能知道表中存在别的行锁，因此阻塞。</p>
-<p>意向锁的兼容互斥关系：</p>
-<img src="/images/2018-12/ix.jpg" class="" width="800" height="1200" title="ix">
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/12/24/2018-12/mysql%E6%84%8F%E5%90%91%E9%94%81/" data-id="ck96cxpov00eumaam3enb183m" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-2018-12/神仙与树獭的等价性-普通程序员如何理解神话世界观" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/12/23/2018-12/%E7%A5%9E%E4%BB%99%E4%B8%8E%E6%A0%91%E7%8D%AD%E7%9A%84%E7%AD%89%E4%BB%B7%E6%80%A7-%E6%99%AE%E9%80%9A%E7%A8%8B%E5%BA%8F%E5%91%98%E5%A6%82%E4%BD%95%E7%90%86%E8%A7%A3%E7%A5%9E%E8%AF%9D%E4%B8%96%E7%95%8C%E8%A7%82/" class="article-date">
-  <time datetime="2018-12-23T11:19:05.000Z" itemprop="datePublished">2018-12-23</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/%E6%97%A5%E5%BF%97/">日志</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/12/23/2018-12/%E7%A5%9E%E4%BB%99%E4%B8%8E%E6%A0%91%E7%8D%AD%E7%9A%84%E7%AD%89%E4%BB%B7%E6%80%A7-%E6%99%AE%E9%80%9A%E7%A8%8B%E5%BA%8F%E5%91%98%E5%A6%82%E4%BD%95%E7%90%86%E8%A7%A3%E7%A5%9E%E8%AF%9D%E4%B8%96%E7%95%8C%E8%A7%82/">神仙与树獭的等价性</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h2 id="普通程序员如何理解神话世界观"><a href="#普通程序员如何理解神话世界观" class="headerlink" title="普通程序员如何理解神话世界观"></a>普通程序员如何理解神话世界观</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">太白金星：“大圣须知天上一日，地上一年。”</span><br></pre></td></tr></table></figure>
-<p>&emsp;&emsp;  根据太白金星的说法易得——<code>时间流速(天上):时间流速(地上)=1:365.25</code>。<br>也就是说神仙在天上看1分钟电视的时候,地上的人已经看了365.25分钟的电视了,如果不考虑双方寿命的话明显是地上的人赚了。</p>
-<p>&emsp;&emsp;  由于孙悟空经常在天上和人间之间来回穿梭，可以看出天上的慢时空和地上的快时空是互通的，为了便于换算，不妨以地上的时间作为基准参照系，此时观测天上的神仙（假设用大圣爷的千里眼能够看到），由于天上的时间流速很慢，可以看到神仙都是以极慢的速度在运动的，从这个角度来说他们与树懒具有一定的等价性。</p>
-<p>&emsp;&emsp;  如果再加入寿命的考虑，可以用繁殖速度来进行类比，以天上的时间为基准参照系的话，此时观测人间，看个几十天人类就繁殖一代了，然后很快就死了。而从人类的角度看细菌的话，可能二十分钟就完成了一代的繁殖，细菌的寿命往往也不会很长。人体构成比细菌复杂得多，完成一次全部复制的时间成本也高得多，可以类比得想象，神仙可能具有极高的组成，复制的时间成本极高，运动的代价也极大，可能是以巨人的形态存在着的。</p>
-<p>&emsp;&emsp;  从个人的角度来说，假设寿命是定长的，时间的流速其实反映在生命的质量上。假设地上有一只与人类寿命一致的蚂蚁，人类3秒钟能完成的思考，假设蚂蚁需要花一天的时间，换句话说蚂蚁要花一天的时间才能获得人类3秒钟的生命体验，这样生命的质量就很差了，即使这只蚂蚁与人类一样活了100年，但它实际体验到的人生只有人类的1.26天。</p>
-<p>&emsp;&emsp;  从cpu时钟的角度来说，刚才例子这只思考速度很慢的蚂蚁就像一台cpu时钟频率极低的计算机。而天上的神仙掐指一算，就能尽知天下事，同时又是以极慢的速度运作，可以看作是一台元件极其复杂的巨型计算机，需要365.25倍的时间才能完成一次脉冲信号，每次运算数据量极大。</p>
-<p>&emsp;&emsp;  延长自己的寿命是很难达到的，但是好好锻炼大脑，提高自己的cpu时钟频率，提高自己的反应速度，提高生命质量是可行的，从这个角度来说也算是延长了生命的长度。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/12/23/2018-12/%E7%A5%9E%E4%BB%99%E4%B8%8E%E6%A0%91%E7%8D%AD%E7%9A%84%E7%AD%89%E4%BB%B7%E6%80%A7-%E6%99%AE%E9%80%9A%E7%A8%8B%E5%BA%8F%E5%91%98%E5%A6%82%E4%BD%95%E7%90%86%E8%A7%A3%E7%A5%9E%E8%AF%9D%E4%B8%96%E7%95%8C%E8%A7%82/" data-id="ck96cxpp000f9maamb1dmariw" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E6%97%A5%E5%BF%97/" rel="tag">日志</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-2018-12/如何阅读heap-dump文件" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/12/13/2018-12/%E5%A6%82%E4%BD%95%E9%98%85%E8%AF%BBheap-dump%E6%96%87%E4%BB%B6/" class="article-date">
-  <time datetime="2018-12-13T13:44:55.000Z" itemprop="datePublished">2018-12-13</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/jvm/">jvm</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/12/13/2018-12/%E5%A6%82%E4%BD%95%E9%98%85%E8%AF%BBheap-dump%E6%96%87%E4%BB%B6/">如何阅读heap dump文件</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>参考资料: <a href="http://www.importnew.com/24393.html" target="_blank" rel="noopener">http://www.importnew.com/24393.html</a></p>
-<p>首先可以尝试用google-perftools查看统计结果,然后用MAT查看heap dump的详细内容。</p>
-<h1 id="谷歌的性能分析工具google-perftools"><a href="#谷歌的性能分析工具google-perftools" class="headerlink" title="谷歌的性能分析工具google-perftools"></a>谷歌的性能分析工具google-perftools</h1><p><code>/usr/local/gperftools/bin/pprof --text $JAVA_HOME/bin/java /data/gperf/ worker.0001.heap</code><br>查看统计结果。</p>
-<h1 id="下载MAT"><a href="#下载MAT" class="headerlink" title="下载MAT"></a>下载MAT</h1><p><a href="https://eclipse.org/mat/downloads.php" target="_blank" rel="noopener">https://eclipse.org/mat/downloads.php</a><br>注意打开的时候要选打开heap dump，而不是open file，不然会打开失败。</p>
-<h2 id="术语"><a href="#术语" class="headerlink" title="术语"></a>术语</h2><h3 id="Retained-Heap"><a href="#Retained-Heap" class="headerlink" title="Retained Heap"></a>Retained Heap</h3><p><code>Retained: 持有,阻拦</code><br>对象以及它所持有的其它引用（包括直接和间接）所占的总内存。</p>
-<p><code>tips</code></p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">如果A,B都持有C对象引用，则C的内存不计入A或B。</span><br></pre></td></tr></table></figure>
-
-<h3 id="Shallow-heap"><a href="#Shallow-heap" class="headerlink" title="Shallow heap"></a>Shallow heap</h3><p><code>Shallow: 浅</code><br>对象本身占用内存的大小，不包含其引用的对象。</p>
-<ul>
-<li>常规对象（非数组）的shallow size有其成员变量的数量和类型决定。</li>
-<li>数组的shallow size有数组元素的类型（对象类型、基本类型）和数组长度决定<h4 id="Shallow-size最大一般是byte-char-int"><a href="#Shallow-size最大一般是byte-char-int" class="headerlink" title="Shallow size最大一般是byte[], char[], int[]"></a><code>Shallow size</code>最大一般是<code>byte[], char[], int[]</code></h4></li>
-</ul>
-<h2 id="Action面板的功能"><a href="#Action面板的功能" class="headerlink" title="Action面板的功能"></a>Action面板的功能</h2><h3 id="Histogram"><a href="#Histogram" class="headerlink" title="Histogram"></a>Histogram</h3><p><code>默认Shallow size排序</code><br>列出每个class的实例数量、大小(内存中的对象统计),可以查看某些对象的具体值:</p>
-<img src="/images/2018-12/stringvalue.png" class="" width="800" height="1200" title="stringvalue">
-
-<p>进一步操作: <code>group by package</code>:</p>
-<img src="/images/2018-12/hist_groupby.png" class="" width="800" height="1200" title="hist_groupby">
-
-<h3 id="Dominator-Tree"><a href="#Dominator-Tree" class="headerlink" title="Dominator Tree"></a>Dominator Tree</h3><p><code>默认Retained Heap排序</code><br>列出最大的对象以及其依赖存活的Object。<br><code>TIPS</code>: 这里有黄点的是GC Root。</p>
-<h3 id="Top-Consumers"><a href="#Top-Consumers" class="headerlink" title="Top Consumers"></a>Top Consumers</h3><img src="/images/2018-12/top_consumer.png" class="" width="800" height="1200" title="top_consumer">
-<p>从3个角度列出最占用内存的对象，展现形式有表格和图。<br>三个角度: class,class loader,包。</p>
-<h3 id="Duplicate-Class"><a href="#Duplicate-Class" class="headerlink" title="Duplicate Class"></a>Duplicate Class</h3><p>列出由多个class loader加载的class。</p>
-<h2 id="图例"><a href="#图例" class="headerlink" title="图例"></a>图例</h2><p>带有黄点的对象: GCRoot（如果是<code>System class</code>可以不用管）</p>
-<h2 id="常用操作"><a href="#常用操作" class="headerlink" title="常用操作"></a>常用操作</h2><p><code>Path to GC Roots</code> -&gt; <code>exclude weak references</code>: 看看为啥没有回收。</p>
-<p><code>List Object</code>-&gt;<code>With incoming reference</code>: 看看都有谁用了这个对象;</p>
-<img src="/images/2018-12/with_in.png" class="" width="800" height="1200" title="with_in">
-
-<p><code>List Object</code>-&gt;<code>With outcoming reference</code>: 看看里面都有啥。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/12/13/2018-12/%E5%A6%82%E4%BD%95%E9%98%85%E8%AF%BBheap-dump%E6%96%87%E4%BB%B6/" data-id="ck96cxpow00exmaam9p5274gi" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/jvm/" rel="tag">jvm</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-2018-12/快速查看大量gc日志的gui工具" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/12/11/2018-12/%E5%BF%AB%E9%80%9F%E6%9F%A5%E7%9C%8B%E5%A4%A7%E9%87%8Fgc%E6%97%A5%E5%BF%97%E7%9A%84gui%E5%B7%A5%E5%85%B7/" class="article-date">
-  <time datetime="2018-12-11T01:33:53.000Z" itemprop="datePublished">2018-12-11</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/jvm/">jvm</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/12/11/2018-12/%E5%BF%AB%E9%80%9F%E6%9F%A5%E7%9C%8B%E5%A4%A7%E9%87%8Fgc%E6%97%A5%E5%BF%97%E7%9A%84gui%E5%B7%A5%E5%85%B7/">快速查看大量gc日志的gui工具</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>之前学习了GC日志的格式，能理解每行日志的大致含义。<br>然而对于实际生产项目，日志量庞大，逐行看很低效，这个时候借助一下gui工具就很nice了。</p>
-<p>经过海淘了谷歌，比较后留下这2个比较好用的工具：</p>
-<ol>
-<li>GCViewer,</li>
-<li><a href="http://gceasy.io" target="_blank" rel="noopener">http://gceasy.io</a></li>
-</ol>
-<p>被抛弃的工具:</p>
-<ol>
-<li>GCHisto: 界面好看,功能有点弱;</li>
-<li>visualgc(jvisualvm的插件): jvisualvm已经1.8,visualgc版本才1.4,完全安装不上，应该已经不维护了。</li>
-</ol>
-<h1 id="GCViewer"><a href="#GCViewer" class="headerlink" title="GCViewer"></a>GCViewer</h1><p><a href="https://sourceforge.net/projects/gcviewer/" target="_blank" rel="noopener">https://sourceforge.net/projects/gcviewer/</a><br>缺点: 字超小<br>优点: 功能全</p>
-<h2 id="查看堆空间的变化"><a href="#查看堆空间的变化" class="headerlink" title="查看堆空间的变化"></a>查看堆空间的变化</h2><img src="/images/2018-12/gcviewer1.png" class="" width="800" height="1200" title="gcviewer1">
-<p>view菜单栏可以看到各种颜色的线的含义，例如蓝色线是堆空间的使用。如果全打开的话眼睛会花的，可以逐步打开几个关心的。</p>
-<p>像下面这种情况图中黑色柱状较多的时候,可以看出堆空间不足了,gc时间占用较多:</p>
-<img src="/images/2018-12/danger.png" class="" width="800" height="1200" title="danger">
-
-
-<h2 id="gc回收的各项统计数据"><a href="#gc回收的各项统计数据" class="headerlink" title="gc回收的各项统计数据"></a>gc回收的各项统计数据</h2><img src="/images/2018-12/gcviewer4.png" class="" width="800" height="1200" title="gcviewer4">
-
-
-<p>如果搭配一个放大镜，<code>GCViewer</code>就是一个非常好的gc日志查看工具了。</p>
-<img src="/images/2018-12/gcviewer.jpg" class="" width="800" height="1200" title="gcviewer">
-
-
-<h1 id="http-gceasy-io"><a href="#http-gceasy-io" class="headerlink" title="http://gceasy.io"></a><a href="http://gceasy.io" target="_blank" rel="noopener">http://gceasy.io</a></h1><p>上传日志到网站。<br>优点：</p>
-<ol>
-<li>有诊断功能,自动检测问题;</li>
-<li>界面很美观。</li>
-</ol>
-<h2 id="诊断功能"><a href="#诊断功能" class="headerlink" title="诊断功能"></a>诊断功能</h2><p>它能帮忙检测gc日志中反映出的问题:</p>
-<img src="/images/2018-12/detect.png" class="" width="800" height="1200" title="detect">
-<img src="/images/2018-12/gceasy6.png" class="" width="800" height="1200" title="gceasy6">
-
-<p>比如能检测到fullgc:</p>
-<img src="/images/2018-12/fullgc.png" class="" width="800" height="1200" title="fullgc">
-<p>有些还能针对性地给出建议:</p>
-<img src="/images/2018-12/tips.png" class="" width="800" height="1200" title="tips">
-
-<h2 id="统计信息"><a href="#统计信息" class="headerlink" title="统计信息"></a>统计信息</h2><p>它提供了各个角度的统计信息。<br>新生代、老生代的峰值使用大小:</p>
-<img src="/images/2018-12/gceasy0.png" class="" width="800" height="1200" title="gceasy0">
-<p>各种统计图表:</p>
-<img src="/images/2018-12/gceasy1.png" class="" width="800" height="1200" title="gceasy1">
-<img src="/images/2018-12/gceasy2.png" class="" width="800" height="1200" title="gceasy2">
-<img src="/images/2018-12/gceasy4.png" class="" width="800" height="1200" title="gceasy4">
-<img src="/images/2018-12/gceasy5.png" class="" width="800" height="1200" title="gceasy5">
-<img src="/images/2018-12/gceasy7.png" class="" width="800" height="1200" title="gceasy7">
-
-
-
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/12/11/2018-12/%E5%BF%AB%E9%80%9F%E6%9F%A5%E7%9C%8B%E5%A4%A7%E9%87%8Fgc%E6%97%A5%E5%BF%97%E7%9A%84gui%E5%B7%A5%E5%85%B7/" data-id="ck96cxpoz00f5maam5ekjdf7v" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/jvm/" rel="tag">jvm</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -996,23 +1256,23 @@
       <ul>
         
           <li>
+            <a href="/2021/02/22/2021-02/%E5%A4%9A%E9%A1%B9%E7%9B%AE%E5%85%B1%E4%BA%AB%E4%BB%A3%E7%A0%81%E4%B9%8B%E2%80%94%E2%80%94git-subtree/">多项目共享代码之——git subtree</a>
+          </li>
+        
+          <li>
+            <a href="/2020/12/27/2020-12/%E8%B7%A8%E5%9F%9F%E7%9B%B8%E5%85%B3/">跨域相关</a>
+          </li>
+        
+          <li>
+            <a href="/2020/12/20/2020-12/%E7%BA%BF%E4%B8%8A%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-%E6%9F%A5%E7%9C%8B%E6%96%B9%E6%B3%95%E7%BA%A7%E8%80%97%E6%97%B6/">线上性能debug-查看方法级耗时</a>
+          </li>
+        
+          <li>
+            <a href="/2020/12/19/2020-12/%E5%8D%87%E7%BA%A7HTTP2%E7%AC%94%E8%AE%B0/">升级HTTP2笔记</a>
+          </li>
+        
+          <li>
             <a href="/2020/07/22/2020-07/ES%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0/">ES实战笔记</a>
-          </li>
-        
-          <li>
-            <a href="/2020/06/19/2020-06/tcp%E8%B0%83%E4%BC%98/">tcp调优</a>
-          </li>
-        
-          <li>
-            <a href="/2020/06/15/2020-06/jdk11%E4%B8%8Bg1%E6%94%B6%E9%9B%86%E5%99%A8%E4%BD%BF%E7%94%A8/">jdk11下g1收集器使用</a>
-          </li>
-        
-          <li>
-            <a href="/2020/06/08/2020-06/mysql%E5%8F%AF%E9%87%8D%E5%A4%8D%E8%AF%BB%E4%B8%8B%E7%94%A8for-update%E5%AF%BC%E8%87%B4%E7%9A%84%E6%AD%BB%E9%94%81/">mysql可重复读下用for update导致的死锁</a>
-          </li>
-        
-          <li>
-            <a href="/2020/05/05/2020-05/BeanCopier%E6%B5%8B%E8%AF%84%E6%8A%A5%E5%91%8A/">BeanCopier测评报告</a>
           </li>
         
       </ul>
@@ -1030,7 +1290,7 @@
   
   <div class="outer">
     <div id="footer-left">
-      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      &copy; 2014 - 2021 风梦七&nbsp;|&nbsp;
       主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
     </div>
      <div id="footer-right">

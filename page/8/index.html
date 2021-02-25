@@ -72,6 +72,282 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-12/mysql意向锁" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/12/24/2018-12/mysql%E6%84%8F%E5%90%91%E9%94%81/" class="article-date">
+  <time datetime="2018-12-24T01:50:47.000Z" itemprop="datePublished">2018-12-24</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/12/24/2018-12/mysql%E6%84%8F%E5%90%91%E9%94%81/">mysql意向锁</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>意向锁: 对表内现有锁的概括，可以看作一种状态信息，很有用但并不必要，用于优化性能。</p>
+<p>意向锁特点: 均为表级(因为是信息概括)，意向锁分为读意向锁和写意向锁，但意向锁之间不互斥。</p>
+<h2 id="场景1：（如果没有意向锁）"><a href="#场景1：（如果没有意向锁）" class="headerlink" title="场景1：（如果没有意向锁）"></a>场景1：（如果没有意向锁）</h2><p>事务A: 对表的某一行加了行锁（互斥锁）;<br>事务B: 希望对整表加锁，需要知道是否已经有表锁，并且需要知道表中任意一样是否有行锁（因为锁定范围有重合，而且是互斥锁），这个时候如果没有意向锁，事务B就只能扫全表了。</p>
+<h2 id="场景2：（引入意向锁后）"><a href="#场景2：（引入意向锁后）" class="headerlink" title="场景2：（引入意向锁后）"></a>场景2：（引入意向锁后）</h2><p>事务A: 先申请表的意向锁，然后申请行锁；<br>事务B：先申请表的意向锁（成功），然后申请表锁，这个时候由于上一步，立即能知道表中存在别的行锁，因此阻塞。</p>
+<p>意向锁的兼容互斥关系：</p>
+<img src="/images/2018-12/ix.jpg" class="" width="800" height="1200" title="ix">
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/12/24/2018-12/mysql%E6%84%8F%E5%90%91%E9%94%81/" data-id="ck96cxpov00eumaam3enb183m" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2018-12/神仙与树獭的等价性-普通程序员如何理解神话世界观" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/12/23/2018-12/%E7%A5%9E%E4%BB%99%E4%B8%8E%E6%A0%91%E7%8D%AD%E7%9A%84%E7%AD%89%E4%BB%B7%E6%80%A7-%E6%99%AE%E9%80%9A%E7%A8%8B%E5%BA%8F%E5%91%98%E5%A6%82%E4%BD%95%E7%90%86%E8%A7%A3%E7%A5%9E%E8%AF%9D%E4%B8%96%E7%95%8C%E8%A7%82/" class="article-date">
+  <time datetime="2018-12-23T11:19:05.000Z" itemprop="datePublished">2018-12-23</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E6%97%A5%E5%BF%97/">日志</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/12/23/2018-12/%E7%A5%9E%E4%BB%99%E4%B8%8E%E6%A0%91%E7%8D%AD%E7%9A%84%E7%AD%89%E4%BB%B7%E6%80%A7-%E6%99%AE%E9%80%9A%E7%A8%8B%E5%BA%8F%E5%91%98%E5%A6%82%E4%BD%95%E7%90%86%E8%A7%A3%E7%A5%9E%E8%AF%9D%E4%B8%96%E7%95%8C%E8%A7%82/">神仙与树獭的等价性</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h2 id="普通程序员如何理解神话世界观"><a href="#普通程序员如何理解神话世界观" class="headerlink" title="普通程序员如何理解神话世界观"></a>普通程序员如何理解神话世界观</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">太白金星：“大圣须知天上一日，地上一年。”</span><br></pre></td></tr></table></figure>
+<p>&emsp;&emsp;  根据太白金星的说法易得——<code>时间流速(天上):时间流速(地上)=1:365.25</code>。<br>也就是说神仙在天上看1分钟电视的时候,地上的人已经看了365.25分钟的电视了,如果不考虑双方寿命的话明显是地上的人赚了。</p>
+<p>&emsp;&emsp;  由于孙悟空经常在天上和人间之间来回穿梭，可以看出天上的慢时空和地上的快时空是互通的，为了便于换算，不妨以地上的时间作为基准参照系，此时观测天上的神仙（假设用大圣爷的千里眼能够看到），由于天上的时间流速很慢，可以看到神仙都是以极慢的速度在运动的，从这个角度来说他们与树懒具有一定的等价性。</p>
+<p>&emsp;&emsp;  如果再加入寿命的考虑，可以用繁殖速度来进行类比，以天上的时间为基准参照系的话，此时观测人间，看个几十天人类就繁殖一代了，然后很快就死了。而从人类的角度看细菌的话，可能二十分钟就完成了一代的繁殖，细菌的寿命往往也不会很长。人体构成比细菌复杂得多，完成一次全部复制的时间成本也高得多，可以类比得想象，神仙可能具有极高的组成，复制的时间成本极高，运动的代价也极大，可能是以巨人的形态存在着的。</p>
+<p>&emsp;&emsp;  从个人的角度来说，假设寿命是定长的，时间的流速其实反映在生命的质量上。假设地上有一只与人类寿命一致的蚂蚁，人类3秒钟能完成的思考，假设蚂蚁需要花一天的时间，换句话说蚂蚁要花一天的时间才能获得人类3秒钟的生命体验，这样生命的质量就很差了，即使这只蚂蚁与人类一样活了100年，但它实际体验到的人生只有人类的1.26天。</p>
+<p>&emsp;&emsp;  从cpu时钟的角度来说，刚才例子这只思考速度很慢的蚂蚁就像一台cpu时钟频率极低的计算机。而天上的神仙掐指一算，就能尽知天下事，同时又是以极慢的速度运作，可以看作是一台元件极其复杂的巨型计算机，需要365.25倍的时间才能完成一次脉冲信号，每次运算数据量极大。</p>
+<p>&emsp;&emsp;  延长自己的寿命是很难达到的，但是好好锻炼大脑，提高自己的cpu时钟频率，提高自己的反应速度，提高生命质量是可行的，从这个角度来说也算是延长了生命的长度。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/12/23/2018-12/%E7%A5%9E%E4%BB%99%E4%B8%8E%E6%A0%91%E7%8D%AD%E7%9A%84%E7%AD%89%E4%BB%B7%E6%80%A7-%E6%99%AE%E9%80%9A%E7%A8%8B%E5%BA%8F%E5%91%98%E5%A6%82%E4%BD%95%E7%90%86%E8%A7%A3%E7%A5%9E%E8%AF%9D%E4%B8%96%E7%95%8C%E8%A7%82/" data-id="ck96cxpp000f9maamb1dmariw" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E6%97%A5%E5%BF%97/" rel="tag">日志</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2018-12/如何阅读heap-dump文件" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/12/13/2018-12/%E5%A6%82%E4%BD%95%E9%98%85%E8%AF%BBheap-dump%E6%96%87%E4%BB%B6/" class="article-date">
+  <time datetime="2018-12-13T13:44:55.000Z" itemprop="datePublished">2018-12-13</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/jvm/">jvm</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/12/13/2018-12/%E5%A6%82%E4%BD%95%E9%98%85%E8%AF%BBheap-dump%E6%96%87%E4%BB%B6/">如何阅读heap dump文件</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>参考资料: <a href="http://www.importnew.com/24393.html" target="_blank" rel="noopener">http://www.importnew.com/24393.html</a></p>
+<p>首先可以尝试用google-perftools查看统计结果,然后用MAT查看heap dump的详细内容。</p>
+<h1 id="谷歌的性能分析工具google-perftools"><a href="#谷歌的性能分析工具google-perftools" class="headerlink" title="谷歌的性能分析工具google-perftools"></a>谷歌的性能分析工具google-perftools</h1><p><code>/usr/local/gperftools/bin/pprof --text $JAVA_HOME/bin/java /data/gperf/ worker.0001.heap</code><br>查看统计结果。</p>
+<h1 id="下载MAT"><a href="#下载MAT" class="headerlink" title="下载MAT"></a>下载MAT</h1><p><a href="https://eclipse.org/mat/downloads.php" target="_blank" rel="noopener">https://eclipse.org/mat/downloads.php</a><br>注意打开的时候要选打开heap dump，而不是open file，不然会打开失败。</p>
+<h2 id="术语"><a href="#术语" class="headerlink" title="术语"></a>术语</h2><h3 id="Retained-Heap"><a href="#Retained-Heap" class="headerlink" title="Retained Heap"></a>Retained Heap</h3><p><code>Retained: 持有,阻拦</code><br>对象以及它所持有的其它引用（包括直接和间接）所占的总内存。</p>
+<p><code>tips</code></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">如果A,B都持有C对象引用，则C的内存不计入A或B。</span><br></pre></td></tr></table></figure>
+
+<h3 id="Shallow-heap"><a href="#Shallow-heap" class="headerlink" title="Shallow heap"></a>Shallow heap</h3><p><code>Shallow: 浅</code><br>对象本身占用内存的大小，不包含其引用的对象。</p>
+<ul>
+<li>常规对象（非数组）的shallow size有其成员变量的数量和类型决定。</li>
+<li>数组的shallow size有数组元素的类型（对象类型、基本类型）和数组长度决定<h4 id="Shallow-size最大一般是byte-char-int"><a href="#Shallow-size最大一般是byte-char-int" class="headerlink" title="Shallow size最大一般是byte[], char[], int[]"></a><code>Shallow size</code>最大一般是<code>byte[], char[], int[]</code></h4></li>
+</ul>
+<h2 id="Action面板的功能"><a href="#Action面板的功能" class="headerlink" title="Action面板的功能"></a>Action面板的功能</h2><h3 id="Histogram"><a href="#Histogram" class="headerlink" title="Histogram"></a>Histogram</h3><p><code>默认Shallow size排序</code><br>列出每个class的实例数量、大小(内存中的对象统计),可以查看某些对象的具体值:</p>
+<img src="/images/2018-12/stringvalue.png" class="" width="800" height="1200" title="stringvalue">
+
+<p>进一步操作: <code>group by package</code>:</p>
+<img src="/images/2018-12/hist_groupby.png" class="" width="800" height="1200" title="hist_groupby">
+
+<h3 id="Dominator-Tree"><a href="#Dominator-Tree" class="headerlink" title="Dominator Tree"></a>Dominator Tree</h3><p><code>默认Retained Heap排序</code><br>列出最大的对象以及其依赖存活的Object。<br><code>TIPS</code>: 这里有黄点的是GC Root。</p>
+<h3 id="Top-Consumers"><a href="#Top-Consumers" class="headerlink" title="Top Consumers"></a>Top Consumers</h3><img src="/images/2018-12/top_consumer.png" class="" width="800" height="1200" title="top_consumer">
+<p>从3个角度列出最占用内存的对象，展现形式有表格和图。<br>三个角度: class,class loader,包。</p>
+<h3 id="Duplicate-Class"><a href="#Duplicate-Class" class="headerlink" title="Duplicate Class"></a>Duplicate Class</h3><p>列出由多个class loader加载的class。</p>
+<h2 id="图例"><a href="#图例" class="headerlink" title="图例"></a>图例</h2><p>带有黄点的对象: GCRoot（如果是<code>System class</code>可以不用管）</p>
+<h2 id="常用操作"><a href="#常用操作" class="headerlink" title="常用操作"></a>常用操作</h2><p><code>Path to GC Roots</code> -&gt; <code>exclude weak references</code>: 看看为啥没有回收。</p>
+<p><code>List Object</code>-&gt;<code>With incoming reference</code>: 看看都有谁用了这个对象;</p>
+<img src="/images/2018-12/with_in.png" class="" width="800" height="1200" title="with_in">
+
+<p><code>List Object</code>-&gt;<code>With outcoming reference</code>: 看看里面都有啥。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/12/13/2018-12/%E5%A6%82%E4%BD%95%E9%98%85%E8%AF%BBheap-dump%E6%96%87%E4%BB%B6/" data-id="ck96cxpow00exmaam9p5274gi" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/jvm/" rel="tag">jvm</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2018-12/快速查看大量gc日志的gui工具" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/12/11/2018-12/%E5%BF%AB%E9%80%9F%E6%9F%A5%E7%9C%8B%E5%A4%A7%E9%87%8Fgc%E6%97%A5%E5%BF%97%E7%9A%84gui%E5%B7%A5%E5%85%B7/" class="article-date">
+  <time datetime="2018-12-11T01:33:53.000Z" itemprop="datePublished">2018-12-11</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/jvm/">jvm</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/12/11/2018-12/%E5%BF%AB%E9%80%9F%E6%9F%A5%E7%9C%8B%E5%A4%A7%E9%87%8Fgc%E6%97%A5%E5%BF%97%E7%9A%84gui%E5%B7%A5%E5%85%B7/">快速查看大量gc日志的gui工具</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>之前学习了GC日志的格式，能理解每行日志的大致含义。<br>然而对于实际生产项目，日志量庞大，逐行看很低效，这个时候借助一下gui工具就很nice了。</p>
+<p>经过海淘了谷歌，比较后留下这2个比较好用的工具：</p>
+<ol>
+<li>GCViewer,</li>
+<li><a href="http://gceasy.io" target="_blank" rel="noopener">http://gceasy.io</a></li>
+</ol>
+<p>被抛弃的工具:</p>
+<ol>
+<li>GCHisto: 界面好看,功能有点弱;</li>
+<li>visualgc(jvisualvm的插件): jvisualvm已经1.8,visualgc版本才1.4,完全安装不上，应该已经不维护了。</li>
+</ol>
+<h1 id="GCViewer"><a href="#GCViewer" class="headerlink" title="GCViewer"></a>GCViewer</h1><p><a href="https://sourceforge.net/projects/gcviewer/" target="_blank" rel="noopener">https://sourceforge.net/projects/gcviewer/</a><br>缺点: 字超小<br>优点: 功能全</p>
+<h2 id="查看堆空间的变化"><a href="#查看堆空间的变化" class="headerlink" title="查看堆空间的变化"></a>查看堆空间的变化</h2><img src="/images/2018-12/gcviewer1.png" class="" width="800" height="1200" title="gcviewer1">
+<p>view菜单栏可以看到各种颜色的线的含义，例如蓝色线是堆空间的使用。如果全打开的话眼睛会花的，可以逐步打开几个关心的。</p>
+<p>像下面这种情况图中黑色柱状较多的时候,可以看出堆空间不足了,gc时间占用较多:</p>
+<img src="/images/2018-12/danger.png" class="" width="800" height="1200" title="danger">
+
+
+<h2 id="gc回收的各项统计数据"><a href="#gc回收的各项统计数据" class="headerlink" title="gc回收的各项统计数据"></a>gc回收的各项统计数据</h2><img src="/images/2018-12/gcviewer4.png" class="" width="800" height="1200" title="gcviewer4">
+
+
+<p>如果搭配一个放大镜，<code>GCViewer</code>就是一个非常好的gc日志查看工具了。</p>
+<img src="/images/2018-12/gcviewer.jpg" class="" width="800" height="1200" title="gcviewer">
+
+
+<h1 id="http-gceasy-io"><a href="#http-gceasy-io" class="headerlink" title="http://gceasy.io"></a><a href="http://gceasy.io" target="_blank" rel="noopener">http://gceasy.io</a></h1><p>上传日志到网站。<br>优点：</p>
+<ol>
+<li>有诊断功能,自动检测问题;</li>
+<li>界面很美观。</li>
+</ol>
+<h2 id="诊断功能"><a href="#诊断功能" class="headerlink" title="诊断功能"></a>诊断功能</h2><p>它能帮忙检测gc日志中反映出的问题:</p>
+<img src="/images/2018-12/detect.png" class="" width="800" height="1200" title="detect">
+<img src="/images/2018-12/gceasy6.png" class="" width="800" height="1200" title="gceasy6">
+
+<p>比如能检测到fullgc:</p>
+<img src="/images/2018-12/fullgc.png" class="" width="800" height="1200" title="fullgc">
+<p>有些还能针对性地给出建议:</p>
+<img src="/images/2018-12/tips.png" class="" width="800" height="1200" title="tips">
+
+<h2 id="统计信息"><a href="#统计信息" class="headerlink" title="统计信息"></a>统计信息</h2><p>它提供了各个角度的统计信息。<br>新生代、老生代的峰值使用大小:</p>
+<img src="/images/2018-12/gceasy0.png" class="" width="800" height="1200" title="gceasy0">
+<p>各种统计图表:</p>
+<img src="/images/2018-12/gceasy1.png" class="" width="800" height="1200" title="gceasy1">
+<img src="/images/2018-12/gceasy2.png" class="" width="800" height="1200" title="gceasy2">
+<img src="/images/2018-12/gceasy4.png" class="" width="800" height="1200" title="gceasy4">
+<img src="/images/2018-12/gceasy5.png" class="" width="800" height="1200" title="gceasy5">
+<img src="/images/2018-12/gceasy7.png" class="" width="800" height="1200" title="gceasy7">
+
+
+
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/12/11/2018-12/%E5%BF%AB%E9%80%9F%E6%9F%A5%E7%9C%8B%E5%A4%A7%E9%87%8Fgc%E6%97%A5%E5%BF%97%E7%9A%84gui%E5%B7%A5%E5%85%B7/" data-id="ck96cxpoz00f5maam5ekjdf7v" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/jvm/" rel="tag">jvm</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-12/如何阅读thread-dump" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/12/06/2018-12/%E5%A6%82%E4%BD%95%E9%98%85%E8%AF%BBthread-dump/" class="article-date">
@@ -709,349 +985,6 @@
 
 
   
-    <article id="post-2018-10/HashedWheelTimer-大量定时器解决方案-Netty与kafka" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/10/27/2018-10/HashedWheelTimer-%E5%A4%A7%E9%87%8F%E5%AE%9A%E6%97%B6%E5%99%A8%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88-Netty%E4%B8%8Ekafka/" class="article-date">
-  <time datetime="2018-10-27T12:16:33.000Z" itemprop="datePublished">2018-10-27</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/Netty/">Netty</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/10/27/2018-10/HashedWheelTimer-%E5%A4%A7%E9%87%8F%E5%AE%9A%E6%97%B6%E5%99%A8%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88-Netty%E4%B8%8Ekafka/">HashedWheelTimer-大量定时器解决方案(Netty与kafka)</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="需求"><a href="#需求" class="headerlink" title="需求:"></a>需求:</h1><p>有大量定时任务需要执行，精度要求不高，可以允许延迟执行。<br>可能的场景: 每个连接的超时事件、每个请求的超时事件。</p>
-<h1 id="方案1"><a href="#方案1" class="headerlink" title="方案1:"></a>方案1:</h1><p>每个定时任务设置一个定时器、或一个<code>Scheduled</code>,<code>DelayedQueue</code>和实现<code>Delayed</code>接口的线程。<br>缺点: 开销太大;<br>优点: 少量任务时精度较高。</p>
-<h1 id="方案2-超时集"><a href="#方案2-超时集" class="headerlink" title="方案2: 超时集"></a>方案2: 超时集</h1><p>将相同时间间隔的任务组织成一个集合。每个集合分配一个计时器（thread）。<br>缺点: 相同时间间隔难以满足，性能不够。</p>
-<h1 id="方案3-HashedWheelTimer：-时间轮算法-Netty4工具类"><a href="#方案3-HashedWheelTimer：-时间轮算法-Netty4工具类" class="headerlink" title="方案3: HashedWheelTimer： 时间轮算法(Netty4工具类)"></a>方案3: HashedWheelTimer： 时间轮算法(Netty4工具类)</h1><p>设计一个虚拟的哈希表组织定时任务。<br>优点: 默认只用一个thread,开销小;<br>缺点:</p>
-<ol>
-<li>精度降低到<code>tickDuration</code>粒度;</li>
-<li>定时任务不能太耗时;(解决方案: 可以在定时任务里异步处理)。</li>
-</ol>
-<h2 id="基本架构"><a href="#基本架构" class="headerlink" title="基本架构"></a>基本架构</h2><img src="/images/2018-10/timewheel.jpg" class="" width="400" height="600" title="timewheel">
-<p>如上图所示即为时间轮。<br>引入术语:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">tick: 时间轮里每一格;</span><br><span class="line">tickDuration: 每一格的时长;</span><br><span class="line">ticksPerWheel: 时间轮总共有多少格.</span><br><span class="line">newTimeout: 定时任务分配到时间轮</span><br></pre></td></tr></table></figure>
-
-<h3 id="定时任务分配到时间轮"><a href="#定时任务分配到时间轮" class="headerlink" title="定时任务分配到时间轮"></a>定时任务分配到时间轮</h3><p>分配流程:</p>
-<ol>
-<li>计算定时任务deadline = <code>System.nanoTime() + unit.toNanos(delay) - startTime</code>;</li>
-<li>计算定时任务放入第几格: <figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">long</span> calculated = deadline / tickDuration; <span class="comment">// 需要计算几次</span></span><br><span class="line"><span class="function"><span class="keyword">final</span> <span class="keyword">long</span> <span class="title">ticks</span><span class="params">(还需要走几格)</span> </span>= Math.max(calculated, 当前tick次数); <span class="comment">// 一般就等于calculated，这里只是为了确保不在以前走过的格子里（这样的话这个任务永远不会执行而且移除不掉了）</span></span><br><span class="line">stopIndex = (<span class="keyword">int</span>) (ticks &amp; mask); <span class="comment">// 相当于% wheel.length，因为长度是2的幂。</span></span><br></pre></td></tr></table></figure></li>
-<li>计算定时任务第几轮被调用: <code>remainingRounds = (calculated - tick) / wheel.length;</code></li>
-<li>放入时间轮stopIndex位置中任务链表: (remainingRounds,task)：<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">HashedWheelBucket bucket = wheel[stopIndex];</span><br><span class="line">bucket.addTimeout(timeout); <span class="comment">// 加入链表尾部。</span></span><br></pre></td></tr></table></figure>
-
-</li>
-</ol>
-<p>当这个时间轮开始运行的时候（也就是开始计时，执行定时任务了），每次跳转一个tick,都会检查这个tick里的定时任务,如果定时任务轮次应当执行，则执行对应任务。</p>
-<p>使用的示例代码: </p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * tickDuration: 每 tick 一次的时间间隔, 每 tick 一次就会到达下一个槽位</span></span><br><span class="line"><span class="comment"> * ticksPerWheel: 轮中的 slot 数</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="meta">@Test</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">testHashedWheelTimer</span><span class="params">()</span> <span class="keyword">throws</span> InterruptedException </span>&#123;</span><br><span class="line"><span class="comment">// 1000ms一格,一轮16格（一般是2的N次幂，这样可以把hash转换为&amp;0xFFFF）</span></span><br><span class="line">    HashedWheelTimer hashedWheelTimer = <span class="keyword">new</span> HashedWheelTimer(<span class="number">1000</span>,TimeUnit.MILLISECONDS, <span class="number">16</span> );</span><br><span class="line">    System.out.println(LocalTime.now()+<span class="string">" submitted"</span>);</span><br><span class="line">    Timeout timeout = hashedWheelTimer.newTimeout((t) -&gt; &#123;</span><br><span class="line">        <span class="keyword">new</span> Thread()&#123;</span><br><span class="line">            <span class="meta">@Override</span></span><br><span class="line">            <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">                System.out.println(<span class="keyword">new</span> Date() + <span class="string">" executed"</span>);</span><br><span class="line">                System.out.println(hashedWheelTimer);</span><br><span class="line">                <span class="keyword">try</span> &#123;</span><br><span class="line">                    TimeUnit.SECONDS.sleep(<span class="number">100</span>);</span><br><span class="line">                &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                    e.printStackTrace();</span><br><span class="line">                &#125;</span><br><span class="line">                System.out.println(<span class="keyword">new</span> Date() + <span class="string">" FINISH"</span>);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;.start();</span><br><span class="line">    &#125;, <span class="number">5</span>, TimeUnit.SECONDS);</span><br><span class="line"></span><br><span class="line">    hashedWheelTimer.newTimeout((t) -&gt; &#123;</span><br><span class="line">        <span class="keyword">new</span> Thread()&#123;</span><br><span class="line">            <span class="meta">@Override</span></span><br><span class="line">            <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">                System.out.println(<span class="keyword">new</span> Date() + <span class="string">" TASK2 executed"</span>);</span><br><span class="line">                System.out.println(hashedWheelTimer);</span><br><span class="line">                <span class="keyword">try</span> &#123;</span><br><span class="line">                    TimeUnit.SECONDS.sleep(<span class="number">10</span>);</span><br><span class="line">                &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                    e.printStackTrace();</span><br><span class="line">                &#125;</span><br><span class="line">                System.out.println(<span class="keyword">new</span> Date() + <span class="string">" TASK2 FINISH"</span>);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;.start();</span><br><span class="line">    &#125;, <span class="number">15</span>, TimeUnit.SECONDS);</span><br><span class="line"></span><br><span class="line">    TimeUnit.SECONDS.sleep(<span class="number">500</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-<p><code>HashedWheelTimer</code>源码:<br><a href="https://github.com/netty/netty/blob/4.1/common/src/main/java/io/netty/util/HashedWheelTimer.java" target="_blank" rel="noopener">https://github.com/netty/netty/blob/4.1/common/src/main/java/io/netty/util/HashedWheelTimer.java</a></p>
-<p>理论基础:(操作系统内核的定时器)<br><a href="http://www.cs.columbia.edu/~nahum/w6998/papers/sosp87-timing-wheels.pdf" target="_blank" rel="noopener">http://www.cs.columbia.edu/~nahum/w6998/papers/sosp87-timing-wheels.pdf</a></p>
-<h1 id="方案4：-层级时间轮-Kafka使用"><a href="#方案4：-层级时间轮-Kafka使用" class="headerlink" title="方案4： 层级时间轮(Kafka使用)"></a>方案4： 层级时间轮(Kafka使用)</h1><p>上述简单时间轮的算法存在的<strong>缺点</strong>:<br>对于延迟很长时间的任务,该方案存在较多的cpu空转。一种可能的方案是增大<code>tickduration</code>,但是很难兼顾精度和性能。</p>
-<p>一种解决方案: 层级时间轮。<br>思路是模拟现实中的钟表,现实中的钟表有时针、分针、秒针,相当于不同<code>tickDuration</code>的时间轮。<br>架构图如下:</p>
-<img src="/images/2018-10/timewheel2.jpg" class="" width="400" height="600" title="timewheel2">
-
-<p>不同于<code>Netty4</code>中每个任务存放自己应到执行的轮次,层级时间轮把高轮次的定时任务分配到高层的时间轮中:层数越高=&gt;<code>tickDuration</code>越大。</p>
-<p>假如定义最低层的时间轮的层号为0,高一层的为1,依次类推,只有n-1层的定时任务到期后,才会取出n层时间轮的定时任务处理（要么直接执行,要么降级,要么放回时间轮）。</p>
-<p>(如果让层级时间轮每层的<code>tickDuratino</code>相同，则退化为方案3的普通时间轮。)</p>
-<p>同时为了辅助推进时间轮的指针,使用<code>DelayQueue</code>存放最近到期的定时任务</p>
-<h2 id="双向链表"><a href="#双向链表" class="headerlink" title="双向链表"></a>双向链表</h2><p>时间中每一个格中使用的数据结构为双向链表。<br>好处是只要持有其中某个节点，就可以在<code>O(1)</code>时间内进行插入或者删除操作。</p>
-<h2 id="到期操作"><a href="#到期操作" class="headerlink" title="到期操作"></a>到期操作</h2><p>由<code>DelayQueue</code>辅助推进指针: </p>
-<ol>
-<li><code>DelayQueue</code>中优先级队列的队首最近到期的定时任务。处理结束后,由<code>leader</code>线程等待下一个定时任务的时间。因此推进步长由定时任务的间隔决定,没有cpu空转的现象。</li>
-<li>推进所有时间轮的指针,对于遇到的定时任务,要么插入低层时间轮,要么删除(执行)。</li>
-</ol>
-<h2 id="插入操作-删除类似"><a href="#插入操作-删除类似" class="headerlink" title="插入操作(删除类似)"></a>插入操作(删除类似)</h2><p>插入新的定时任务:</p>
-<ol>
-<li>插入时间轮: 根据到期时间,可以算出具体应该放在哪一层时间轮的哪一格,得到对应的双向链表引用。如果这一格还是空的,需要新建一个,然后插入到<code>DelayQueue</code>中(<code>O(logN)</code>时间复杂度)。(参见<code>DelayQueue</code>原理,如果时间低于<code>DelayQueue</code>的最小延时任务,会提前唤醒里面的<code>leader</code>线程)</li>
-<li>插入<code>DelayQueue</code>: 根据上一步中得到的双向链表引用,往里面插入新的定时任务（<code>O(1)</code>）。</li>
-</ol>
-<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>层级时间轮通过不同<code>tickDuration</code>的时间轮,以较小的空间映射到一个很大的时间范围,兼顾了精度和性能。<br><strong>插入删除的时间复杂度:</strong><br>时间复杂度其实取决于有效格子的数量,因为<code>DelayQueue</code>存放的是有任务的格子,也就是双向链表的数量。低层用的是优先级队列(最小堆),假如有效格子的数量是<code>m</code>，则复杂度为<code>O(log(m))</code>。<br>实际中m一般远小于n，因此性能有很大的提高。<br><strong>理想情况</strong>:定时任务的时间间隔分布能尽量让它们位于相同格子中。 (<code>O(1)</code>)<br><strong>最坏情况</strong>:所有双向链表都只有一个任务(均匀地分布在不同格子中)。(<code>O(logN)</code>)</p>
-<p>实际业务中,定时任务一般都服从对数正态分布,因此每次插入删除时间复杂度是接近<code>O(1)</code>的。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/10/27/2018-10/HashedWheelTimer-%E5%A4%A7%E9%87%8F%E5%AE%9A%E6%97%B6%E5%99%A8%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88-Netty%E4%B8%8Ekafka/" data-id="ck96cxpon00dqmaamcxajhzfw" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Netty/" rel="tag">Netty</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/kafka/" rel="tag">kafka</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%AE%9A%E6%97%B6%E4%BB%BB%E5%8A%A1/" rel="tag">定时任务</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-2018-10/Java并发编程的艺术-第6章3-DelayQueue" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/10/27/2018-10/Java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC6%E7%AB%A03-DelayQueue/" class="article-date">
-  <time datetime="2018-10-27T04:06:10.000Z" itemprop="datePublished">2018-10-27</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/10/27/2018-10/Java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC6%E7%AB%A03-DelayQueue/">Java并发编程的艺术-第6章3-DelayQueue</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p><code>DelayQueue</code>: JDK提供的延迟获取元素的无界阻塞队列。<br><strong>应用场景</strong>:</p>
-<ol>
-<li>缓存有效期: 能取到的时候过期.</li>
-<li>定时任务: 能取到的时候执行。</li>
-</ol>
-<p><code>DelayQueue</code>的两个特性:<br><strong>无界</strong>: 说明底层至少使用了链表。<br><strong>阻塞</strong>: 为底层实现时，利用访问线程干活埋下伏笔(<code>leader</code>)。 </p>
-<h2 id="底层实现机制"><a href="#底层实现机制" class="headerlink" title="底层实现机制"></a>底层实现机制</h2><p>底层用一个优先级队列存储<code>delay</code>元素(比如定时任务),排序依据是延迟的时长。<br>可以看出，这里用的是一个支持无界阻塞的优先级队列实现(例如<code>PriorityBlockingQueue</code>)。</p>
-<p><strong>时间复杂度</strong>: <code>O(logN)</code>。由于使用的是优先级队列(最小堆),插入新元素(任务)的时间复杂度是<code>O(logN)</code>。</p>
-<p><code>take</code>流程: </p>
-<ol>
-<li><code>lock.lockInterruptibly()</code>;</li>
-<li>delay =  队首元素延时;</li>
-<li>delay&lt;=0: 取出该元素;</li>
-<li>delay&gt;0: 尝试设置自己线程为<code>leader</code>，然后等待delay时间。</li>
-<li><code>finnally: lock.unlock()</code>;</li>
-</ol>
-<p>这里<code>leader</code>的职责是等待<code>delay</code>时间，以及唤醒其他等待线程。<br>注意第四步里, 由于<code>leader</code>只能有一个,所以如果尝试成为<code>leader</code>失败，就直接<code>await</code>就好,会被<code>leader</code>叫醒的。</p>
-<p><code>offer</code>: offer就是简单地把元素插入堆中。如果正好是延迟最小，则此时之前的<code>leader</code>等待时间太长了，因此需要叫醒所有等待线程。</p>
-<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p><code>DelayQueue</code><br><strong>优点</strong>:<br>资源开销小: 本质上只需一个线程负责等待;每次等待间隔都是delay时间,cpu空转少。<br><strong>缺点</strong><br>插入删除延时元素时间复杂度为<strong>O(logN)</strong>，对于成千上万的延时任务时间开销大,有待优化。</p>
-<p>优化思路:<br>如果要比<code>O(logN)</code>更好,很自然的思路就是使用哈希表<code>O(1)</code>，空间换时间。</p>
-<h2 id="优化方案"><a href="#优化方案" class="headerlink" title="优化方案"></a>优化方案</h2><p>需求: 降低插入删除延时元素的时间复杂度。<br>方案:</p>
-<ol>
-<li>保留优先级队列,但里面的元素改成链表引用(比如从<code>Task</code>到<code>List&lt;Task&gt;</code>);</li>
-<li>引入辅助哈希表,保存的也是链表引用(<code>List&lt;Task&gt;</code>)，hash函数的输入为延时时长。</li>
-</ol>
-<p>这里即使<code>List&lt;Task&gt;</code>长期只有1个元素也没有关系,这里只是为了起到C++中指针的效果，方便从哈希表里直接修改(插入删除)优先级队里的数据。</p>
-<p><strong><code>take</code>/<code>offer</code>流程</strong>: 与之前相似,唯一不同就是取到<code>List&lt;Task&gt;</code>后，遍历其中所有<code>Task</code>。</p>
-<p><strong>插入延时元素(任务)</strong>：（删除也类似）</p>
-<ol>
-<li>根据延时,通过哈希函数找到哈希表中的槽位;</li>
-<li>如果以前有过相同延时: 直接插入List;</li>
-<li>如果以前没有相同延时: 新建List，并且插入优先级队列。</li>
-</ol>
-<p>可以看出这里优化的重要条件是能合并多个Task到List。<br>为了达到这个条件，可以使用进一步的优化方案: 时间轮。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/10/27/2018-10/Java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC6%E7%AB%A03-DelayQueue/" data-id="ck96cxpon00dumaam35pv69ma" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%B9%B6%E5%8F%91/" rel="tag">并发</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-2018-10/flask多线程下，连接泄露的bug" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/10/23/2018-10/flask%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%8B%EF%BC%8C%E8%BF%9E%E6%8E%A5%E6%B3%84%E9%9C%B2%E7%9A%84bug/" class="article-date">
-  <time datetime="2018-10-23T08:35:52.000Z" itemprop="datePublished">2018-10-23</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/mysql/">mysql</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/10/23/2018-10/flask%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%8B%EF%BC%8C%E8%BF%9E%E6%8E%A5%E6%B3%84%E9%9C%B2%E7%9A%84bug/">flask多线程下，连接泄露的bug</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="架构图"><a href="#架构图" class="headerlink" title="架构图"></a>架构图</h1><img src="/images/2018-10/flask.png" class="" width="400" height="600" title="flask">
-
-<p>如图所示，底层使用mysql，web服务使用<code>flask-SqlAlchemy</code>的连接池（复用连接，减少创建销毁开销），逻辑层代码使用线程池（异步IO操作，如果要异步cpu操作，可以很方便改成进程池）。</p>
-<h1 id="基础知识"><a href="#基础知识" class="headerlink" title="基础知识"></a>基础知识</h1><ol>
-<li>使用<code>db.engine.execute(sql)</code>: 从连接池获取一个连接,执行完sql后自动<code>commit</code>;(<code>commit</code>操作的回调是: 归还连接到池里); </li>
-<li>使用<code>session</code>的<code>orm</code>(<code>xxxModel.query等</code>): 默认配置及推荐配置是<code>autocommit=false</code>，执行完增删查改后，处于事务未提交的状态，也就是没有归还连接。如果要归还连接，可以使用语句:<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">db.session.commit()</span><br><span class="line">db.session.rollback()</span><br><span class="line">db.session.close()</span><br><span class="line">db.session.remove(): 底层会调用db.session.close()</span><br></pre></td></tr></table></figure>
-
-</li>
-</ol>
-<p>小结:</p>
-<blockquote>
-<p>db.engine.execute(sql) =&gt; 自动commit =&gt; 自动归还<br>session(orm) =&gt; 手动commit =&gt; 手动归还<br>因此db.engine.execute(sql)是绝对安全的;<br>orm是有条件的。接着往下看orm的安全条件。</p>
-</blockquote>
-<h2 id="线程与session"><a href="#线程与session" class="headerlink" title="线程与session"></a>线程与session</h2><p>使用flask的SqlAlchemy插件<code>flask-SqlAlchemy</code>时，每个线程可以直接用<code>db.session</code>获得session，即使不显式获得，使用orm的model时，其实也隐式得获得了<code>session</code>。</p>
-<h3 id="线程与session的关系"><a href="#线程与session的关系" class="headerlink" title="线程与session的关系:"></a>线程与session的关系:</h3><p>每个线程有自己的<code>threadlocal</code>的<code>session</code>对象，并且随着线程销毁，会自动释放<code>session</code>,也就是会隐式调用<code>session.remove</code>，也就是会隐式释放<code>session</code>的连接。</p>
-<p>多线程两种使用:</p>
-<ol>
-<li><code>t1=threading.Thread(...)</code>;</li>
-<li>线程池: <code>future= pool.submit(...)</code>.<br>方法1的线程使用完以后自动销毁=&gt;session自动销毁=&gt;连接自动释放;<br>方法2的线程使用完以后归还线程池=&gt;session手动销毁=&gt;连接释放。</li>
-</ol>
-<p>小结:<br>不使用线程池=&gt;连接自动释放;<br>使用线程池=&gt;连接手动释放.<br>手动释放的方法:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">db.session.remove()</span><br></pre></td></tr></table></figure>
-
-<h1 id="空闲连接超时与连接释放bug"><a href="#空闲连接超时与连接释放bug" class="headerlink" title="空闲连接超时与连接释放bug"></a>空闲连接超时与连接释放bug</h1><p>前面说到使用线程池时，连接没有自动释放，一直维护在线程的threadlocal存储中(tls)。那么这样似乎也没有什么关系，只要线程池大小&lt;连接池大小,这样连接池有空闲连接，每个线程也有自己的连接可以用，一切似乎也相安无事。</p>
-<p>然而，这里有一个之前没有提到的机制：空闲连接超时回收。</p>
-<h3 id="空闲连接超时回收"><a href="#空闲连接超时回收" class="headerlink" title="空闲连接超时回收"></a>空闲连接超时回收</h3><h4 id="mysql服务端"><a href="#mysql服务端" class="headerlink" title="mysql服务端:"></a>mysql服务端:</h4><p>定期检查现存连接的空闲时间，把超出<code>wait_timeout</code>的连接删除，此时客户端保存的长连接引用就失效了; 这个时间的设定:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">global</span> <span class="keyword">variables</span> <span class="keyword">like</span> <span class="string">'wait_timeout'</span>;</span><br><span class="line"><span class="keyword">set</span> <span class="keyword">global</span> wait_timeout=<span class="number">10</span>*<span class="number">60</span>; <span class="comment">-- seconds</span></span><br></pre></td></tr></table></figure>
-
-<h4 id="web服务"><a href="#web服务" class="headerlink" title="web服务:"></a>web服务:</h4><p>flask会定期检查连接池里的连接，把空闲连接删除，重新向mysql服务端申请新的连接，这样就不会访问到失效的连接引用了。其中定期的时间是: <code>app.config[&#39;SQLALCHEMY_POOL_RECYCLE&#39;] =xxx</code>(秒，应当设置为小于<code>wait_timeout</code>)。这就是为什么最好连接用完及时归还，否则可能就没法被flask刷新成新连接。</p>
-<h4 id="空闲连接超时与连接释放bug-1"><a href="#空闲连接超时与连接释放bug-1" class="headerlink" title="空闲连接超时与连接释放bug"></a>空闲连接超时与连接释放bug</h4><p>bug发生的流程</p>
-<ol>
-<li>mysql服务端清除了空闲时间过长的连接;</li>
-<li>线程池中线程一直不销毁，因此持有了活了很久的session;</li>
-<li>活了很久的session持有了空闲很久的连接, 这个连接其实已经被服务端销毁了，因此已经不可用了，但是由于其一直没有归还到连接池中，因此一直没有得到更新。</li>
-<li>此时web服务收到数据请求，使用该线程中的该session中的连接，就会抛异常了，因为连接已经不可用了。</li>
-</ol>
-<p>一般来说，空闲时间很长以后，线程池里所有线程的所有session的所有连接都会失效，因此就会完全无法通过orm访问数据库了。</p>
-<p>相关异常信息:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">MySQL server has gone away</span><br><span class="line">Can&#39;t reconnect until invalid transaction is rolled back</span><br></pre></td></tr></table></figure>
-<p>这里之所以说<code>invalid transaction is rolled back</code>，是因为老session收到数据请求后，准备要用连接了。<br>而连接上的事务没有自动提交，也没有rollback，因此不能直接用。<br>因此尝试把连接上，上一次请求的事务提交，但由于连接已经失效，所以失败了。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/10/23/2018-10/flask%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%8B%EF%BC%8C%E8%BF%9E%E6%8E%A5%E6%B3%84%E9%9C%B2%E7%9A%84bug/" data-id="ck96cxpop00e4maamerbl1rgc" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/flask/" rel="tag">flask</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/python/" rel="tag">python</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-2018-10/mysql优化实战-范围查询转点查询" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/10/22/2018-10/mysql%E4%BC%98%E5%8C%96%E5%AE%9E%E6%88%98-%E8%8C%83%E5%9B%B4%E6%9F%A5%E8%AF%A2%E8%BD%AC%E7%82%B9%E6%9F%A5%E8%AF%A2/" class="article-date">
-  <time datetime="2018-10-22T02:28:25.000Z" itemprop="datePublished">2018-10-22</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/mysql/">mysql</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/10/22/2018-10/mysql%E4%BC%98%E5%8C%96%E5%AE%9E%E6%88%98-%E8%8C%83%E5%9B%B4%E6%9F%A5%E8%AF%A2%E8%BD%AC%E7%82%B9%E6%9F%A5%E8%AF%A2/">mysql优化实战-范围查询转点查询</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="反直觉优化"><a href="#反直觉优化" class="headerlink" title="反直觉优化"></a>反直觉优化</h1><h2 id="慢查询"><a href="#慢查询" class="headerlink" title="慢查询:"></a>慢查询:</h2><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> *</span><br><span class="line">    <span class="keyword">from</span> layer_data.layers_push b</span><br><span class="line">    <span class="keyword">where</span> group_key=<span class="string">'nopushtest'</span></span><br><span class="line">    <span class="keyword">AND</span> utype=<span class="string">'10w1'</span></span><br><span class="line">    <span class="keyword">AND</span> dt&gt;=<span class="number">20180620</span> <span class="keyword">AND</span> dt&lt;=<span class="number">20181020</span></span><br><span class="line">    <span class="keyword">AND</span> bucket_id=<span class="number">60</span></span><br></pre></td></tr></table></figure>
-<p>上述SQL执行时间约在2.10秒,通过查看执行计划,可以发现有一个异常的指标,预估扫描的行数(<code>rows</code>)为96W，而实际结果行数应该在几十条。(查询涉及到的列合起来是联合主键)<br>此外<code>type</code>为<code>range</code>，执行的是范围扫描。<br>查询计划:(<code>explain exntended select ...</code>)</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">+----+-------------+-------------+-------+---------------+---------+---------+------+--------+-------------+</span><br><span class="line">| id | select_type | table       | type  | possible_keys | key     | key_len | ref  | rows   | Extra       |</span><br><span class="line">+----+-------------+-------------+-------+---------------+---------+---------+------+--------+-------------+</span><br><span class="line">|  1 | SIMPLE      | layers_push | range | PRIMARY       | PRIMARY | 216     | NULL | 989236 | Using where |</span><br><span class="line">+----+-------------+-------------+-------+---------------+---------+---------+------+--------+-------------+</span><br></pre></td></tr></table></figure>
-
-
-<h2 id="快查询-（反直觉优化）"><a href="#快查询-（反直觉优化）" class="headerlink" title="快查询:（反直觉优化）"></a>快查询:（反直觉优化）</h2><p>基于上面观察到预估行数异常，一个自然的思路就是引入一个很小的辅助表来帮助优化器减少扫描的行数。辅助表的主键与原表分布相同: </p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> b.*</span><br><span class="line"><span class="keyword">from</span> layer_data.layers__nopushtest a</span><br><span class="line"><span class="keyword">join</span> layer_data.layers_push b</span><br><span class="line"> <span class="keyword">ON</span> a.dt=b.dt</span><br><span class="line"><span class="keyword">AND</span> a.bucket_id=b.bucket_id</span><br><span class="line"><span class="keyword">AND</span> b.group_key=<span class="string">'nopushtest'</span></span><br><span class="line"><span class="keyword">AND</span> b.dt <span class="keyword">between</span> <span class="number">20180620</span> <span class="keyword">AND</span> <span class="number">20181020</span></span><br><span class="line"><span class="keyword">AND</span> b.utype=<span class="string">'10w1'</span></span><br><span class="line">    <span class="keyword">where</span> a.dt&gt;=<span class="number">20180620</span> <span class="keyword">and</span> a.dt&lt;=<span class="number">20181020</span></span><br><span class="line">    <span class="keyword">and</span> a.utype=<span class="string">'w1'</span></span><br><span class="line">    <span class="keyword">and</span> a.bucket_id=<span class="number">60</span></span><br></pre></td></tr></table></figure>
-<p>优化后,执行时间大约在0.05秒,快了40多倍。<br>优化后的执行计划:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">+----+-------------+-------+--------+---------------+---------+---------+-----------------------------------+-------+--------------------------+</span><br><span class="line">| id | select_type | table | type   | possible_keys | key     | key_len | ref                               | rows  | Extra                    |</span><br><span class="line">+----+-------------+-------+--------+---------------+---------+---------+-----------------------------------+-------+--------------------------+</span><br><span class="line">|  1 | SIMPLE      | a     | range  | PRIMARY       | PRIMARY | 38      | NULL                              | 23925 | Using where; Using index |</span><br><span class="line">|  1 | SIMPLE      | b     | eq_ref | PRIMARY       | PRIMARY | 216     | layer_data.a.dt,const,const,const |     1 | Using where              |</span><br><span class="line">+----+-------------+-------+--------+---------------+---------+---------+-----------------------------------+-------+--------------------------+</span><br></pre></td></tr></table></figure>
-<p>执行流程:<br>第一步:范围扫描表a,得到连接键的所有可能取值;<br>第二步: 表b的type是eq_ref(等值连接,而且是唯一键),ref是<code>layer_data.a.dt,const,const,const</code>，预估扫描的行数变成只有1。</p>
-<h1 id="原理分析"><a href="#原理分析" class="headerlink" title="原理分析"></a>原理分析</h1><h2 id="慢查询的执行计划"><a href="#慢查询的执行计划" class="headerlink" title="慢查询的执行计划:"></a>慢查询的执行计划:</h2><p>预估的行数有96w，执行计划是从dt为20180620的数据页顺序扫描到dt为20181020的数据页。</p>
-<h3 id="范围查询的扫描行数预估："><a href="#范围查询的扫描行数预估：" class="headerlink" title="范围查询的扫描行数预估："></a>范围查询的扫描行数预估：</h3><p>这里由于使用的mysql版本是5.6(可以通过<code>select version();</code>语句查看)，预估的流程:</p>
-<ol>
-<li>取符合where条件的最左边的数据页及后续的8个页，再加上符合where条件的最右边的数据页,共计10个页进行采样;</li>
-<li>根据上述采样结果，以及与总数据的采样比，估算出需要扫描的行数。</li>
-</ol>
-<h2 id="快查询的执行计划"><a href="#快查询的执行计划" class="headerlink" title="快查询的执行计划:"></a>快查询的执行计划:</h2><p>因为有辅助的小表帮忙，扫描的行数减少。执行计划是先范围扫描小表，得到所有连接键的取值后，用表b的索引挨个儿进行点查询（<code>type</code>是<code>eq_ref</code>，而不是<code>range</code>）,扫描的数据页大大减少。</p>
-<p><code>range</code>类型查询:</p>
-<blockquote>
-<p>以下操作符会导致查询计划为range:<br>=, &lt;&gt;, &gt;, &gt;=, &lt;, &lt;=, IS NULL, &lt;=&gt;, BETWEEN, IN (…)</p>
-</blockquote>
-<h1 id="符合直觉的优化"><a href="#符合直觉的优化" class="headerlink" title="符合直觉的优化"></a>符合直觉的优化</h1><p>由于mysql对in有特殊的优化: 把范围查询转换为多次点查询。<br>此时虽然查询计划是<code>range</code>，但实际执行时候不会进行范围扫描，而会进行点查询。<br>因此也可以把查询改写成:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span>   *</span><br><span class="line">    <span class="keyword">from</span> layer_data.layers_push b</span><br><span class="line">    <span class="keyword">where</span> group_key=<span class="string">'nopushtest'</span></span><br><span class="line">    <span class="keyword">AND</span> utype=<span class="string">'10w1'</span></span><br><span class="line">    <span class="keyword">AND</span> dt  <span class="keyword">in</span>  (<span class="number">20180805</span>,<span class="number">20180806</span>,<span class="number">20180807</span>,<span class="number">20180808</span>,<span class="number">20180809</span>,<span class="number">20180810</span>,<span class="number">20180811</span>,<span class="number">20180812</span>,<span class="number">20180813</span>,<span class="number">20180814</span>,<span class="number">20180815</span>,<span class="number">20180816</span>,<span class="number">20180817</span>,<span class="number">20180818</span>,<span class="number">20180819</span>,<span class="number">20180820</span>,<span class="number">20180821</span>,<span class="number">20180822</span>,<span class="number">20180823</span>,<span class="number">20180824</span>,<span class="number">20180825</span>,<span class="number">20180826</span>,<span class="number">20180827</span>,<span class="number">20180828</span>,<span class="number">20180829</span>,<span class="number">20180830</span>,<span class="number">20180831</span></span><br><span class="line">,<span class="number">20180901</span>,<span class="number">20180902</span>,<span class="number">20180903</span>,<span class="number">20180904</span>,<span class="number">20180905</span>,<span class="number">20180906</span>,<span class="number">20180907</span>,<span class="number">20180908</span>,<span class="number">20180909</span>,<span class="number">20180910</span>,<span class="number">20180911</span>,<span class="number">20180912</span>,<span class="number">20180913</span>,<span class="number">20180914</span>,<span class="number">20180915</span>,<span class="number">20180916</span>,<span class="number">20180917</span>,<span class="number">20180918</span>,<span class="number">20180919</span>,<span class="number">20180920</span>,<span class="number">20180921</span>,<span class="number">20180922</span>,<span class="number">20180923</span>,<span class="number">20180924</span>,<span class="number">20180925</span>,<span class="number">20180926</span>,<span class="number">20180927</span>,<span class="number">20180928</span>,<span class="number">20180929</span>,<span class="number">20180930</span></span><br><span class="line">,<span class="number">20181001</span>,<span class="number">20181002</span>,<span class="number">20181003</span>,<span class="number">20181004</span>,<span class="number">20181005</span>,<span class="number">20181006</span>,<span class="number">20181007</span>,<span class="number">20181008</span>,<span class="number">20181009</span>,<span class="number">20181010</span>,<span class="number">20181011</span>,<span class="number">20181012</span>,<span class="number">20181013</span>,<span class="number">20181014</span>,<span class="number">20181015</span>,<span class="number">20181016</span>,<span class="number">20181017</span>,<span class="number">20181018</span>,<span class="number">20181019</span>,<span class="number">20181020</span>,<span class="number">20181021</span>,<span class="number">20181022</span>,<span class="number">20181023</span>,<span class="number">20181024</span>,<span class="number">20181025</span>,<span class="number">20181026</span>,<span class="number">20181027</span>)</span><br><span class="line">    <span class="keyword">AND</span> bucket_id=<span class="number">60</span></span><br></pre></td></tr></table></figure>
-<p>优点:<br>直观,速度最快。<br>缺点:<br>啰嗦，改写起来比较麻烦，只适用于能使用代码预处理sql的地方，而且有最大长度限制。</p>
-<h3 id="in查询的扫描行数预估"><a href="#in查询的扫描行数预估" class="headerlink" title="in查询的扫描行数预估"></a>in查询的扫描行数预估</h3><p>有两种方式:</p>
-<ol>
-<li>精确计算(<code>index_dive</code>): 直接查询对应的行;</li>
-<li>采样预估(<code>index statistics</code>): 采样10个数据页,通过索引的选择性统计数据，预估总行数。</li>
-</ol>
-<p>具体采取哪种方式，由<code>eq_range_index_dive_limit</code>参数控制(默认是10)。<br>小于<code>eq_range_index_dive_limit</code>的时候，采用方法1，精确计算；<br>大于等于<code>eq_range_index_dive_limit</code>的时候，采用方法2, 采样预估。</p>
-<h1 id="执行计划耗时"><a href="#执行计划耗时" class="headerlink" title="执行计划耗时"></a>执行计划耗时</h1><p>可以通过命令查看某个查询的具体耗时及具体发生了哪些操作:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">set</span> profiling=<span class="number">1</span>;</span><br><span class="line"><span class="comment">-- select * from xxx ;</span></span><br><span class="line"><span class="keyword">show</span> <span class="keyword">profiles</span>;</span><br><span class="line"><span class="keyword">show</span> profile <span class="keyword">for</span> <span class="keyword">query</span> <span class="number">1</span>;</span><br><span class="line"><span class="keyword">show</span> profile <span class="keyword">all</span> <span class="keyword">for</span> <span class="keyword">query</span> <span class="number">1</span>; <span class="comment">-- cpu,io等详细信息</span></span><br></pre></td></tr></table></figure>
-<p>这里可以看到之前的慢查询发生了51w个block io input。</p>
-<h1 id="优化器查询计划选择"><a href="#优化器查询计划选择" class="headerlink" title="优化器查询计划选择"></a>优化器查询计划选择</h1><p>可以通过命令查看某个查询生成执行计划时，考虑过哪些方案，以及对于where条件的等价变换，最终选择了哪个方案(<code>chosen:true</code>)。</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">set</span> optimizer_trace=<span class="string">"enabled=on"</span>;</span><br><span class="line"><span class="keyword">SET</span> optimizer_trace_max_mem_size=<span class="number">1000000</span>;</span><br><span class="line"><span class="keyword">explain</span> <span class="keyword">select</span> xxx</span><br><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> information_schema.OPTIMIZER_TRACE\G</span><br></pre></td></tr></table></figure>
-<p>可以看到对于之前慢查询的查询条件只用到了dt条件，其他where条件是在服务器层进行过滤的。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/10/22/2018-10/mysql%E4%BC%98%E5%8C%96%E5%AE%9E%E6%88%98-%E8%8C%83%E5%9B%B4%E6%9F%A5%E8%AF%A2%E8%BD%AC%E7%82%B9%E6%9F%A5%E8%AF%A2/" data-id="ck96cxpoq00e7maam5h9zcfq9" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1078,23 +1011,23 @@
       <ul>
         
           <li>
+            <a href="/2021/02/22/2021-02/%E5%A4%9A%E9%A1%B9%E7%9B%AE%E5%85%B1%E4%BA%AB%E4%BB%A3%E7%A0%81%E4%B9%8B%E2%80%94%E2%80%94git-subtree/">多项目共享代码之——git subtree</a>
+          </li>
+        
+          <li>
+            <a href="/2020/12/27/2020-12/%E8%B7%A8%E5%9F%9F%E7%9B%B8%E5%85%B3/">跨域相关</a>
+          </li>
+        
+          <li>
+            <a href="/2020/12/20/2020-12/%E7%BA%BF%E4%B8%8A%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-%E6%9F%A5%E7%9C%8B%E6%96%B9%E6%B3%95%E7%BA%A7%E8%80%97%E6%97%B6/">线上性能debug-查看方法级耗时</a>
+          </li>
+        
+          <li>
+            <a href="/2020/12/19/2020-12/%E5%8D%87%E7%BA%A7HTTP2%E7%AC%94%E8%AE%B0/">升级HTTP2笔记</a>
+          </li>
+        
+          <li>
             <a href="/2020/07/22/2020-07/ES%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0/">ES实战笔记</a>
-          </li>
-        
-          <li>
-            <a href="/2020/06/19/2020-06/tcp%E8%B0%83%E4%BC%98/">tcp调优</a>
-          </li>
-        
-          <li>
-            <a href="/2020/06/15/2020-06/jdk11%E4%B8%8Bg1%E6%94%B6%E9%9B%86%E5%99%A8%E4%BD%BF%E7%94%A8/">jdk11下g1收集器使用</a>
-          </li>
-        
-          <li>
-            <a href="/2020/06/08/2020-06/mysql%E5%8F%AF%E9%87%8D%E5%A4%8D%E8%AF%BB%E4%B8%8B%E7%94%A8for-update%E5%AF%BC%E8%87%B4%E7%9A%84%E6%AD%BB%E9%94%81/">mysql可重复读下用for update导致的死锁</a>
-          </li>
-        
-          <li>
-            <a href="/2020/05/05/2020-05/BeanCopier%E6%B5%8B%E8%AF%84%E6%8A%A5%E5%91%8A/">BeanCopier测评报告</a>
           </li>
         
       </ul>
@@ -1112,7 +1045,7 @@
   
   <div class="outer">
     <div id="footer-left">
-      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      &copy; 2014 - 2021 风梦七&nbsp;|&nbsp;
       主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
     </div>
      <div id="footer-right">

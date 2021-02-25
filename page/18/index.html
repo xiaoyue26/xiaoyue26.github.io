@@ -72,6 +72,413 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-builder模式" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2016/12/23/builder%E6%A8%A1%E5%BC%8F/" class="article-date">
+  <time datetime="2016-12-23T11:09:40.000Z" itemprop="datePublished">2016-12-23</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/">设计模式</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2016/12/23/builder%E6%A8%A1%E5%BC%8F/">builder模式</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>构造一个对象时，若参数有多个，且其中几个为可选，有几种实现方式:</p>
+<ul>
+<li>重叠构造函数(重叠构造器)<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">public NutritionFacts(int a,int b)&#123;this(a,b,0);&#125;#调用底层构造函数</span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">NutritionFacts</span><span class="params">(<span class="keyword">int</span> a,<span class="keyword">int</span> b,<span class="keyword">int</span> c)</span></span>&#123;</span><br><span class="line"> <span class="keyword">this</span>.a=a;</span><br><span class="line"> <span class="keyword">this</span>.b=b;</span><br><span class="line"> <span class="keyword">this</span>.b=b;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+这种方法较为繁琐，颠倒其中两个参数顺序会造成严重后果。不易扩展。</li>
+</ul>
+<hr>
+<ul>
+<li>javeBeans模式<br>  使用多个setter方法来设定必要的参数，可读性很强，但同时也是javabean容易处于不一致状态、不可用状态，需要额外努力来保证线程安全要求。</li>
+</ul>
+<hr>
+<ul>
+<li>builder模式<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> java.lang.reflect.Field;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">NutritionFacts</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> servingSize;</span><br><span class="line">	<span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> serving;</span><br><span class="line">	<span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> calories;</span><br><span class="line">	<span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> fat;</span><br><span class="line">	<span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> sodium;</span><br><span class="line">	<span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> carbohydrate;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">public</span> <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">Builder</span> </span>&#123;</span><br><span class="line">		<span class="comment">// Required parameters:</span></span><br><span class="line">		<span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> servingSize;</span><br><span class="line">		<span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> serving;</span><br><span class="line">		<span class="comment">// optional parameters:</span></span><br><span class="line">		<span class="keyword">private</span> <span class="keyword">int</span> calories = <span class="number">0</span>;</span><br><span class="line">		<span class="keyword">private</span> <span class="keyword">int</span> fat = <span class="number">0</span>;</span><br><span class="line">		<span class="keyword">private</span> <span class="keyword">int</span> sodium = <span class="number">0</span>;</span><br><span class="line">		<span class="keyword">private</span> <span class="keyword">int</span> carbohydrate = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">		<span class="function"><span class="keyword">public</span> <span class="title">Builder</span><span class="params">(<span class="keyword">int</span> servingSize, <span class="keyword">int</span> serving)</span> </span>&#123;</span><br><span class="line">			<span class="keyword">this</span>.servingSize = servingSize;</span><br><span class="line">			<span class="keyword">this</span>.serving = serving;</span><br><span class="line">		&#125;</span><br><span class="line"></span><br><span class="line">		<span class="function"><span class="keyword">public</span> Builder <span class="title">calories</span><span class="params">(<span class="keyword">int</span> val)</span> </span>&#123;</span><br><span class="line">			calories = val;</span><br><span class="line">			<span class="keyword">return</span> <span class="keyword">this</span>;</span><br><span class="line">		&#125;</span><br><span class="line"></span><br><span class="line">		<span class="function"><span class="keyword">public</span> Builder <span class="title">fat</span><span class="params">(<span class="keyword">int</span> val)</span> </span>&#123;</span><br><span class="line">			fat = val;</span><br><span class="line">			<span class="keyword">return</span> <span class="keyword">this</span>;</span><br><span class="line">		&#125;</span><br><span class="line"></span><br><span class="line">		<span class="function"><span class="keyword">public</span> Builder <span class="title">sodium</span><span class="params">(<span class="keyword">int</span> val)</span> </span>&#123;</span><br><span class="line">			sodium = val;</span><br><span class="line">			<span class="keyword">return</span> <span class="keyword">this</span>;</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="function"><span class="keyword">public</span> Builder <span class="title">carbohydrate</span><span class="params">(<span class="keyword">int</span> val)</span> </span>&#123;</span><br><span class="line">			carbohydrate = val;</span><br><span class="line">			<span class="keyword">return</span> <span class="keyword">this</span>;</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="function"><span class="keyword">public</span> NutritionFacts <span class="title">build</span><span class="params">()</span> </span>&#123;</span><br><span class="line">			<span class="keyword">return</span> <span class="keyword">new</span> NutritionFacts(<span class="keyword">this</span>);</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="function"><span class="keyword">private</span> <span class="title">NutritionFacts</span><span class="params">(Builder builder)</span> </span>&#123;</span><br><span class="line">		<span class="keyword">this</span>.servingSize = builder.servingSize;</span><br><span class="line">		<span class="keyword">this</span>.serving = builder.serving;</span><br><span class="line">		<span class="keyword">this</span>.calories = builder.serving;</span><br><span class="line">		<span class="keyword">this</span>.fat = builder.serving;</span><br><span class="line">		<span class="keyword">this</span>.sodium = builder.serving;</span><br><span class="line">		<span class="keyword">this</span>.carbohydrate = builder.carbohydrate;</span><br><span class="line"></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">		NutritionFacts cocacola = <span class="keyword">new</span> NutritionFacts.Builder(<span class="number">240</span>, <span class="number">8</span>).calories(<span class="number">100</span>).sodium(<span class="number">35</span>).carbohydrate(<span class="number">27</span>).build();</span><br><span class="line">		 </span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+</li>
+</ul>
+<p>builder模式代码比较冗长，但是当大部分参数都是可选的时候是一个不错的选择，拓展性强，比javaBean安全。</p>
+<ul>
+<li><p>其他技巧<br>避免创建不必要的对象，使用静态工厂方法。例如能使用Boolean.valueOf(String)时，就不要使用Boolean(String)。后者会多创建一个对象。</p>
+</li>
+<li><p>内存泄露<br>消除过期的对象引用：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//自己实现的容器如栈：</span></span><br><span class="line"><span class="keyword">private</span> Object[]elements;</span><br><span class="line"><span class="function"><span class="keyword">public</span> Object <span class="title">pop</span><span class="params">()</span><span class="comment">//此函数存在内存泄露</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">if</span>(size==<span class="number">0</span>)</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> EmptyStackException();</span><br><span class="line">    <span class="keyword">return</span> elements[--size];</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">//正确写法:</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> Object <span class="title">pop</span><span class="params">()</span><span class="comment">//此函数存在内存泄露</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">if</span>(size==<span class="number">0</span>)</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> EmptyStackException();</span><br><span class="line">    Object res=elements[--size];</span><br><span class="line">    elements[size]=<span class="keyword">null</span>;<span class="comment">//使废弃对象的引用数减至0.让GC回收。</span></span><br><span class="line">    <span class="keyword">return</span> res;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>其他可能出现内存泄露的来源：监听器、回调、缓存。</p>
+</li>
+</ul>
+<p>引用：<br>1.强引用<br>强引用就是普通的Java引用，代码：<br><code>StringBuffer buffer = new StringBuffer();</code><br>2.软引用（SoftReference）//用于缓存<br>    如果一个对象只具有软引用，则内存空间足够，垃圾回收器就不会回收它；如果内存空间不足了，就会回收这些对象的内存。只要垃圾回收器没有回收它，该对象就可以被程序使用。软引用可用来实现内存敏感的高速缓存（下文给出示例）。<br>    软引用可以和一个引用队列（ReferenceQueue）联合使用，如果软引用所引用的对象被垃圾回收器回收，Java虚拟机就会把这个软引用加入到与之关联的引用队列中。</p>
+<p>3.弱引用（WeakReference）<br>    弱引用与软引用的区别在于：弱引用的对象拥有更短暂的生命周期。在垃圾回收器线程扫描它所管辖的内存区域的过程中，一旦发现了只具有弱引用的对象，不管当前内存空间足够与否，都会回收它的内存。不过，由于垃圾回收器是一个优先级很低的线程，因此不一定会很快发现那些只具有弱引用的对象。<br>    &gt;当你想引用一个对象，但是这个对象有自己的生命周期，你不想介入这个对象的生命周期，这时候你就是用弱引用。<br>    <figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">String abc = <span class="keyword">new</span> String(<span class="string">"abcde"</span>);</span><br><span class="line">WeakReference&lt;String&gt; wf= <span class="keyword">new</span> WeakReference&lt;String&gt;(str, rq);</span><br><span class="line">String abc1 = wf.get()<span class="comment">//如果abcde这个对象没有被垃圾回收器回收，那么abc1就指向"abcde"对象</span></span><br></pre></td></tr></table></figure><br>4.虚引用（PhantomReference）//它允许你知道对象何时从内存中移除。<br>    “虚引用”顾名思义，就是形同虚设，与其他几种引用都不同，虚引用并不会决定对象的生命周期。如果一个对象仅持有虚引用，那么它就和没有任何引用一样，在任何时候都可能被垃圾回收器回收。<br>虚引用主要用来跟踪对象被垃圾回收器回收的活动。虚引用与软引用和弱引用的一个区别在于：虚引用必须和引用队列（ReferenceQueue）联合使用。当垃圾回收器准备回收一个对象时，如果发现它还有虚引用，就会在回收对象的内存之前，把这个虚引用加入到与之 关联的引用队列中。</p>
+<p>三种类型的引用定义了三种不同层次的可达性级别，由强到弱排列如下：</p>
+<p>　　SoftReference &gt; WeakReference &gt; PhantomReference</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2016/12/23/builder%E6%A8%A1%E5%BC%8F/" data-id="ck96cxpko000pmaamcds82xwz" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/" rel="tag">设计模式</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-java内存" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2016/09/24/java%E5%86%85%E5%AD%98/" class="article-date">
+  <time datetime="2016-09-24T11:50:20.000Z" itemprop="datePublished">2016-09-24</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2016/09/24/java%E5%86%85%E5%AD%98/">java内存</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>#1. PC</p>
+<blockquote>
+<p>每个线程都有自己独立的程序计数器.<br>JVM规范中规定:<br>如果线程执行的是非native方法，则PC中保存的是当前需要执行的指令地址;<br>如果线程执行的是native方法，则PC中的值undefined。</p>
+</blockquote>
+<p>#2. Java虚拟机栈</p>
+<blockquote>
+<p>存放的是栈帧. 每个方法生成一个栈帧.<br>栈帧中包括：局部变量表、操作数栈、动态连接、方法返回地址、附加信息.<br>##(1) 局部变量表:<br>各种基本数据类型,对象引用.<br>这个区域的两种异常:stackOverFlowError,OutOfMemoryError<br>1.如果线程请求的栈深度大于虚拟机所允许的深度，将抛出StackOverflowError异常；<br>2.如果虚拟机栈可以动态扩展（当前大部分的Java虚拟机都可动态扩展，只不过Java虚拟机规范中也允许固定长度的虚拟机栈），如果扩展时无法申请到足够的内存，就会抛出OutOfMemoryError异常。</p>
+</blockquote>
+<p>##(2) 操作数栈<br>略.</p>
+<p>##(3) 动态连接</p>
+<blockquote>
+<p>每个栈帧都包含一个指向运行时常量池中该栈帧所属方法的引用（指向运行时常量池：在方法执行的过程中有可能需要用到类中的常量），持有这个引用是为了支持方法调用过程中的动态连接.</p>
+</blockquote>
+<p>##(4) 方法返回地址</p>
+<blockquote>
+<p>当一个方法执行完毕之后，要返回之前调用它的地方，因此在栈帧中必须保存一个方法返回地址。(PC)</p>
+</blockquote>
+<p>##(5) 附加信息</p>
+<blockquote>
+<p>取决于具体的虚拟机实现.在实际开发中，一般会把动态连接，方法返回地址与其它附加信息全部归为一类，称为栈帧信息。</p>
+</blockquote>
+<h1 id="3-本地方法栈"><a href="#3-本地方法栈" class="headerlink" title="3. 本地方法栈"></a>3. 本地方法栈</h1><blockquote>
+<p>执行非java代码. 其他类似,也抛stackoverflow和outOfMemory.</p>
+</blockquote>
+<h1 id="4-堆"><a href="#4-堆" class="headerlink" title="4. 堆"></a>4. 堆</h1><blockquote>
+<p>所有线程共享.<br>所有对象分配的地方. </p>
+</blockquote>
+<h1 id="5-方法区"><a href="#5-方法区" class="headerlink" title="5. 方法区"></a>5. 方法区</h1><blockquote>
+<p>所有线程共享.<br>存储已被虚拟机加载的类信息、常量、静态变量、以及编译器编译后的代码.</p>
+</blockquote>
+<h2 id="常量池"><a href="#常量池" class="headerlink" title="常量池"></a>常量池</h2><blockquote>
+<p>运行时常量池是方法区的一部分。<br>Class文件中除了有类的版本、字段、方法、接口等描述信息外，还有一项信息是常量池（Constant Pool Table），用于存放编译期生成的各种字面量和符号引用，这部分内容将在类加载后进入方法区的运行时常量池中存放。</p>
+</blockquote>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2016/09/24/java%E5%86%85%E5%AD%98/" data-id="ck96cxpl8002emaamaie558vv" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-redis笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2016/04/03/redis%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2016-04-03T12:00:39.000Z" itemprop="datePublished">2016-04-03</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2016/04/03/redis%E7%AC%94%E8%AE%B0/">redis笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h2 id="1-安装"><a href="#1-安装" class="headerlink" title="1. 安装:"></a>1. 安装:</h2><p>mac下安装很简单:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">brew install redis</span><br></pre></td></tr></table></figure>
+<p>启动服务端:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">redis-server</span><br></pre></td></tr></table></figure>
+<p>启动客户端:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">redis-cli</span><br></pre></td></tr></table></figure>
+
+<h2 id="2-配置"><a href="#2-配置" class="headerlink" title="2. 配置"></a>2. 配置</h2><p>mac默认的配置文件在:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;usr&#x2F;local&#x2F;etc&#x2F;redis.conf</span><br></pre></td></tr></table></figure>
+<p>可以通过命令<code>brew info redis</code>查看到.<br>但具体的安装路径,找了一圈连接发现是在:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;usr&#x2F;local&#x2F;Cellar&#x2F;redis</span><br></pre></td></tr></table></figure>
+<p>cli会话下查询某项配置的值:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">CONFIG GET loglevel</span><br><span class="line">CONFIG GET * # 获取所有</span><br></pre></td></tr></table></figure>
+
+<h2 id="3-数据类型"><a href="#3-数据类型" class="headerlink" title="3. 数据类型"></a>3. 数据类型</h2><p>Redis支持五种数据类型：string（字符串），hash（哈希），list（列表），set（集合）及zset(sorted set：有序集合)。</p>
+<p>#1. string</p>
+<blockquote>
+<p>redis 127.0.0.1:6379&gt; SET name “runoob”<br>OK<br>redis 127.0.0.1:6379&gt; GET name<br>“runoob”</p>
+</blockquote>
+<p>#2. hash(k,v都是string)</p>
+<blockquote>
+<p>127.0.0.1:6379&gt; HMSET user:1 username runoob password runoob points 200<br>OK<br>127.0.0.1:6379&gt; HGETALL user:1</p>
+</blockquote>
+<p>1) “username”<br>2) “runoob”<br>3) “password”<br>4) “runoob”<br>5) “points”<br>6) “200”</p>
+<h1 id="3-list"><a href="#3-list" class="headerlink" title="3. list"></a>3. list</h1><p>Redis 列表是简单的字符串列表，按照插入顺序排序。你可以添加一个元素到列表的头部（左边）或者尾部（右边）。</p>
+<blockquote>
+<p>redis 127.0.0.1:6379&gt; lpush runoob redis<br>(integer) 1<br>redis 127.0.0.1:6379&gt; lpush runoob mongodb<br>(integer) 2<br>redis 127.0.0.1:6379&gt; lpush runoob rabitmq<br>(integer) 3<br>redis 127.0.0.1:6379&gt; lrange runoob 0 10</p>
+</blockquote>
+<p>1) “rabitmq”<br>2) “mongodb”<br>3) “redis”</p>
+<p>相关命令</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">lpush key value [value...]</span><br><span class="line">rpush key value [value...]</span><br><span class="line">lrange key start end #左闭右闭</span><br></pre></td></tr></table></figure>
+
+<h1 id="4-Set"><a href="#4-Set" class="headerlink" title="4. Set"></a>4. Set</h1><p>命令: <code>sadd key member</code></p>
+<blockquote>
+<p>redis 127.0.0.1:6379&gt; sadd new_set redis<br>(integer) 1<br>redis 127.0.0.1:6379&gt; sadd new_set mongodb<br>(integer) 1<br>redis 127.0.0.1:6379&gt; sadd new_set rabitmq<br>(integer) 1<br>redis 127.0.0.1:6379&gt; sadd new_set rabitmq<br>(integer) 0<br>redis 127.0.0.1:6379&gt; smembers new_set</p>
+</blockquote>
+<p>1) “rabitmq”<br>2) “mongodb”<br>3) “redis”</p>
+<h1 id="5-zset-排序的set-根据score排序从小到大"><a href="#5-zset-排序的set-根据score排序从小到大" class="headerlink" title="5. zset 排序的set,根据score排序从小到大"></a>5. zset 排序的set,根据score排序从小到大</h1><p>命令: <code>zadd key score member</code></p>
+<blockquote>
+<p>redis 127.0.0.1:6379&gt; zadd new_zset 0 redis<br>(integer) 1<br>redis 127.0.0.1:6379&gt; zadd new_zset 0 mongodb<br>(integer) 1<br>redis 127.0.0.1:6379&gt; zadd new_zset 0 rabitmq<br>(integer) 1<br>redis 127.0.0.1:6379&gt; zadd new_zset 0 rabitmq<br>(integer) 0<br>redis 127.0.0.1:6379&gt; ZRANGEBYSCORE new_zset 0 1000</p>
+</blockquote>
+<p>1) “redis”<br>2) “mongodb”<br>3) “rabitmq”</p>
+<h2 id="连接远端redis服务器"><a href="#连接远端redis服务器" class="headerlink" title="连接远端redis服务器"></a>连接远端redis服务器</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">redis-cli -h host -p port -a password</span><br></pre></td></tr></table></figure>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2016/04/03/redis%E7%AC%94%E8%AE%B0/" data-id="ck96cxplt004lmaam82lc4sbi" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-spark中的存储" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2016/03/26/spark%E4%B8%AD%E7%9A%84%E5%AD%98%E5%82%A8/" class="article-date">
+  <time datetime="2016-03-26T07:12:52.000Z" itemprop="datePublished">2016-03-26</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/spark/">spark</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2016/03/26/spark%E4%B8%AD%E7%9A%84%E5%AD%98%E5%82%A8/">spark中的存储</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <ul>
+<li>#存储架构<img src="/images/storage_in_spark(1).png" class="" width="400" height="600" title="存储架构">
+
+</li>
+</ul>
+<blockquote>
+<p>Spark是一种基于内存的运算框架。数据存储在worker节点中。对于每一个worker，worker Excutor有一个JVM，数据存储在JVM中。</p>
+</blockquote>
+<hr>
+<ul>
+<li>#故障恢复<img src="/images/storage_in_spark(2).png" class="" width="400" height="600" title="故障恢复">
+
+</li>
+</ul>
+<blockquote>
+<p>当计算引擎的进程损坏，Cache 丢失，Spark只能重新启动并计算恢复数据。</p>
+</blockquote>
+<hr>
+<ul>
+<li>#Lineage(世代)<img src="/images/storage_in_spark(3).png" class="" width="400" height="600" title="Lineage">
+
+</li>
+</ul>
+<blockquote>
+<p>Lineage保证数据的Reliability。</p>
+</blockquote>
+<ul>
+<li>当数据E丢失后：</li>
+</ul>
+<ol>
+<li>通过世代找到相应的之前数据，重新部署一个Job将数据重新计算。</li>
+<li>将数据在底层文件系统中备份。</li>
+</ol>
+<hr>
+<ul>
+<li>#数据流<img src="/images/storage_in_spark(4).png" class="" width="400" height="600" title="Lineage">
+
+</li>
+</ul>
+<blockquote>
+<p>计算数据在JVM的内存中存储一份，以保证较少的网络通信和读写。同时记录存储数据的世代(lineage)，当数据丢失时，基于世代将job重新运行，得到相应数据。</p>
+</blockquote>
+<hr>
+<ul>
+<li>#计算过程<img src="/images/storage_in_spark(5).png" class="" width="400" height="600" title="Lineage">
+
+</li>
+</ul>
+<blockquote>
+<p>Spark内部，单个executor进程内RDD的分片数据是用Iterator流式访问的。<br>Iterator的hasNext方法和next方法是由RDD lineage上各个transformation携带的闭包函数复合而成的。<br>该复合Iterator每访问一个元素，就对该元素应用相应的复合函数，得到的结果再流式地落地。空间复杂度为O(1)。</p>
+</blockquote>
+<hr>
+<ul>
+<li>#持久化</li>
+</ul>
+<blockquote>
+<p><code>spark.local.dir</code>：可以设置Spark的暂存目录，包括映射输出文件和需要存储在磁盘上的RDDs。这个磁盘目录在系统上面访问速度越快越好。可以用逗号隔开来设置多个目录。默认值为’/tmp’。<br><code>org.apache.spark.storage.StorageLevel</code>中5种持久化的级别.(<code>result.persist(StorageLevel.DISK_ONLY)</code>) 默认为<code>MEMORY_ONLY</code>。</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th align="center">级别</th>
+<th align="center">空间</th>
+<th align="center">时间</th>
+<th align="center">内存</th>
+<th align="center">磁盘</th>
+<th align="center">备注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">MEMORY_ONLY</td>
+<td align="center">多</td>
+<td align="center">少</td>
+<td align="center">使用</td>
+<td align="center">不使用</td>
+<td align="center">-</td>
+</tr>
+<tr>
+<td align="center">MEMORY_ONLY_SER</td>
+<td align="center">少</td>
+<td align="center">多</td>
+<td align="center">使用</td>
+<td align="center">不使用</td>
+<td align="center">-</td>
+</tr>
+<tr>
+<td align="center">MEMORY_AND_DISK</td>
+<td align="center">多</td>
+<td align="center">中等</td>
+<td align="center">部分</td>
+<td align="center">部分</td>
+<td align="center">如果数据在内存中放不下，则溢写到磁盘上</td>
+</tr>
+<tr>
+<td align="center">MEMORY_AND_DISK_SER</td>
+<td align="center">少</td>
+<td align="center">多</td>
+<td align="center">部分</td>
+<td align="center">部分</td>
+<td align="center">如果数据在内存中放不下，则溢写到磁盘上。在内存中存放序列化后的数据。</td>
+</tr>
+<tr>
+<td align="center">DISK_ONLY</td>
+<td align="center">少</td>
+<td align="center">多</td>
+<td align="center">部分</td>
+<td align="center">部分</td>
+<td align="center">-</td>
+</tr>
+</tbody></table>
+<hr>
+<ul>
+<li>#数据分享<img src="/images/storage_in_spark(6).png" class="" width="400" height="600" title="数据分享">
+
+</li>
+</ul>
+<blockquote>
+<p>在Spark中，如果job2需要Job1运算的数据，Job1首先需要将数据写入到HDFS的block中，会产生硬盘甚至跨网络的读写，同时在HDFS中默认数据需要写三份，因此造成性能的损失。</p>
+</blockquote>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2016/03/26/spark%E4%B8%AD%E7%9A%84%E5%AD%98%E5%82%A8/" data-id="ck96cxplw004xmaam1bb14dt1" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spark/" rel="tag">spark</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/storage/" rel="tag">storage</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-jdk1-7中fork-join并发框架源码浅析及具体实例分析" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2016/02/26/jdk1-7%E4%B8%ADfork-join%E5%B9%B6%E5%8F%91%E6%A1%86%E6%9E%B6%E6%BA%90%E7%A0%81%E6%B5%85%E6%9E%90%E5%8F%8A%E5%85%B7%E4%BD%93%E5%AE%9E%E4%BE%8B%E5%88%86%E6%9E%90/" class="article-date">
@@ -491,271 +898,6 @@
 
 
   
-    <article id="post-java里的一些技巧" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2015/10/30/java%E9%87%8C%E7%9A%84%E4%B8%80%E4%BA%9B%E6%8A%80%E5%B7%A7/" class="article-date">
-  <time datetime="2015-10-30T02:17:55.000Z" itemprop="datePublished">2015-10-30</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2015/10/30/java%E9%87%8C%E7%9A%84%E4%B8%80%E4%BA%9B%E6%8A%80%E5%B7%A7/">java里的一些技巧</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>一开始在<code>quora</code>上看到<code>tricks</code>:<br><a href="https://www.quora.com/What-are-some-cool-Java-tricks" target="_blank" rel="noopener">https://www.quora.com/What-are-some-cool-Java-tricks</a><br>我是拒绝的，然而定语是<code>cool</code>，所以我就很<code>cool</code>地点进去了。</p>
-<ul>
-<li>注解:<br><code>java6+</code>以来，注解处理器一直是一个未被充分利用的<code>trick</code>，它能在编译期就找出错误，而不是等到运行时(这样会增大找出错误的难度)。<br>然后答主<code>Chris Hansen</code>还推荐使用<a href="http://square.github.io/dagger/" target="_blank" rel="noopener">Dragger</a>框架进行依赖注入。</li>
-</ul>
-<ul>
-<li>注释中运行代码:<br>后续的答案除了使用JMX检测死锁的线程、如何序列化一个枚举类等，还有一个是讲如何在注释中插入能运行的部分的：<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String... args)</span> </span>&#123;   </span><br><span class="line">    <span class="comment">// The comment below is no typo.    </span></span><br><span class="line">    <span class="comment">// \u000d System.out.println("This Comment Executed!"); </span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-</li>
-</ul>
-<p>比如这里注释中的<code>System.out.println</code>输出语句就是可以运行的。XD简直是无比邪恶的技巧。其他比较好懂的:</p>
-<ul>
-<li>类型推断：<br>还有一个<code>tricks</code>就是类型推断，例如：<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> &lt;T&gt; <span class="function">Set&lt;T&gt; <span class="title">hashSet</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> (Set&lt;T&gt;)(<span class="keyword">new</span> HashSet&lt;T&gt;());</span><br><span class="line">&#125;</span><br><span class="line">&#123;</span><br><span class="line">Set&lt;String&gt; set1 = hashSet();</span><br><span class="line">Set&lt;Long&gt; set2 = hashSet();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-这对于数据类型参数化是很有用的。</li>
-</ul>
-<ul>
-<li><p>变长参数列表：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">example</span><span class="params">(String...strings)</span> </span>&#123;&#125;;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>在泛型参数上使用联合：其中<code>Bar</code>为接口，<code>Foo</code>可为类或接口。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">Baz</span>&lt;<span class="title">T</span> <span class="keyword">extends</span> <span class="title">Foo</span> &amp; <span class="title">Bar</span>&gt; </span>&#123;&#125;</span><br></pre></td></tr></table></figure></li>
-<li><p>使用标号进行流程控制:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">outer: </span><br><span class="line">    <span class="keyword">for</span> (i = <span class="number">0</span>; i &lt; arr.length; i++) &#123;</span><br><span class="line">        <span class="keyword">for</span> (j = <span class="number">0</span>; j &lt; arr[i].length;  j++) &#123; </span><br><span class="line">            <span class="keyword">if</span> (someCondition(i, j)) &#123; </span><br><span class="line">                <span class="keyword">break</span> outer; </span><br><span class="line">             &#125; </span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>google java编程风格指南:<br><a href="http://www.topthink.com/topic/12834.html" target="_blank" rel="noopener">http://www.topthink.com/topic/12834.html</a></p>
-</li>
-</ul>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2015/10/30/java%E9%87%8C%E7%9A%84%E4%B8%80%E4%BA%9B%E6%8A%80%E5%B7%A7/" data-id="ck96cxplf0036maamhx3d2lvm" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-使用JMX轮询发现死锁" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2015/10/30/%E4%BD%BF%E7%94%A8JMX%E8%BD%AE%E8%AF%A2%E5%8F%91%E7%8E%B0%E6%AD%BB%E9%94%81/" class="article-date">
-  <time datetime="2015-10-30T02:15:48.000Z" itemprop="datePublished">2015-10-30</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2015/10/30/%E4%BD%BF%E7%94%A8JMX%E8%BD%AE%E8%AF%A2%E5%8F%91%E7%8E%B0%E6%AD%BB%E9%94%81/">使用JMX轮询发现死锁</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p><a href="http://download.oracle.com/technetwork/java/javase/6/docs/zh/api/java/lang/management/ThreadMXBean.html" target="_blank" rel="noopener">ThreadMXBean</a>是Java虚拟机线程系统的管理接口，可以使用其中的<code>findDeadlockedThreads</code>方法自动发现死锁的线程，jdk1.6下包括:</p>
-<blockquote>
-<ol>
-<li><code>owner locks(java.util.concurrent)</code>引起的死锁；</li>
-<li><code>monitor locks</code>（例如，同步块）引起的死锁。</li>
-</ol>
-</blockquote>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">DeadLockDetector</span> <span class="keyword">extends</span> <span class="title">Thread</span> </span>&#123;</span><br><span class="line">  <span class="meta">@Override</span></span><br><span class="line">  <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">while</span>(<span class="keyword">true</span>) &#123;</span><br><span class="line">        ThreadMXBean threadMXBean = ManagementFactory.getThreadMXBean();</span><br><span class="line">        <span class="keyword">long</span>[] ids = threadMXBean.findDeadlockedThreads();</span><br><span class="line">        <span class="keyword">if</span> (ids != <span class="keyword">null</span>) &#123;</span><br><span class="line">          System.exit(<span class="number">127</span>);</span><br><span class="line">      &#125;</span><br><span class="line">      <span class="keyword">try</span> &#123;</span><br><span class="line">        Thread.sleep(<span class="number">1000</span>);<span class="comment">//定期轮询</span></span><br><span class="line">      &#125; <span class="keyword">catch</span> (InterruptedException e) &#123; &#125;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">  Process process = <span class="keyword">null</span>;</span><br><span class="line">  <span class="keyword">int</span> exitcode = <span class="number">0</span>;</span><br><span class="line">  <span class="keyword">try</span> &#123;</span><br><span class="line">    <span class="keyword">while</span> (<span class="keyword">true</span>) &#123;</span><br><span class="line">        process = Runtime.getRuntime().exec(<span class="string">"java -cp . DeadlockedApp"</span>);</span><br><span class="line">        exitcode = process.waitFor();</span><br><span class="line">        System.out.println(<span class="string">"exit code: "</span> + exitcode);</span><br><span class="line">        <span class="keyword">if</span> (exitcode == <span class="number">0</span>)</span><br><span class="line">          <span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">    <span class="keyword">if</span> (process != <span class="keyword">null</span>) &#123;</span><br><span class="line">       process.destroy();</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>然而轮询和检测死锁显然都是相当耗费资源的操作，尽量还是自己做好线程的管理。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2015/10/30/%E4%BD%BF%E7%94%A8JMX%E8%BD%AE%E8%AF%A2%E5%8F%91%E7%8E%B0%E6%AD%BB%E9%94%81/" data-id="ck96cxpm90067maam83kmf1uj" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/JMX/" rel="tag">JMX</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E7%BA%BF%E7%A8%8B/" rel="tag">线程</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-mybatis批量插入和更新" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2015/10/19/mybatis%E6%89%B9%E9%87%8F%E6%8F%92%E5%85%A5%E5%92%8C%E6%9B%B4%E6%96%B0/" class="article-date">
-  <time datetime="2015-10-19T12:47:36.000Z" itemprop="datePublished">2015-10-19</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/orm/">orm</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2015/10/19/mybatis%E6%89%B9%E9%87%8F%E6%8F%92%E5%85%A5%E5%92%8C%E6%9B%B4%E6%96%B0/">mybatis批量插入和更新</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <ol>
-<li><p>批量插入:<br><code>mysql</code>下批量插入的sql语句:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">insert</span> <span class="keyword">into</span> user_info (uname,unumber) <span class="keyword">values</span> </span><br><span class="line">(<span class="string">'xiaoyue1'</span>,<span class="string">'1'</span>),</span><br><span class="line">(<span class="string">'xiaoyue2'</span>,<span class="string">'2'</span>);</span><br></pre></td></tr></table></figure>
-<p>似乎很简单,<br>然而,经过复杂的条件判断和动态构造就变成了这样:</p>
-<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">insert</span> <span class="attr">id</span>=<span class="string">"insertMass"</span> <span class="attr">useGeneratedKeys</span>=<span class="string">"true"</span> <span class="attr">keyProperty</span>=<span class="string">"id"</span>&gt;</span></span><br><span class="line">		insert into user_info</span><br><span class="line">		<span class="tag">&lt;<span class="name">trim</span> <span class="attr">prefix</span>=<span class="string">"("</span> <span class="attr">suffixOverrides</span>=<span class="string">","</span> <span class="attr">suffix</span>=<span class="string">")"</span>&gt;</span></span><br><span class="line">			<span class="tag">&lt;<span class="name">if</span> <span class="attr">test</span>=<span class="string">"list[0].id != null"</span>&gt;</span>id,<span class="tag">&lt;/<span class="name">if</span>&gt;</span></span><br><span class="line">			<span class="tag">&lt;<span class="name">if</span> <span class="attr">test</span>=<span class="string">"list[0].uname!= null"</span>&gt;</span>uname,<span class="tag">&lt;/<span class="name">if</span>&gt;</span></span><br><span class="line">			<span class="tag">&lt;<span class="name">if</span> <span class="attr">test</span>=<span class="string">"list[0].unumber!= null"</span>&gt;</span>unumber,<span class="tag">&lt;/<span class="name">if</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;/<span class="name">trim</span>&gt;</span></span><br><span class="line">		values</span><br><span class="line">		<span class="tag">&lt;<span class="name">foreach</span> <span class="attr">collection</span>=<span class="string">"list"</span> <span class="attr">item</span>=<span class="string">"item"</span> <span class="attr">index</span>=<span class="string">"index"</span></span></span><br><span class="line"><span class="tag">			<span class="attr">separator</span>=<span class="string">","</span>&gt;</span></span><br><span class="line">			<span class="tag">&lt;<span class="name">trim</span> <span class="attr">prefix</span>=<span class="string">"("</span> <span class="attr">suffixOverrides</span>=<span class="string">","</span> <span class="attr">suffix</span>=<span class="string">")"</span>&gt;</span></span><br><span class="line">				<span class="tag">&lt;<span class="name">if</span> <span class="attr">test</span>=<span class="string">"item.id != null"</span>&gt;</span>#&#123;item.id&#125;,<span class="tag">&lt;/<span class="name">if</span>&gt;</span></span><br><span class="line">				<span class="tag">&lt;<span class="name">if</span> <span class="attr">test</span>=<span class="string">"item.uname!= null"</span>&gt;</span>#&#123;item.uname&#125;,<span class="tag">&lt;/<span class="name">if</span>&gt;</span></span><br><span class="line">				<span class="tag">&lt;<span class="name">if</span> <span class="attr">test</span>=<span class="string">"item.unumber!= null"</span>&gt;</span>#&#123;item.unumber&#125;,<span class="tag">&lt;/<span class="name">if</span>&gt;</span></span><br><span class="line">			<span class="tag">&lt;/<span class="name">trim</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;/<span class="name">foreach</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">insert</span>&gt;</span></span><br></pre></td></tr></table></figure>
-
-<ul>
-<li>用<code>useGeneratedKeys</code>和<code>keyProperty</code>接收自增主键返回的id,而且此处返回的是第一个插入的记录的id,而不是最后一条记录的id。注意调用代码传入的<code>map</code>中必须有<code>id</code>这一项以接收返回值。</li>
-<li>用<code>trim</code>标签消除末尾的逗号，同时在首尾加上括号。</li>
-<li>用<code>foreach</code>标签遍历传入的<code>list</code>, 传入的<code>map</code>中<code>key</code>为<code>list</code>的对象即为<code>userInfo</code>数组。</li>
-<li><code>list[0]</code>表示对象数组的第一项。</li>
-</ul>
-</li>
-</ol>
-<ol start="2">
-<li>对应的调用代码:<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">insertMass</span><span class="params">(List&lt;UserInfo&gt; users)</span> </span>&#123;</span><br><span class="line">		Map&lt;String, Object&gt; paraMap = <span class="keyword">new</span> HashMap&lt;&gt;();</span><br><span class="line">		paraMap.put(<span class="string">"list"</span>, users);</span><br><span class="line">		paraMap.put(<span class="string">"id"</span>, <span class="number">0</span>);<span class="comment">//note</span></span><br><span class="line">		userInfoMapper.insertMass(paraMap);</span><br><span class="line">		<span class="keyword">int</span> beginId = (<span class="keyword">int</span>) paraMap.get(<span class="string">"id"</span>);</span><br><span class="line">		<span class="keyword">for</span> (UserInfo userInfo : users) &#123;</span><br><span class="line">			userInfo.setId(beginId);</span><br><span class="line">			++beginId;</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br></pre></td></tr></table></figure>
-
-</li>
-</ol>
-<hr>
-<ol start="3">
-<li>批量更新:<br>本来是打算用<code>case when</code>语句写的,然而太过复杂没能写出来,可能得用<code>java</code>拼接好<code>sql</code>语句再传给<code>mybatis</code>；<code>replace into</code>虽然简练但可能改变其他不想改变的字段；最后折中写了<code>insert into..on duplicate key UPDATE...</code>。</li>
-</ol>
-<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">insert</span> <span class="attr">id</span>=<span class="string">"updateMass"</span>&gt;</span> <span class="comment">&lt;!--on duplicate key, mysql特有语法 --&gt;</span></span><br><span class="line">		insert into user_info</span><br><span class="line">		(</span><br><span class="line">		<span class="tag">&lt;<span class="name">if</span> <span class="attr">test</span>=<span class="string">"list[0].unumber != null"</span>&gt;</span> unumber,<span class="tag">&lt;/<span class="name">if</span>&gt;</span></span><br><span class="line">		uname,</span><br><span class="line">		id<span class="comment">&lt;!-- id is necessary --&gt;</span></span><br><span class="line">		)</span><br><span class="line">		values</span><br><span class="line">		<span class="tag">&lt;<span class="name">foreach</span> <span class="attr">collection</span>=<span class="string">"list"</span> <span class="attr">item</span>=<span class="string">"item"</span> <span class="attr">index</span>=<span class="string">"index"</span></span></span><br><span class="line"><span class="tag">			<span class="attr">separator</span>=<span class="string">","</span>&gt;</span></span><br><span class="line">			(</span><br><span class="line">			<span class="tag">&lt;<span class="name">if</span> <span class="attr">test</span>=<span class="string">"item.unumber!= null"</span>&gt;</span> #&#123;item.unumber&#125;,<span class="tag">&lt;/<span class="name">if</span>&gt;</span></span><br><span class="line">			<span class="tag">&lt;<span class="name">if</span> <span class="attr">test</span>=<span class="string">"item.uname!= null"</span>&gt;</span>#&#123;item.uname&#125;,<span class="tag">&lt;/<span class="name">if</span>&gt;</span></span><br><span class="line">			#&#123;item.id&#125;</span><br><span class="line">			)</span><br><span class="line">		<span class="tag">&lt;/<span class="name">foreach</span>&gt;</span></span><br><span class="line">		on duplicate key UPDATE</span><br><span class="line">		<span class="tag">&lt;<span class="name">if</span> <span class="attr">test</span>=<span class="string">"list[0].unumber != null"</span>&gt;</span>unumber=values(unumber),<span class="tag">&lt;/<span class="name">if</span>&gt;</span></span><br><span class="line">		uname=values(uname) <span class="comment">&lt;!-- 至少更新一项 --&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">insert</span>&gt;</span></span><br></pre></td></tr></table></figure>
-<ul>
-<li>这次没使用<code>trim</code>标签，可读性好了一点点,可以和上面对比一下;</li>
-<li>传入参数没设置类型,因为<code>mybatis</code>自己会判断, 其实类型是<code>map</code>。<code>map</code>中<code>list</code>项中存着要更新的对象数组。</li>
-</ul>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2015/10/19/mybatis%E6%89%B9%E9%87%8F%E6%8F%92%E5%85%A5%E5%92%8C%E6%9B%B4%E6%96%B0/" data-id="ck96cxplo0041maam6uuna4l1" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mybatis/" rel="tag">mybatis</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-RTTI与反射" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2015/10/18/RTTI%E4%B8%8E%E5%8F%8D%E5%B0%84/" class="article-date">
-  <time datetime="2015-10-18T12:53:45.000Z" itemprop="datePublished">2015-10-18</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2015/10/18/RTTI%E4%B8%8E%E5%8F%8D%E5%B0%84/">RTTI与反射</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <blockquote>
-<ul>
-<li><code>RTTI</code>:<br>  运行期类型鉴定。在编译期通过载入和检查<code>.class</code>文件,从而鉴定类型。</li>
-<li><code>反射</code>:<br>  运行期类信息。应用场景:反序列化,远程调用(RM)，访问私用变量和方法。编译期<code>.class</code>文件不可用,只能在运行期获得<code>.class</code>文件，在运行期载入和检查<code>.class</code>文件。</li>
-</ul>
-</blockquote>
-<p>1.<code>RTTI</code>:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//RTTI的例子:</span></span><br><span class="line"><span class="keyword">if</span>(<span class="keyword">boolean</span><span class="class">.<span class="keyword">class</span></span>==Boolean.TYPE)</span><br><span class="line">    System.out.println(<span class="string">"boolean true"</span>);</span><br><span class="line">Gun gun=<span class="keyword">new</span> Gun();</span><br><span class="line"><span class="keyword">if</span><span class="comment">//(Gun.class.isInstance(gun))//方式1;</span></span><br><span class="line">(Class.forName(<span class="string">"test1.RTTI$Gun"</span>).isInstance(gun ))<span class="comment">//方式2反射。</span></span><br><span class="line">    System.out.println(<span class="string">"gun is instance of  Gun"</span>);</span><br><span class="line">    <span class="comment">//此处Gun是test1包下RTTI类中的一个内部类。</span></span><br></pre></td></tr></table></figure>
-<p>2.反射:<br><a href="http://blog.csdn.net/stevenhu_223/article/details/9286121" target="_blank" rel="noopener">http://blog.csdn.net/stevenhu_223/article/details/9286121</a></p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">Class&lt;?&gt; class1 = Class.forName(<span class="string">"test1.RTTI$Gun"</span>);</span><br><span class="line">Method[] methods = class1.getMethods();</span><br><span class="line"><span class="keyword">for</span> (Method method : methods)</span><br><span class="line">	out.println(method);</span><br><span class="line">out.println(<span class="string">"constructos:--"</span>);</span><br><span class="line">Constructor[] constructors=class1.getConstructors();</span><br><span class="line"><span class="keyword">for</span> (Constructor method : constructors)</span><br><span class="line">	out.println(method);</span><br><span class="line">Method me1=class1.getMethod(<span class="string">"getdata"</span>, <span class="keyword">int</span><span class="class">.<span class="keyword">class</span>)</span>;</span><br><span class="line">Type returnType=me1.getReturnType();</span><br><span class="line">Object output=me1.invoke(class1.newInstance(),<span class="number">3</span>);</span><br><span class="line">out.println(output);</span><br></pre></td></tr></table></figure>
-<blockquote>
-<p><code>getFields</code>方法获取所有<code>public</code>属性；<br><code>getDeclaredFields</code>方法获取所有属性,包括<code>private</code>。<br><code>getMethods</code>方法获取所有<code>public</code>方法;<br><code>getDeclaredMethods</code>方法获取所有方法,包括<code>private</code>。</p>
-</blockquote>
-<p>可通过<code>getDeclaredMethods</code>获取私有方法；<br>然后<code>nameMethod.setAccessible(true);</code><br>然后就可以执行<code>private</code>方法了。</p>
-<p>此外，获取方法时，除了指定方法名，还要指定参数类型列表，多个参数时可这样写:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Class&lt;?&gt; clazz=Gun<span class="class">.<span class="keyword">class</span></span>;</span><br><span class="line">Method allValuesMethod = clazz.getDeclaredMethod(<span class="string">"setAllValues"</span>, <span class="keyword">new</span> Class[]&#123;String<span class="class">.<span class="keyword">class</span>, <span class="title">int</span>.<span class="title">class</span>, <span class="title">float</span>.<span class="title">class</span>&#125;)</span>;</span><br></pre></td></tr></table></figure>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2015/10/18/RTTI%E4%B8%8E%E5%8F%8D%E5%B0%84/" data-id="ck96cxpkh0007maam3ataayqq" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -782,23 +924,23 @@
       <ul>
         
           <li>
+            <a href="/2021/02/22/2021-02/%E5%A4%9A%E9%A1%B9%E7%9B%AE%E5%85%B1%E4%BA%AB%E4%BB%A3%E7%A0%81%E4%B9%8B%E2%80%94%E2%80%94git-subtree/">多项目共享代码之——git subtree</a>
+          </li>
+        
+          <li>
+            <a href="/2020/12/27/2020-12/%E8%B7%A8%E5%9F%9F%E7%9B%B8%E5%85%B3/">跨域相关</a>
+          </li>
+        
+          <li>
+            <a href="/2020/12/20/2020-12/%E7%BA%BF%E4%B8%8A%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-%E6%9F%A5%E7%9C%8B%E6%96%B9%E6%B3%95%E7%BA%A7%E8%80%97%E6%97%B6/">线上性能debug-查看方法级耗时</a>
+          </li>
+        
+          <li>
+            <a href="/2020/12/19/2020-12/%E5%8D%87%E7%BA%A7HTTP2%E7%AC%94%E8%AE%B0/">升级HTTP2笔记</a>
+          </li>
+        
+          <li>
             <a href="/2020/07/22/2020-07/ES%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0/">ES实战笔记</a>
-          </li>
-        
-          <li>
-            <a href="/2020/06/19/2020-06/tcp%E8%B0%83%E4%BC%98/">tcp调优</a>
-          </li>
-        
-          <li>
-            <a href="/2020/06/15/2020-06/jdk11%E4%B8%8Bg1%E6%94%B6%E9%9B%86%E5%99%A8%E4%BD%BF%E7%94%A8/">jdk11下g1收集器使用</a>
-          </li>
-        
-          <li>
-            <a href="/2020/06/08/2020-06/mysql%E5%8F%AF%E9%87%8D%E5%A4%8D%E8%AF%BB%E4%B8%8B%E7%94%A8for-update%E5%AF%BC%E8%87%B4%E7%9A%84%E6%AD%BB%E9%94%81/">mysql可重复读下用for update导致的死锁</a>
-          </li>
-        
-          <li>
-            <a href="/2020/05/05/2020-05/BeanCopier%E6%B5%8B%E8%AF%84%E6%8A%A5%E5%91%8A/">BeanCopier测评报告</a>
           </li>
         
       </ul>
@@ -816,7 +958,7 @@
   
   <div class="outer">
     <div id="footer-left">
-      &copy; 2014 - 2020 风梦七&nbsp;|&nbsp;
+      &copy; 2014 - 2021 风梦七&nbsp;|&nbsp;
       主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
     </div>
      <div id="footer-right">
