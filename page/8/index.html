@@ -72,6 +72,144 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-01/Redis设计与实现笔记1-数据结构" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/01/12/2019-01/Redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B01-%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/" class="article-date">
+  <time datetime="2019-01-12T11:55:22.000Z" itemprop="datePublished">2019-01-12</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/01/12/2019-01/Redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B01-%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/">Redis设计与实现笔记1-数据结构</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>参考\搬运资料: <a href="http://redisbook.com/index.html" target="_blank" rel="noopener">http://redisbook.com/index.html</a></p>
+<h1 id="设计哲学"><a href="#设计哲学" class="headerlink" title="设计哲学"></a>设计哲学</h1><p>设计简单优于巧妙实现:</p>
+<table>
+<thead>
+<tr>
+<th align="center">表现</th>
+<th align="left">原因</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">不处理循环引用</td>
+<td align="left">不产生循环引用。数据结构足够简单，最多2层。</td>
+</tr>
+<tr>
+<td align="center">不处理事务回滚</td>
+<td align="left">程序员自己处理代码错误</td>
+</tr>
+<tr>
+<td align="center">换个角度就是，没把握做好的事情就干脆不做了。</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="center">解决问题的方法就是不产生问题。不写错代码，很科学，很彻底XD。</td>
+<td align="left"></td>
+</tr>
+</tbody></table>
+<h2 id="简单动态字符串-simple-dynamic-string，SDS"><a href="#简单动态字符串-simple-dynamic-string，SDS" class="headerlink" title="简单动态字符串(simple dynamic string，SDS)"></a>简单动态字符串(simple dynamic string，SDS)</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">sdshdr</span> &#123;</span></span><br><span class="line">    <span class="comment">// 记录 buf 数组中已使用字节的数量</span></span><br><span class="line">    <span class="comment">// 等于 SDS 所保存字符串的长度</span></span><br><span class="line">    <span class="keyword">int</span> len;</span><br><span class="line">    <span class="comment">// 记录 buf 数组中未使用字节的数量</span></span><br><span class="line">    <span class="keyword">int</span> <span class="built_in">free</span>;</span><br><span class="line">    <span class="comment">// 字节数组，用于保存字符串</span></span><br><span class="line">    <span class="keyword">char</span> buf[];<span class="comment">//\0结尾，不计入len</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>类似<code>head-body</code>结构的消息。比<code>\0</code>分割的C字符串简单易用多了，性能更高，代价是付出了更多的内存。<br>之所以最后用上了<code>\0</code>结尾,是为了重用一部分c库里的字符串库，进一步降低了使用成本。</p>
+<h3 id="性能优势点"><a href="#性能优势点" class="headerlink" title="性能优势点:"></a>性能优势点:</h3><ol>
+<li>获取字符串长度: O(1)</li>
+<li>空间预分配，减少系统调用。</li>
+<li>惰性空间释放，减少系统调用。</li>
+</ol>
+<h3 id="安全性优势点"><a href="#安全性优势点" class="headerlink" title="安全性优势点:"></a>安全性优势点:</h3><ol>
+<li>有效防止缓冲区溢出</li>
+<li>二进制安全，可以保存\0。</li>
+</ol>
+<h3 id="缺点："><a href="#缺点：" class="headerlink" title="缺点："></a>缺点：</h3><ol>
+<li>如果有大量字符串缩短，内存泄露严重。</li>
+</ol>
+<h3 id="sdscat"><a href="#sdscat" class="headerlink" title="sdscat"></a>sdscat</h3><p>字符串拼接：</p>
+<img src="/images/2019-01/sds.png" class="" width="800" height="1200" title="sds">
+<p>计算拼接后总长度len，扩展空间为2*len，拼入字符串。最后一定会有一半free空间。</p>
+<h4 id="空间预分配"><a href="#空间预分配" class="headerlink" title="空间预分配"></a>空间预分配</h4><p>假如现有空间不足以存放字符串：</p>
+<ul>
+<li>总长度len&lt;1MB: 总空间为<code>2*len+1</code>;</li>
+<li>总长度len&gt;=1MB: 总空间为<code>len+1MB+1</code>。<br>换句话说，预分配的空间上限是1MB，尽量为len。<br>这么做的目的是减少空间申请、回收的系统调用性能开销。</li>
+</ul>
+<h3 id="惰性空间释放"><a href="#惰性空间释放" class="headerlink" title="惰性空间释放"></a>惰性空间释放</h3><p> 字符串缩短的时候，默认不进行内存回收（可能内存泄露）。<br> 需要手动调API回收。</p>
+<h1 id="链表-RPush"><a href="#链表-RPush" class="headerlink" title="链表(RPush)"></a>链表(RPush)</h1><p>单个节点：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">listNode</span> &#123;</span></span><br><span class="line">    <span class="comment">// 前置节点</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">listNode</span> *<span class="title">prev</span>;</span></span><br><span class="line">    <span class="comment">// 后置节点</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">listNode</span> *<span class="title">next</span>;</span></span><br><span class="line">    <span class="comment">// 节点的值</span></span><br><span class="line">    <span class="keyword">void</span> *value;</span><br><span class="line">&#125; listNode;</span><br></pre></td></tr></table></figure>
+<p>可以看出是一个简单的双向链表。</p>
+<img src="/images/2019-01/double_linked_list.png" class="" width="800" height="1200" title="double_linked_list">
+<p>整个列表容器：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">list</span> &#123;</span></span><br><span class="line">    <span class="comment">// 表头节点</span></span><br><span class="line">    listNode *head;</span><br><span class="line">    <span class="comment">// 表尾节点</span></span><br><span class="line">    listNode *tail;</span><br><span class="line">    <span class="comment">// 链表所包含的节点数量</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> len;</span><br><span class="line">    <span class="comment">// 节点值复制函数</span></span><br><span class="line">    <span class="keyword">void</span> *(*dup)(<span class="keyword">void</span> *ptr);</span><br><span class="line">    <span class="comment">// 节点值释放函数</span></span><br><span class="line">    <span class="keyword">void</span> (*<span class="built_in">free</span>)(<span class="keyword">void</span> *ptr);</span><br><span class="line">    <span class="comment">// 节点值对比函数</span></span><br><span class="line">    <span class="keyword">int</span> (*match)(<span class="keyword">void</span> *ptr, <span class="keyword">void</span> *key);</span><br><span class="line">&#125; <span class="built_in">list</span>;</span><br></pre></td></tr></table></figure>
+
+<h1 id="哈希表（HSet）"><a href="#哈希表（HSet）" class="headerlink" title="哈希表（HSet）"></a>哈希表（HSet）</h1><img src="/images/2019-01/hash_table.png" class="" width="800" height="1200" title="hash_table">
+<p>单个节点:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">dictEntry</span> &#123;</span></span><br><span class="line">    <span class="comment">// 键</span></span><br><span class="line">    <span class="keyword">void</span> *key;</span><br><span class="line">    <span class="comment">// 值</span></span><br><span class="line">    <span class="keyword">union</span> &#123;  <span class="comment">// 三者取其1</span></span><br><span class="line">        <span class="keyword">void</span> *val;</span><br><span class="line">        <span class="keyword">uint64_t</span> u64;</span><br><span class="line">        <span class="keyword">int64_t</span> s64;</span><br><span class="line">    &#125; v;</span><br><span class="line">    <span class="comment">// 指向下个哈希表节点，形成链表</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">dictEntry</span> *<span class="title">next</span>;</span></span><br><span class="line">&#125; dictEntry;</span><br></pre></td></tr></table></figure>
+<p>整个表:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">dictht</span> &#123;</span></span><br><span class="line">    <span class="comment">// 哈希表数组</span></span><br><span class="line">    dictEntry **table;</span><br><span class="line">    <span class="comment">// 哈希表大小</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> <span class="built_in">size</span>;</span><br><span class="line">    <span class="comment">// 哈希表大小掩码，用于计算索引值</span></span><br><span class="line">    <span class="comment">// 总是等于 size - 1</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> sizemask;</span><br><span class="line">    <span class="comment">// 该哈希表已有节点的数量</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> used;</span><br><span class="line">&#125; dictht;</span><br></pre></td></tr></table></figure>
+<p>对外接口:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">dict</span> &#123;</span></span><br><span class="line">    <span class="comment">// 类型特定函数</span></span><br><span class="line">    dictType *type;</span><br><span class="line">    <span class="comment">// 私有数据</span></span><br><span class="line">    <span class="keyword">void</span> *privdata;</span><br><span class="line">    <span class="comment">// 哈希表,有两个，第二个扩容时候用</span></span><br><span class="line">    dictht ht[<span class="number">2</span>];</span><br><span class="line">    <span class="comment">// rehash 索引</span></span><br><span class="line">    <span class="comment">// 当 rehash 不在进行时，值为 -1。 扩容时候用。</span></span><br><span class="line">    <span class="keyword">int</span> rehashidx; <span class="comment">/* rehashing not in progress if rehashidx == -1 */</span></span><br><span class="line">&#125; dict;</span><br></pre></td></tr></table></figure>
+<p>dictType:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">dictType</span> &#123;</span></span><br><span class="line">    <span class="comment">// 计算哈希值的函数</span></span><br><span class="line">    <span class="function"><span class="keyword">unsigned</span> <span class="title">int</span> <span class="params">(*hashFunction)</span><span class="params">(<span class="keyword">const</span> <span class="keyword">void</span> *key)</span></span>;</span><br><span class="line">    <span class="comment">// 复制键的函数</span></span><br><span class="line">    <span class="keyword">void</span> *(*keyDup)(<span class="keyword">void</span> *privdata, <span class="keyword">const</span> <span class="keyword">void</span> *key);</span><br><span class="line">    <span class="comment">// 复制值的函数</span></span><br><span class="line">    <span class="keyword">void</span> *(*valDup)(<span class="keyword">void</span> *privdata, <span class="keyword">const</span> <span class="keyword">void</span> *obj);</span><br><span class="line">    <span class="comment">// 对比键的函数</span></span><br><span class="line">    <span class="keyword">int</span> (*keyCompare)(<span class="keyword">void</span> *privdata, <span class="keyword">const</span> <span class="keyword">void</span> *key1, <span class="keyword">const</span> <span class="keyword">void</span> *key2);</span><br><span class="line">    <span class="comment">// 销毁键的函数</span></span><br><span class="line">    <span class="keyword">void</span> (*keyDestructor)(<span class="keyword">void</span> *privdata, <span class="keyword">void</span> *key);</span><br><span class="line">    <span class="comment">// 销毁值的函数</span></span><br><span class="line">    <span class="keyword">void</span> (*valDestructor)(<span class="keyword">void</span> *privdata, <span class="keyword">void</span> *obj);</span><br><span class="line">&#125; dictType;</span><br></pre></td></tr></table></figure>
+
+
+<p>sizemask为3的话，也就是0x11，就是说取最后两位作为哈希序号，也就是0~3，4个数。<br>所以此时hash表长度为4。以此类推，sizemask有n位,哈希表长度就有2^n。</p>
+<h2 id="渐进式hash"><a href="#渐进式hash" class="headerlink" title="渐进式hash"></a>渐进式hash</h2><p>具体还是要参见: <a href="http://redisbook.com/preview/dict/rehashing.html" target="_blank" rel="noopener">http://redisbook.com/preview/dict/rehashing.html</a></p>
+<img src="/images/2019-01/rehash.png" class="" width="800" height="1200" title="rehash">
+
+<p>逐步把ht[0]中的数据迁移到ht[1]中。<code>rehashidx</code>为0的时候，表示0号位置已经全部迁往ht[1],依次类推，直到全部迁完。<br>交换ht[0],ht[1]以后，<code>rehashidx</code>改为-1.<br>在此过程中ht[0]不会有新插入，新请求全部去ht[1]。</p>
+<h3 id="扩容-rehash的触发"><a href="#扩容-rehash的触发" class="headerlink" title="扩容/rehash的触发"></a>扩容/rehash的触发</h3><p>由时间事件serverCron根据负载因子来决定是否进行扩容。<br>扩容的实际执行是由1个专门的单线程来进行; (类似cms一样高响应,一次resh一个桶,尽量不阻塞线上读写请求)<br>相比之下,concurrentHashMap的扩容则由多线程进行,阻塞所有读写,高吞吐低响应。</p>
+<h1 id="跳表"><a href="#跳表" class="headerlink" title="跳表"></a>跳表</h1><img src="/images/2019-01/skiplist.png" class="" width="800" height="1200" title="skiplist">
+
+<p>有序集合使用。(ZSET)<br>节点源码: </p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">zskiplistNode</span> &#123;</span></span><br><span class="line">    <span class="comment">// 后退指针</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">zskiplistNode</span> *<span class="title">backward</span>;</span></span><br><span class="line">    <span class="comment">// 分值</span></span><br><span class="line">    <span class="keyword">double</span> score;</span><br><span class="line">    <span class="comment">// 成员对象</span></span><br><span class="line">    robj *obj;</span><br><span class="line">    <span class="comment">// 层</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">zskiplistLevel</span> &#123;</span></span><br><span class="line">        <span class="comment">// 前进指针</span></span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">zskiplistNode</span> *<span class="title">forward</span>;</span></span><br><span class="line">        <span class="comment">// 跨度</span></span><br><span class="line">        <span class="keyword">unsigned</span> <span class="keyword">int</span> span;</span><br><span class="line">    &#125; level[];</span><br><span class="line">&#125; zskiplistNode;</span><br></pre></td></tr></table></figure>
+<p>跳表容器:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">zskiplist</span> &#123;</span></span><br><span class="line">    <span class="comment">// 表头节点和表尾节点</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">zskiplistNode</span> *<span class="title">header</span>, *<span class="title">tail</span>;</span></span><br><span class="line">    <span class="comment">// 表中节点的数量</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> length;</span><br><span class="line">    <span class="comment">// 表中层数最大的节点的层数</span></span><br><span class="line">    <span class="keyword">int</span> level;</span><br><span class="line">&#125; zskiplist;</span><br></pre></td></tr></table></figure>
+
+<p>从高层向低层找:</p>
+<ol>
+<li>在找的过程中用update[]数组记录每一层插入位置的上一个节点，</li>
+<li>用rank[]数组记录每一层插入位置的上一个节点在跳跃表中的排名。</li>
+<li>根据update[]插入新节点，插入完成后再根据rank[]更新跨度信息。</li>
+</ol>
+<h1 id="整数集合"><a href="#整数集合" class="headerlink" title="整数集合"></a>整数集合</h1><p>整数集合（intset）是集合键的底层实现之一： 当一个集合只包含整数值元素， 并且这个集合的元素数量不多时， Redis 就会使用整数集合作为集合键的底层实现。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">SADD numbers 1 3 5 7 9</span><br><span class="line">OBJECT ENCODING numbers # 查看底层实现 &quot;intset&quot;</span><br></pre></td></tr></table></figure>
+<h2 id="升级"><a href="#升级" class="headerlink" title="升级"></a>升级</h2><p>默认用最小数据类型，新数据太大的话，会对整个集合数据类型升级，并且移动全部元素。<br>因此最坏时间复杂度为O(n)。</p>
+<p>升级后不会降级。</p>
+<h1 id="压缩列表（ziplist）"><a href="#压缩列表（ziplist）" class="headerlink" title="压缩列表（ziplist）"></a>压缩列表（ziplist）</h1><p>压缩列表（ziplist）是列表键和哈希键的底层实现之一。<br>适用条件: 整数、小字符串。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">RPUSH lst 1 3 5 10086 &quot;hello&quot; &quot;world&quot;</span><br><span class="line">OBJECT ENCODING lst # 底层结构: ziplist</span><br></pre></td></tr></table></figure>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/01/12/2019-01/Redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B01-%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/" data-id="ck96cxpp100fcmaamctgdef7k" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-12/mysql意向锁" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/12/24/2018-12/mysql%E6%84%8F%E5%90%91%E9%94%81/" class="article-date">
@@ -920,71 +1058,6 @@
 
 
   
-    <article id="post-2018-11/gc日志的含义" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/11/24/2018-11/gc%E6%97%A5%E5%BF%97%E7%9A%84%E5%90%AB%E4%B9%89/" class="article-date">
-  <time datetime="2018-11-24T14:40:42.000Z" itemprop="datePublished">2018-11-24</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/jvm/">jvm</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/11/24/2018-11/gc%E6%97%A5%E5%BF%97%E7%9A%84%E5%90%AB%E4%B9%89/">gc日志的含义</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="gc日志示例"><a href="#gc日志示例" class="headerlink" title="gc日志示例"></a>gc日志示例</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">2018-11-11T17:53:47.765+0800: 6.223: [GC (CMS Initial Mark)  1208720K(9946240K), 0.0293534 secs]</span><br><span class="line">2018-11-11T17:53:48.622+0800: 7.080: [GC (Allocation Failure)  2158400K-&gt;38812K(9946240K), 0.0383138 secs]</span><br><span class="line">2018-11-11T17:53:51.479+0800: 9.937: [GC (CMS Final Remark) 2018-11-11T17:53:51.480+0800: 9.937: [GC (CMS Final Remark)  1167518K-&gt;22899K(9946240K), 0.0147020 secs]</span><br><span class="line"> 22899K(9946240K), 0.0299512 secs]</span><br><span class="line">2018-11-11T17:53:55.022+0800: 13.480: [GC (Allocation Failure)  2176846K-&gt;89359K(9946240K), 0.0181967 secs]</span><br><span class="line">2018-11-11T17:54:08.938+0800: 27.396: [GC (Allocation Failure)  2247759K-&gt;301630K(9946240K), 0.1307113 secs]</span><br><span class="line">2018-11-11T17:54:12.721+0800: 31.179: [GC (Allocation Failure)  2460030K-&gt;337872K(9946240K), 0.6716872 secs]</span><br><span class="line">2018-11-11T17:54:14.953+0800: 33.411: [GC (Allocation Failure)  2496272K-&gt;338204K(9946240K), 0.1792878 secs]</span><br><span class="line">2018-11-11T17:54:15.133+0800: 33.591: [GC (GCLocker Initiated GC)  362412K-&gt;368987K(9946240K), 0.0447314 secs]</span><br><span class="line">2018-11-11T17:54:48.328+0800: 66.786: [GC (Allocation Failure)  2527387K-&gt;347750K(9946240K), 0.0532146 secs]</span><br></pre></td></tr></table></figure>
-
-<h1 id="gc日志的组成"><a href="#gc日志的组成" class="headerlink" title="gc日志的组成"></a>gc日志的组成</h1><img src="/images/2018-11/gc_format.png" class="" width="400" height="600" title="gc_format">
-<ol>
-<li>日期时间: <code>2018-11-11T17:53:47.765+0800:</code>;</li>
-<li>jvm启动依赖的时间(秒):  <code>6.223:</code>;</li>
-<li>GC停顿类型: <code>[GC (CMS Initial Mark)</code>;</li>
-<li>(不一定有)GC发生区域: <code>[DefNew”、“[Tenured”、“[Perm</code>;</li>
-<li>(不一定有,针对4中的区域)GC前后该容量变化:<br>GC前该内存区域已使用容量-＞GC后该内存区域已使用容量（该内存区域总容量）<br><code>2496272K-&gt;338204K(9946240K)</code>;</li>
-<li>GC前后java堆容量变化:<br>GC前Java堆已使用容量-＞GC后Java堆已使用容量（Java堆总容量）<br><code>3324K-＞152K（11904K）</code>;</li>
-<li>GC耗时: <code>0.0383138 secs</code>.</li>
-</ol>
-<h1 id="GC区域"><a href="#GC区域" class="headerlink" title="GC区域"></a>GC区域</h1><ol>
-<li><code>New</code>: 新生代、年轻代;</li>
-<li><code>Tenured</code>: 老生代、老年代;</li>
-<li><code>Perm</code>: 永久代.</li>
-</ol>
-<p>收集器的类型+区域: <code>DefNew</code>: Default Serial收集器的新生代区域。</p>
-<h2 id="目标"><a href="#目标" class="headerlink" title="目标"></a>目标</h2><p>消除全部<code>FullGC</code>,普通gc时间占用少于5%。<br>网上说少于3秒一次的频率,由于我们是离线应用,目前还没有什么思路能达到这种性能。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/11/24/2018-11/gc%E6%97%A5%E5%BF%97%E7%9A%84%E5%90%AB%E4%B9%89/" data-id="ck96cxpor00ebmaam2r59f90e" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/gc/" rel="tag">gc</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/jvm/" rel="tag">jvm</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1011,6 +1084,10 @@
       <ul>
         
           <li>
+            <a href="/2021/06/01/2021-06/%E7%BD%91%E7%BB%9C%E5%AE%89%E5%85%A8%E7%AC%94%E8%AE%B0-1/">网络安全笔记-1</a>
+          </li>
+        
+          <li>
             <a href="/2021/02/22/2021-02/%E5%A4%9A%E9%A1%B9%E7%9B%AE%E5%85%B1%E4%BA%AB%E4%BB%A3%E7%A0%81%E4%B9%8B%E2%80%94%E2%80%94git-subtree/">多项目共享代码之——git subtree</a>
           </li>
         
@@ -1024,10 +1101,6 @@
         
           <li>
             <a href="/2020/12/19/2020-12/%E5%8D%87%E7%BA%A7HTTP2%E7%AC%94%E8%AE%B0/">升级HTTP2笔记</a>
-          </li>
-        
-          <li>
-            <a href="/2020/07/22/2020-07/ES%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0/">ES实战笔记</a>
           </li>
         
       </ul>
