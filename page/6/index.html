@@ -72,6 +72,116 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-03/redis设计与实现笔记9-cluster模式" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/03/03/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B09-cluster%E6%A8%A1%E5%BC%8F/" class="article-date">
+  <time datetime="2019-03-03T13:05:48.000Z" itemprop="datePublished">2019-03-03</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/03/03/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B09-cluster%E6%A8%A1%E5%BC%8F/">redis设计与实现笔记9-cluster模式</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>cluster功能是3.0及以后才有的。需要开启cluster模式才能让redis-server以cluster模式启动，这种模式下只有一个数据库（0号数据库）。</p>
+<p>启动集群模式的redis客户端:</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 加上-c参数: </span></span><br><span class="line">redis-cli -c</span><br></pre></td></tr></table></figure>
+
+<h2 id="集群纳入新成员过程"><a href="#集群纳入新成员过程" class="headerlink" title="集群纳入新成员过程"></a>集群纳入新成员过程</h2><ol>
+<li>节点A接到Cluster meet B命令，节点A和B进行握手；</li>
+<li>节点A会将节点B的信息通过<code>Gossip</code>协议传播给集群中的其他节点；</li>
+<li>最终节点B被集群完全认识、接受。</li>
+</ol>
+<h2 id="Gossip协议消息类型"><a href="#Gossip协议消息类型" class="headerlink" title="Gossip协议消息类型"></a>Gossip协议消息类型</h2><ol>
+<li>Meet;</li>
+<li>Ping;</li>
+<li>Pong。</li>
+</ol>
+<h2 id="slot-槽指派"><a href="#slot-槽指派" class="headerlink" title="slot: 槽指派"></a>slot: 槽指派</h2><p>某个节点负责哪些slot:</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">127.0.0.1&gt; cluster ADDslots &lt;slot&gt; [slot ...]</span><br></pre></td></tr></table></figure>
+
+<h2 id="Cluster-Nodes命令"><a href="#Cluster-Nodes命令" class="headerlink" title="Cluster Nodes命令"></a>Cluster Nodes命令</h2><p>用redis-cli客户端可以查看当前集群的节点情况、id，以及slot的分派情况：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Cluster Nodes</span><br></pre></td></tr></table></figure>
+
+<h2 id="clusterState信息"><a href="#clusterState信息" class="headerlink" title="clusterState信息"></a>clusterState信息</h2><p>clusterState信息中有一项是<code>slots_to_keys</code>跳表(类似一个有序hashmap)，保存slot和key之间的关联。<br>key=&gt;跳表中的key;<br>slot号码=&gt;跳表中的score。</p>
+<p>key查节点、节点查key都可以快速完成:</p>
+<ol>
+<li>每个节点可以根据key，查到对应的slot(crc算法)，然后可以查到对应存在哪个节点（存在跳表）；</li>
+<li>可以查自己节点负责的slot:<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">clusterNode</span>&#123;</span></span><br><span class="line">    <span class="comment">// 总共16384(也就是2^14)位，每一位的1,0代表是否负责</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> slots[<span class="number">16384</span>/<span class="number">8</span>];</span><br><span class="line">    <span class="keyword">int</span> numslots;<span class="comment">// 该节点总共负责多少个slot(1的数量)</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+</li>
+</ol>
+<p><code>clusterState</code>中存储了所有slots的指派情况:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">clusterState</span>&#123;</span></span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">    clusterNode* slots[<span class="number">16384</span>];</span><br><span class="line">&#125;clusterState;</span><br></pre></td></tr></table></figure>
+
+<p>如果集群中所有的slot都有人负责，cluster进入上线状态。</p>
+<h2 id="Moved错误"><a href="#Moved错误" class="headerlink" title="Moved错误"></a>Moved错误</h2><p>客户端访问了错误的节点，需要的key在别的节点负责的slot里头：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">MOVED &lt;slot&gt; &lt;ip&gt;:&lt;port&gt;</span><br></pre></td></tr></table></figure>
+<p>cluster模式的redis客户端能自动处理<code>MOVED</code>错误。</p>
+<h2 id="ASK错误"><a href="#ASK错误" class="headerlink" title="ASK错误"></a>ASK错误</h2><h3 id="重新指派"><a href="#重新指派" class="headerlink" title="重新指派"></a>重新指派</h3><img src="/images/2019-03/cluster_migrate.png" class="" width="800" height="1200" title="cluster_migrate">
+<p>集群可以将slot重新分派给另一个节点。<br>也就是: 源节点=迁移到=&gt;目标节点。<br>其中节点id可以通过<code>cluster nodes</code>获得。<br>通过redis-trib工具：<br>1.在target_id节点上发送: (准备好导入)</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Cluster setslot &lt;slot&gt; Importing &lt;source_id&gt;</span><br></pre></td></tr></table></figure>
+<p>2.向source_id发送:（准备好导出）</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Cluster SetSlot &lt;slot&gt; Migrating &lt;target_id&gt;</span><br></pre></td></tr></table></figure>
+<p>3.向source_id发送:</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Cluster GETkeysInSlot &lt;slot&gt; &lt;count&gt;</span><br></pre></td></tr></table></figure>
+<p>获得最多count个属于slot的key；<br>4.对于第3步中的每个key，redis-trib向source_id发送一个命令:</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Migrate &lt;target_ip&gt; &lt;target_port&gt; &lt;key_name&gt; 0 &lt;timeout&gt;</span><br></pre></td></tr></table></figure>
+<p>实际进行迁移每一个key。<br>5.完成迁移，发布:</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Cluster SetSlot &lt;slot&gt; Node &lt;target_id&gt;</span><br></pre></td></tr></table></figure>
+<p>任意节点收到后传播给整个集群。</p>
+<h3 id="ASK错误-1"><a href="#ASK错误-1" class="headerlink" title="ASK错误"></a>ASK错误</h3><img src="/images/2019-03/ask_error.png" class="" width="800" height="1200" title="ask_error">
+<p>迁移过程中，源节点遇到缺少的key会向客户端返回ASK错误:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ASK 16198 127.0.0.1:7003</span><br></pre></td></tr></table></figure>
+<p>表示这个key正在将16198号slot迁移到<code>127.0.0.1:7003</code>。</p>
+<img src="/images/2019-03/ask_query.png" class="" width="800" height="1200" title="ask_query">
+<p>cluster模式的客户端获得ASK错误后，带着ASK标记去访问目标节点，才能获得数据。</p>
+<h3 id="故障恢复"><a href="#故障恢复" class="headerlink" title="故障恢复"></a>故障恢复</h3><p>节点状态：<br><code>在线</code>==&gt;<code>疑似下线</code>==&gt;<code>下线</code><br>(类似于之前<code>sentinel</code>模式中的<code>主观下线</code>和<code>客观下线</code>)。</p>
+<p>cluster模式的各个主节点之间都有连接，相当于一张完全图了。<br>这个网络内，它们每隔一段时间就互相ping，看看对方是否活着（返回pong）。</p>
+<p><code>疑似下线</code>： 不返回pong，标记为<code>疑似下线</code>；<br><code>下线</code>    ： 节点之间交流看法(集群状态)，超过半数认为<code>疑似下线</code>则认为确实是<code>下线</code>，开始故障恢复。</p>
+<p>如果离线的节点有从节点，则可以开始选举了。<br>从节点们发现主节点下线了，就开始向集群存活的主节点们请求投票，获得超过半数的票则当选。</p>
+<h2 id="Publish命令实现"><a href="#Publish命令实现" class="headerlink" title="Publish命令实现"></a>Publish命令实现</h2><p>订阅频道：      subscribe<br>发布消息到频道：publish</p>
+<p>客户端发布消息的流程：</p>
+<ol>
+<li>客户端=&gt;某个节点: publish命令: 发布xx消息到xxx频道;</li>
+<li>该节点=&gt;其他节点: publish的具体消息。</li>
+</ol>
+<p>第2步中为什么不是直接转发命令到其他节点，而是转发消息呢？<br>这个主要是设计理念上，希望节点之间不是命令交互，而是消息交互。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/03/03/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B09-cluster%E6%A8%A1%E5%BC%8F/" data-id="ck96cxppl00hvmaamgc5j37vc" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2019-02/nginx笔记-鉴权及转发配置" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E9%89%B4%E6%9D%83%E5%8F%8A%E8%BD%AC%E5%8F%91%E9%85%8D%E7%BD%AE/" class="article-date">
@@ -997,144 +1107,10 @@
 
 
   
-    <article id="post-2019-02/高性能mysql第12-16章-笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/02/13/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC12-16%E7%AB%A0-%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2019-02-13T01:34:54.000Z" itemprop="datePublished">2019-02-13</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/mysql/">mysql</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/02/13/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC12-16%E7%AB%A0-%E7%AC%94%E8%AE%B0/">高性能mysql第12-16章-笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>这一章主要讲了一些概念和一些Mysql Cluster变种，略。</p>
-<h2 id="高可用概念"><a href="#高可用概念" class="headerlink" title="高可用概念"></a>高可用概念</h2><p>5个9: 99.999%，每年允许5分钟宕机时间。</p>
-<h2 id="宕机原因"><a href="#宕机原因" class="headerlink" title="宕机原因"></a>宕机原因</h2><ol>
-<li>运行环境: 磁盘耗尽；</li>
-<li>性能问题：糟糕sql，schema索引设计;</li>
-<li>复制问题：主备不一致；</li>
-<li>数据丢失：如误操作。</li>
-</ol>
-<h3 id="tips"><a href="#tips" class="headerlink" title="tips"></a>tips</h3><ol>
-<li>禁用查询缓存</li>
-<li>禁用复制过滤器、触发器。</li>
-</ol>
-<h1 id="高性能mysql第13章-笔记-云端mysql"><a href="#高性能mysql第13章-笔记-云端mysql" class="headerlink" title="高性能mysql第13章-笔记-云端mysql"></a>高性能mysql第13章-笔记-云端mysql</h1><p>IaaS:基础设施虚拟化；<br>DaaS:数据库虚拟化。</p>
-<h2 id="Iaas"><a href="#Iaas" class="headerlink" title="Iaas:"></a>Iaas:</h2><p>mysql需要的4种资源:</p>
-<ol>
-<li>cpu: 云cpu一般较慢；</li>
-<li>内存: 最好能到512GB~1TB；</li>
-<li>IO： ms级，虚拟化后一般慢100倍； </li>
-<li>网络： 一般不成为瓶颈。</li>
-</ol>
-<h2 id="Daas："><a href="#Daas：" class="headerlink" title="Daas："></a>Daas：</h2><p>稍微讲了一下亚马逊RDS，略过。</p>
-<h1 id="高性能mysql第14章-笔记-应用层优化"><a href="#高性能mysql第14章-笔记-应用层优化" class="headerlink" title="高性能mysql第14章-笔记-应用层优化"></a>高性能mysql第14章-笔记-应用层优化</h1><h2 id="思考的角度"><a href="#思考的角度" class="headerlink" title="思考的角度"></a>思考的角度</h2><ol>
-<li>应用和数据库正确分工；</li>
-<li>ORM的循环SQL和嵌套查询的性能优劣；</li>
-<li>缓存(redis)；</li>
-<li>连接池。</li>
-</ol>
-<h2 id="web服务器问题"><a href="#web服务器问题" class="headerlink" title="web服务器问题"></a>web服务器问题</h2><p>静态资源： 用nginx代替apache<br>移除无用的apache模块</p>
-<h2 id="缓存问题"><a href="#缓存问题" class="headerlink" title="缓存问题"></a>缓存问题</h2><p>不同等级层次的缓存:</p>
-<ol>
-<li>进程缓存;</li>
-<li>本地共享内存缓存;</li>
-<li>分布式内存缓存;(memcached)</li>
-<li>磁盘缓存。</li>
-</ol>
-<h3 id="缓存失效策略"><a href="#缓存失效策略" class="headerlink" title="缓存失效策略"></a>缓存失效策略</h3><ol>
-<li>TTL;</li>
-<li>显式失效:更新数据时候更新缓存或者标记缓存为脏数据;</li>
-<li>读时失效:读的时候再判断缓存是否已经过期； （加快写，减慢了读）</li>
-</ol>
-<h1 id="高性能mysql第15章-笔记-备份与恢复"><a href="#高性能mysql第15章-笔记-备份与恢复" class="headerlink" title="高性能mysql第15章-笔记-备份与恢复"></a>高性能mysql第15章-笔记-备份与恢复</h1><p>备份建议：</p>
-<ol>
-<li>使用Percona XtraBackup、Mysql Enterprise Backup；</li>
-<li>生产服务器和备份服务器分开，以免同时挂掉。</li>
-<li>定期进行恢复测试。</li>
-</ol>
-<h2 id="逻辑备份"><a href="#逻辑备份" class="headerlink" title="逻辑备份"></a>逻辑备份</h2><p>(SQL,mysqldump)<br>缺点: </p>
-<ol>
-<li>恢复起来慢</li>
-</ol>
-<h2 id="物理备份"><a href="#物理备份" class="headerlink" title="物理备份"></a>物理备份</h2><p>(文件)<br>缺点：</p>
-<ol>
-<li>受版本、兼容性影响，bug概率高。</li>
-<li>文件很大。</li>
-</ol>
-<p>建议：<br>0. 全局使用<code>utf-8</code>;</p>
-<ol>
-<li>逻辑：使用<code>mysqldump</code>备份结构；</li>
-<li>物理: 使用<code>select into outfile</code>导出数据为分隔符文件。</li>
-<li>恢复结构：执行1中的sql;</li>
-<li>恢复数据：<code>load data infile</code>。<br>其中2，4两步对字符集有要求。（不能单独设置某列字符集）</li>
-</ol>
-<h2 id="增量备份和全量备份"><a href="#增量备份和全量备份" class="headerlink" title="增量备份和全量备份"></a>增量备份和全量备份</h2><p>尽量做全备，增量bug多；</p>
-<h2 id="数据一致性"><a href="#数据一致性" class="headerlink" title="数据一致性"></a>数据一致性</h2><p><code>mysqldump --single-transaction</code><br>可能会导致非常长的事务，从而失败。</p>
-<h2 id="binlog清理"><a href="#binlog清理" class="headerlink" title="binlog清理"></a>binlog清理</h2><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">purge</span> <span class="keyword">master</span> <span class="keyword">logs</span> <span class="keyword">before</span> <span class="keyword">current_date</span> - <span class="built_in">Interval</span> N <span class="keyword">day</span></span><br></pre></td></tr></table></figure>
-<p>或者设置<code>expire_logs_days</code>。</p>
-<h2 id="innodb损坏恢复"><a href="#innodb损坏恢复" class="headerlink" title="innodb损坏恢复"></a>innodb损坏恢复</h2><h3 id="1-二级索引损坏"><a href="#1-二级索引损坏" class="headerlink" title="1. 二级索引损坏"></a>1. 二级索引损坏</h3><p>3种办法：</p>
-<ol>
-<li><code>optimize table</code>语句;</li>
-<li>删除重建表;</li>
-<li>表引擎改为<code>myisam</code>，再改回来。</li>
-</ol>
-<h3 id="2-聚簇索引损坏"><a href="#2-聚簇索引损坏" class="headerlink" title="2. 聚簇索引损坏"></a>2. 聚簇索引损坏</h3><p><strong>优先使用备份还原</strong><br>否则：<br>(大概率只能修复未受损坏影响的行。)<br>通过<code>innodb_force_recover</code>选项导出表，如果导出过程崩溃，需要跳过受损行。</p>
-<h3 id="3-损坏系统结构"><a href="#3-损坏系统结构" class="headerlink" title="3. 损坏系统结构"></a>3. 损坏系统结构</h3><p>损坏： innodb事务日志(redo log),表空间撤销日志(undo log),数据字典。</p>
-<p><strong>优先使用备份还原</strong><br>否则：<br>可能需要做整个数据库的导出和还原。<br>innodb内部绝大部分工作可能受影响。</p>
-<p>上述2，3两种损坏最好从备份还原数据。</p>
-<h1 id="高性能mysql第16章-笔记-用户工具"><a href="#高性能mysql第16章-笔记-用户工具" class="headerlink" title="高性能mysql第16章-笔记-用户工具"></a>高性能mysql第16章-笔记-用户工具</h1><p>这章主要介绍一些工具：</p>
-<h3 id="UI工具"><a href="#UI工具" class="headerlink" title="UI工具:"></a>UI工具:</h3><ol>
-<li>MysqlWorkbench;</li>
-<li>SQLyog: 同workbench,windows专用；</li>
-</ol>
-<h3 id="命令行工具"><a href="#命令行工具" class="headerlink" title="命令行工具:"></a>命令行工具:</h3><ol>
-<li>Percona Toolkit: 管理员必备；</li>
-<li>The openark kit：一些管理任务的python脚本。</li>
-</ol>
-<h3 id="监控工具"><a href="#监控工具" class="headerlink" title="监控工具"></a>监控工具</h3><ol>
-<li>Nagios;<br>2-6等其余很多略过。</li>
-</ol>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/02/13/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC12-16%E7%AB%A0-%E7%AC%94%E8%AE%B0/" data-id="ck96cxppe00gzmaam67zeat24" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
-    <a class="extend prev" rel="prev" href="/page/5/">&amp;laquo; 上一页</a><a class="page-number" href="/">1</a><span class="space">&hellip;</span><a class="page-number" href="/page/4/">4</a><a class="page-number" href="/page/5/">5</a><span class="page-number current">6</span><a class="page-number" href="/page/7/">7</a><a class="page-number" href="/page/8/">8</a><span class="space">&hellip;</span><a class="page-number" href="/page/21/">21</a><a class="extend next" rel="next" href="/page/7/">下一页&amp;raquo;</a>
+    <a class="extend prev" rel="prev" href="/page/5/">&amp;laquo; 上一页</a><a class="page-number" href="/">1</a><span class="space">&hellip;</span><a class="page-number" href="/page/4/">4</a><a class="page-number" href="/page/5/">5</a><span class="page-number current">6</span><a class="page-number" href="/page/7/">7</a><a class="page-number" href="/page/8/">8</a><span class="space">&hellip;</span><a class="page-number" href="/page/22/">22</a><a class="extend next" rel="next" href="/page/7/">下一页&amp;raquo;</a>
   </nav>
 </section>
            
@@ -1157,6 +1133,10 @@
       <ul>
         
           <li>
+            <a href="/2021/07/26/2021-07/metaspace%E7%AC%94%E8%AE%B0/">metaspace笔记</a>
+          </li>
+        
+          <li>
             <a href="/2021/06/01/2021-06/%E7%BD%91%E7%BB%9C%E5%AE%89%E5%85%A8%E7%AC%94%E8%AE%B0-1/">网络安全笔记-1</a>
           </li>
         
@@ -1170,10 +1150,6 @@
         
           <li>
             <a href="/2020/12/20/2020-12/%E7%BA%BF%E4%B8%8A%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-%E6%9F%A5%E7%9C%8B%E6%96%B9%E6%B3%95%E7%BA%A7%E8%80%97%E6%97%B6/">线上性能debug-查看方法级耗时</a>
-          </li>
-        
-          <li>
-            <a href="/2020/12/19/2020-12/%E5%8D%87%E7%BA%A7HTTP2%E7%AC%94%E8%AE%B0/">升级HTTP2笔记</a>
           </li>
         
       </ul>

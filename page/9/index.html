@@ -72,6 +72,72 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-11/jinfo-运行时查看JVM配置及更改" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/11/25/2018-11/jinfo-%E8%BF%90%E8%A1%8C%E6%97%B6%E6%9F%A5%E7%9C%8BJVM%E9%85%8D%E7%BD%AE%E5%8F%8A%E6%9B%B4%E6%94%B9/" class="article-date">
+  <time datetime="2018-11-25T12:12:57.000Z" itemprop="datePublished">2018-11-25</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/jvm/">jvm</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/11/25/2018-11/jinfo-%E8%BF%90%E8%A1%8C%E6%97%B6%E6%9F%A5%E7%9C%8BJVM%E9%85%8D%E7%BD%AE%E5%8F%8A%E6%9B%B4%E6%94%B9/">jinfo-运行时查看JVM配置及更改</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="查看运行的java程序的启动命令"><a href="#查看运行的java程序的启动命令" class="headerlink" title="查看运行的java程序的启动命令"></a>查看运行的java程序的启动命令</h1><p><code>jps -lvm</code></p>
+<h1 id="运行时查看JVM配置"><a href="#运行时查看JVM配置" class="headerlink" title="运行时查看JVM配置"></a>运行时查看JVM配置</h1><p>语法如下:<br><code>jinfo -flag &lt;name&gt; PID</code><br>如:<br><code>jinfo -flag CMSAbortablePrecleanWaitMillis 11715</code></p>
+<p>查看全部非默认配置:<br><code>jinfo -flags PID</code><br>或者:<br><code>jcmd PID VM.flags</code></p>
+<h1 id="运行时修改JVM配置"><a href="#运行时修改JVM配置" class="headerlink" title="运行时修改JVM配置"></a>运行时修改JVM配置</h1><p>首先并不是所有JVM配置都能在运行时动态修改的,需要查看哪些配置是可以运行时动态修改的:</p>
+<h2 id="列出可运行时调整的JVM配置-linux"><a href="#列出可运行时调整的JVM配置-linux" class="headerlink" title="列出可运行时调整的JVM配置(linux)"></a>列出可运行时调整的JVM配置(linux)</h2><p><code>java -XX:+PrintFlagsInitial | grep manageable</code><br>结果如下:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line">intx CMSAbortablePrecleanWaitMillis &#x3D; 100 &#123;manageable&#125;</span><br><span class="line">intx CMSTriggerInterval  &#x3D; -1 &#123;manageable&#125;</span><br><span class="line">intx CMSWaitDuration &#x3D; 2000 &#123;manageable&#125;</span><br><span class="line">bool HeapDumpAfterFullGC &#x3D; false &#123;manageable&#125;</span><br><span class="line">bool HeapDumpBeforeFullGC   &#x3D; false &#123;manageable&#125;</span><br><span class="line">bool HeapDumpOnOutOfMemoryError  &#x3D; false &#123;manageable&#125;</span><br><span class="line">ccstr HeapDumpPath &#x3D; &#123;manageable&#125;</span><br><span class="line">uintx MaxHeapFreeRatio &#x3D; 70 &#123;manageable&#125;</span><br><span class="line">uintx MinHeapFreeRatio &#x3D; 40 &#123;manageable&#125;</span><br><span class="line">bool PrintClassHistogram &#x3D; false &#123;manageable&#125;</span><br><span class="line">bool PrintClassHistogramAfterFullGC &#x3D; false &#123;manageable&#125;</span><br><span class="line">bool PrintClassHistogramBeforeFullGC  &#x3D; false &#123;manageable&#125;</span><br><span class="line">bool PrintConcurrentLocks   &#x3D; false &#123;manageable&#125;</span><br><span class="line">bool PrintGC  &#x3D; false &#123;manageable&#125;</span><br><span class="line">bool PrintGCDateStamps   &#x3D; false &#123;manageable&#125;</span><br><span class="line">bool PrintGCDetails   &#x3D; false &#123;manageable&#125;</span><br><span class="line">bool PrintGCID &#x3D; false &#123;manageable&#125;</span><br><span class="line">bool PrintGCTimeStamps   &#x3D; false &#123;manageable&#125;</span><br></pre></td></tr></table></figure>
+
+<p>可以看到参数的类型主要分为<code>bool</code>和非<code>bool</code>(<code>intx</code>,<code>uintx</code>,<code>ccstr</code>)。</p>
+<h2 id="运行时修改bool型配置"><a href="#运行时修改bool型配置" class="headerlink" title="运行时修改bool型配置"></a>运行时修改bool型配置</h2><p>用加减(+/-)表示开关:<br><code>jinfo -flag [+|-]&lt;name&gt; PID</code></p>
+<h2 id="运行时修改intx-ccstr-uintx型配置"><a href="#运行时修改intx-ccstr-uintx型配置" class="headerlink" title="运行时修改intx/ccstr/uintx型配置"></a>运行时修改intx/ccstr/uintx型配置</h2><p><code>jinfo -flag &lt;name&gt;=&lt;value&gt; PID</code></p>
+<h1 id="示例"><a href="#示例" class="headerlink" title="示例"></a>示例</h1><p>比如我们有一个java进程11715,我们突然想查看它的gc情况,但是之前又没有打开gc日志,只重定向了控制台日志,这个时候可以动态打开:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">jinfo -flag +PrintGC 11715</span><br><span class="line">jinfo -flag +PrintGCDateStamps 11715</span><br><span class="line">jinfo -flag +PrintGCDetails 11715</span><br></pre></td></tr></table></figure>
+<p>拿到日志:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">2018-11-25T20:21:41.772+0800: [GC (Allocation Failure) [PSYoungGen: 45952K-&gt;1856K(48128K)] 248269K-&gt;204197K(309248K), 0.0423007 secs] [Times: user&#x3D;0.88 sys&#x3D;0.02, real&#x3D;0.06 secs]</span><br></pre></td></tr></table></figure>
+
+<p>调试完后再关掉即可:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">jinfo -flag -PrintGC 11715</span><br><span class="line">jinfo -flag -PrintGCDateStamps 11715</span><br><span class="line">jinfo -flag -PrintGCDetails 11715</span><br></pre></td></tr></table></figure>
+
+
+
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/11/25/2018-11/jinfo-%E8%BF%90%E8%A1%8C%E6%97%B6%E6%9F%A5%E7%9C%8BJVM%E9%85%8D%E7%BD%AE%E5%8F%8A%E6%9B%B4%E6%94%B9/" data-id="ck96cxpor00eemaamf6do3biz" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/jvm/" rel="tag">jvm</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-11/gc日志的含义" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/11/24/2018-11/gc%E6%97%A5%E5%BF%97%E7%9A%84%E5%90%AB%E4%B9%89/" class="article-date">
@@ -1075,131 +1141,10 @@ r3是关键的加密保护的随机数，r1,r2,r3一起生成key。<br>r1,r2的�
 
 
   
-    <article id="post-2018-09/Netty-in-action第九章-单元测试-笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/09/22/2018-09/Netty-in-action%E7%AC%AC%E4%B9%9D%E7%AB%A0-%E5%8D%95%E5%85%83%E6%B5%8B%E8%AF%95-%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2018-09-22T13:26:52.000Z" itemprop="datePublished">2018-09-22</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/Netty/">Netty</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/09/22/2018-09/Netty-in-action%E7%AC%AC%E4%B9%9D%E7%AB%A0-%E5%8D%95%E5%85%83%E6%B5%8B%E8%AF%95-%E7%AC%94%E8%AE%B0/">Netty in action第九章-单元测试-笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="EmbeddedChannel-测试Handler"><a href="#EmbeddedChannel-测试Handler" class="headerlink" title="EmbeddedChannel(测试Handler)"></a>EmbeddedChannel(测试Handler)</h1><p>实际应用中,我们大概率需要编写各种<code>inboundHandler</code>,<code>outboundHandler</code>，这个时候可以使用<code>EmbeddedChannel</code>来测试处理逻辑。<br>(测<code>Handler</code>用的)</p>
-<img src="/images/2018-09/9.1.png" class="" width="400" height="600" title="单元测试">
-<table>
-<thead>
-<tr>
-<th align="center">api</th>
-<th align="left">作用</th>
-</tr>
-</thead>
-<tbody><tr>
-<td align="center">writeInbound</td>
-<td align="left">往测试channel里写数据.测试入站事件。如果这条数据能够通过所有<code>InboundHandler</code>，则返回<code>true</code></td>
-</tr>
-<tr>
-<td align="center">writeOutbound</td>
-<td align="left">往测试channel里写数据.测试出站事件。如果这条数据能够通过所有<code>OutboundHandler</code>，则返回<code>true</code></td>
-</tr>
-<tr>
-<td align="center">readInbound</td>
-<td align="left">读入站消息，无则返回<code>null</code></td>
-</tr>
-<tr>
-<td align="center">readOutbound</td>
-<td align="left">读出站消息，无则返回<code>null</code></td>
-</tr>
-<tr>
-<td align="center">finish</td>
-<td align="left">关闭写。还可以读。</td>
-</tr>
-</tbody></table>
-<p>示例代码:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Test</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">testFramesDecoded</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="comment">//创建一个 ByteBuf，并存储 9 字节</span></span><br><span class="line">    ByteBuf buf = Unpooled.buffer();</span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; <span class="number">9</span>; i++) &#123;</span><br><span class="line">        buf.writeByte(i);</span><br><span class="line">    &#125;</span><br><span class="line">    ByteBuf input = buf.duplicate(); <span class="comment">// 1</span></span><br><span class="line">    EmbeddedChannel channel = <span class="keyword">new</span> EmbeddedChannel(</span><br><span class="line">        <span class="keyword">new</span> FixedLengthFrameDecoder(<span class="number">3</span>));</span><br><span class="line">     </span><br><span class="line">    assertTrue(channel.writeInbound(input.retain())); <span class="comment">// 2. 数据量够,能够传到末端</span></span><br><span class="line">    assertTrue(channel.finish()); <span class="comment">// 3. 还有可读数据,返回true</span></span><br><span class="line">   </span><br><span class="line">    <span class="comment">// 读3帧(3个入站消息):</span></span><br><span class="line">    ByteBuf read = (ByteBuf) channel.readInbound();</span><br><span class="line">    assertEquals(buf.readSlice(<span class="number">3</span>), read); <span class="comment">// 4</span></span><br><span class="line">    read.release(); <span class="comment">// 5</span></span><br><span class="line"></span><br><span class="line">    read = (ByteBuf) channel.readInbound();</span><br><span class="line">    assertEquals(buf.readSlice(<span class="number">3</span>), read);</span><br><span class="line">    read.release();</span><br><span class="line"></span><br><span class="line">    read = (ByteBuf) channel.readInbound();</span><br><span class="line">    assertEquals(buf.readSlice(<span class="number">3</span>), read);</span><br><span class="line">    read.release();</span><br><span class="line"></span><br><span class="line">    assertNull(channel.readInbound());</span><br><span class="line">    buf.release();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>可以结合<code>JUnit</code>编写单元测试。<br>上述代码中标了几个要注意的地方:</p>
-<ul>
-<li><p>1.duplicate和copy:</p>
-<blockquote>
-<p>duplicate: 浅拷贝buf,生成input。数据是共享的，writerIndex和readerIndex是隔离的。<br>copy: 深拷贝，数据和index都是隔离的。</p>
-</blockquote>
-</li>
-<li><p>2.retain和release:</p>
-<blockquote>
-<p>retain: 引用计数器+1;<br>release: 引用计数器-1。<br>因为进行了浅拷贝，把引用传递给方法之前必须调一次<code>retain</code>。<br>(如果只是和父ByteBuf同生命周期范围,不传递,可以不调。大部分时候还是调一下为好。)<br>最后使用结束记得要release。</p>
-</blockquote>
-</li>
-<li><p>3.channel.finish():</p>
-<blockquote>
-<p>channel.finish():<br>标记这个channel已经不能再写入数据了。(但是可以读)</p>
-</blockquote>
-</li>
-<li><p>4.buf.readSlice(3);</p>
-<blockquote>
-<p>返回值类似于buf.slice(3), 但是有一个read前缀,说明这个方法调用结束后会增加readerIndex。(消费行为)<br>作用是读出3个字节来。</p>
-</blockquote>
-</li>
-<li><p>5.release: </p>
-<blockquote>
-<p>使用结束记得release。</p>
-</blockquote>
-</li>
-</ul>
-<p>上述代码是测试入站事件,所以样例用的是<code>inbound</code>和<code>decoder</code>；<br>如果要测试出站事件,只要类似改成<code>outbound</code>和<code>encoder</code>即可。</p>
-<h2 id="异常测试"><a href="#异常测试" class="headerlink" title="异常测试"></a>异常测试</h2><p>除了出站入站事件,还可以测试异常捕捉(<code>exceptionCaught</code>)。</p>
-<ul>
-<li>如果写了<code>exceptionCaught</code>，期望的结果是测试中不能捕捉到异常;</li>
-<li>反之如果没写,期望的结果是测试中能捕捉到异常。</li>
-</ul>
-<p>前者:期望不能捕捉到(被<code>exceptionCaught</code>处理了)</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">try</span> &#123;</span><br><span class="line">        channel.writeInbound(input.readBytes(<span class="number">4</span>));</span><br><span class="line">    &#125; <span class="keyword">catch</span> (TooLongFrameException e) &#123;</span><br><span class="line">    Assert.fail();<span class="comment">// 期望不能抵达这里</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-<p>后者:期望能捕捉到:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">try</span> &#123;</span><br><span class="line">            channel.writeInbound(input.readBytes(<span class="number">4</span>));</span><br><span class="line">            Assert.fail();<span class="comment">// 期望不能抵达这里。</span></span><br><span class="line">        &#125; <span class="keyword">catch</span> (TooLongFrameException e) &#123;</span><br><span class="line">        &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>主要还是逻辑上的控制流测试。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/09/22/2018-09/Netty-in-action%E7%AC%AC%E4%B9%9D%E7%AB%A0-%E5%8D%95%E5%85%83%E6%B5%8B%E8%AF%95-%E7%AC%94%E8%AE%B0/" data-id="ck96cxpoh00d8maam9cav1fxs" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Netty/" rel="tag">Netty</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
-    <a class="extend prev" rel="prev" href="/page/8/">&amp;laquo; 上一页</a><a class="page-number" href="/">1</a><span class="space">&hellip;</span><a class="page-number" href="/page/7/">7</a><a class="page-number" href="/page/8/">8</a><span class="page-number current">9</span><a class="page-number" href="/page/10/">10</a><a class="page-number" href="/page/11/">11</a><span class="space">&hellip;</span><a class="page-number" href="/page/21/">21</a><a class="extend next" rel="next" href="/page/10/">下一页&amp;raquo;</a>
+    <a class="extend prev" rel="prev" href="/page/8/">&amp;laquo; 上一页</a><a class="page-number" href="/">1</a><span class="space">&hellip;</span><a class="page-number" href="/page/7/">7</a><a class="page-number" href="/page/8/">8</a><span class="page-number current">9</span><a class="page-number" href="/page/10/">10</a><a class="page-number" href="/page/11/">11</a><span class="space">&hellip;</span><a class="page-number" href="/page/22/">22</a><a class="extend next" rel="next" href="/page/10/">下一页&amp;raquo;</a>
   </nav>
 </section>
            
@@ -1222,6 +1167,10 @@ r3是关键的加密保护的随机数，r1,r2,r3一起生成key。<br>r1,r2的�
       <ul>
         
           <li>
+            <a href="/2021/07/26/2021-07/metaspace%E7%AC%94%E8%AE%B0/">metaspace笔记</a>
+          </li>
+        
+          <li>
             <a href="/2021/06/01/2021-06/%E7%BD%91%E7%BB%9C%E5%AE%89%E5%85%A8%E7%AC%94%E8%AE%B0-1/">网络安全笔记-1</a>
           </li>
         
@@ -1235,10 +1184,6 @@ r3是关键的加密保护的随机数，r1,r2,r3一起生成key。<br>r1,r2的�
         
           <li>
             <a href="/2020/12/20/2020-12/%E7%BA%BF%E4%B8%8A%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-%E6%9F%A5%E7%9C%8B%E6%96%B9%E6%B3%95%E7%BA%A7%E8%80%97%E6%97%B6/">线上性能debug-查看方法级耗时</a>
-          </li>
-        
-          <li>
-            <a href="/2020/12/19/2020-12/%E5%8D%87%E7%BA%A7HTTP2%E7%AC%94%E8%AE%B0/">升级HTTP2笔记</a>
           </li>
         
       </ul>

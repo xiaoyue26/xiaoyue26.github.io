@@ -72,6 +72,74 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-apt-get本地源" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2016/01/03/apt-get%E6%9C%AC%E5%9C%B0%E6%BA%90/" class="article-date">
+  <time datetime="2016-01-03T02:59:01.000Z" itemprop="datePublished">2016-01-03</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E9%85%8D%E7%BD%AE/">配置</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2016/01/03/apt-get%E6%9C%AC%E5%9C%B0%E6%BA%90/">apt-get本地源</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <blockquote>
+<p>上次安装ambari，由于网速问题下载包下载了好久。如果反复这样的话太浪费时间了，又找不到能用的国内镜像源，决定自己建一个本地源。</p>
+</blockquote>
+<p>首先有一台服务器用官方的<code>ambari.list</code>源</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">sudo apt-get install ambari-server</span><br><span class="line">sudo apt-get install ambari-agent</span><br></pre></td></tr></table></figure>
+<p>下载好了相关的<code>deb</code>包。<br>接下来要做的工作就是想要复用这些文件。</p>
+<p>1.<code>apt-get</code>安装的软件都保存在<code>/var/cache/apt/archives/</code>目录下，所以先把它们拷贝到别的目录下：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">sudo mkdir ~/data/soft -p </span><br><span class="line">sudo cp -p /var/cache/apt/archives/*.deb  ~/data/soft/</span><br><span class="line">cd ~/data/soft/</span><br><span class="line"><span class="meta">#</span><span class="bash">修改一下拥有者和组，方便之后缩小权限:</span></span><br><span class="line">chown -R am-server ~/data/</span><br><span class="line">chgrp -R am-server ~/data/</span><br></pre></td></tr></table></figure>
+<p>2.安装一下依赖扫描工具：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo apt-get install  dpkg-dev -y</span><br></pre></td></tr></table></figure>
+<p>3.生成<code>Packages.gz</code></p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">dpkg-scanpackages soft/ |gzip &gt; soft/Packages.gz</span><br></pre></td></tr></table></figure>
+<p>4.nginx对于静态资源并发比较好：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 安装nginx:</span></span><br><span class="line">sudo apt-get install nginx</span><br><span class="line"><span class="meta">#</span><span class="bash"> 配置一下nginx的启动用户：</span></span><br><span class="line">vi /etc/nginx/nginx.conf</span><br><span class="line"><span class="meta">#</span><span class="bash"> 把user从www-data改为自己的用户am-server</span></span><br><span class="line">user am-server;</span><br><span class="line">:wq </span><br><span class="line">vi /etc/nginx/sites-available/default</span><br><span class="line"><span class="meta">#</span><span class="bash"> 更改根目录和location:</span></span><br><span class="line">server &#123;</span><br><span class="line">	listen   80; ## listen for ipv4; this line is default and implied</span><br><span class="line"><span class="meta">	#</span><span class="bash">listen   [::]:80 default ipv6only=on; <span class="comment">## listen for ipv6</span></span></span><br><span class="line"></span><br><span class="line">	root /home/am-server/data;</span><br><span class="line">	index index.html index.htm;</span><br><span class="line"></span><br><span class="line"><span class="meta">	#</span><span class="bash"> Make site accessible from http://localhost/</span></span><br><span class="line">	server_name localhost;</span><br><span class="line"></span><br><span class="line">	location / &#123;</span><br><span class="line"><span class="meta">		#</span><span class="bash"> First attempt to serve request as file, <span class="keyword">then</span></span></span><br><span class="line"><span class="meta">		#</span><span class="bash"> as directory, <span class="keyword">then</span> fall back to index.html</span></span><br><span class="line">		try_files $uri $uri/ /index.html;</span><br><span class="line">		</span><br><span class="line"><span class="meta">		#</span><span class="bash"> Uncomment to <span class="built_in">enable</span> naxsi on this location</span></span><br><span class="line"><span class="meta">		#</span><span class="bash"> include /etc/nginx/naxsi.rules</span></span><br><span class="line">	&#125;</span><br><span class="line">	location /soft&#123;</span><br><span class="line">		autoindex on;</span><br><span class="line">		allow all;</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br><span class="line">这里我顺手把index文件也拷进了data/</span><br><span class="line">cp /usr/share/nginx/www/index.html /data</span><br><span class="line"><span class="meta">#</span><span class="bash">保存之后重启nginx即可：</span></span><br><span class="line">service nginx restart</span><br></pre></td></tr></table></figure>
+<p>在浏览器上检查是否可以访问：<br><a href="http://10.2.14.120/" target="_blank" rel="noopener">http://10.2.14.120/</a><br><a href="http://10.2.14.120/soft" target="_blank" rel="noopener">http://10.2.14.120/soft</a></p>
+<p>如果出现问题的话，可以通过检查两个log文件寻找原因：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 访问日志：</span></span><br><span class="line">cat /var/log/nginx/access.log;</span><br><span class="line"><span class="meta">#</span><span class="bash"> 错误日志：</span></span><br><span class="line">cat /var/log/nginx/error.log;</span><br></pre></td></tr></table></figure>
+<p>有可能是权限等问题。</p>
+<p>5.配置后本地源的服务器后，可以在其他机器上测试一下apt-get能否正常识别：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">sudo vi &#x2F;etc&#x2F;apt&#x2F;source.list.d</span><br><span class="line">#添加以下内容：</span><br><span class="line">deb http:&#x2F;&#x2F;10.2.14.120 soft&#x2F;</span><br><span class="line"># 保存退出后执行</span><br><span class="line">sudo apt-get update</span><br><span class="line">sudo apt-get install ambari-server</span><br></pre></td></tr></table></figure>
+<p>这个时候应该可以看到飞驰的下载速度了。</p>
+<p>感动吧.XD</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2016/01/03/apt-get%E6%9C%AC%E5%9C%B0%E6%BA%90/" data-id="ck96cxpkn000nmaam94rx40fc" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E9%85%8D%E7%BD%AE/" rel="tag">配置</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-ambari安装笔记" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2016/01/03/ambari%E5%AE%89%E8%A3%85%E7%AC%94%E8%AE%B0/" class="article-date">
@@ -673,78 +741,10 @@
 
 
   
-    <article id="post-mybatis处理mysql自增主键的三种写法" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2015/10/04/mybatis%E5%A4%84%E7%90%86mysql%E8%87%AA%E5%A2%9E%E4%B8%BB%E9%94%AE%E7%9A%84%E4%B8%89%E7%A7%8D%E5%86%99%E6%B3%95/" class="article-date">
-  <time datetime="2015-10-04T00:18:16.000Z" itemprop="datePublished">2015-10-04</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/orm/">orm</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2015/10/04/mybatis%E5%A4%84%E7%90%86mysql%E8%87%AA%E5%A2%9E%E4%B8%BB%E9%94%AE%E7%9A%84%E4%B8%89%E7%A7%8D%E5%86%99%E6%B3%95/">mybatis处理mysql自增主键的三种写法</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <ol>
-<li><p>数据库的自增主键id(int(11)),查看<code>auto_increment</code>,记录的是下一次插入时的主键值。(=最大的id+1)</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SHOW</span> <span class="keyword">TABLE</span> <span class="keyword">STATUS</span>;</span><br><span class="line"><span class="comment">#或:</span></span><br><span class="line"><span class="keyword">SELECT</span> AUTO_INCREMENT <span class="keyword">FROM</span>  information_schema.tables <span class="keyword">WHERE</span> table_name=<span class="string">'t_account_0'</span></span><br></pre></td></tr></table></figure></li>
-<li><p>测试<code>select @@identity</code>命令：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">INSERT into user_info  (uname, unumber) VALUES (&#39;test&#39;,&#39;test&#39;);</span><br><span class="line">select @@identity  as &#39;curMaxId&#39;;</span><br></pre></td></tr></table></figure>
-<p>注意到第一条命令并没有插入<code>id</code>值，以便让数据库插入自增<code>id</code>值。<br>两条命令同一线程中顺序执行后，第二条命令获取到第一条命令插入的<code>id</code>值。<br>例如，若<code>select @@identity</code>结果为<code>106</code>，则<code>auto_increment</code>此时为<code>107</code>，而<code>INSERT</code>的记录<code>id</code>值为<code>106</code>.</p>
-</li>
-<li><p>第一种mybatis支持自增主键的写法，使用<code>useGeneratedKeys</code>和<code>keyProperty</code>属性设置：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">&lt;sql id&#x3D;&quot;UserInfoSet&quot;&gt;</span><br><span class="line">		&lt;set&gt;</span><br><span class="line">			&lt;if test&#x3D;&quot;id !&#x3D; null&quot;&gt;id&#x3D;#&#123;id&#125;,&lt;&#x2F;if&gt;</span><br><span class="line">			&lt;if test&#x3D;&quot;uname!&#x3D; null&quot;&gt;uname&#x3D;#&#123;uname&#125;,&lt;&#x2F;if&gt;</span><br><span class="line">			&lt;if test&#x3D;&quot;unumber !&#x3D; null&quot;&gt;unumber&#x3D;#&#123;unumber&#125;,&lt;&#x2F;if&gt;</span><br><span class="line">		&lt;&#x2F;set&gt;</span><br><span class="line">	&lt;&#x2F;sql&gt;</span><br><span class="line">&lt;insert id&#x3D;&quot;insert&quot; parameterType&#x3D;&quot;UserInfo&quot;</span><br><span class="line">		 useGeneratedKeys&#x3D;&quot;true&quot; keyProperty&#x3D;&quot;id&quot;&gt;</span><br><span class="line">		insert user_info</span><br><span class="line">		&lt;include refid&#x3D;&quot;UserInfoSet&quot; &#x2F;&gt;</span><br><span class="line">&lt;&#x2F;insert&gt;</span><br></pre></td></tr></table></figure>
-<p>如果表中主键已经设定为<code>auto_increment</code>，则插入后会自动把生成的<code>id</code>值返回给插入的对象。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">UserInfo userInfo = <span class="keyword">new</span> UserInfo();</span><br><span class="line">userInfo.setUname(<span class="string">"xiaoming"</span>); </span><br><span class="line">userInfo.setUnumber(<span class="string">"x07"</span>);</span><br><span class="line"><span class="comment">//a.插入前userinfo的id为null</span></span><br><span class="line">result = userService.insert(userInfo);		</span><br><span class="line"><span class="comment">//b.插入后userinfo的id为数据库生成的id值(例如123).</span></span><br></pre></td></tr></table></figure>
-</li>
-<li><p>第二种使用<code>selectKey</code>，限定于<code>mysql</code>数据库的写法,其他数据库如<code>oracle</code>为<code>before</code>,各有不同:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">&lt;insert id&#x3D;&quot;insert&quot; parameterType&#x3D;&quot;UserInfo&quot;&gt;</span><br><span class="line">	&lt;selectKey resultType&#x3D;&quot;java.lang.Integer&quot; keyProperty&#x3D;&quot;id&quot; order&#x3D;&quot;AFTER&quot;&gt;</span><br><span class="line">	SELECT @@IDENTITY</span><br><span class="line">    &lt;&#x2F;selectKey&gt;</span><br><span class="line">insert user_info &lt;include refid&#x3D;&quot;UserInfoSet&quot; &#x2F;&gt;</span><br><span class="line">&lt;&#x2F;insert&gt;</span><br></pre></td></tr></table></figure>
-<p>此时表现和上一种一样;<br>若把<code>SELECT @@IDENTITY</code>改为 <code>select 20 from dual</code> , 则数据库中虽依然插入了正常递增的id值(如<code>123</code>),<br>但<code>b</code>处插入后的对象中id值为<code>20</code>. 可见<code>selectKey</code>标签实际执行是在<code>insert</code>执行后，返回<code>obj</code>对象前,将其中的<code>id</code>值改为<code>20</code>.并不影响<code>insert</code>执行过程。<br>综上所示，这两种方法其实都不影响<code>insert</code>,只是执行后获取一次<code>id</code>值。<code>insert</code>过程中生成<code>id</code>值是由数据库支持的。<br>所以如果数据库中没有设定主键的自增属性，这两种都是无能为力的,此时就要更改SelectKey的用法:</p>
-</li>
-<li><p>第三种，使用<code>select max(id)+1</code>：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">&lt;insert id&#x3D;&quot;insert&quot; parameterType&#x3D;&quot;test.model.UserInfo&quot; &gt;</span><br><span class="line">	&lt;selectKey resultType&#x3D;&quot;java.lang.Integer&quot; keyProperty&#x3D;&quot;id&quot; order&#x3D;&quot;BEFORE&quot;&gt;</span><br><span class="line">	select max(id)+1 from user_info</span><br><span class="line">	&lt;&#x2F;selectKey&gt;</span><br><span class="line">	insert user_info &lt;include refid&#x3D;&quot;UserInfoSet&quot; &#x2F;&gt;</span><br><span class="line">&lt;&#x2F;insert&gt;</span><br></pre></td></tr></table></figure>
-<p>其中<code>select max(id)+1 from user_info</code>语句是选出表中最大id值+1,并赋予传入的参数<code>userInfo</code>对象,然后再执行<code>insert</code>.<br>注意到<code>order</code>此时等于<code>before</code>. 应当警惕的是多用户交替插入时,这种方法的安全性,涉及到事务比较麻烦,所以最好还是直接设计数据库时直接设定主键的递增属性。</p>
-</li>
-</ol>
-<p>其他感想:<br>    <code>mybatis</code>的<code>choose when</code>好比<code>switch case</code>;<br><code>otherwise</code>就是<code>default</code>。<code>foreach</code>就是传入一个<code>list</code>或<code>array</code>给<code>mybatis</code>，然后生成很长的<code>sql</code>。<br>    学到这里大概觉得<code>mybatis</code>生成<code>sql</code>，就跟<code>jsp</code>生成<code>html</code>一样，就是输出，就是翻译，编译原理无处不在，重复造轮子无处不在。<br>暂时不适用<code>trim</code>标签了，太geek了，而且居然只有replace功能，可读性差。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2015/10/04/mybatis%E5%A4%84%E7%90%86mysql%E8%87%AA%E5%A2%9E%E4%B8%BB%E9%94%AE%E7%9A%84%E4%B8%89%E7%A7%8D%E5%86%99%E6%B3%95/" data-id="ck96cxpln003ymaam5rr70nbn" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mybatis/" rel="tag">mybatis</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
-    <a class="extend prev" rel="prev" href="/page/18/">&amp;laquo; 上一页</a><a class="page-number" href="/">1</a><span class="space">&hellip;</span><a class="page-number" href="/page/17/">17</a><a class="page-number" href="/page/18/">18</a><span class="page-number current">19</span><a class="page-number" href="/page/20/">20</a><a class="page-number" href="/page/21/">21</a><a class="extend next" rel="next" href="/page/20/">下一页&amp;raquo;</a>
+    <a class="extend prev" rel="prev" href="/page/18/">&amp;laquo; 上一页</a><a class="page-number" href="/">1</a><span class="space">&hellip;</span><a class="page-number" href="/page/17/">17</a><a class="page-number" href="/page/18/">18</a><span class="page-number current">19</span><a class="page-number" href="/page/20/">20</a><a class="page-number" href="/page/21/">21</a><a class="page-number" href="/page/22/">22</a><a class="extend next" rel="next" href="/page/20/">下一页&amp;raquo;</a>
   </nav>
 </section>
            
@@ -767,6 +767,10 @@
       <ul>
         
           <li>
+            <a href="/2021/07/26/2021-07/metaspace%E7%AC%94%E8%AE%B0/">metaspace笔记</a>
+          </li>
+        
+          <li>
             <a href="/2021/06/01/2021-06/%E7%BD%91%E7%BB%9C%E5%AE%89%E5%85%A8%E7%AC%94%E8%AE%B0-1/">网络安全笔记-1</a>
           </li>
         
@@ -780,10 +784,6 @@
         
           <li>
             <a href="/2020/12/20/2020-12/%E7%BA%BF%E4%B8%8A%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-%E6%9F%A5%E7%9C%8B%E6%96%B9%E6%B3%95%E7%BA%A7%E8%80%97%E6%97%B6/">线上性能debug-查看方法级耗时</a>
-          </li>
-        
-          <li>
-            <a href="/2020/12/19/2020-12/%E5%8D%87%E7%BA%A7HTTP2%E7%AC%94%E8%AE%B0/">升级HTTP2笔记</a>
           </li>
         
       </ul>

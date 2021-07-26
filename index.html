@@ -72,6 +72,77 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2021-07/metaspace笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2021/07/26/2021-07/metaspace%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2021-07-26T03:45:43.000Z" itemprop="datePublished">2021-07-26</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/jvm/">jvm</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2021/07/26/2021-07/metaspace%E7%AC%94%E8%AE%B0/">metaspace笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="metaspace内容"><a href="#metaspace内容" class="headerlink" title="metaspace内容"></a>metaspace内容</h1><p>Klass Metaspace+NoKlass Metaspace: </p>
+<img src="/images/2021-07/metaspace.png" class="" width="800" height="1200" title="metaspace">
+
+<h1 id="Klass-Metaspace"><a href="#Klass-Metaspace" class="headerlink" title="Klass Metaspace"></a>Klass Metaspace</h1><blockquote>
+<p>如果关闭压缩指针，或者堆大于32G，这块儿会存到NoKlass Metaspace里。</p>
+</blockquote>
+<p>存class元数据，JVM对class的表示。<br>vtable: 类中的方法（我理解类似虚函数指针，指到NoKlass区域）<br>itable: 类实现的接口<br>oop map: 类引用的对象地址</p>
+<h1 id="NoKlass-Metaspace"><a href="#NoKlass-Metaspace" class="headerlink" title="NoKlass Metaspace"></a>NoKlass Metaspace</h1><p>方法相关：</p>
+<blockquote>
+<p>方法的字节码<br>参数信息<br>局部变量表<br>异常表</p>
+</blockquote>
+<p>常量池<br>注解<br>方法计数器（JIT）</p>
+<h1 id="相关参数"><a href="#相关参数" class="headerlink" title="相关参数"></a>相关参数</h1><p><code>-Xnoclassgc</code>: 让 JVM 在垃圾收集的时候不去卸载类.<br>尽量别开启这个选项。</p>
+<p><code>–XX:+CMSClassUnloadingEnabled</code>: 如果使用CMS，需要开启这个选项。</p>
+<p><code>CompressedClassSpaceSize</code>: Klass空间的大小。默认1G,可能要改大。<br>比如可以CompressedClassSpaceSize设置2G, MaxMetaspaceSize设置3G.(看klass和noklass的比例)</p>
+<h1 id="jstat"><a href="#jstat" class="headerlink" title="jstat"></a>jstat</h1><p>主要看MC，MU，CCSC，CCSU：<br>MC: Klass+NoKlass Metaspace已committed的内存大小/KB<br>MU: Klass+NoKlass Metaspace已使用的内存大小<br>CCSC: Klass Metaspace已commit的内存大小/KB<br>CCSU: Klass Metaspace已使用的内存大小/KB</p>
+<p>其他:<br>M: Klass+NoKlass总共使用率<br>CCS: CCSU/CCSC<br>MCMN和CCSMN: 0<br>MCMX: Klass+NoKlass Metaspace两者总共的reserved的内存大小<br>CCSMX: Klass Metaspace reserved的内存大小</p>
+<h1 id="生命周期"><a href="#生命周期" class="headerlink" title="生命周期"></a>生命周期</h1><p>每个class loader都会有自己的metaspace，各自分配（metachunk,metablock），但是总和是公用的。</p>
+<p>普通类metaspace: 基本不太可能卸载，因为需要等class loader卸载；<br>匿名类metaspace: 跟着匿名类的生命周期。lambda和method handler可以提前卸载，不等待class loader。</p>
+<p>卸载以后内存是否会归还：</p>
+<ol>
+<li>Klass空间必不归还；</li>
+<li>noKlass空间: 如果Node分配给同一个class loader，比较容易归还；<br>如果分配给了多个class loader，不释放空间。<br>一个Node多个chunk；<br>单个chunk整体属于一个class loader；<br>一个chunk多个block，每个block是最小分配单元（分配给调用者）。</li>
+</ol>
+<h1 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h1><p><a href="https://javadoop.com/post/metaspace" target="_blank" rel="noopener">https://javadoop.com/post/metaspace</a><br><a href="https://segmentfault.com/a/1190000023235677" target="_blank" rel="noopener">https://segmentfault.com/a/1190000023235677</a><br><a href="https://www.infoq.cn/article/troubleshooting-java-memory-issues" target="_blank" rel="noopener">https://www.infoq.cn/article/troubleshooting-java-memory-issues</a></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2021/07/26/2021-07/metaspace%E7%AC%94%E8%AE%B0/" data-id="ckrk3gxn90000jiam5pquf1al" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/jvm/" rel="tag">jvm</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2021-06/网络安全笔记-1" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2021/06/01/2021-06/%E7%BD%91%E7%BB%9C%E5%AE%89%E5%85%A8%E7%AC%94%E8%AE%B0-1/" class="article-date">
@@ -953,247 +1024,10 @@
 
 
   
-    <article id="post-2020-05/BeanCopier测评报告" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2020/05/05/2020-05/BeanCopier%E6%B5%8B%E8%AF%84%E6%8A%A5%E5%91%8A/" class="article-date">
-  <time datetime="2020-05-05T09:38:53.000Z" itemprop="datePublished">2020-05-05</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/spring/">spring</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2020/05/05/2020-05/BeanCopier%E6%B5%8B%E8%AF%84%E6%8A%A5%E5%91%8A/">BeanCopier测评报告</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="What-BeanCopier是什么"><a href="#What-BeanCopier是什么" class="headerlink" title="What: BeanCopier是什么?"></a>What: BeanCopier是什么?</h1><p>本文讨论的<code>BeanCopier</code>具体指的是:<br><code>org.springframework.cglib.beans.BeanCopier</code><br>, 此外用于对比的<code>BeanUtils</code>指的是:<br><code>org.springframework.beans.BeanUtils</code></p>
-<p>其中spring使用<code>5.1.1.release</code>,所以cglib版本为<code>3.2.10</code>.</p>
-<p>BeanCopier和BeanUtils都能用于对象之间浅拷贝成员字段。</p>
-<h1 id="Why-背景"><a href="#Why-背景" class="headerlink" title="Why: 背景"></a>Why: 背景</h1><p>这里引用一下网上的说法:</p>
-<blockquote>
-<p>在做业务的时候，我们有时为了隔离变化，会将DAO查询出来的Entity，和对外提供的DTO隔离开来。大概90%的时候，它们的结构都是类似的，但是我们很不喜欢写很多冗长的b.setF1(a.getF1())这样的代码，于是我们需要BeanCopier来帮助我们。选择Cglib的BeanCopier进行Bean拷贝的理由是，其性能要比Spring的BeanUtils，Apache的BeanUtils和PropertyUtils要好很多，尤其是数据量比较大的情况下。</p>
-</blockquote>
-<h1 id="性能测评"><a href="#性能测评" class="headerlink" title="性能测评"></a>性能测评</h1><p>参考网上一些benchmark，如<a href="https://juejin.im/post/5dc2b293e51d456e65283e61" target="_blank" rel="noopener">https://juejin.im/post/5dc2b293e51d456e65283e61</a><br>beanCopier能比beanUtils快30～45倍。</p>
-<table>
-<thead>
-<tr>
-<th>场景</th>
-<th>耗时</th>
-<th>原理</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>直接使用get&amp;set方法</td>
-<td>22ms</td>
-<td>直接调用</td>
-</tr>
-<tr>
-<td>使用BeanCopiers（不使用Converter）</td>
-<td>22ms</td>
-<td>修改字节码</td>
-</tr>
-<tr>
-<td>使用BeanCopiers（使用Converter）</td>
-<td>249ms</td>
-<td>修改字节码</td>
-</tr>
-<tr>
-<td>使用BeanUtils</td>
-<td>12983ms</td>
-<td>反射</td>
-</tr>
-<tr>
-<td>使用PropertyUtils（不使用Converter）</td>
-<td>3922ms</td>
-<td>反射</td>
-</tr>
-</tbody></table>
-<p>因此如果我们不使用类型转换，使用BeanCopiers几乎没有性能损耗。这是因为cglib修改生成的字节码和get&amp;set几乎是一样的：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">MA</span>$$<span class="title">BeanCopierByCGLIB</span>$$<span class="title">d9c04262</span> <span class="keyword">extends</span> <span class="title">BeanCopier</span> </span>&#123;</span><br><span class="line">    <span class="keyword">public</span> MA$$BeanCopierByCGLIB$$d9c04262() &#123;</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">copy</span><span class="params">(Object var1, Object var2, Converter var3)</span> </span>&#123;</span><br><span class="line">        MA var10000 = (MA)var2;</span><br><span class="line">        MA var10001 = (MA)var1;</span><br><span class="line">        var10000.setBooleanP(((MA)var1).isBooleanP());</span><br><span class="line">        var10000.setByteP(var10001.getByteP());</span><br><span class="line">        var10000.setCharP(var10001.getCharP());</span><br><span class="line">        var10000.setDoubleP(var10001.getDoubleP());</span><br><span class="line">        var10000.setFloatP(var10001.getFloatP());</span><br><span class="line">        var10000.setId(var10001.getId());</span><br><span class="line">        var10000.setIntP(var10001.getIntP());</span><br><span class="line">        var10000.setLongP(var10001.getLongP());</span><br><span class="line">        var10000.setName(var10001.getName());</span><br><span class="line">        var10000.setShortP(var10001.getShortP());</span><br><span class="line">        var10000.setStringP(var10001.getStringP());</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h2 id="自测"><a href="#自测" class="headerlink" title="自测"></a>自测</h2><table>
-<thead>
-<tr>
-<th></th>
-<th>1kw次</th>
-<th>1亿次</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>beanUtils</td>
-<td>8秒</td>
-<td>91秒</td>
-</tr>
-<tr>
-<td>beanCopier（无converter/有缓存）</td>
-<td>0.5秒</td>
-<td>4秒</td>
-</tr>
-<tr>
-<td>beanCopier（无converter/无缓存）</td>
-<td>1.1秒</td>
-<td>10秒</td>
-</tr>
-<tr>
-<td>beanCopier（无converter/懒汉式缓存）</td>
-<td>3.3秒</td>
-<td>30秒</td>
-</tr>
-</tbody></table>
-<p>其中各个测试的相关代码:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 1. beanUtils:</span></span><br><span class="line">BeanUtils.copyProperties(bean, vo);</span><br><span class="line"> </span><br><span class="line"><span class="comment">// 2. beanCopier（无converter/有缓存）:</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> BeanCopier MODEL_2_VO = BeanCopier.create(Banner<span class="class">.<span class="keyword">class</span></span></span><br><span class="line"><span class="class">            , <span class="title">BannerVO</span>.<span class="title">class</span>, <span class="title">false</span>)</span>;</span><br><span class="line">copier.copy(bean, vo, <span class="keyword">null</span>);</span><br><span class="line"> </span><br><span class="line"><span class="comment">// 3. beanCopier（无converter/无缓存）:</span></span><br><span class="line">copier = BeanCopier.create(Banner<span class="class">.<span class="keyword">class</span>, <span class="title">BannerVO</span>.<span class="title">class</span>, <span class="title">false</span>)</span>;</span><br><span class="line">copier.copy(bean, vo, <span class="keyword">null</span>);</span><br><span class="line"> </span><br><span class="line"><span class="comment">// 4. beanCopier（无converter/懒汉式缓存）:</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> Map&lt;String, BeanCopier&gt; MAP = <span class="keyword">new</span> ConcurrentHashMap&lt;&gt;();</span><br><span class="line">copier = MAP.computeIfAbsent(key, k -&gt; BeanCopier.create(Banner<span class="class">.<span class="keyword">class</span></span></span><br><span class="line"><span class="class">                , <span class="title">BannerVO</span>.<span class="title">class</span>, <span class="title">false</span>))</span>;</span><br><span class="line">copier.copy(bean, vo, <span class="keyword">null</span>);</span><br></pre></td></tr></table></figure>
-
-<h2 id="耗时组成"><a href="#耗时组成" class="headerlink" title="耗时组成"></a>耗时组成</h2><p>BeanUtils耗时组成:(主要为反射)</p>
-<img src="/images/2020-05/beanUtils.png" class="" width="800" height="1200" title="beanUtils">
-
-<p>BeanCopier（有缓存、无convert）耗时组成:（主要为调用构造函数(xxx::new)）</p>
-<img src="/images/2020-05/beanCopier1.png" class="" width="800" height="1200" title="beanCopier1">
-
-<p>beanCopier（无converter/懒汉式缓存）: 生成key和查询缓存花费了大量的时间，因此第四种写法是得不偿失的。</p>
-<img src="/images/2020-05/beanCopier2.png" class="" width="800" height="1200" title="beanCopier2">
-
-<h3 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h3><p>BeanCopier（无convert、有缓存）: 主要耗时是业务自身的代码(创建对象)，性能最优，可以考虑;</p>
-<p>BeanCopier（无convert、无缓存）：不需要预创建，写法简洁，耗时增加不多，可以考虑。</p>
-<p>BeanUtils: 反射调用占用了60%的代码，其中还涉及到查询concurrentHashMap中的bean定义，损耗较大。</p>
-<h1 id="How-用法"><a href="#How-用法" class="headerlink" title="How: 用法"></a>How: 用法</h1><p>BeanCopier： 只拷贝名称和类型都相同的属性, 基本类型和装箱类型视为不同类型。</p>
-<p>如果不符合上述规则，可以自定义converter。（否则可以将converter字段传null）</p>
-<p>示例代码:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> BeanCopier MODEL_2_VO = BeanCopier.create(Banner<span class="class">.<span class="keyword">class</span></span></span><br><span class="line"><span class="class">            , <span class="title">BannerVO</span>.<span class="title">class</span>, <span class="title">false</span>)</span>; <span class="comment">// 可以复用一个copier，提高一倍速度</span></span><br><span class="line"> </span><br><span class="line">banner = ... ; <span class="comment">// 例如从DAO获取到</span></span><br><span class="line">BannerVO vo = <span class="keyword">new</span> BannerVO();</span><br><span class="line">MODEL_2_VO.copy(b, vo, <span class="keyword">null</span>); <span class="comment">// converter可以直接传null</span></span><br></pre></td></tr></table></figure>
-
-
-<h2 id="支持功能"><a href="#支持功能" class="headerlink" title="支持功能"></a>支持功能</h2><table>
-<thead>
-<tr>
-<th>情况</th>
-<th>Apache BeanUtils</th>
-<th>Cglib BeanCopier</th>
-<th>Spring BeanUtils</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>非public类</td>
-<td>不支持</td>
-<td>支持</td>
-<td>支持</td>
-</tr>
-<tr>
-<td>基本类型与装箱类型，int-&gt;Integer，Integer-&gt;int</td>
-<td>支持，可以copy</td>
-<td>不支持，不copy</td>
-<td>不支持，不copy</td>
-</tr>
-<tr>
-<td>int-&gt;long，long-&gt;int，int-&gt;Long，Integer-&gt;long</td>
-<td>不支持</td>
-<td>不支持</td>
-<td>不支持</td>
-</tr>
-<tr>
-<td>源对象相同属性无get方法</td>
-<td>不支持 不copy</td>
-<td>不支持 不copy</td>
-<td>不支持 不copy</td>
-</tr>
-<tr>
-<td>目标对象相同属性无get方法</td>
-<td>支持</td>
-<td>不支持</td>
-<td>支持</td>
-</tr>
-<tr>
-<td>目标对象相同属性无set方法</td>
-<td>不copy，不报错</td>
-<td>报错</td>
-<td>不copy，不报错</td>
-</tr>
-<tr>
-<td>源对象相同属性无set方法</td>
-<td>支持</td>
-<td>支持</td>
-<td>支持</td>
-</tr>
-<tr>
-<td>目标对象相同属性set方法返回非void</td>
-<td>不设置，其他正常属性可以copy</td>
-<td>不设置，导致其他属性都无法copy</td>
-<td>支持，能够copy</td>
-</tr>
-<tr>
-<td>目标对象多字段</td>
-<td>支持</td>
-<td>支持</td>
-<td>支持</td>
-</tr>
-<tr>
-<td>目标对象少字段</td>
-<td>支持</td>
-<td>支持</td>
-<td>支持</td>
-</tr>
-</tbody></table>
-<p>此外一些较为复杂的情况BeanCopier会进行浅拷贝：</p>
-<p>1.属性为对象；</p>
-<p>2.属性为List&lt;自定义类&gt;；(注意范型的类型擦除)</p>
-<p>当然前提还是源类和目标类中该属性的类型相同，如果不同只能自定义converter了。相应生成的字节码:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">copy</span><span class="params">(Object var1, Object var2, Converter var3)</span> </span>&#123;</span><br><span class="line">        BeanB var10000 = (BeanB)var2;</span><br><span class="line">        BeanA var10001 = (BeanA)var1;</span><br><span class="line">        var10000.setAList(((BeanA)var1).getAList());</span><br><span class="line">        var10000.setName(var10001.getName());</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
-<p>因此不能用BeanCopier做深拷贝。</p>
-<p>对应我们考虑的场景，entity和VO之间拷贝数据，由于entity和VO一般不包含集合或者对象，而且没有修改数据的副作用，因此还是可以用的。</p>
-<h1 id="线程安全"><a href="#线程安全" class="headerlink" title="线程安全"></a>线程安全</h1><h2 id="copy方法"><a href="#copy方法" class="headerlink" title="copy方法"></a>copy方法</h2><p>BeanCopier实例的copy方法是线程安全的，因为它是无状态的，相关讨论：<a href="https://cglib-devel.narkive.com/2cqPSUM1/cglib-and-thread-safeness" target="_blank" rel="noopener">https://cglib-devel.narkive.com/2cqPSUM1/cglib-and-thread-safeness</a></p>
-<h2 id="create方法"><a href="#create方法" class="headerlink" title="create方法"></a>create方法</h2><p>BeanCopier的create方法底层会缓存生成过的字节码，因此不是无状态的，但是有用到synchronized进行线程安全的保护：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">protected</span> Object <span class="title">create</span><span class="params">(Object key)</span> </span>&#123;</span><br><span class="line">    Class gen = <span class="keyword">null</span>;</span><br><span class="line"><span class="keyword">synchronized</span> (source) &#123;</span><br><span class="line">        ClassLoader loader = getClassLoader();</span><br><span class="line">        Map cache2 = <span class="keyword">null</span>;</span><br><span class="line">        cache2 = (Map) source.cache.get(loader);</span><br><span class="line">...</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">/** 3.根据生成类，创建实例并返回 **/</span></span><br><span class="line">    <span class="keyword">return</span> firstInstance(gen);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>由于BeanCopier的create方法需要查询底层map中的缓存，因此当它生成过的copier非常多的时候，有理由猜测create性能会下降。</p>
-<p>1.create方法由悲观锁(synchronized)保护: 并发高时，性能下降；</p>
-<p>2.create方法底层有存储: 历史上生成过的copier非常多时，查询性能下降。</p>
-<h1 id="类卸载"><a href="#类卸载" class="headerlink" title="类卸载"></a>类卸载</h1><p>资料2显示，BeanCopier增强的字节码缓存由一个两级map保存，第一级为WeakHashMap，第二级为HashMap，线程安全由synchronized保护。</p>
-<p>第一级weakHashMap的key是classloader，因此类的卸载当classloader被回收时进行。</p>
-<p>但类似的，如果是我们自己封装拷贝函数，也会面临字节码回收、metaspace占用的问题。</p>
-<p>个人认为BeanCopier生成的字节码并不比自己手写的多很多，因此推荐使用BeanCopier。</p>
-<p>可能的坑:</p>
-<p>跨多个classloader的情况：<a href="https://stackoverflow.com/questions/20816197/use-cglib-beancopier-with-multiple-classloaders" target="_blank" rel="noopener">https://stackoverflow.com/questions/20816197/use-cglib-beancopier-with-multiple-classloaders</a></p>
-<p>BeanCopier无法判断两个不同classloader加载的同名类是不同的类。所以如果使用不同classloader加载同名类，需要特别考虑。</p>
-<h1 id="参考资料"><a href="#参考资料" class="headerlink" title="参考资料"></a>参考资料</h1><p><a href="https://www.cnblogs.com/winner-0715/p/10117282.html" target="_blank" rel="noopener">https://www.cnblogs.com/winner-0715/p/10117282.html</a></p>
-<p><a href="https://www.jianshu.com/p/f8b892e08d26" target="_blank" rel="noopener">https://www.jianshu.com/p/f8b892e08d26</a></p>
-<p><a href="https://www.cnblogs.com/mengdd/p/3594608.html" target="_blank" rel="noopener">https://www.cnblogs.com/mengdd/p/3594608.html</a></p>
-<p><a href="https://blog.csdn.net/xihuanyuye/article/details/89887913" target="_blank" rel="noopener">https://blog.csdn.net/xihuanyuye/article/details/89887913</a></p>
-<p><a href="https://ningyu1.github.io/blog/20190322/113-object-copy.html" target="_blank" rel="noopener">https://ningyu1.github.io/blog/20190322/113-object-copy.html</a></p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2020/05/05/2020-05/BeanCopier%E6%B5%8B%E8%AF%84%E6%8A%A5%E5%91%8A/" data-id="ck9tq5tbb0000alamfplm0rxy" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spring/" rel="tag">spring</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
-    <span class="page-number current">1</span><a class="page-number" href="/page/2/">2</a><a class="page-number" href="/page/3/">3</a><span class="space">&hellip;</span><a class="page-number" href="/page/21/">21</a><a class="extend next" rel="next" href="/page/2/">下一页&amp;raquo;</a>
+    <span class="page-number current">1</span><a class="page-number" href="/page/2/">2</a><a class="page-number" href="/page/3/">3</a><span class="space">&hellip;</span><a class="page-number" href="/page/22/">22</a><a class="extend next" rel="next" href="/page/2/">下一页&amp;raquo;</a>
   </nav>
 </section>
            
@@ -1226,7 +1060,7 @@
   <div class="widget-wrap">
     <h3 class="widget-title categories">分类</h3>
     <div class="widget" id="categories">
-      <ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/clickhouse/">clickhouse</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/es/">es</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/git/">git</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/gradle/">gradle</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/hadoop/">hadoop</a><span class="category-list-count">15</span><ul class="category-list-child"><li class="category-list-item"><a class="category-list-link" href="/categories/hadoop/hbase/">hbase</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/hadoop/hive/">hive</a><span class="category-list-count">8</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/hadoop/pig/">pig</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/hadoop/sqoop/">sqoop</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/hadoop/%E8%BF%90%E7%BB%B4/">运维</a><span class="category-list-count">1</span></li></ul></li><li class="category-list-item"><a class="category-list-link" href="/categories/http/">http</a><span class="category-list-count">4</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/java/">java</a><span class="category-list-count">78</span><ul class="category-list-child"><li class="category-list-item"><a class="category-list-link" href="/categories/java/Netty/">Netty</a><span class="category-list-count">14</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/java/jvm/">jvm</a><span class="category-list-count">9</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/java/spring/">spring</a><span class="category-list-count">6</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a><span class="category-list-count">21</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/java/%E6%80%A7%E8%83%BD/">性能</a><span class="category-list-count">6</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/java/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/">设计模式</a><span class="category-list-count">7</span></li></ul></li><li class="category-list-item"><a class="category-list-link" href="/categories/mysql/">mysql</a><span class="category-list-count">23</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/nginx/">nginx</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/orm/">orm</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/redis/">redis</a><span class="category-list-count">18</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/rust/">rust</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/shell/">shell</a><span class="category-list-count">4</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/spark/">spark</a><span class="category-list-count">11</span><ul class="category-list-child"><li class="category-list-item"><a class="category-list-link" href="/categories/spark/streaming/">streaming</a><span class="category-list-count">1</span></li></ul></li><li class="category-list-item"><a class="category-list-link" href="/categories/tcp/">tcp</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F/">分布式</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/">数据结构与算法</a><span class="category-list-count">3</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E6%97%A5%E5%BF%97/">日志</a><span class="category-list-count">4</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/">消息队列</a><span class="category-list-count">4</span><ul class="category-list-child"><li class="category-list-item"><a class="category-list-link" href="/categories/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/disruptor/">disruptor</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/kafka/">kafka</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/rabbitmq/">rabbitmq</a><span class="category-list-count">1</span></li></ul></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E7%BD%91%E7%BB%9C/">网络</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E8%AE%BA%E6%96%87/">论文</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E9%85%8D%E7%BD%AE/">配置</a><span class="category-list-count">23</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E9%A1%B9%E7%9B%AE%E7%AE%A1%E7%90%86/">项目管理</a><span class="category-list-count">1</span></li></ul>
+      <ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/clickhouse/">clickhouse</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/es/">es</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/git/">git</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/gradle/">gradle</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/hadoop/">hadoop</a><span class="category-list-count">15</span><ul class="category-list-child"><li class="category-list-item"><a class="category-list-link" href="/categories/hadoop/hbase/">hbase</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/hadoop/hive/">hive</a><span class="category-list-count">8</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/hadoop/pig/">pig</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/hadoop/sqoop/">sqoop</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/hadoop/%E8%BF%90%E7%BB%B4/">运维</a><span class="category-list-count">1</span></li></ul></li><li class="category-list-item"><a class="category-list-link" href="/categories/http/">http</a><span class="category-list-count">4</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/java/">java</a><span class="category-list-count">78</span><ul class="category-list-child"><li class="category-list-item"><a class="category-list-link" href="/categories/java/Netty/">Netty</a><span class="category-list-count">14</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/java/jvm/">jvm</a><span class="category-list-count">9</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/java/spring/">spring</a><span class="category-list-count">6</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a><span class="category-list-count">21</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/java/%E6%80%A7%E8%83%BD/">性能</a><span class="category-list-count">6</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/java/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/">设计模式</a><span class="category-list-count">7</span></li></ul></li><li class="category-list-item"><a class="category-list-link" href="/categories/jvm/">jvm</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/mysql/">mysql</a><span class="category-list-count">23</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/nginx/">nginx</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/orm/">orm</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/redis/">redis</a><span class="category-list-count">18</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/rust/">rust</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/shell/">shell</a><span class="category-list-count">4</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/spark/">spark</a><span class="category-list-count">11</span><ul class="category-list-child"><li class="category-list-item"><a class="category-list-link" href="/categories/spark/streaming/">streaming</a><span class="category-list-count">1</span></li></ul></li><li class="category-list-item"><a class="category-list-link" href="/categories/tcp/">tcp</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F/">分布式</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/">数据结构与算法</a><span class="category-list-count">3</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E6%97%A5%E5%BF%97/">日志</a><span class="category-list-count">4</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/">消息队列</a><span class="category-list-count">4</span><ul class="category-list-child"><li class="category-list-item"><a class="category-list-link" href="/categories/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/disruptor/">disruptor</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/kafka/">kafka</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/rabbitmq/">rabbitmq</a><span class="category-list-count">1</span></li></ul></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E7%BD%91%E7%BB%9C/">网络</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E8%AE%BA%E6%96%87/">论文</a><span class="category-list-count">2</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E9%85%8D%E7%BD%AE/">配置</a><span class="category-list-count">23</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E9%A1%B9%E7%9B%AE%E7%AE%A1%E7%90%86/">项目管理</a><span class="category-list-count">1</span></li></ul>
     </div>
   </div>
 
@@ -1236,7 +1070,7 @@
   <div class="widget-wrap">
     <h3 class="widget-title tagcloud">标签云</h3>
     <div class="widget tagcloud">
-      <a href="/tags/2-3%E6%A0%91/" style="font-size: 14px; color: #00f">2-3树</a> <a href="/tags/AES/" style="font-size: 14px; color: #00f">AES</a> <a href="/tags/DDD/" style="font-size: 14.92px; color: #140bfe">DDD</a> <a href="/tags/HMAC/" style="font-size: 14px; color: #00f">HMAC</a> <a href="/tags/HTTP/" style="font-size: 14px; color: #00f">HTTP</a> <a href="/tags/JMX/" style="font-size: 14px; color: #00f">JMX</a> <a href="/tags/JNI/" style="font-size: 16.75px; color: #3c21fb">JNI</a> <a href="/tags/NIO/" style="font-size: 14px; color: #00f">NIO</a> <a href="/tags/Netty/" style="font-size: 21.33px; color: #9f57f4">Netty</a> <a href="/tags/RSA/" style="font-size: 14px; color: #00f">RSA</a> <a href="/tags/RTP/" style="font-size: 14px; color: #00f">RTP</a> <a href="/tags/SIMD/" style="font-size: 14px; color: #00f">SIMD</a> <a href="/tags/SSL/" style="font-size: 14px; color: #00f">SSL</a> <a href="/tags/TLS/" style="font-size: 14px; color: #00f">TLS</a> <a href="/tags/arthas/" style="font-size: 14px; color: #00f">arthas</a> <a href="/tags/awk/" style="font-size: 14px; color: #00f">awk</a> <a href="/tags/clickhouse/" style="font-size: 14.92px; color: #140bfe">clickhouse</a> <a href="/tags/disruptor/" style="font-size: 14px; color: #00f">disruptor</a> <a href="/tags/elasticsearch/" style="font-size: 14px; color: #00f">elasticsearch</a> <a href="/tags/es/" style="font-size: 14px; color: #00f">es</a> <a href="/tags/flask/" style="font-size: 14px; color: #00f">flask</a> <a href="/tags/gc/" style="font-size: 14px; color: #00f">gc</a> <a href="/tags/git/" style="font-size: 14.92px; color: #140bfe">git</a> <a href="/tags/gradle/" style="font-size: 14.92px; color: #140bfe">gradle</a> <a href="/tags/groovy/" style="font-size: 14.92px; color: #140bfe">groovy</a> <a href="/tags/hadoop/" style="font-size: 16.75px; color: #3c21fb">hadoop</a> <a href="/tags/hbase/" style="font-size: 14px; color: #00f">hbase</a> <a href="/tags/hdfs/" style="font-size: 14.92px; color: #140bfe">hdfs</a> <a href="/tags/hive/" style="font-size: 18.58px; color: #6336f8">hive</a> <a href="/tags/hll/" style="font-size: 14px; color: #00f">hll</a> <a href="/tags/http/" style="font-size: 15.83px; color: #2816fc">http</a> <a href="/tags/https/" style="font-size: 14px; color: #00f">https</a> <a href="/tags/hyperloglog/" style="font-size: 14px; color: #00f">hyperloglog</a> <a href="/tags/io/" style="font-size: 14px; color: #00f">io</a> <a href="/tags/java/" style="font-size: 25px; color: #ee82ee">java</a> <a href="/tags/jvm/" style="font-size: 19.5px; color: #7741f7">jvm</a> <a href="/tags/kafka/" style="font-size: 15.83px; color: #2816fc">kafka</a> <a href="/tags/kylin/" style="font-size: 14px; color: #00f">kylin</a> <a href="/tags/log4j2/" style="font-size: 14px; color: #00f">log4j2</a> <a href="/tags/maven/" style="font-size: 14px; color: #00f">maven</a> <a href="/tags/monad/" style="font-size: 14px; color: #00f">monad</a> <a href="/tags/mybatis/" style="font-size: 14.92px; color: #140bfe">mybatis</a> <a href="/tags/mysql/" style="font-size: 24.08px; color: #da77ef">mysql</a> <a href="/tags/nginx/" style="font-size: 17.67px; color: #4f2bf9">nginx</a> <a href="/tags/paxos/" style="font-size: 14px; color: #00f">paxos</a> <a href="/tags/pig/" style="font-size: 14px; color: #00f">pig</a> <a href="/tags/python/" style="font-size: 14px; color: #00f">python</a> <a href="/tags/rabbitmq/" style="font-size: 14px; color: #00f">rabbitmq</a> <a href="/tags/redis/" style="font-size: 22.25px; color: #b362f2">redis</a> <a href="/tags/restful/" style="font-size: 14px; color: #00f">restful</a> <a href="/tags/rust/" style="font-size: 14.92px; color: #140bfe">rust</a> <a href="/tags/scala/" style="font-size: 16.75px; color: #3c21fb">scala</a> <a href="/tags/shell/" style="font-size: 16.75px; color: #3c21fb">shell</a> <a href="/tags/spark/" style="font-size: 19.5px; color: #7741f7">spark</a> <a href="/tags/spring/" style="font-size: 17.67px; color: #4f2bf9">spring</a> <a href="/tags/springboot/" style="font-size: 14px; color: #00f">springboot</a> <a href="/tags/springmvc/" style="font-size: 14px; color: #00f">springmvc</a> <a href="/tags/sql%E6%B3%A8%E5%85%A5/" style="font-size: 14px; color: #00f">sql注入</a> <a href="/tags/sqoop/" style="font-size: 14.92px; color: #140bfe">sqoop</a> <a href="/tags/ssl/" style="font-size: 14px; color: #00f">ssl</a> <a href="/tags/storage/" style="font-size: 14px; color: #00f">storage</a> <a href="/tags/streaming/" style="font-size: 14px; color: #00f">streaming</a> <a href="/tags/tcp/" style="font-size: 15.83px; color: #2816fc">tcp</a> <a href="/tags/utf8/" style="font-size: 14px; color: #00f">utf8</a> <a href="/tags/%E4%B8%80%E8%87%B4%E6%80%A7%E5%93%88%E5%B8%8C/" style="font-size: 14px; color: #00f">一致性哈希</a> <a href="/tags/%E5%87%BD%E6%95%B0%E5%BC%8F/" style="font-size: 14px; color: #00f">函数式</a> <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/" style="font-size: 14.92px; color: #140bfe">分布式</a> <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/" style="font-size: 14px; color: #00f">分布式事务</a> <a href="/tags/%E5%AE%89%E5%85%A8/" style="font-size: 14px; color: #00f">安全</a> <a href="/tags/%E5%AE%9A%E6%97%B6%E4%BB%BB%E5%8A%A1/" style="font-size: 14px; color: #00f">定时任务</a> <a href="/tags/%E5%B9%B6%E5%8F%91/" style="font-size: 20.42px; color: #8b4cf5">并发</a> <a href="/tags/%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/" style="font-size: 14px; color: #00f">性能优化</a> <a href="/tags/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/" style="font-size: 14px; color: #00f">数据结构与算法</a> <a href="/tags/%E6%97%A5%E5%BF%97/" style="font-size: 14.92px; color: #140bfe">日志</a> <a href="/tags/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/" style="font-size: 14.92px; color: #140bfe">消息队列</a> <a href="/tags/%E7%AE%97%E6%B3%95/" style="font-size: 14.92px; color: #140bfe">算法</a> <a href="/tags/%E7%BA%A2%E9%BB%91%E6%A0%91/" style="font-size: 14px; color: #00f">红黑树</a> <a href="/tags/%E7%BA%BF%E7%A8%8B/" style="font-size: 14px; color: #00f">线程</a> <a href="/tags/%E7%BC%96%E7%A0%81/" style="font-size: 14px; color: #00f">编码</a> <a href="/tags/%E8%AE%BA%E6%96%87/" style="font-size: 14.92px; color: #140bfe">论文</a> <a href="/tags/%E8%AE%BE%E8%AE%A1/" style="font-size: 14.92px; color: #140bfe">设计</a> <a href="/tags/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/" style="font-size: 16.75px; color: #3c21fb">设计模式</a> <a href="/tags/%E9%85%8D%E7%BD%AE/" style="font-size: 23.17px; color: #c66cf1">配置</a> <a href="/tags/%E9%95%BF%E8%BF%9E%E6%8E%A5/" style="font-size: 14px; color: #00f">长连接</a> <a href="/tags/%E9%A1%B9%E7%9B%AE%E7%AE%A1%E7%90%86/" style="font-size: 14px; color: #00f">项目管理</a>
+      <a href="/tags/2-3%E6%A0%91/" style="font-size: 14px; color: #00f">2-3树</a> <a href="/tags/AES/" style="font-size: 14px; color: #00f">AES</a> <a href="/tags/DDD/" style="font-size: 14.85px; color: #120afe">DDD</a> <a href="/tags/HMAC/" style="font-size: 14px; color: #00f">HMAC</a> <a href="/tags/HTTP/" style="font-size: 14px; color: #00f">HTTP</a> <a href="/tags/JMX/" style="font-size: 14px; color: #00f">JMX</a> <a href="/tags/JNI/" style="font-size: 16.54px; color: #371efb">JNI</a> <a href="/tags/NIO/" style="font-size: 14px; color: #00f">NIO</a> <a href="/tags/Netty/" style="font-size: 21.62px; color: #a55af3">Netty</a> <a href="/tags/RSA/" style="font-size: 14px; color: #00f">RSA</a> <a href="/tags/RTP/" style="font-size: 14px; color: #00f">RTP</a> <a href="/tags/SIMD/" style="font-size: 14px; color: #00f">SIMD</a> <a href="/tags/SSL/" style="font-size: 14px; color: #00f">SSL</a> <a href="/tags/TLS/" style="font-size: 14px; color: #00f">TLS</a> <a href="/tags/arthas/" style="font-size: 14px; color: #00f">arthas</a> <a href="/tags/awk/" style="font-size: 14px; color: #00f">awk</a> <a href="/tags/clickhouse/" style="font-size: 14.85px; color: #120afe">clickhouse</a> <a href="/tags/disruptor/" style="font-size: 14px; color: #00f">disruptor</a> <a href="/tags/elasticsearch/" style="font-size: 14px; color: #00f">elasticsearch</a> <a href="/tags/es/" style="font-size: 14px; color: #00f">es</a> <a href="/tags/flask/" style="font-size: 14px; color: #00f">flask</a> <a href="/tags/gc/" style="font-size: 14px; color: #00f">gc</a> <a href="/tags/git/" style="font-size: 14.85px; color: #120afe">git</a> <a href="/tags/gradle/" style="font-size: 14.85px; color: #120afe">gradle</a> <a href="/tags/groovy/" style="font-size: 14.85px; color: #120afe">groovy</a> <a href="/tags/hadoop/" style="font-size: 16.54px; color: #371efb">hadoop</a> <a href="/tags/hbase/" style="font-size: 14px; color: #00f">hbase</a> <a href="/tags/hdfs/" style="font-size: 14.85px; color: #120afe">hdfs</a> <a href="/tags/hive/" style="font-size: 18.23px; color: #5c32f8">hive</a> <a href="/tags/hll/" style="font-size: 14px; color: #00f">hll</a> <a href="/tags/http/" style="font-size: 15.69px; color: #2514fc">http</a> <a href="/tags/https/" style="font-size: 14px; color: #00f">https</a> <a href="/tags/hyperloglog/" style="font-size: 14px; color: #00f">hyperloglog</a> <a href="/tags/io/" style="font-size: 14px; color: #00f">io</a> <a href="/tags/java/" style="font-size: 25px; color: #ee82ee">java</a> <a href="/tags/jvm/" style="font-size: 19.92px; color: #8046f6">jvm</a> <a href="/tags/kafka/" style="font-size: 15.69px; color: #2514fc">kafka</a> <a href="/tags/kylin/" style="font-size: 14px; color: #00f">kylin</a> <a href="/tags/log4j2/" style="font-size: 14px; color: #00f">log4j2</a> <a href="/tags/maven/" style="font-size: 14px; color: #00f">maven</a> <a href="/tags/monad/" style="font-size: 14px; color: #00f">monad</a> <a href="/tags/mybatis/" style="font-size: 14.85px; color: #120afe">mybatis</a> <a href="/tags/mysql/" style="font-size: 24.15px; color: #dc78ef">mysql</a> <a href="/tags/nginx/" style="font-size: 17.38px; color: #4928fa">nginx</a> <a href="/tags/paxos/" style="font-size: 14px; color: #00f">paxos</a> <a href="/tags/pig/" style="font-size: 14px; color: #00f">pig</a> <a href="/tags/python/" style="font-size: 14px; color: #00f">python</a> <a href="/tags/rabbitmq/" style="font-size: 14px; color: #00f">rabbitmq</a> <a href="/tags/redis/" style="font-size: 22.46px; color: #b764f2">redis</a> <a href="/tags/restful/" style="font-size: 14px; color: #00f">restful</a> <a href="/tags/rust/" style="font-size: 14.85px; color: #120afe">rust</a> <a href="/tags/scala/" style="font-size: 16.54px; color: #371efb">scala</a> <a href="/tags/shell/" style="font-size: 16.54px; color: #371efb">shell</a> <a href="/tags/spark/" style="font-size: 19.08px; color: #6e3cf7">spark</a> <a href="/tags/spring/" style="font-size: 17.38px; color: #4928fa">spring</a> <a href="/tags/springboot/" style="font-size: 14px; color: #00f">springboot</a> <a href="/tags/springmvc/" style="font-size: 14px; color: #00f">springmvc</a> <a href="/tags/sql%E6%B3%A8%E5%85%A5/" style="font-size: 14px; color: #00f">sql注入</a> <a href="/tags/sqoop/" style="font-size: 14.85px; color: #120afe">sqoop</a> <a href="/tags/ssl/" style="font-size: 14px; color: #00f">ssl</a> <a href="/tags/storage/" style="font-size: 14px; color: #00f">storage</a> <a href="/tags/streaming/" style="font-size: 14px; color: #00f">streaming</a> <a href="/tags/tcp/" style="font-size: 15.69px; color: #2514fc">tcp</a> <a href="/tags/utf8/" style="font-size: 14px; color: #00f">utf8</a> <a href="/tags/%E4%B8%80%E8%87%B4%E6%80%A7%E5%93%88%E5%B8%8C/" style="font-size: 14px; color: #00f">一致性哈希</a> <a href="/tags/%E5%87%BD%E6%95%B0%E5%BC%8F/" style="font-size: 14px; color: #00f">函数式</a> <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/" style="font-size: 14.85px; color: #120afe">分布式</a> <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/" style="font-size: 14px; color: #00f">分布式事务</a> <a href="/tags/%E5%AE%89%E5%85%A8/" style="font-size: 14px; color: #00f">安全</a> <a href="/tags/%E5%AE%9A%E6%97%B6%E4%BB%BB%E5%8A%A1/" style="font-size: 14px; color: #00f">定时任务</a> <a href="/tags/%E5%B9%B6%E5%8F%91/" style="font-size: 20.77px; color: #9250f5">并发</a> <a href="/tags/%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/" style="font-size: 14px; color: #00f">性能优化</a> <a href="/tags/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/" style="font-size: 14px; color: #00f">数据结构与算法</a> <a href="/tags/%E6%97%A5%E5%BF%97/" style="font-size: 14.85px; color: #120afe">日志</a> <a href="/tags/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/" style="font-size: 14.85px; color: #120afe">消息队列</a> <a href="/tags/%E7%AE%97%E6%B3%95/" style="font-size: 14.85px; color: #120afe">算法</a> <a href="/tags/%E7%BA%A2%E9%BB%91%E6%A0%91/" style="font-size: 14px; color: #00f">红黑树</a> <a href="/tags/%E7%BA%BF%E7%A8%8B/" style="font-size: 14px; color: #00f">线程</a> <a href="/tags/%E7%BC%96%E7%A0%81/" style="font-size: 14px; color: #00f">编码</a> <a href="/tags/%E8%AE%BA%E6%96%87/" style="font-size: 14.85px; color: #120afe">论文</a> <a href="/tags/%E8%AE%BE%E8%AE%A1/" style="font-size: 14.85px; color: #120afe">设计</a> <a href="/tags/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/" style="font-size: 16.54px; color: #371efb">设计模式</a> <a href="/tags/%E9%85%8D%E7%BD%AE/" style="font-size: 23.31px; color: #c96ef1">配置</a> <a href="/tags/%E9%95%BF%E8%BF%9E%E6%8E%A5/" style="font-size: 14px; color: #00f">长连接</a> <a href="/tags/%E9%A1%B9%E7%9B%AE%E7%AE%A1%E7%90%86/" style="font-size: 14px; color: #00f">项目管理</a>
     </div>
   </div>
 
@@ -1246,6 +1080,10 @@
     <h3 class="widget-title recent-posts">最新文章</h3>
     <div class="widget">
       <ul>
+        
+          <li>
+            <a href="/2021/07/26/2021-07/metaspace%E7%AC%94%E8%AE%B0/">metaspace笔记</a>
+          </li>
         
           <li>
             <a href="/2021/06/01/2021-06/%E7%BD%91%E7%BB%9C%E5%AE%89%E5%85%A8%E7%AC%94%E8%AE%B0-1/">网络安全笔记-1</a>
@@ -1263,10 +1101,6 @@
             <a href="/2020/12/20/2020-12/%E7%BA%BF%E4%B8%8A%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-%E6%9F%A5%E7%9C%8B%E6%96%B9%E6%B3%95%E7%BA%A7%E8%80%97%E6%97%B6/">线上性能debug-查看方法级耗时</a>
           </li>
         
-          <li>
-            <a href="/2020/12/19/2020-12/%E5%8D%87%E7%BA%A7HTTP2%E7%AC%94%E8%AE%B0/">升级HTTP2笔记</a>
-          </li>
-        
       </ul>
     </div>
   </div>
@@ -1276,7 +1110,7 @@
   <div class="widget-wrap">
     <h3 class="widget-title archive">归档</h3>
     <div class="widget">
-      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2021/06/">六月 2021</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2021/02/">二月 2021</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/12/">十二月 2020</a><span class="archive-list-count">3</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/07/">七月 2020</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/06/">六月 2020</a><span class="archive-list-count">3</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/05/">五月 2020</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/04/">四月 2020</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/03/">三月 2020</a><span class="archive-list-count">4</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/01/">一月 2020</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/12/">十二月 2019</a><span class="archive-list-count">3</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/11/">十一月 2019</a><span class="archive-list-count">3</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/10/">十月 2019</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/09/">九月 2019</a><span class="archive-list-count">7</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/08/">八月 2019</a><span class="archive-list-count">2</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/07/">七月 2019</a><span class="archive-list-count">4</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/06/">六月 2019</a><span class="archive-list-count">2</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/05/">五月 2019</a><span class="archive-list-count">3</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/04/">四月 2019</a><span class="archive-list-count">3</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/03/">三月 2019</a><span class="archive-list-count">6</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/02/">二月 2019</a><span class="archive-list-count">16</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/01/">一月 2019</a><span class="archive-list-count">5</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/12/">十二月 2018</a><span class="archive-list-count">5</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/11/">十一月 2018</a><span class="archive-list-count">5</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/10/">十月 2018</a><span class="archive-list-count">6</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/09/">九月 2018</a><span class="archive-list-count">7</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/08/">八月 2018</a><span class="archive-list-count">6</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/07/">七月 2018</a><span class="archive-list-count">4</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/06/">六月 2018</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/05/">五月 2018</a><span class="archive-list-count">2</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/04/">四月 2018</a><span class="archive-list-count">3</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/03/">三月 2018</a><span class="archive-list-count">7</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/02/">二月 2018</a><span class="archive-list-count">4</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/01/">一月 2018</a><span class="archive-list-count">13</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/12/">十二月 2017</a><span class="archive-list-count">5</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/11/">十一月 2017</a><span class="archive-list-count">5</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/10/">十月 2017</a><span class="archive-list-count">3</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/09/">九月 2017</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/05/">五月 2017</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/04/">四月 2017</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/03/">三月 2017</a><span class="archive-list-count">6</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/02/">二月 2017</a><span class="archive-list-count">6</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/01/">一月 2017</a><span class="archive-list-count">6</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/12/">十二月 2016</a><span class="archive-list-count">4</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/09/">九月 2016</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/04/">四月 2016</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/03/">三月 2016</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/02/">二月 2016</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/01/">一月 2016</a><span class="archive-list-count">5</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2015/10/">十月 2015</a><span class="archive-list-count">12</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2015/09/">九月 2015</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2015/07/">七月 2015</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2015/03/">三月 2015</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2015/01/">一月 2015</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2014/12/">十二月 2014</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2014/11/">十一月 2014</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2014/10/">十月 2014</a><span class="archive-list-count">6</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2014/03/">三月 2014</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2013/11/">十一月 2013</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2013/09/">九月 2013</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2013/08/">八月 2013</a><span class="archive-list-count">2</span></li></ul>
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2021/07/">七月 2021</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2021/06/">六月 2021</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2021/02/">二月 2021</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/12/">十二月 2020</a><span class="archive-list-count">3</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/07/">七月 2020</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/06/">六月 2020</a><span class="archive-list-count">3</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/05/">五月 2020</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/04/">四月 2020</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/03/">三月 2020</a><span class="archive-list-count">4</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/01/">一月 2020</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/12/">十二月 2019</a><span class="archive-list-count">3</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/11/">十一月 2019</a><span class="archive-list-count">3</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/10/">十月 2019</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/09/">九月 2019</a><span class="archive-list-count">7</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/08/">八月 2019</a><span class="archive-list-count">2</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/07/">七月 2019</a><span class="archive-list-count">4</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/06/">六月 2019</a><span class="archive-list-count">2</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/05/">五月 2019</a><span class="archive-list-count">3</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/04/">四月 2019</a><span class="archive-list-count">3</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/03/">三月 2019</a><span class="archive-list-count">6</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/02/">二月 2019</a><span class="archive-list-count">16</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/01/">一月 2019</a><span class="archive-list-count">5</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/12/">十二月 2018</a><span class="archive-list-count">5</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/11/">十一月 2018</a><span class="archive-list-count">5</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/10/">十月 2018</a><span class="archive-list-count">6</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/09/">九月 2018</a><span class="archive-list-count">7</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/08/">八月 2018</a><span class="archive-list-count">6</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/07/">七月 2018</a><span class="archive-list-count">4</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/06/">六月 2018</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/05/">五月 2018</a><span class="archive-list-count">2</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/04/">四月 2018</a><span class="archive-list-count">3</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/03/">三月 2018</a><span class="archive-list-count">7</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/02/">二月 2018</a><span class="archive-list-count">4</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/01/">一月 2018</a><span class="archive-list-count">13</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/12/">十二月 2017</a><span class="archive-list-count">5</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/11/">十一月 2017</a><span class="archive-list-count">5</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/10/">十月 2017</a><span class="archive-list-count">3</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/09/">九月 2017</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/05/">五月 2017</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/04/">四月 2017</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/03/">三月 2017</a><span class="archive-list-count">6</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/02/">二月 2017</a><span class="archive-list-count">6</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/01/">一月 2017</a><span class="archive-list-count">6</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/12/">十二月 2016</a><span class="archive-list-count">4</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/09/">九月 2016</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/04/">四月 2016</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/03/">三月 2016</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/02/">二月 2016</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/01/">一月 2016</a><span class="archive-list-count">5</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2015/10/">十月 2015</a><span class="archive-list-count">12</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2015/09/">九月 2015</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2015/07/">七月 2015</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2015/03/">三月 2015</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2015/01/">一月 2015</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2014/12/">十二月 2014</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2014/11/">十一月 2014</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2014/10/">十月 2014</a><span class="archive-list-count">6</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2014/03/">三月 2014</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2013/11/">十一月 2013</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2013/09/">九月 2013</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2013/08/">八月 2013</a><span class="archive-list-count">2</span></li></ul>
     </div>
   </div>
 
