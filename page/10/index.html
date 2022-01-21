@@ -72,6 +72,113 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-09/Netty-in-action第十章-编解码器-笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/09/22/2018-09/Netty-in-action%E7%AC%AC%E5%8D%81%E7%AB%A0-%E7%BC%96%E8%A7%A3%E7%A0%81%E5%99%A8-%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2018-09-22T13:31:09.000Z" itemprop="datePublished">2018-09-22</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/Netty/">Netty</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/09/22/2018-09/Netty-in-action%E7%AC%AC%E5%8D%81%E7%AB%A0-%E7%BC%96%E8%A7%A3%E7%A0%81%E5%99%A8-%E7%AC%94%E8%AE%B0/">Netty in action-第十章-编解码器-笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>编码器: encoder , 出站handler;<br>解码器: decoder,  入站handler。</p>
+<p>用途包括:<br><code>POP3</code>,<code>IMAP</code>,<code>SMTP</code>协议。（邮件服务器）</p>
+<h1 id="资源管理"><a href="#资源管理" class="headerlink" title="资源管理"></a>资源管理</h1><p>编码器和解码器的消息被消费后，会自动调用<code>ReferenceCountUtil.release(message)</code>进行释放。<br>如果要阻止这种自动释放，可以显式调用<code>ReferenceCountUtil.retain(message)</code>保留消息。（后续再自己手动释放）</p>
+<h1 id="解码器"><a href="#解码器" class="headerlink" title="解码器"></a>解码器</h1><p>两种:<br>1.字节=&gt;消息:<code>ByteToMessageDecoder</code>,<code>ReplayingDecoder</code>;<br>2.消息=&gt;消息:<code>MessageToMessageDecoder</code>。(不需要检查<code>readableBytes</code>)</p>
+<p>解码器包括:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 1.字节=&gt;消息: （解码）</span></span><br><span class="line">ByteToMessageDecoder: 抽象类;</span><br><span class="line">LineBasedFrameDecoder: 行分割消息数据， 实际类。</span><br><span class="line">HttpObjectDecoder: Http数据解析。抽象类。</span><br><span class="line"><span class="comment">// 2.消息=&gt;消息: （格式转换）</span></span><br><span class="line">MessageToMessageDecoder: 消息=&gt;消息;</span><br><span class="line">HttpObjectAggregator: Http数据转换。实际类。</span><br></pre></td></tr></table></figure>
+<p>相应的声明:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">LineBasedFrameDecoder</span> <span class="keyword">extends</span> <span class="title">ByteToMessageDecoder</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">abstract</span> <span class="class"><span class="keyword">class</span> <span class="title">HttpObjectDecoder</span> <span class="keyword">extends</span> <span class="title">ByteToMessageDecoder</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">HttpObjectAggregator</span> <span class="keyword">extends</span> <span class="title">MessageAggregator</span>&lt;<span class="title">HttpObject</span>, <span class="title">HttpMessage</span>, <span class="title">HttpContent</span>, <span class="title">FullHttpMessage</span>&gt;</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">abstract</span> <span class="class"><span class="keyword">class</span> <span class="title">MessageAggregator</span>&lt;<span class="title">I</span>, <span class="title">S</span>, <span class="title">C</span> <span class="keyword">extends</span> <span class="title">ByteBufHolder</span>, <span class="title">O</span> <span class="keyword">extends</span> <span class="title">ByteBufHolder</span>&gt; <span class="keyword">extends</span> <span class="title">MessageToMessageDecoder</span>&lt;<span class="title">I</span>&gt;</span>;</span><br></pre></td></tr></table></figure>
+
+
+<h2 id="ByteToMessageDecoder-抽象类"><a href="#ByteToMessageDecoder-抽象类" class="headerlink" title="ByteToMessageDecoder(抽象类)"></a>ByteToMessageDecoder(抽象类)</h2><p>处理流程是字节=&gt;消息，也就是<code>ByteBuf in</code>=&gt;<code>List&lt;Object&gt;out</code>。<br>需要注意每次从<code>in</code>读之前，需要确认可读字节数量:<code>in.readableBytes()</code>。<br>具体代码:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">ToIntegerDecoder</span> <span class="keyword">extends</span> <span class="title">ByteToMessageDecoder</span> </span>&#123;</span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">decode</span><span class="params">(ChannelHandlerContext ctx</span></span></span><br><span class="line"><span class="function"><span class="params">        ,ByteBuf in         // <span class="number">1.</span>输入</span></span></span><br><span class="line"><span class="function"><span class="params">        ,List&lt;Object&gt; out)</span>  <span class="comment">// 2.输出</span></span></span><br><span class="line"><span class="function">        <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">        <span class="comment">//检查是否至少有 4 字节可读（一个 int 的字节长度）</span></span><br><span class="line">        <span class="keyword">if</span> (in.readableBytes() &gt;= <span class="number">4</span>) &#123;</span><br><span class="line">            out.add(in.readInt());</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>ByteToMessageDecoder</code>有俩api:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">decode:     必须实现，解析每条消息;</span><br><span class="line">decodeLast: 可选，处理最后一条消息，默认是调用decode。</span><br></pre></td></tr></table></figure>
+
+<h2 id="ReplayingDecoder-抽象类-尽量不用"><a href="#ReplayingDecoder-抽象类-尽量不用" class="headerlink" title="ReplayingDecoder(抽象类)(尽量不用)"></a>ReplayingDecoder(抽象类)(尽量不用)</h2><p>使用上比<code>ByteToMessageDecoder</code>省略<code>readableBytes</code>的调用，但是速度稍慢。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">ToIntegerDecoder2</span> <span class="keyword">extends</span> <span class="title">ReplayingDecoder</span>&lt;<span class="title">Void</span>&gt; </span>&#123;</span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">decode</span><span class="params">(ChannelHandlerContext ctx, ByteBuf in, </span></span></span><br><span class="line"><span class="function"><span class="params">    //传入的 ByteBuf 是 ReplayingDecoderByteBuf</span></span></span><br><span class="line"><span class="function"><span class="params">        List&lt;Object&gt; out)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">        <span class="comment">//从入站 ByteBuf 中读取 一个 int，并将其添加到解码消息的 List 中</span></span><br><span class="line">        out.add(in.readInt());</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>尽可能使用<code>ByteToMessageDecoder</code>而不是<code>ReplaingDecoder</code>。<br>两个原因:</p>
+<ol>
+<li><code>ReplaingDecoder</code>比较慢;</li>
+<li>内部用的是<code>ReplayingDecoderByteBuf</code>，并没有支持所有<code>ByteBuf</code>的操作。(api不全)</li>
+</ol>
+<h2 id="MessageToMessageDecoder-抽象类"><a href="#MessageToMessageDecoder-抽象类" class="headerlink" title="MessageToMessageDecoder(抽象类)"></a>MessageToMessageDecoder(抽象类)</h2><p>消息=&gt;消息。<br>如果声明是<code>MessageToMessageDecoder&lt;Integer&gt;</code>,那么输入就是<code>Integer</code>类型。<br>具体签名是:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">abstract</span> <span class="class"><span class="keyword">class</span> <span class="title">MessageToMessageDecoder</span>&lt;<span class="title">I</span>&gt;</span></span><br><span class="line"><span class="class"><span class="keyword">extends</span> <span class="title">ChannelInboundHandlerAdapter</span></span></span><br></pre></td></tr></table></figure>
+<p>实际案例:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">IntegerToStringDecoder</span> <span class="keyword">extends</span></span></span><br><span class="line"><span class="class">    <span class="title">MessageToMessageDecoder</span>&lt;<span class="title">Integer</span>&gt; </span>&#123;</span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">decode</span><span class="params">(ChannelHandlerContext ctx</span></span></span><br><span class="line"><span class="function"><span class="params">        , Integer msg      // <span class="number">1.</span>输入</span></span></span><br><span class="line"><span class="function"><span class="params">        , List&lt;Object&gt; out // <span class="number">2.</span>输出</span></span></span><br><span class="line"><span class="function"><span class="params">)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">        out.add(String.valueOf(msg));</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>可以发现这种消息转换不需要检查<code>readableBytes</code>。(毕竟输入已经不是<code>byte</code>了)</p>
+<h2 id="TooLongFrameException类"><a href="#TooLongFrameException类" class="headerlink" title="TooLongFrameException类"></a>TooLongFrameException类</h2><p>解码前，解码器会缓冲大量的数据。如果发现缓冲太多，可以抛出异常来报告这种情况:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">SafeByteToMessageDecoder</span> <span class="keyword">extends</span> <span class="title">ByteToMessageDecoder</span> </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> MAX_FRAME_SIZE = <span class="number">1024</span>;</span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">decode</span><span class="params">(ChannelHandlerContext ctx, ByteBuf in,</span></span></span><br><span class="line"><span class="function"><span class="params">        List&lt;Object&gt; out)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">            <span class="keyword">int</span> readable = in.readableBytes();</span><br><span class="line">            <span class="keyword">if</span> (readable &gt; MAX_FRAME_SIZE) &#123;</span><br><span class="line">                in.skipBytes(readable); <span class="comment">// 一种可能的处理</span></span><br><span class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> TooLongFrameException(<span class="string">"Frame too big!"</span>);<span class="comment">// 抛出异常</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>抛异常的用意:<br>1.可能是上游生产太快,因此需要识别这种情况;<br>2.可能是下游消费太慢,也需要识别这种情况。</p>
+<p>后续可以用<code>exceptionCaught</code>来捕获这个异常，可能的处理包括:<br>1.向生产端返回一个特殊的响应;<br>如HTTP:<br><code>413</code> 错误 – 请求实体太大 (Request entity too large)<br><code>414</code> 错误 – 请求 URI 过长 (Request URI too long)<br>2.关闭对应的连接。<br>3.其他处理方案。</p>
+<h1 id="编码器"><a href="#编码器" class="headerlink" title="编码器"></a>编码器</h1><p>两种:<br>1.消息=&gt;字节:MessageToByteEncoder;<br>2.消息=&gt;消息:MessageToMessageEncoder。<br>// 主要是入站出站方向不同，不然和前面的消息转换差不多。</p>
+<p>编码器包括:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">MessageToByteEncoder&lt;I&gt;: 消息=&gt;字节</span><br><span class="line">MessageToMessageEncoder: 消息=&gt;消息</span><br><span class="line">Websocket08FrameEncoder: 消息=&gt;消息</span><br><span class="line">ProtobufEncoder: 消息=&gt;消息</span><br></pre></td></tr></table></figure>
+<p>具体代码:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">IntegerToStringEncoder</span></span></span><br><span class="line"><span class="class">    <span class="keyword">extends</span> <span class="title">MessageToMessageEncoder</span>&lt;<span class="title">Integer</span>&gt; </span>&#123;</span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">encode</span><span class="params">(ChannelHandlerContext ctx</span></span></span><br><span class="line"><span class="function"><span class="params">        , Integer msg       // <span class="number">1.</span>输入 </span></span></span><br><span class="line"><span class="function"><span class="params">        , List&lt;Object&gt; out  // <span class="number">2.</span>输出</span></span></span><br><span class="line"><span class="function"><span class="params">)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">        out.add(String.valueOf(msg));</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>解码器:<code>decode</code>,<code>decodeLast</code><br>编码器:<code>encode</code></p>
+<h1 id="编解码器（编码器-解码器复合）"><a href="#编解码器（编码器-解码器复合）" class="headerlink" title="编解码器（编码器+解码器复合）"></a>编解码器（编码器+解码器复合）</h1><p>编解码复合，也有两种:</p>
+<ol>
+<li>字节&lt;=&gt;消息: <code>ByteToMessageCodec</code>;</li>
+<li>消息&lt;=&gt;消息: <code>MessageToMessageCodec</code>.</li>
+</ol>
+<p>可以发现就是多了一个<code>Codec</code>后缀。</p>
+<h2 id="ByteToMessageCodec-抽象类"><a href="#ByteToMessageCodec-抽象类" class="headerlink" title="ByteToMessageCodec(抽象类)"></a>ByteToMessageCodec(抽象类)</h2><p><code>ByteToMessageCodec</code>的方法就是把编码器和解码器的api都加上:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">decode(ctx,ByteBuf in,List&lt;Object&gt;out)</span><br><span class="line">decodeLast(ctx,ByteBuf in,List&lt;Object&gt;out)</span><br><span class="line">encode(ctx,I msg,ByteBuf out)</span><br></pre></td></tr></table></figure>
+
+<h2 id="MessageToMessageCodec-抽象类"><a href="#MessageToMessageCodec-抽象类" class="headerlink" title="MessageToMessageCodec(抽象类)"></a>MessageToMessageCodec(抽象类)</h2><p>这是一个参数化的类，声明如下；</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">abstract</span> <span class="class"><span class="keyword">class</span> <span class="title">MessageToMessageCodec</span>&lt;<span class="title">INBOUND_IN</span>, <span class="title">OUTBOUND_IN</span>&gt; <span class="keyword">extends</span> <span class="title">ChannelDuplexHandler</span></span></span><br><span class="line"><span class="class"><span class="title">public</span> <span class="title">class</span> <span class="title">ChannelDuplexHandler</span> <span class="keyword">extends</span> <span class="title">ChannelInboundHandlerAdapter</span> <span class="keyword">implements</span> <span class="title">ChannelOutboundHandler</span></span></span><br></pre></td></tr></table></figure>
+<p>看到这里大致可以发现一个规律，这些编码器、解码器最重要的是定义输入数据的数据类型，而输出数据的数据类型一般都是<code>List&lt;Object&gt;</code>。<br><code>MessageToMessageCodec</code>本质上是一个可以处理入站事件和出站事件的handler，因此需要定义入站和出站的数据类型:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">INBOUND_IN:  入站数据参数的数据类型</span><br><span class="line">OUTBOUND_IN: 出站数据参数的数据类型</span><br></pre></td></tr></table></figure>
+
+<p>它的两个接口:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">abstract</span> <span class="keyword">void</span> <span class="title">encode</span><span class="params">(ChannelHandlerContext ctx</span></span></span><br><span class="line"><span class="function"><span class="params">, OUTBOUND_IN msg   -- 输入</span></span></span><br><span class="line"><span class="function"><span class="params">, List&lt;Object&gt; out)</span> -- 输出，实际上一般会是INBOUND_IN类型</span></span><br><span class="line"><span class="function"><span class="keyword">throws</span> Exception</span>;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">abstract</span> <span class="keyword">void</span> <span class="title">decode</span><span class="params">(ChannelHandlerContext ctx</span></span></span><br><span class="line"><span class="function"><span class="params">, INBOUND_IN msg    -- 输入</span></span></span><br><span class="line"><span class="function"><span class="params">, List&lt;Object&gt; out)</span> -- 输出，实际上一般会是OUTBOUND_IN类型</span></span><br><span class="line"><span class="function"><span class="keyword">throws</span> Exception</span>;</span><br></pre></td></tr></table></figure>
+
+<h2 id="CombinedChannelDuplexHandler类"><a href="#CombinedChannelDuplexHandler类" class="headerlink" title="CombinedChannelDuplexHandler类"></a>CombinedChannelDuplexHandler类</h2><p>编解码器是从头写一个，实现双向转换。<br><code>CombinedChannelDuplexHandler</code>是从已经写好的编码器和解码器，生成一个双向转换的封装类。<br>声明:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">CombinedChannelDuplexHandler</span>&lt;<span class="title">I</span> <span class="keyword">extends</span> <span class="title">ChannelInboundHandler</span></span></span><br><span class="line"><span class="class">, <span class="title">O</span> <span class="keyword">extends</span> <span class="title">ChannelOutboundHandler</span>&gt;</span></span><br><span class="line"><span class="class">        <span class="keyword">extends</span> <span class="title">ChannelDuplexHandler</span> </span>&#123;</span><br></pre></td></tr></table></figure>
+<p>传入两个类,I是inbound,O是outbound。具体样例如下:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">CombinedByteCharCodec</span> <span class="keyword">extends</span></span></span><br><span class="line"><span class="class">    <span class="title">CombinedChannelDuplexHandler</span>&lt;<span class="title">ByteToCharDecoder</span>, <span class="title">CharToByteEncoder</span>&gt; </span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">CombinedByteCharCodec</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="comment">//将委托实例传递给父类</span></span><br><span class="line">        <span class="keyword">super</span>(<span class="keyword">new</span> ByteToCharDecoder(), <span class="keyword">new</span> CharToByteEncoder());</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>传进来后调用父类默认写好的构造函数即可。</p>
+<p>个人理解编解码器和DuplexHandler类都是高级用法，不一定实用。<br>个人偏好直接使用编码器、解码器就好了。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/09/22/2018-09/Netty-in-action%E7%AC%AC%E5%8D%81%E7%AB%A0-%E7%BC%96%E8%A7%A3%E7%A0%81%E5%99%A8-%E7%AC%94%E8%AE%B0/" data-id="ck96cxpol00dkmaamasjl6b24" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Netty/" rel="tag">Netty</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-09/Netty-in-action第九章-单元测试-笔记" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/09/22/2018-09/Netty-in-action%E7%AC%AC%E4%B9%9D%E7%AB%A0-%E5%8D%95%E5%85%83%E6%B5%8B%E8%AF%95-%E7%AC%94%E8%AE%B0/" class="article-date">
@@ -1092,70 +1199,6 @@
 
 
   
-    <article id="post-2018-08/Forkjoin笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/08/05/2018-08/Forkjoin%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2018-08-05T09:34:38.000Z" itemprop="datePublished">2018-08-05</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/08/05/2018-08/Forkjoin%E7%AC%94%E8%AE%B0/">Forkjoin笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="ForkJoin框架"><a href="#ForkJoin框架" class="headerlink" title="ForkJoin框架"></a>ForkJoin框架</h1><p>forkjoin类似于一个单机版的mapreduce，只是把多节点多进程换成了多线程。</p>
-<blockquote>
-<p>分治法(dfs): 把大任务划分成多个子任务,然后单线程执行、合并结果；<br>mapreduce: 把大任务划分成多个子任务,然后多节点多进程执行、合并结果；<br>forkjoin:  把大任务划分成多个子任务,然后多线程执行、合并结果。</p>
-</blockquote>
-<p>优化：<br><code>mapreduce</code>: 可以通过配置开启预测执行，如果有任务算得慢，会启动新的attempt，取算的快的结果，kill跑得慢的attempt；<br><code>forjoin</code>: 通过双端队列存储每个线程的任务，如果有线程结束得慢，空闲的线程会进行<code>工作窃取</code>,从双端队列的尾部拿任务执行（但是不会重复计算同一个任务，这一点与MR不同）。</p>
-<h2 id="示例使用代码"><a href="#示例使用代码" class="headerlink" title="示例使用代码"></a>示例使用代码</h2><p>范围求和：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">CountTask</span> <span class="keyword">extends</span> <span class="title">RecursiveTask</span>&lt;<span class="title">Integer</span>&gt; </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">static</span> <span class="keyword">int</span> THREDSHOLD = <span class="number">2</span>;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> start;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> end;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">CountTask</span><span class="params">(<span class="keyword">int</span> start, <span class="keyword">int</span> end)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.start = start;</span><br><span class="line">        <span class="keyword">this</span>.end = end;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">protected</span> Integer <span class="title">compute</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">int</span> sum = <span class="number">0</span>;</span><br><span class="line">        <span class="keyword">boolean</span> canCompute = (end - start) &lt;= THREDSHOLD;</span><br><span class="line">        <span class="keyword">if</span> (canCompute) &#123;</span><br><span class="line">            <span class="keyword">for</span> (<span class="keyword">int</span> i = start; i &lt;= end; i++) &#123;</span><br><span class="line">                sum += i;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="comment">// 任务太大, 分治</span></span><br><span class="line">            <span class="keyword">int</span> mid = start + (end - start) / <span class="number">2</span>;</span><br><span class="line">            CountTask left = <span class="keyword">new</span> CountTask(start, mid);</span><br><span class="line">            CountTask right = <span class="keyword">new</span> CountTask(mid + <span class="number">1</span>, end);</span><br><span class="line">            left.fork();</span><br><span class="line">            right.fork();</span><br><span class="line">            <span class="keyword">int</span> leftRes = left.join();</span><br><span class="line">            <span class="keyword">int</span> rightRes = right.join();</span><br><span class="line">            sum = leftRes + rightRes;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> sum;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> <span class="keyword">throws</span> ExecutionException, InterruptedException </span>&#123;</span><br><span class="line">        ForkJoinPool forkJoinPool = <span class="keyword">new</span> ForkJoinPool();<span class="comment">// 可以传入并行度参数, 不传则默认从RunningTime取核数作为并行度</span></span><br><span class="line">        CountTask task = <span class="keyword">new</span> CountTask(<span class="number">1</span>, <span class="number">10</span>);<span class="comment">// RecursiveTask=&gt; ForkJoinTask</span></span><br><span class="line">        Future&lt;Integer&gt; res = forkJoinPool.submit(task);<span class="comment">// ForkJoinTask</span></span><br><span class="line">        System.out.print(res.get());</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h2 id="相关类"><a href="#相关类" class="headerlink" title="相关类"></a>相关类</h2><p>可以看到代码里主要是继承<code>RecursiveTask</code>定义一个计算任务类，定义分治和合并计算结果的操作，然后交给<code>ForkJoinPool</code>进行计算即可。（类似于归并排序）</p>
-<p>实际上<code>forkjoin</code>框架中涉及到的类大致如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 外部接口：</span></span><br><span class="line"><span class="comment">// 1. 需要返回值：</span></span><br><span class="line">RecursiveTask =&gt; ForkJoinTask implements Future&lt;V&gt;, Serializable</span><br><span class="line"></span><br><span class="line"><span class="comment">// 2. 不需要返回值：</span></span><br><span class="line">RecursiveAction =&gt; ForkJoinTask implements Future&lt;V&gt;, Serializable</span><br><span class="line"></span><br><span class="line"><span class="comment">// 3. 管理线程池和工作任务：</span></span><br><span class="line">ForkJoinPool =&gt; extends AbstractExecutorService =&gt; implements ExecutorService</span><br></pre></td></tr></table></figure>
-
-<p><code>ForkJoinPool</code>中使用的双端队列：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 内部组件 </span></span><br><span class="line"><span class="meta">@sun</span>.misc.Contended</span><br><span class="line">    <span class="keyword">static</span> <span class="keyword">final</span> <span class="class"><span class="keyword">class</span> <span class="title">WorkQueue</span> </span>&#123;</span><br><span class="line">        <span class="comment">// 核心部分: </span></span><br><span class="line">        <span class="keyword">volatile</span> <span class="keyword">int</span> scanState;    <span class="comment">// versioned, &lt;0: inactive; odd:scanning</span></span><br><span class="line">        <span class="keyword">int</span> stackPred;             <span class="comment">// pool stack (ctl) predecessor</span></span><br><span class="line">        <span class="keyword">volatile</span> <span class="keyword">int</span> qlock;        <span class="comment">// 1: locked, &lt; 0: terminate; else 0</span></span><br><span class="line">        <span class="keyword">volatile</span> <span class="keyword">int</span> base;         <span class="comment">// 队尾,poll用,会被窃取线程更改。</span></span><br><span class="line">        <span class="keyword">int</span> top;                   <span class="comment">// 队首,push用,只会被当前线程更改,</span></span><br><span class="line">                                   <span class="comment">// 因此没有volatile</span></span><br><span class="line">        ForkJoinTask&lt;?&gt;[] array;   <span class="comment">// 双端队列</span></span><br><span class="line">        <span class="keyword">volatile</span> Thread parker;    <span class="comment">// == owner during call to park; else null</span></span><br><span class="line">        <span class="keyword">volatile</span> ForkJoinTask&lt;?&gt; currentJoin;  <span class="comment">// task being joined in awaitJoin</span></span><br><span class="line">        <span class="keyword">volatile</span> ForkJoinTask&lt;?&gt; currentSteal; <span class="comment">// mainly used by helpStealer</span></span><br><span class="line">        <span class="comment">// 其他成员省略:</span></span><br><span class="line">        ... </span><br><span class="line">    ... </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-
-
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/08/05/2018-08/Forkjoin%E7%AC%94%E8%AE%B0/" data-id="ck96cxpob00clmaame2gp155l" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%B9%B6%E5%8F%91/" rel="tag">并发</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1182,6 +1225,10 @@
       <ul>
         
           <li>
+            <a href="/2022/01/21/2022-01/voip-rtc/">VoIP和RTC</a>
+          </li>
+        
+          <li>
             <a href="/2021/07/26/2021-07/metaspace%E7%AC%94%E8%AE%B0/">metaspace笔记</a>
           </li>
         
@@ -1195,10 +1242,6 @@
         
           <li>
             <a href="/2020/12/27/2020-12/%E8%B7%A8%E5%9F%9F%E7%9B%B8%E5%85%B3/">跨域相关</a>
-          </li>
-        
-          <li>
-            <a href="/2020/12/20/2020-12/%E7%BA%BF%E4%B8%8A%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-%E6%9F%A5%E7%9C%8B%E6%96%B9%E6%B3%95%E7%BA%A7%E8%80%97%E6%97%B6/">线上性能debug-查看方法级耗时</a>
           </li>
         
       </ul>
@@ -1216,7 +1259,7 @@
   
   <div class="outer">
     <div id="footer-left">
-      &copy; 2014 - 2021 风梦七&nbsp;|&nbsp;
+      &copy; 2014 - 2022 风梦七&nbsp;|&nbsp;
       主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
     </div>
      <div id="footer-right">

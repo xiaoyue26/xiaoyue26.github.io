@@ -72,6 +72,70 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-08/Forkjoin笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/08/05/2018-08/Forkjoin%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2018-08-05T09:34:38.000Z" itemprop="datePublished">2018-08-05</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/08/05/2018-08/Forkjoin%E7%AC%94%E8%AE%B0/">Forkjoin笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="ForkJoin框架"><a href="#ForkJoin框架" class="headerlink" title="ForkJoin框架"></a>ForkJoin框架</h1><p>forkjoin类似于一个单机版的mapreduce，只是把多节点多进程换成了多线程。</p>
+<blockquote>
+<p>分治法(dfs): 把大任务划分成多个子任务,然后单线程执行、合并结果；<br>mapreduce: 把大任务划分成多个子任务,然后多节点多进程执行、合并结果；<br>forkjoin:  把大任务划分成多个子任务,然后多线程执行、合并结果。</p>
+</blockquote>
+<p>优化：<br><code>mapreduce</code>: 可以通过配置开启预测执行，如果有任务算得慢，会启动新的attempt，取算的快的结果，kill跑得慢的attempt；<br><code>forjoin</code>: 通过双端队列存储每个线程的任务，如果有线程结束得慢，空闲的线程会进行<code>工作窃取</code>,从双端队列的尾部拿任务执行（但是不会重复计算同一个任务，这一点与MR不同）。</p>
+<h2 id="示例使用代码"><a href="#示例使用代码" class="headerlink" title="示例使用代码"></a>示例使用代码</h2><p>范围求和：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">CountTask</span> <span class="keyword">extends</span> <span class="title">RecursiveTask</span>&lt;<span class="title">Integer</span>&gt; </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">static</span> <span class="keyword">int</span> THREDSHOLD = <span class="number">2</span>;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> start;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">int</span> end;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">CountTask</span><span class="params">(<span class="keyword">int</span> start, <span class="keyword">int</span> end)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.start = start;</span><br><span class="line">        <span class="keyword">this</span>.end = end;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">protected</span> Integer <span class="title">compute</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">int</span> sum = <span class="number">0</span>;</span><br><span class="line">        <span class="keyword">boolean</span> canCompute = (end - start) &lt;= THREDSHOLD;</span><br><span class="line">        <span class="keyword">if</span> (canCompute) &#123;</span><br><span class="line">            <span class="keyword">for</span> (<span class="keyword">int</span> i = start; i &lt;= end; i++) &#123;</span><br><span class="line">                sum += i;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="comment">// 任务太大, 分治</span></span><br><span class="line">            <span class="keyword">int</span> mid = start + (end - start) / <span class="number">2</span>;</span><br><span class="line">            CountTask left = <span class="keyword">new</span> CountTask(start, mid);</span><br><span class="line">            CountTask right = <span class="keyword">new</span> CountTask(mid + <span class="number">1</span>, end);</span><br><span class="line">            left.fork();</span><br><span class="line">            right.fork();</span><br><span class="line">            <span class="keyword">int</span> leftRes = left.join();</span><br><span class="line">            <span class="keyword">int</span> rightRes = right.join();</span><br><span class="line">            sum = leftRes + rightRes;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> sum;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> <span class="keyword">throws</span> ExecutionException, InterruptedException </span>&#123;</span><br><span class="line">        ForkJoinPool forkJoinPool = <span class="keyword">new</span> ForkJoinPool();<span class="comment">// 可以传入并行度参数, 不传则默认从RunningTime取核数作为并行度</span></span><br><span class="line">        CountTask task = <span class="keyword">new</span> CountTask(<span class="number">1</span>, <span class="number">10</span>);<span class="comment">// RecursiveTask=&gt; ForkJoinTask</span></span><br><span class="line">        Future&lt;Integer&gt; res = forkJoinPool.submit(task);<span class="comment">// ForkJoinTask</span></span><br><span class="line">        System.out.print(res.get());</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="相关类"><a href="#相关类" class="headerlink" title="相关类"></a>相关类</h2><p>可以看到代码里主要是继承<code>RecursiveTask</code>定义一个计算任务类，定义分治和合并计算结果的操作，然后交给<code>ForkJoinPool</code>进行计算即可。（类似于归并排序）</p>
+<p>实际上<code>forkjoin</code>框架中涉及到的类大致如下：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 外部接口：</span></span><br><span class="line"><span class="comment">// 1. 需要返回值：</span></span><br><span class="line">RecursiveTask =&gt; ForkJoinTask implements Future&lt;V&gt;, Serializable</span><br><span class="line"></span><br><span class="line"><span class="comment">// 2. 不需要返回值：</span></span><br><span class="line">RecursiveAction =&gt; ForkJoinTask implements Future&lt;V&gt;, Serializable</span><br><span class="line"></span><br><span class="line"><span class="comment">// 3. 管理线程池和工作任务：</span></span><br><span class="line">ForkJoinPool =&gt; extends AbstractExecutorService =&gt; implements ExecutorService</span><br></pre></td></tr></table></figure>
+
+<p><code>ForkJoinPool</code>中使用的双端队列：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 内部组件 </span></span><br><span class="line"><span class="meta">@sun</span>.misc.Contended</span><br><span class="line">    <span class="keyword">static</span> <span class="keyword">final</span> <span class="class"><span class="keyword">class</span> <span class="title">WorkQueue</span> </span>&#123;</span><br><span class="line">        <span class="comment">// 核心部分: </span></span><br><span class="line">        <span class="keyword">volatile</span> <span class="keyword">int</span> scanState;    <span class="comment">// versioned, &lt;0: inactive; odd:scanning</span></span><br><span class="line">        <span class="keyword">int</span> stackPred;             <span class="comment">// pool stack (ctl) predecessor</span></span><br><span class="line">        <span class="keyword">volatile</span> <span class="keyword">int</span> qlock;        <span class="comment">// 1: locked, &lt; 0: terminate; else 0</span></span><br><span class="line">        <span class="keyword">volatile</span> <span class="keyword">int</span> base;         <span class="comment">// 队尾,poll用,会被窃取线程更改。</span></span><br><span class="line">        <span class="keyword">int</span> top;                   <span class="comment">// 队首,push用,只会被当前线程更改,</span></span><br><span class="line">                                   <span class="comment">// 因此没有volatile</span></span><br><span class="line">        ForkJoinTask&lt;?&gt;[] array;   <span class="comment">// 双端队列</span></span><br><span class="line">        <span class="keyword">volatile</span> Thread parker;    <span class="comment">// == owner during call to park; else null</span></span><br><span class="line">        <span class="keyword">volatile</span> ForkJoinTask&lt;?&gt; currentJoin;  <span class="comment">// task being joined in awaitJoin</span></span><br><span class="line">        <span class="keyword">volatile</span> ForkJoinTask&lt;?&gt; currentSteal; <span class="comment">// mainly used by helpStealer</span></span><br><span class="line">        <span class="comment">// 其他成员省略:</span></span><br><span class="line">        ... </span><br><span class="line">    ... </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/08/05/2018-08/Forkjoin%E7%AC%94%E8%AE%B0/" data-id="ck96cxpob00clmaame2gp155l" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%B9%B6%E5%8F%91/" rel="tag">并发</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-08/Future-FutureTask笔记" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/08/05/2018-08/Future-FutureTask%E7%AC%94%E8%AE%B0/" class="article-date">
@@ -975,60 +1039,6 @@
 
 
   
-    <article id="post-2018-04/resolv-conf笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/04/08/2018-04/resolv-conf%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2018-04-08T03:37:38.000Z" itemprop="datePublished">2018-04-08</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/%E9%85%8D%E7%BD%AE/">配置</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/04/08/2018-04/resolv-conf%E7%AC%94%E8%AE%B0/">resolv.conf笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p><code>/etc/resolv.conf</code>配置文件的4个关键字:</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">// 1. 定义dns服务器的地址,按序查找</span><br><span class="line">nameserver 8.8.8.8</span><br><span class="line">nameserver 114.114.114.114</span><br><span class="line"></span><br><span class="line">// 2. 本地域名.  </span><br><span class="line">domain google.com</span><br><span class="line"></span><br><span class="line">// 3. 搜索域名.</span><br><span class="line">search google.com cn.bing.com</span><br><span class="line"></span><br><span class="line">// 4. 返回域名的排序</span><br><span class="line">sortlist</span><br></pre></td></tr></table></figure>
-
-<p>主要用到的其实是<code>nameserver</code>和<code>search</code>.</p>
-<p>其中<code>search</code>的用例如下:</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ping new</span><br></pre></td></tr></table></figure>
-<p>由于<code>new</code>这个域名找不到ip;<br>尝试搜索<code>new.google.com</code>,(<code>search</code>域的第一项)<br>如果还是搜不到,就尝试搜索<code>new.cn.bing.com</code>.<br>也就说<code>search</code>会尝试补齐域名。</p>
-<p>至于<code>domain</code>,相当于配置<code>search</code>的默认值。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/04/08/2018-04/resolv-conf%E7%AC%94%E8%AE%B0/" data-id="ck96cxpo500bumaam1k2n35n9" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E9%85%8D%E7%BD%AE/" rel="tag">配置</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1055,6 +1065,10 @@
       <ul>
         
           <li>
+            <a href="/2022/01/21/2022-01/voip-rtc/">VoIP和RTC</a>
+          </li>
+        
+          <li>
             <a href="/2021/07/26/2021-07/metaspace%E7%AC%94%E8%AE%B0/">metaspace笔记</a>
           </li>
         
@@ -1068,10 +1082,6 @@
         
           <li>
             <a href="/2020/12/27/2020-12/%E8%B7%A8%E5%9F%9F%E7%9B%B8%E5%85%B3/">跨域相关</a>
-          </li>
-        
-          <li>
-            <a href="/2020/12/20/2020-12/%E7%BA%BF%E4%B8%8A%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-%E6%9F%A5%E7%9C%8B%E6%96%B9%E6%B3%95%E7%BA%A7%E8%80%97%E6%97%B6/">线上性能debug-查看方法级耗时</a>
           </li>
         
       </ul>
@@ -1089,7 +1099,7 @@
   
   <div class="outer">
     <div id="footer-left">
-      &copy; 2014 - 2021 风梦七&nbsp;|&nbsp;
+      &copy; 2014 - 2022 风梦七&nbsp;|&nbsp;
       主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
     </div>
      <div id="footer-right">
