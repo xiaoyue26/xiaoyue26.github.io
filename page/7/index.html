@@ -72,6 +72,81 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-02/redis设计与实现笔记3-数据库" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/13/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B03-%E6%95%B0%E6%8D%AE%E5%BA%93/" class="article-date">
+  <time datetime="2019-02-13T01:50:59.000Z" itemprop="datePublished">2019-02-13</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/02/13/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B03-%E6%95%B0%E6%8D%AE%E5%BA%93/">redis设计与实现笔记3-数据库</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h2 id="架构"><a href="#架构" class="headerlink" title="架构:"></a>架构:</h2><p>server-&gt; db* -&gt; dict*(k/v)</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">redisServer</span> &#123;</span></span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">    redisDb *db;</span><br><span class="line">    <span class="keyword">int</span> dbnum;    </span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">&#125; redisDb;</span><br></pre></td></tr></table></figure>
+
+<h1 id="数据库键空间"><a href="#数据库键空间" class="headerlink" title="数据库键空间"></a>数据库键空间</h1><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">redisDb</span> &#123;</span></span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">    <span class="comment">// 数据库键空间，保存着数据库中的所有键值对</span></span><br><span class="line">    dict *dict;</span><br><span class="line">    <span class="comment">// 过期时间:</span></span><br><span class="line">    dict *expires;</span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">&#125; redisDb;</span><br></pre></td></tr></table></figure>
+
+<p>db默认有16,客户端可以通过<code>select 1</code>命令来选择1号数据库。<br>每个client会保存当前在哪个db的状态变量。</p>
+<h1 id="键-Key"><a href="#键-Key" class="headerlink" title="键:Key"></a>键:Key</h1><p>key只能为字符串。<br>整个架构最多三层: db-&gt;hashtable-&gt;value</p>
+<img src="/images/2019-02/db_kv.png" class="" width="800" height="1200" title="db_kv">
+
+<h1 id="key过期"><a href="#key过期" class="headerlink" title="key过期"></a>key过期</h1><h2 id="过期删除策略"><a href="#过期删除策略" class="headerlink" title="过期删除策略"></a>过期删除策略</h2><ol>
+<li>定时统一删除 (一般不用，卡太久)</li>
+<li>惰性删除(默认使用,访问时发现过期才删除)</li>
+<li>定期删除(默认使用,类似于增量删除,每次删除最近过期的)</li>
+</ol>
+<h2 id="redis持久化策略"><a href="#redis持久化策略" class="headerlink" title="redis持久化策略"></a>redis持久化策略</h2><ol>
+<li>RDB: 定期(比如五分钟)做一次快照; (<code>Redis DataBase</code>)</li>
+<li>AOF: 类似于WAL，存每条操作指令日志。(<code>Append only file</code>)</li>
+</ol>
+<h2 id="RDB和AOF下的过期删除"><a href="#RDB和AOF下的过期删除" class="headerlink" title="RDB和AOF下的过期删除"></a>RDB和AOF下的过期删除</h2><ol>
+<li>RDB:  主服务器生成快照时删除过期key; 从库则保留。从库只有收到主库DEL指令时候才会删除过期key。</li>
+<li>AOF:  保存DEL指令即可。</li>
+</ol>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">从库如果没有收到主库的DEL指令，即使已经key已经过期，也会返回给客户端。</span><br></pre></td></tr></table></figure>
+<p>主从复制要点：（中心化，一致性）<br><code>从库</code>只接受<code>主库</code>的<code>写</code>指令，自己只执行<code>读</code>。</p>
+<h1 id="通知机制"><a href="#通知机制" class="headerlink" title="通知机制"></a>通知机制</h1><p>两个功能:</p>
+<ol>
+<li>订阅某个key的所有操作; (只能知道发生了什么类型的操作,不知道操作数)</li>
+<li>订阅某个库下的所有DEL操作.(或者别的什么操作)<br>换句话说就是订阅某个库下key，或者订阅指令。</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/13/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B03-%E6%95%B0%E6%8D%AE%E5%BA%93/" data-id="ck96cxpp600g1maam1uc41333" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2019-02/高性能mysql附录A-E-笔记" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/02/13/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E9%99%84%E5%BD%95A-E-%E7%AC%94%E8%AE%B0/" class="article-date">
@@ -1158,79 +1233,6 @@
 
 
   
-    <article id="post-2019-01/redis的embstr为什么是39B" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/01/19/2019-01/redis%E7%9A%84embstr%E4%B8%BA%E4%BB%80%E4%B9%88%E6%98%AF39B/" class="article-date">
-  <time datetime="2019-01-19T02:47:50.000Z" itemprop="datePublished">2019-01-19</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/redis/">redis</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/01/19/2019-01/redis%E7%9A%84embstr%E4%B8%BA%E4%BB%80%E4%B9%88%E6%98%AF39B/">redis的embstr为什么是39B</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>回顾字符串的三种实现:</p>
-<ul>
-<li><code>int</code>: long能存下的数会用数字编码;</li>
-<li><code>embstr</code>: &lt;=39B的字符串，或者浮点数，会用<code>embstr</code>编码;</li>
-<li><code>raw</code>: &gt;39B的字符串，会用<code>raw</code>编码,也就是简单动态字符串(<code>SDS</code>)。<img src="/images/2019-01/raw.png" class="" width="800" height="1200" title="raw">
-<img src="/images/2019-01/embstr.png" class="" width="800" height="1200" title="embstr">
-
-</li>
-</ul>
-<p><code>embstr</code>顾名思义就是嵌入式字符串，把元数据和实际数据存放在一起，好处是这样可以对缓存友好，可以减少一次寻址。坏处是只能支持短字符串。<br>这里为啥是39B作为切换条件呢?(而且没有看到参数进行调节)，这其实是存储结构决定的。</p>
-<blockquote>
-<p>embstr本质上是利用了元数据存储空间里的剩余空间存储字符串。</p>
-</blockquote>
-<p>所以当元数据剩了40B，<code>embstr</code>就最多只能存39B了(还要留1B存<code>\0</code>)。<br>回顾元数据结构：</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> LRU_BITS 24</span></span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">redisObject</span> &#123;</span>    <span class="comment">// redis对象</span></span><br><span class="line">    <span class="keyword">unsigned</span> type:<span class="number">4</span>;    <span class="comment">// 类型,4bit</span></span><br><span class="line">    <span class="keyword">unsigned</span> encoding:<span class="number">4</span>;    <span class="comment">// 编码,4bit</span></span><br><span class="line">    <span class="keyword">unsigned</span> lru:LRU_BITS; <span class="comment">/* lru time (relative to server.lruclock) */</span> <span class="comment">// 24bit</span></span><br><span class="line">    <span class="keyword">int</span> refcount;   <span class="comment">// 引用计数</span></span><br><span class="line">    <span class="keyword">void</span> *ptr;  <span class="comment">// 指向各种基础类型的指针</span></span><br><span class="line">&#125; robj;</span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">sdshdr</span> &#123;</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> len;</span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> <span class="built_in">free</span>;</span><br><span class="line">    <span class="keyword">char</span> buf[];</span><br><span class="line">&#125;sds;</span><br></pre></td></tr></table></figure>
-<img src="/images/2019-01/sizeof0.png" class="" width="800" height="1200" title="sizeof0">
-<img src="/images/2019-01/sizeof1.png" class="" width="800" height="1200" title="sizeof0">
-
-<h2 id="redisObject占16B"><a href="#redisObject占16B" class="headerlink" title="redisObject占16B"></a>redisObject占16B</h2><p><code>16B=(4bit+4bit+24bit)+4B+8B= (32/8)B+12B</code></p>
-<h2 id="sdshdr占8B"><a href="#sdshdr占8B" class="headerlink" title="sdshdr占8B"></a>sdshdr占8B</h2><p><code>8=4+4+0</code><br>注意这里的<code>char buf[]</code>不占空间，当里面存放字符串的时候才占空间，而且末尾需要1B存放<code>\0</code>。</p>
-<p>按最小分配64B来算，剩余空间就是64B-16B-8B-1B=39B。</p>
-<p>但是，如果仔细看看这里<code>sdshdr</code>里的，两个4B的长度：</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">unsigned</span> <span class="keyword">int</span> len;</span><br><span class="line"><span class="keyword">unsigned</span> <span class="keyword">int</span> <span class="built_in">free</span>;</span><br></pre></td></tr></table></figure>
-<p>想一下，这里最大长度也才39,根本不需要这么大的数据结构来存长度，因此其实还是有压榨空间的。</p>
-<h1 id="从39B到44B"><a href="#从39B到44B" class="headerlink" title="从39B到44B"></a>从39B到44B</h1><p>新版本的<code>embstr</code>已经不是39B了，改成了44B。本质上是元数据的剩余空间再次发生了变化。<br>新版本的元数据(从<code>SDS_TYPE_5</code>到<code>SDS_TYPE_64</code>5个)：<br>(<a href="https://github.com/antirez/redis/blob/unstable/src/sds.h" target="_blank" rel="noopener">https://github.com/antirez/redis/blob/unstable/src/sds.h</a>)</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* Note: sdshdr5 is never used, we just access the flags byte directly.</span></span><br><span class="line"><span class="comment"> * However is here to document the layout of type 5 SDS strings. */</span></span><br><span class="line"><span class="class"><span class="keyword">struct</span> __<span class="title">attribute__</span> ((__<span class="title">packed__</span>)) <span class="title">sdshdr5</span> &#123;</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> flags; <span class="comment">/* 3 lsb of type, and 5 msb of string length */</span></span><br><span class="line">    <span class="keyword">char</span> buf[];</span><br><span class="line">&#125;;</span><br><span class="line"><span class="class"><span class="keyword">struct</span> __<span class="title">attribute__</span> ((__<span class="title">packed__</span>)) <span class="title">sdshdr8</span> &#123;</span></span><br><span class="line">    <span class="keyword">uint8_t</span> len; <span class="comment">/* used */</span></span><br><span class="line">    <span class="keyword">uint8_t</span> alloc; <span class="comment">/* excluding the header and null terminator */</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> flags; <span class="comment">/* 3 lsb of type, 5 unused bits */</span></span><br><span class="line">    <span class="keyword">char</span> buf[];</span><br><span class="line">&#125;;</span><br><span class="line"><span class="class"><span class="keyword">struct</span> __<span class="title">attribute__</span> ((__<span class="title">packed__</span>)) <span class="title">sdshdr16</span> &#123;</span></span><br><span class="line">    <span class="keyword">uint16_t</span> len; <span class="comment">/* used */</span></span><br><span class="line">    <span class="keyword">uint16_t</span> alloc; <span class="comment">/* excluding the header and null terminator */</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> flags; <span class="comment">/* 3 lsb of type, 5 unused bits */</span></span><br><span class="line">    <span class="keyword">char</span> buf[];</span><br><span class="line">&#125;;</span><br><span class="line"><span class="class"><span class="keyword">struct</span> __<span class="title">attribute__</span> ((__<span class="title">packed__</span>)) <span class="title">sdshdr32</span> &#123;</span></span><br><span class="line">    <span class="keyword">uint32_t</span> len; <span class="comment">/* used */</span></span><br><span class="line">    <span class="keyword">uint32_t</span> alloc; <span class="comment">/* excluding the header and null terminator */</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> flags; <span class="comment">/* 3 lsb of type, 5 unused bits */</span></span><br><span class="line">    <span class="keyword">char</span> buf[];</span><br><span class="line">&#125;;</span><br><span class="line"><span class="class"><span class="keyword">struct</span> __<span class="title">attribute__</span> ((__<span class="title">packed__</span>)) <span class="title">sdshdr64</span> &#123;</span></span><br><span class="line">    <span class="keyword">uint64_t</span> len; <span class="comment">/* used */</span></span><br><span class="line">    <span class="keyword">uint64_t</span> alloc; <span class="comment">/* excluding the header and null terminator */</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> flags; <span class="comment">/* 3 lsb of type, 5 unused bits */</span></span><br><span class="line">    <span class="keyword">char</span> buf[];</span><br><span class="line">&#125;;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>其中<code>sdshdr5</code>其实没有用，用的是<code>sdshdr8</code>，因此这里的元数据结构从8B下降到3B，<code>embstr</code>可用空间也就从39B上升到44B了。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/01/19/2019-01/redis%E7%9A%84embstr%E4%B8%BA%E4%BB%80%E4%B9%88%E6%98%AF39B/" data-id="ck96cxpp300fnmaama6uv3u8r" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1257,6 +1259,10 @@
       <ul>
         
           <li>
+            <a href="/2022/02/16/2022-02/http-range/">http_range</a>
+          </li>
+        
+          <li>
             <a href="/2022/01/21/2022-01/voip-rtc/">VoIP和RTC</a>
           </li>
         
@@ -1270,10 +1276,6 @@
         
           <li>
             <a href="/2021/02/22/2021-02/%E5%A4%9A%E9%A1%B9%E7%9B%AE%E5%85%B1%E4%BA%AB%E4%BB%A3%E7%A0%81%E4%B9%8B%E2%80%94%E2%80%94git-subtree/">多项目共享代码之——git subtree</a>
-          </li>
-        
-          <li>
-            <a href="/2020/12/27/2020-12/%E8%B7%A8%E5%9F%9F%E7%9B%B8%E5%85%B3/">跨域相关</a>
           </li>
         
       </ul>

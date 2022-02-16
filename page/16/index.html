@@ -72,6 +72,95 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-sqoop学习笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2017/09/28/sqoop%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2017-09-28T12:08:36.000Z" itemprop="datePublished">2017-09-28</time>
+</a>
+    
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2017/09/28/sqoop%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/">sqoop学习笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p><a href="https://geosmart.github.io/2016/02/24/Sqoop%E4%BD%BF%E7%94%A8%E7%AC%94%E8%AE%B0/" target="_blank" rel="noopener">https://geosmart.github.io/2016/02/24/Sqoop%E4%BD%BF%E7%94%A8%E7%AC%94%E8%AE%B0/</a><br><a href="https://sqoop.apache.org/docs/1.4.6/SqoopUserGuide.html#_mysql" target="_blank" rel="noopener">https://sqoop.apache.org/docs/1.4.6/SqoopUserGuide.html#_mysql</a><br><a href="http://stackoverflow.com/questions/25887086/sqoop-export-using-update-key" target="_blank" rel="noopener">http://stackoverflow.com/questions/25887086/sqoop-export-using-update-key</a></p>
+<h1 id="1-列出数据库"><a href="#1-列出数据库" class="headerlink" title="1.列出数据库:"></a>1.列出数据库:</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sqoop list-databases --connect jdbc:mysql:&#x2F;&#x2F;pipe-reader:3306&#x2F; -username pipe -password pipe</span><br></pre></td></tr></table></figure>
+
+<h1 id="2-列出表"><a href="#2-列出表" class="headerlink" title="2.列出表:"></a>2.列出表:</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sqoop list-tables --connect jdbc:mysql:&#x2F;&#x2F;pipe-reader:3306&#x2F;pipe_tutor --username xxx --password pipe123</span><br></pre></td></tr></table></figure>
+
+<h1 id="3-复制表结构"><a href="#3-复制表结构" class="headerlink" title="3. 复制表结构:"></a>3. 复制表结构:</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">sqoop create-hive-table --connect jdbc:mysql:&#x2F;&#x2F;pipe-reader:3306&#x2F;pipe_tutor --table dim_tutor_teacher \</span><br><span class="line">--username xxx --password xxx \</span><br><span class="line">--hive-table tutor.dim_tutor_teacher  --fields-terminated-by &quot;\t&quot;  --lines-terminated-by &quot;\n&quot;;</span><br></pre></td></tr></table></figure>
+
+<h1 id="4-复制数据"><a href="#4-复制数据" class="headerlink" title="4. 复制数据:"></a>4. 复制数据:</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">sqoop import --connect jdbc:mysql:&#x2F;&#x2F;pipe-reader:3306&#x2F;pipe_tutor \</span><br><span class="line">--username xxx --password xxx \</span><br><span class="line">--table dim_tutor_teacher --hive-import --hive-table tutor.dim_tutor_teacher \</span><br><span class="line">-m 1 --fields-terminated-by &quot;\t&quot;;</span><br></pre></td></tr></table></figure>
+
+<h2 id="工作流程为"><a href="#工作流程为" class="headerlink" title="工作流程为:"></a>工作流程为:</h2><blockquote>
+<p>(1) 连接ZK<br>(2) 使用 <code>SELECT t.* FROM</code>dim_tutor_teacher<code>AS t LIMIT 1&#39; 测试连接
+(3) 生成一个运行jar包:</code>/tmp/sqoop-maintain/compile/a2b05194f5b67b58688dff76426380ef/dim_tutor_teacher.jar<code>(4) 提交jar包到RM,输出文件到</code>/user/maintain/dim_tutor_teacher<code>(5) load数据到内部表,</code>/user/maintain/dim_tutor_teacher<code>下的文件除了</code>_success<code>文件都移动到 :</code>/user/hive/warehouse/tutor.db/dim_tutor_teacher`</p>
+</blockquote>
+<h2 id="注意事项"><a href="#注意事项" class="headerlink" title="注意事项:"></a>注意事项:</h2><blockquote>
+<p>(1) 若输出文件夹已经存在则会报错: <code>dfs -rmr  /user/maintain/dim_tutor_teacher</code><br>(2) 内部表可以原先不存在,或者存在.<br>(3) 若表中原有数据,则load数据后会有两份数据. (需要自己手动删原有数据: <code>truncate table tutor.dim_tutor_teacher</code> )<br>(4) 使用<code>--direct</code>参数可以更快,但不支持blob和clob类型字段.<br>(5) 若hive表结构存在且与mysql表结构不一样,不影响sqoop工作(多退少补NULL).</p>
+</blockquote>
+<h2 id="启发"><a href="#启发" class="headerlink" title="启发:"></a>启发:</h2><blockquote>
+<p>若使用外部表:<br>(1) 不需要删表数据,只需要和原来一样,删除输出文件夹.<br>(2) 表结构更新:<br>(2.1)内部表使用alter语句,外部表可以使用drop,create语句.<br>(2.2)若有dt且表结构中间多了一列,数据错位,无论内部表外部表,历史数据都不可直接用.需要写脚本转换调整.</p>
+</blockquote>
+<h1 id="5-将hive中的表数据导入到mysql数据库表中"><a href="#5-将hive中的表数据导入到mysql数据库表中" class="headerlink" title="5. 将hive中的表数据导入到mysql数据库表中"></a>5. 将hive中的表数据导入到mysql数据库表中</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">sqoop export --connect jdbc:mysql:&#x2F;&#x2F;pipe-reader:3306&#x2F;pipe_tutor \</span><br><span class="line">--username xxx --password xxx \</span><br><span class="line">--table test_teacher --export-dir &#x2F;user&#x2F;hive&#x2F;warehouse&#x2F;tutor.db&#x2F;dim_tutor_teacher  \</span><br><span class="line">--input-fields-terminated-by &#39;\t&#39; \</span><br><span class="line">--update-mode allowinsert --update-key id \</span><br><span class="line">--input-null-string &quot;\\\\N&quot; --input-null-non-string &quot;\\\\N&quot;</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>注意事项:</p>
+</blockquote>
+<ol>
+<li>其中mysql表<code>pipe_tutor.test_teacher</code>需要自己手动建立表结构,这一点和从mysql导到hive不同.</li>
+<li>若<code>pipe_tutor.test_teacher</code>中原有一部分数据,则当出现主键冲突时,会卡死.使用<code>--update-mode allowinsert --update-key id</code>参数可解开卡死.</li>
+<li>导出的时候最好在末尾加上:<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">--input-null-string &quot;\\\\N&quot; --input-null-non-string &quot;\\\\N&quot;</span><br></pre></td></tr></table></figure></li>
+<li>更新模式:–update-mode updateonly/allowinsert<br>updateonly则只更新,allowinsert则对于没有冲突的primary key 进行插入.</li>
+</ol>
+<h1 id="6-–query-语句和–append使用-mysql-gt-hdfs"><a href="#6-–query-语句和–append使用-mysql-gt-hdfs" class="headerlink" title="6. –query 语句和–append使用 (mysql -&gt; hdfs)"></a>6. –query 语句和–append使用 (mysql -&gt; hdfs)</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">sqoop import --append --connect jdbc:mysql:&#x2F;&#x2F;pipe-reader:3306&#x2F;pipe_tutor --username xxx --password xxx --query &quot;select * from test_teacher where \$CONDITIONS and id&gt;30&quot;  -m 2  --split-by id --target-dir &#x2F;user&#x2F;maintain&#x2F;dim_tutor_teacher --fields-terminated-by &quot;\t&quot;;</span><br><span class="line">&#96;&#96;&#96; </span><br><span class="line">或:</span><br></pre></td></tr></table></figure>
+<p>sqoop import –append –connect jdbc:mysql://pipe-reader:3306/pipe_tutor –username xxx –password xxx –query “select * from test_teacher where $CONDITIONS and id&gt;30”  -m 1  –target-dir /user/maintain/dim_tutor_teacher –fields-terminated-by “\t”;</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">\$CONDITIONS 作为关键字,用于均摊任务到mapper中时填充筛选条件.</span><br><span class="line">使用--query时必须使用\$CONDITIONS.</span><br><span class="line"></span><br><span class="line"># 7. --columns  --where 语句使用(mysql -&gt; hdfs)</span><br></pre></td></tr></table></figure>
+<p>sqoop import –append –connect jdbc:mysql://pipe-reader:3306/pipe_tutor –username xxx –password xxx –table test_teacher –columns “id,status,course”  –where “id &lt; 3 “  -m 1  –target-dir /user/maintain/dim_tutor_teacher –fields-terminated-by “,”;</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">--fields-terminated-by默认以&#39;,&#39;分隔.</span><br><span class="line"></span><br><span class="line">导入hdfs:</span><br><span class="line">--target-dir &#x2F;user&#x2F;maintain&#x2F;dim_tutor_teacher</span><br><span class="line">导入hive表:</span><br><span class="line"> --hive-import --hive-table tutor.dim_tutor_teacher</span><br><span class="line"> </span><br><span class="line">分隔符:</span><br><span class="line">--fields-terminated-by &#39;\t&#39;  --lines-terminated-by &#39;\n&#39; --optionally-enclosed-by &#39;\&quot;&#39;     \</span><br><span class="line"></span><br><span class="line">#8. 测试 --direct 参数</span><br><span class="line"></span><br><span class="line">clob的字段是导入到hdfs上是正常显示文本，blob是二进制文件导出到hdfs上显示为16进制. 16进制转string:</span><br><span class="line">http:&#x2F;&#x2F;www.aboutyun.com&#x2F;thread-14008-1-1.html</span><br><span class="line"></span><br><span class="line">对于clob和blob字段,使用--direct参数时应使用--query参数,不能使用--table参数.</span><br><span class="line">或者不使用--direct参数.</span><br><span class="line"></span><br><span class="line">参数:</span><br></pre></td></tr></table></figure>
+<p>–driver com.mysql.jdbc.Driver</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">语句:</span><br></pre></td></tr></table></figure>
+<p>sqoop import –append  <br>–connect jdbc:mysql://mysql-ape-exercise13-reader:3306/ape_exercise13 <br>–username ape –password ape@ytkz7c <br>–query “select * from exercise where $CONDITIONS   limit 1” <br>-m 1  –target-dir /user/maintain/dim_tutor_teacher <br>–direct <br> –fields-terminated-by “\t”;</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+<p>sqoop import –append  <br>–connect jdbc:mysql://mysql-ape-conan-task4-reader:3306/ape_conan_task14 <br>–username ape –password 87mPiRJky <br>–query “select * from task where $CONDITIONS” <br> -m 1  –target-dir /user/maintain/dim_tutor_teacher <br>–direct <br> –fields-terminated-by “\t”;</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line">#9. sqoop执行文件:</span><br><span class="line">sqoop --options-file .&#x2F;test.opt</span><br><span class="line">sqoop命令格式是 &#96;sqoop CMD [args]&#96;</span><br><span class="line">从下文示例可以看出:</span><br><span class="line">test.opt文件第一行是&#96;CMD&#96;(&#96;import&#96;);</span><br><span class="line">以换行分隔参数(&#96;args&#96;).每对参数和值分成两行,</span><br><span class="line">key前加&#96;--&#96;,value则不用.</span><br><span class="line">关键字&#96;$CONDITIONS&#96;前的反斜杠不能加.</span><br><span class="line">&#96;--query&#96;的&#96;sql&#96;语句的引号可有可无.</span><br><span class="line">分隔符的&#96;\t&#96;语句的引号可有可无.</span><br><span class="line"></span><br><span class="line">&#96;&#96;&#96;test.opt</span><br><span class="line">import</span><br><span class="line">--append</span><br><span class="line">--connect</span><br><span class="line">jdbc:mysql:&#x2F;&#x2F;mysql-ape-conan-task4-reader:3306&#x2F;ape_conan_task14</span><br><span class="line">--username</span><br><span class="line">ape</span><br><span class="line">--password</span><br><span class="line">87mPiRJky</span><br><span class="line">--query</span><br><span class="line">select * from task where $CONDITIONS</span><br><span class="line">-m</span><br><span class="line">1</span><br><span class="line">--target-dir</span><br><span class="line">&#x2F;user&#x2F;maintain&#x2F;dim_tutor_teacher</span><br><span class="line">--direct</span><br><span class="line">--fields-terminated-by</span><br><span class="line">\t</span><br></pre></td></tr></table></figure>
+
+
+<h1 id="10-–warehouse-dir参数"><a href="#10-–warehouse-dir参数" class="headerlink" title="10. –warehouse-dir参数:"></a>10. –warehouse-dir参数:</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">sqoop import  --append --connect jdbc:mysql:&#x2F;&#x2F;pipe-reader:3306&#x2F;pipe_tutor \</span><br><span class="line">--username xxx --password xxx \</span><br><span class="line">--table dim_tutor_teacher \</span><br><span class="line">--warehouse-dir &#x2F;user&#x2F;maintain&#x2F;dim_tutor_teacher \</span><br><span class="line">-m 1 --fields-terminated-by &quot;\t&quot;;</span><br></pre></td></tr></table></figure>
+<p><code>--warehouse-dir</code>会在目录建立与表名同名的目录(如果没有).然后把数据导入相应目录中.<br>日志:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">17&#x2F;05&#x2F;25 10:22:35 INFO util.AppendUtils: Creating missing output directory - dim_tutor_teacher</span><br></pre></td></tr></table></figure>
+<p><code>--target-dir</code>则直接写入,不创建目录.</p>
+<h1 id="11-指定参数"><a href="#11-指定参数" class="headerlink" title="11. 指定参数:"></a>11. 指定参数:</h1><p>不预测执行(降低attempt数量,降低数据库压力).</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">-D</span><br><span class="line">mapreduce.map.speculative&#x3D;false</span><br><span class="line">-D</span><br><span class="line">mapreduce.job.name&#x3D;question_hour</span><br></pre></td></tr></table></figure>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2017/09/28/sqoop%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/" data-id="ck96cxpm1005gmaam0h3t37hs" class="article-share-link">分享</a>
+      
+      
+      
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-scala笔记" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2017/05/17/scala%E7%AC%94%E8%AE%B0/" class="article-date">
@@ -1173,175 +1262,6 @@ case class的companion object是隐式自动生成的<figure class="highlight pl
 
 
   
-    <article id="post-java并发编程实战笔记-4-5章" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2017/02/25/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-4-5%E7%AB%A0/" class="article-date">
-  <time datetime="2017-02-25T11:44:30.000Z" itemprop="datePublished">2017-02-25</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2017/02/25/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-4-5%E7%AB%A0/">java并发编程实战笔记-4-5章</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="对象的组合"><a href="#对象的组合" class="headerlink" title="对象的组合"></a>对象的组合</h1><h1 id="设计线程安全类"><a href="#设计线程安全类" class="headerlink" title="设计线程安全类"></a>设计线程安全类</h1><p>三个步骤:</p>
-<blockquote>
-<ol>
-<li>找出构成对象状态的所有变量;</li>
-<li>找出约束状态变量的不变性条件;//收集同步需求,例如哪些操作必须是原子性的.</li>
-<li>建立对象状态的并发访问管理策略.</li>
-</ol>
-</blockquote>
-<h1 id="包装类"><a href="#包装类" class="headerlink" title="包装类"></a>包装类</h1><p>常见容器ArrayList不是线程安全的, 但可以通过Collections.synchronizedList方法转化成一个线程安全的容器.(实现上使用装饰器模式,封装对于底层对象的访问).<br>此时,只要这个包装类持有数据对象的唯一引用,则可以保证容器的安全.</p>
-<h1 id="监视器模式"><a href="#监视器模式" class="headerlink" title="监视器模式"></a>监视器模式</h1><p>通过一个私有的锁保护状态:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">PrivateLock</span> </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> Object myLock=<span class="keyword">new</span> Object();</span><br><span class="line">    <span class="meta">@GuardedBy</span>(<span class="string">"myLock"</span>)</span><br><span class="line">    JRSUIConstants.Widget widget;</span><br><span class="line">    <span class="function"><span class="keyword">void</span> <span class="title">someMothode</span><span class="params">()</span></span>&#123;</span><br><span class="line">        <span class="keyword">synchronized</span> (myLock)&#123;</span><br><span class="line">            <span class="comment">// do some thing</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h1 id="对象的组合-1"><a href="#对象的组合-1" class="headerlink" title="对象的组合"></a>对象的组合</h1><ol>
-<li>一个没有成员的对象A,无状态,因此是线程安全的;</li>
-<li>当A中增加一个成员,如:<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">A</span></span>&#123;</span><br><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> AtomicLong aa=<span class="keyword">new</span> AtomicLong(<span class="number">0</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-因为引用不可变,且AtomicLong是线程安全的,因此A依然是安全的.<br>但如果增加多个线程安全成员,当且仅当它们独立的时候是安全的.<br>如果不独立,例如某些aa和bb的取值组合是不合法的,则是不安全的.<br>(例如上界下界都是AtomicLong.但不独立.)</li>
-</ol>
-<h2 id="委托"><a href="#委托" class="headerlink" title="委托:"></a>委托:</h2><blockquote>
-<p>此时A是否线程安全取决于aa,换言之,A的安全性委托aa来保证. </p>
-</blockquote>
-<p>综上可知,尽量委托给一个线程安全的类或容器,避免所托非人.XD</p>
-<h1 id="基础构建模块"><a href="#基础构建模块" class="headerlink" title="基础构建模块"></a>基础构建模块</h1><p>将线程安全委托给一个JDK实现好的同步容器后,如果需要进行复合操作,而且需要这几个操作具有原子性,依然需要自己加锁.这个时候就得知道底层的同步容器原先使用的锁是什么,才好照着写.</p>
-<p>//每当遇到难题,都可以考虑生成一个静态镜像,线程局部变量,避开这个难题.实在不行只好升级手段,增加复杂度.</p>
-<h2 id="迭代器与ConcurrentModificationException"><a href="#迭代器与ConcurrentModificationException" class="headerlink" title="迭代器与ConcurrentModificationException"></a>迭代器与ConcurrentModificationException</h2><blockquote>
-<p>同步容器的迭代器在迭代之前会获取容器的锁,<br>如果迭代过程中,检测到容器有修改,则会抛这个异常.<br>(实现上,是通过计数器实现的,而且没有同步(性能考虑),因此也有可能没有意识到已经修改了,读了失效数据.)</p>
-</blockquote>
-<ul>
-<li>隐藏迭代器<br>容器类的toString方法.直接打印容器的时候,会触发对容器内所有内容的迭代.<br>其他类似的方法有:<br>hashCode,equals,ContainsAll等等.<br>以及容器整体作为一个key,存入另一个容器时.</li>
-</ul>
-<h2 id="同步容器和并发容器"><a href="#同步容器和并发容器" class="headerlink" title="同步容器和并发容器"></a>同步容器和并发容器</h2><h3 id="同步容器"><a href="#同步容器" class="headerlink" title="同步容器:"></a>同步容器:</h3><blockquote>
-<p>HashTable,Vector,Collections.synchronizedXxx包装的.</p>
-</blockquote>
-<ul>
-<li>强一致性.</li>
-<li>迭代时锁容器,不允许修改.</li>
-</ul>
-<h3 id="并发容器"><a href="#并发容器" class="headerlink" title="并发容器:"></a>并发容器:</h3><blockquote>
-<p>ConcurrentMap,CopyOnWriteList,BlockingQueue,ConcurrentLinkedQueue.</p>
-</blockquote>
-<ul>
-<li>弱一致性.(size,isEmpty只返回近似值)</li>
-<li>迭代时一般只锁局部,容忍修改.</li>
-<li>性能高.</li>
-</ul>
-<p>基本上应该使用并发容器代替同步容器. </p>
-<h2 id="两种队列的使用场景"><a href="#两种队列的使用场景" class="headerlink" title="两种队列的使用场景"></a>两种队列的使用场景</h2><ol>
-<li><code>BlockingQueue</code>:<br>生产者消费者,queue.put(xxx),queue.take();</li>
-<li><code>BlockingDeque</code>:(双端队列)<br>工作队列\工作觅取(fork-join);完成了自己的工作队列后,从别人队列的尾巴觅取新的工作,均摊工作量.</li>
-</ol>
-<h2 id="阻塞方法与中断方法"><a href="#阻塞方法与中断方法" class="headerlink" title="阻塞方法与中断方法"></a>阻塞方法与中断方法</h2><p>阻塞状态:</p>
-<blockquote>
-<p>BLOCKED,WAITING,TIMED_WAITING</p>
-</blockquote>
-<p>如果一个方法签名抛出<code>InterruptedException</code>,则说明它是阻塞方法.<br>因为一个阻塞方法一般会被中断打断.</p>
-<p>中断: Interrupt<br>查询线程是否中断: interrupt方法;<br>中断线程:   也是  interrupt方法. </p>
-<p>当你的方法catch到了一个<code>InterruptedException</code>,两种处理方法:</p>
-<ol>
-<li>传递. 接着往外抛;</li>
-<li>恢复中断.<br>当已经是最外层的时候,(在Runnable这一层了)<br>就不能往外抛了,再抛线程就挂了.<br>这个时候保持中断状态就好:(恢复中断)<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">catch</span>(InterruptedException e )&#123;</span><br><span class="line"></span><br><span class="line">Thread.currentThread().interrupt();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-</li>
-</ol>
-<h1 id="同步工具类"><a href="#同步工具类" class="headerlink" title="同步工具类"></a>同步工具类</h1><p>可以用于同步线程的工具类,包括:</p>
-<blockquote>
-<p>BlockingQueue 阻塞队列<br>Semephore 信号量<br>Barrier 栅栏<br>Latch 闭锁</p>
-</blockquote>
-<h2 id="闭锁-Latch"><a href="#闭锁-Latch" class="headerlink" title="闭锁 Latch"></a>闭锁 Latch</h2><p>作用相当于一道门,所有线程得等这扇门打开才能继续运行.<br>Latch是一次性的,打开后就不能再关上. </p>
-<blockquote>
-<ul>
-<li>使用的时候就像主线程设定了好了一扇门挡住起跑线,把所有工作线程挨个释放,一头撞到门上卡住了;等到某个时机放下门,瞬间释放所有线程;</li>
-</ul>
-</blockquote>
-<ul>
-<li>设置一扇门挡住主线程,让主线程等待子线程跑完;</li>
-<li>结束的时候,每一个线程到达终点就把计数器减一,直到大家都结束,再在终点释放主线程.</li>
-</ul>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> CountDownLatch startGate=<span class="keyword">new</span> CountDownLatch(<span class="number">1</span>);</span><br><span class="line"><span class="comment">// 开始的门,只需主线程一人下令countDown,因此计数器为1;</span></span><br><span class="line"><span class="keyword">final</span> CountDownLatch endGate=<span class="keyword">new</span> CountDownLatch(nThreads);</span><br><span class="line"><span class="comment">// 结束的门,需要n个子线程countDown,因此计数器为n.</span></span><br></pre></td></tr></table></figure>
-
-
-<ul>
-<li>完整代码<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">TestLatch</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">long</span> <span class="title">timeTasks</span><span class="params">(<span class="keyword">int</span> nThreads, <span class="keyword">final</span> Runnable task)</span> <span class="keyword">throws</span> InterruptedException </span>&#123;</span><br><span class="line">        <span class="keyword">final</span> CountDownLatch startGate = <span class="keyword">new</span> CountDownLatch(<span class="number">1</span>);<span class="comment">// countDown一次就能打开</span></span><br><span class="line">        <span class="keyword">final</span> CountDownLatch endGate = <span class="keyword">new</span> CountDownLatch(nThreads);<span class="comment">//countDown nThreads次才能打开(所有线程都countDown过)</span></span><br><span class="line"></span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; nThreads; i++) &#123;<span class="comment">// 先全部放出去,然后一头撞在startGate上;</span></span><br><span class="line">            Thread t = <span class="keyword">new</span> Thread(() -&gt; &#123;</span><br><span class="line">                <span class="keyword">try</span> &#123;</span><br><span class="line">                    startGate.await();<span class="comment">// 一头撞在startGate上</span></span><br><span class="line">                    <span class="keyword">try</span> &#123;</span><br><span class="line">                        task.run();</span><br><span class="line">                    &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">                        endGate.countDown();<span class="comment">//每个线程countDown一次</span></span><br><span class="line">                    &#125;</span><br><span class="line">                &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                    e.printStackTrace();<span class="comment">//ignore</span></span><br><span class="line">                &#125;</span><br><span class="line">            &#125;);</span><br><span class="line">            t.start();</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">long</span> start = System.currentTimeMillis();</span><br><span class="line">        System.out.println(<span class="string">"准备开始"</span>);</span><br><span class="line">        startGate.countDown();<span class="comment">// 打开开始的门</span></span><br><span class="line">        endGate.await();<span class="comment">// 主线程等待全部结束. (n次countDown结束)</span></span><br><span class="line">        System.out.println(<span class="string">"结束等待"</span>);</span><br><span class="line">        <span class="keyword">long</span> end = System.currentTimeMillis();</span><br><span class="line">        <span class="keyword">return</span> end - start;</span><br><span class="line"></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> <span class="keyword">throws</span> InterruptedException </span>&#123;</span><br><span class="line">        Runnable task = <span class="keyword">new</span> Runnable() &#123;</span><br><span class="line">            <span class="meta">@Override</span></span><br><span class="line">            <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">                <span class="keyword">try</span> &#123;</span><br><span class="line">                    Thread.sleep(<span class="number">1000</span>);</span><br><span class="line">                &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                    e.printStackTrace();</span><br><span class="line">                &#125;</span><br><span class="line">                System.out.println(<span class="string">"running task"</span>);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;;</span><br><span class="line">        TestLatch testLatch = <span class="keyword">new</span> TestLatch();</span><br><span class="line">        <span class="keyword">long</span> during = testLatch.timeTasks(<span class="number">10</span>, task);</span><br><span class="line">        System.out.println(<span class="string">"Runtime: "</span> + during);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-</li>
-</ul>
-<h1 id="FutureTask-Callable-Runnable"><a href="#FutureTask-Callable-Runnable" class="headerlink" title="FutureTask\Callable\Runnable"></a>FutureTask<V>\Callable<V>\Runnable</h1><blockquote>
-<p>FutureTask三种状态: waiting,running,completed.</p>
-</blockquote>
-<ul>
-<li><p>Runnable</p>
-<blockquote>
-<p>顾名思义,有个run函数,可以run.</p>
-</blockquote>
-</li>
-<li><p>Callable<V></p>
-<blockquote>
-<p>比Run多个返回值V.</p>
-</blockquote>
-</li>
-<li><p>FutureTask<V></p>
-<blockquote>
-<p>声明实现的接口是Runnable和Future<V>.<br>但实际上里头有个适配器,把Runnable转成Callable.<br>而且它可以接收Callable作为构造函数的参数.<br>运行的时候直接ftask.run()即可.<br>取结果则是直接ftask.get()即可.</p>
-</blockquote>
-</li>
-</ul>
-<p>还可以把FutureTask传给Thread的构造函数\加入线程池接受调度.</p>
-<p>感觉<code>FutureTask&lt;V&gt;</code>挺好用的.</p>
-<p>第五章的原则总结:</p>
-<blockquote>
-<ol>
-<li>尽量使用final;</li>
-<li>不可变对象一定线程安全;<br>尽量使用不可变对象(空间换时间);</li>
-<li>尽量封装,把数据封装到对象中,以便以后构造不可变或者同步策略;</li>
-<li>每一个可变对象,都要考虑用锁保护;</li>
-<li>保护同一个不变性条件的所有变量时,使用同一个锁;</li>
-<li>注意在复合操作上加锁;</li>
-<li>不武断得认为不需要同步;</li>
-<li>明确地指出(注解或注释)每个类是否线程安全.</li>
-</ol>
-</blockquote>
-<h1 id="疑问"><a href="#疑问" class="headerlink" title="疑问:"></a>疑问:</h1><ol>
-<li>Collections.unmodifiableMap(xxx)<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> xxx;<span class="comment">//引用是不可变的,如果是基本类型,就是值.</span></span><br><span class="line"><span class="keyword">final</span> xxx = Collections.unmodifiableMap(xxx);</span><br><span class="line"><span class="comment">/**不但引用是不可变的,第一级寻址对象也是不可更改的.</span></span><br><span class="line"><span class="comment">调用map.put(xxx,xxx)会抛unSupported异常.</span></span><br><span class="line"><span class="comment">但显然这不是万能的,用户也可以先用get获取到对象,然后再把对象里的数据给改了.(类似于二级寻址)</span></span><br><span class="line"><span class="comment">因此里面如果存的是不可变对象,是可以的,否则还是可以改.</span></span><br><span class="line"><span class="comment">*/</span></span><br></pre></td></tr></table></figure></li>
-<li>ConcurrentMap: 一个线程安全的容器. 保证多线程都能访问一级寻址对象.</li>
-</ol>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2017/02/25/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-4-5%E7%AB%A0/" data-id="ck96cxpl9002jmaamftrndxcu" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1368,6 +1288,10 @@ case class的companion object是隐式自动生成的<figure class="highlight pl
       <ul>
         
           <li>
+            <a href="/2022/02/16/2022-02/http-range/">http_range</a>
+          </li>
+        
+          <li>
             <a href="/2022/01/21/2022-01/voip-rtc/">VoIP和RTC</a>
           </li>
         
@@ -1381,10 +1305,6 @@ case class的companion object是隐式自动生成的<figure class="highlight pl
         
           <li>
             <a href="/2021/02/22/2021-02/%E5%A4%9A%E9%A1%B9%E7%9B%AE%E5%85%B1%E4%BA%AB%E4%BB%A3%E7%A0%81%E4%B9%8B%E2%80%94%E2%80%94git-subtree/">多项目共享代码之——git subtree</a>
-          </li>
-        
-          <li>
-            <a href="/2020/12/27/2020-12/%E8%B7%A8%E5%9F%9F%E7%9B%B8%E5%85%B3/">跨域相关</a>
           </li>
         
       </ul>

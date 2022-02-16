@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>http_range | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="http协议header中的range相关客户端可以在http请求的header中指定请求资源的范围(range)，如果服务端支持的话，就可以只返回部分数据，节约网络资源。如果服务端实现了这部分协议，客户端就可以进行断点续传、多线程下载、在线播放视频修改进度等功能了。应用场景：1。在线播放视频：调整进度；（seek offset）2。下载文件：多线程下载、断点续传。 检查服务端是否支持可以通过命令">
+<meta property="og:type" content="article">
+<meta property="og:title" content="http_range">
+<meta property="og:url" content="http://xiaoyue26.github.io/2022/02/16/2022-02/http-range/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="http协议header中的range相关客户端可以在http请求的header中指定请求资源的范围(range)，如果服务端支持的话，就可以只返回部分数据，节约网络资源。如果服务端实现了这部分协议，客户端就可以进行断点续传、多线程下载、在线播放视频修改进度等功能了。应用场景：1。在线播放视频：调整进度；（seek offset）2。下载文件：多线程下载、断点续传。 检查服务端是否支持可以通过命令">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2022-02-16T09:27:26.000Z">
+<meta property="article:modified_time" content="2022-02-16T09:51:47.039Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="java">
+<meta property="article:tag" content="http">
+<meta property="article:tag" content="spring">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2022-02/http-range" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2022/02/16/2022-02/http-range/" class="article-date">
+  <time datetime="2022-02-16T09:27:26.000Z" itemprop="datePublished">2022-02-16</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/http/">http</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      http_range
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="http协议header中的range相关"><a href="#http协议header中的range相关" class="headerlink" title="http协议header中的range相关"></a>http协议header中的range相关</h1><p>客户端可以在http请求的header中指定请求资源的范围(range)，如果服务端支持的话，就可以只返回部分数据，节约网络资源。<br>如果服务端实现了这部分协议，客户端就可以进行断点续传、多线程下载、在线播放视频修改进度等功能了。<br>应用场景：<br>1。在线播放视频：调整进度；（seek offset）<br>2。下载文件：多线程下载、断点续传。</p>
+<h2 id="检查服务端是否支持"><a href="#检查服务端是否支持" class="headerlink" title="检查服务端是否支持"></a>检查服务端是否支持</h2><p>可以通过命令:</p>
+<figure class="highlight shell"><figcaption><span>script</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">curl -I https://cdn.com/xxx.png</span><br></pre></td></tr></table></figure>
+<p>来检查服务端是否支持。<br>如果支持,服务端的回复是bytes：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Accept-Ranges: bytes</span><br></pre></td></tr></table></figure>
+<p>如果不支持，服务端的回复是none:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Accept-Ranges: none</span><br></pre></td></tr></table></figure>
+<p>(<code>curl -I</code>只显示header; <code>curl -i</code>显示header和body)</p>
+<h2 id="实际应用中的回复"><a href="#实际应用中的回复" class="headerlink" title="实际应用中的回复"></a>实际应用中的回复</h2><p>客户端发送:</p>
+<figure class="highlight shell"><figcaption><span>script</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">curl -i -H "Range: bytes=0-1023" https://cdn.com/xxx.png</span><br></pre></td></tr></table></figure>
+<p>服务端正常回复206(单个区间的话):</p>
+<figure class="highlight shell"><figcaption><span>script</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">HTTP/1.1 206 Partial Content</span><br><span class="line">Content-Type: image/png</span><br><span class="line">Content-Length: 1024</span><br><span class="line">Connection: keep-alive</span><br><span class="line">ETag: "2F4AF992F06D75CA7BE353ED2A981C45"</span><br><span class="line">Date: Tue, 01 Feb 2022 15:54:43 GMT</span><br><span class="line">Last-Modified: Tue, 25 Jan 2022 15:54:42 GMT</span><br><span class="line">Expires: Tue, 08 Feb 2022 15:54:43 GMT</span><br><span class="line">Age: 579015</span><br><span class="line">Cache-Control: max-age=604800</span><br><span class="line">Content-Range: bytes 0-1023/9404</span><br><span class="line">Accept-Ranges: bytes</span><br></pre></td></tr></table></figure>
+
+<p>如果range不合法的话，服务端回复:</p>
+<figure class="highlight shell"><figcaption><span>script</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">HTTP/1.1 416 Requested Range Not Satisfiable</span><br></pre></td></tr></table></figure>
+<p>如果服务端不支持range请求，会回复200，并且返回全部数据:</p>
+<figure class="highlight shell"><figcaption><span>script</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">HTTP/1.1 200 OK</span><br></pre></td></tr></table></figure>
+
+<p>其他Range相关的一些姿势可以参考：<br><a href="https://www.greenbytes.de/tech/webdav/draft-ietf-httpbis-p5-range-latest.html#rule.ranges-specifier" target="_blank" rel="noopener">https://www.greenbytes.de/tech/webdav/draft-ietf-httpbis-p5-range-latest.html#rule.ranges-specifier</a><br>实际还可以指定多区间，指定末尾100个字节（<code>Range: bytes=-100</code>），<br>还可以用<code>If-Range</code>避免文件发生变更的情况：<br><a href="https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Headers/If-Range" target="_blank" rel="noopener">https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Headers/If-Range</a><br>只有Last-Modified或者ETag字段验证通过的时候，才处理<code>Range</code>请求，否则返回200（整个文件）。</p>
+<h1 id="实现：spring中"><a href="#实现：spring中" class="headerlink" title="实现：spring中"></a>实现：spring中</h1><h2 id="方案1，交给spring接管"><a href="#方案1，交给spring接管" class="headerlink" title="方案1，交给spring接管"></a>方案1，交给spring接管</h2><p>如果是本地机器中的资源，可以封装成<code>FileSystemResource</code>；<br>如果要从别的地方获取byte数组，可以封装成<code>ByteArrayResource</code>;<br>状态直接写200(OK),spring会自动转成206。<br>示例代码：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@RestController</span></span><br><span class="line"><span class="meta">@RequestMapping</span>(value = <span class="string">"/v3/csc/center/range"</span>)</span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">CscCenterRangeController</span> </span>&#123;</span><br><span class="line">    <span class="meta">@RequestMapping</span>(<span class="string">"/load"</span>)</span><br><span class="line">    <span class="meta">@ResponseBody</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> ResponseEntity&lt;ByteArrayResource&gt; <span class="title">load</span><span class="params">(@RequestParam(value = <span class="string">"fileKey"</span>)</span> String fileKey) </span>&#123;</span><br><span class="line">        String res = <span class="string">"1234"</span>;</span><br><span class="line">        <span class="keyword">final</span> HttpHeaders responseHeaders = <span class="keyword">new</span> HttpHeaders();</span><br><span class="line">        <span class="comment">// responseHeaders.add("Content-Type", "video/mp4");</span></span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> ResponseEntity&lt;&gt;(<span class="keyword">new</span> ByteArrayResource(res.getBytes()), responseHeaders, HttpStatus.OK);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@RequestMapping</span>(<span class="string">"/load-file"</span>)</span><br><span class="line">    <span class="meta">@ResponseBody</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> ResponseEntity&lt;FileSystemResource&gt; <span class="title">loadFile</span><span class="params">(@RequestParam(value = <span class="string">"fileKey"</span>)</span> String fileKey) </span>&#123;</span><br><span class="line">        String filePathString = <span class="string">"/Users/fengmengqi/Documents/DH_scret.png"</span>;</span><br><span class="line">        <span class="keyword">final</span> HttpHeaders responseHeaders = <span class="keyword">new</span> HttpHeaders();</span><br><span class="line">        <span class="comment">// responseHeaders.add("Content-Type", "video/mp4");</span></span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> ResponseEntity&lt;&gt;(<span class="keyword">new</span> FileSystemResource(filePathString), responseHeaders, HttpStatus.OK);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>缺点是spring似乎没有实现Range协议中的<code>If-Range</code>头。</p>
+<h2 id="方案2，在spring提供的HttpRange类基础上实现"><a href="#方案2，在spring提供的HttpRange类基础上实现" class="headerlink" title="方案2，在spring提供的HttpRange类基础上实现"></a>方案2，在spring提供的HttpRange类基础上实现</h2><p>可以参考<code>org.springframework.web.servlet.resource.ResourceHttpRequestHandler#handleRequest</code><br>在HttpRange类的基础上实现自定义的Range相关协议，这样可以增添<code>If-Range</code>的功能。</p>
+<h1 id="参考资料"><a href="#参考资料" class="headerlink" title="参考资料"></a>参考资料</h1><p><a href="https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Range_requests" target="_blank" rel="noopener">https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Range_requests</a><br><a href="https://www.greenbytes.de/tech/webdav/draft-ietf-httpbis-p5-range-latest.html#rule.ranges-specifier" target="_blank" rel="noopener">https://www.greenbytes.de/tech/webdav/draft-ietf-httpbis-p5-range-latest.html#rule.ranges-specifier</a></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2022/02/16/2022-02/http-range/" data-id="ckzpdkrwo000090am6k5w85je" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/http/" rel="tag">http</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spring/" rel="tag">spring</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+  
+    <a href="/2022/01/21/2022-01/voip-rtc/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">VoIP和RTC</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#http协议header中的range相关"><span class="toc-number">1.</span> <span class="toc-text">http协议header中的range相关</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#检查服务端是否支持"><span class="toc-number">1.1.</span> <span class="toc-text">检查服务端是否支持</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#实际应用中的回复"><span class="toc-number">1.2.</span> <span class="toc-text">实际应用中的回复</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#实现：spring中"><span class="toc-number">2.</span> <span class="toc-text">实现：spring中</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#方案1，交给spring接管"><span class="toc-number">2.1.</span> <span class="toc-text">方案1，交给spring接管</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#方案2，在spring提供的HttpRange类基础上实现"><span class="toc-number">2.2.</span> <span class="toc-text">方案2，在spring提供的HttpRange类基础上实现</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#参考资料"><span class="toc-number">3.</span> <span class="toc-text">参考资料</span></a></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2022 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

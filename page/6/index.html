@@ -72,6 +72,107 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-03/redis设计与实现笔记11-排序与二进制数组" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/03/17/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B011-%E6%8E%92%E5%BA%8F%E4%B8%8E%E4%BA%8C%E8%BF%9B%E5%88%B6%E6%95%B0%E7%BB%84/" class="article-date">
+  <time datetime="2019-03-17T12:35:13.000Z" itemprop="datePublished">2019-03-17</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/03/17/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B011-%E6%8E%92%E5%BA%8F%E4%B8%8E%E4%BA%8C%E8%BF%9B%E5%88%B6%E6%95%B0%E7%BB%84/">redis设计与实现笔记11-排序与二进制数组</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>排序命令<code>SORT</code>:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">RPUSH numbers 5 3 1 4 2</span><br><span class="line">SORT numbers</span><br><span class="line"><span class="meta">#</span><span class="bash"> 结果:</span></span><br><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td></tr></table></figure>
+<p>也可以在末尾加上<code>alpha</code>参数，指定按字母序排序。<br>还可以在末尾加上<code>By</code>参数，指定按某个集合定义的权重进行排序。</p>
+<h2 id="sort-命令的实现"><a href="#sort-命令的实现" class="headerlink" title="sort 命令的实现"></a>sort <key>命令的实现</h2><img src="/images/2019-03/sort_key.png" class="" width="800" height="1200" title="sort_key">
+<p>实现sort的时候为被排序的key创建一个与排序目标长度相同的数组，数组中的节点的obj字段存放实际数据指针，score字段是double，存放每个对象的排序值。<br>实际排序对这个新创建的数组进行即可。</p>
+<h2 id="sort-By-price命令的实现"><a href="#sort-By-price命令的实现" class="headerlink" title="sort  By *-price命令的实现"></a>sort <key> By *-price命令的实现</h2><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">MSEST apple-price 8 banana-price 5.5 cherry-price 7</span><br><span class="line">SORT fruits BY *-price</span><br></pre></td></tr></table></figure>
+
+<p>不同选项顺序：(执行顺序和编程时书写顺序无关)</p>
+<ol>
+<li>先<code>by *-price</code>；</li>
+<li>后<code>alpha</code></li>
+</ol>
+<h2 id="limit命令的实现"><a href="#limit命令的实现" class="headerlink" title="limit命令的实现"></a>limit命令的实现</h2><p><code>sort fruits limit &lt;offset&gt; &lt;count&gt;</code><br>实现上是先排序后，然后在跳转到<code>offset</code>上选<code>count</code>个。</p>
+<h2 id="STORE命令"><a href="#STORE命令" class="headerlink" title="STORE命令"></a>STORE命令</h2><p>可以用<code>STORE</code>命令保存<code>SORT</code>的结果:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Sort fruits STORE sorted_fruits</span><br></pre></td></tr></table></figure>
+<p>实现上，首先排序，然后：</p>
+<ol>
+<li>检查要保存的键<code>sorted_fruits</code>是否存在,存在则删除;</li>
+<li>创建<code>sorted_fruits</code>列表；</li>
+<li>将辅助排序数组依次压入<code>sorted_fruits</code>.</li>
+</ol>
+<h1 id="第22章-二进制数组"><a href="#第22章-二进制数组" class="headerlink" title="第22章-二进制数组"></a>第22章-二进制数组</h1><p>单个数组操作:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">SETBIT bit 0 1 # 第0位设置为1</span><br><span class="line">GETBIT bit 3   # 获取第3位的值</span><br><span class="line">BITCOUNT bit   # 获取bit数组中1的个数</span><br></pre></td></tr></table></figure>
+<p>多个数组之间操作:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">BITOP AND and-result x y z # x,y,z求与的结果放and-result</span><br><span class="line">类似的操作还有OR,XOR,NOT,也就是与、或、非、异或、取反。</span><br></pre></td></tr></table></figure>
+
+<h2 id="底层存储"><a href="#底层存储" class="headerlink" title="底层存储"></a>底层存储</h2><p>用SDS字符串存储二进制数组。<br>对二进制数组的操作： 也借用SDS的字符串函数。</p>
+<p>因为SDS是二进制安全的(也就是存储的数据中有\0也没关系，因为SDS中有存长度)，所以可以用来存储二进制数组。</p>
+<h3 id="逆序存储"><a href="#逆序存储" class="headerlink" title="逆序存储"></a>逆序存储</h3><img src="/images/2019-03/sds_binary.png" class="" width="800" height="1200" title="sds_binary">
+<p>这里保存的二进制数组是<code>0100 1101</code>;<br>图中SDS保存的是逆序的:<code>1011 0010</code>，之所以逆序存储的原因为了简化<code>SETBIT</code>命令的实现。</p>
+<h4 id="offset、高位、低位"><a href="#offset、高位、低位" class="headerlink" title="offset、高位、低位"></a>offset、高位、低位</h4><p>这里要强调一下二进制的offset、高位、低位的概念，方便理解为什么要逆序存储以及因为逆序存储所以扩展时不需要移动。<br>二进制数组是<code>0100 1101</code>：<br>高位、低位: <code>0100</code>是高位,<code>1101</code>是低位,(想象十进制数字9876的高位是9).<br>offset: offset为0的是1，offset为1的为0.</p>
+<p><code>GETBIT 7</code>是0<br><code>SETBIT 11 1</code>其中第11位不存在，因此扩展后会变成<code>1000 0100 1101</code>。</p>
+<h2 id="GETBIT实现O-1"><a href="#GETBIT实现O-1" class="headerlink" title="GETBIT实现O(1)"></a>GETBIT实现O(1)</h2><p>由于前面是逆序存储的二进制数组，因此可以从左边开始数offset了（原来是从右边往左数，负负得正）。<br>由于用SDS存储二进制，当我们想要获取第n位0，1值的时候，相当于需要获取两个坐标：</p>
+<ol>
+<li>位于哪个byte:    <code>n/8</code></li>
+<li>位于byte的第几位:<code>n%8+1</code> 。<br>换句话说所有值的坐标计算公式为: <code>(n/8，n%8+1)</code>。<img src="/images/2019-03/locate_binary.png" class="" width="800" height="1200" title="locate_binary">
+而<code>GETBIT &lt;bitarray&gt; 10</code>的结果是:<br><code>(10/8，10%8+1)</code>也就是byte[1][3-1]。<br>（从左到右第3位）。<br>其实如果统一从0开始计数，公式可以简化为：<br><code>(n/8,n%8)</code></li>
+</ol>
+<img src="/images/2019-03/locate_binary10.png" class="" width="800" height="1200" title="locate_binary10">
+<p>GETBIT命令算法复杂度为O(1)。</p>
+<h2 id="SETBIT命令实现O-1"><a href="#SETBIT命令实现O-1" class="headerlink" title="SETBIT命令实现O(1)"></a>SETBIT命令实现O(1)</h2><p>命令格式：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">SETBIT &lt;bitarray&gt; &lt;offset&gt; &lt;value&gt;</span><br></pre></td></tr></table></figure>
+<p>这个命令会做3件事：</p>
+<ol>
+<li>设置新值</li>
+<li>返回旧值；</li>
+<li>如果offset超出原有数组长度，会拓展原数组，并且把新扩展空间的值设置为0.<br>这里的扩展应当注意到SDS的空间预分配策略：<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">总长度len&lt;1MB: 总空间为2*len+1;</span><br><span class="line">总长度len&gt;&#x3D;1MB: 总空间为len+1MB+1。</span><br><span class="line">换句话说，预分配的空间上限是1MB，尽量为len。</span><br></pre></td></tr></table></figure>
+
+</li>
+</ol>
+<h3 id="逆序存储与扩展不需要移动"><a href="#逆序存储与扩展不需要移动" class="headerlink" title="逆序存储与扩展不需要移动"></a>逆序存储与扩展不需要移动</h3><p>由于扩展是扩展高位，而高位经过逆序存储后，放在了buf数组的末尾，因此扩展时就不需要移动原来的数据了。</p>
+<h2 id="BITCOUNT命令实现"><a href="#BITCOUNT命令实现" class="headerlink" title="BITCOUNT命令实现"></a>BITCOUNT命令实现</h2><p>有几种实现算法：<br>(1) 遍历：最慢；<br>(2) 查表：空间换时间，二进制数组的排列是有穷的，可以预先存下不同排列对应的1数量；<br>(3) SWAR算法: 计算汉明码问题，Hamming Weight。<br>如果cpu不支持直接进行汉明码计算，可以使用SWAR算法:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">uint32_t</span> <span class="title">swar</span><span class="params">(<span class="keyword">uint32_t</span> i)</span></span>&#123;</span><br><span class="line">    i = (i&amp; <span class="number">0x55555555</span>)+((i&gt;&gt;<span class="number">1</span>)&amp;<span class="number">0x55555555</span>);</span><br><span class="line">    i = (i&amp; <span class="number">0x33333333</span>)+((i&gt;&gt;<span class="number">2</span>)&amp;<span class="number">0x33333333</span>);</span><br><span class="line">    i = (i&amp; <span class="number">0x0F0F0F0F</span>)+((i&gt;&gt;<span class="number">4</span>)&amp;<span class="number">0x0F0F0F0F</span>);</span><br><span class="line">    i = (i*(<span class="number">0x01010101</span>)&gt;&gt;<span class="number">24</span>);</span><br><span class="line">    <span class="keyword">return</span> i;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>比遍历快32倍，比查8位的表快4倍，比查16位的表快2倍，无需额外内存。<br>由于SWAR算法缓存的值较少而且规整，是缓存友好的。<br>(4)redis的二进制位统计算法：<br>结合查8位的表和SWAR算法。<br>如果n&lt; 128: 直接用查表；<br>如果n&gt;=128: 使用SWAR，每次载入128位，调用4次SWAR。</p>
+<h2 id="BITOP-OR-XOR-NOT命令实现"><a href="#BITOP-OR-XOR-NOT命令实现" class="headerlink" title="BITOP OR\XOR\NOT命令实现"></a>BITOP OR\XOR\NOT命令实现</h2><p>对于每个byte调用c函数操作。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/03/17/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B011-%E6%8E%92%E5%BA%8F%E4%B8%8E%E4%BA%8C%E8%BF%9B%E5%88%B6%E6%95%B0%E7%BB%84/" data-id="ck96cxppk00homaamd95uhnze" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2019-03/redis设计与实现笔记10-订阅-事物-lua" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/03/10/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B010-%E8%AE%A2%E9%98%85-%E4%BA%8B%E7%89%A9-lua/" class="article-date">
@@ -941,81 +1042,6 @@
 
 
   
-    <article id="post-2019-02/redis设计与实现笔记3-数据库" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/02/13/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B03-%E6%95%B0%E6%8D%AE%E5%BA%93/" class="article-date">
-  <time datetime="2019-02-13T01:50:59.000Z" itemprop="datePublished">2019-02-13</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/redis/">redis</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/02/13/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B03-%E6%95%B0%E6%8D%AE%E5%BA%93/">redis设计与实现笔记3-数据库</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h2 id="架构"><a href="#架构" class="headerlink" title="架构:"></a>架构:</h2><p>server-&gt; db* -&gt; dict*(k/v)</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">redisServer</span> &#123;</span></span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">    redisDb *db;</span><br><span class="line">    <span class="keyword">int</span> dbnum;    </span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">&#125; redisDb;</span><br></pre></td></tr></table></figure>
-
-<h1 id="数据库键空间"><a href="#数据库键空间" class="headerlink" title="数据库键空间"></a>数据库键空间</h1><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">redisDb</span> &#123;</span></span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">    <span class="comment">// 数据库键空间，保存着数据库中的所有键值对</span></span><br><span class="line">    dict *dict;</span><br><span class="line">    <span class="comment">// 过期时间:</span></span><br><span class="line">    dict *expires;</span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">&#125; redisDb;</span><br></pre></td></tr></table></figure>
-
-<p>db默认有16,客户端可以通过<code>select 1</code>命令来选择1号数据库。<br>每个client会保存当前在哪个db的状态变量。</p>
-<h1 id="键-Key"><a href="#键-Key" class="headerlink" title="键:Key"></a>键:Key</h1><p>key只能为字符串。<br>整个架构最多三层: db-&gt;hashtable-&gt;value</p>
-<img src="/images/2019-02/db_kv.png" class="" width="800" height="1200" title="db_kv">
-
-<h1 id="key过期"><a href="#key过期" class="headerlink" title="key过期"></a>key过期</h1><h2 id="过期删除策略"><a href="#过期删除策略" class="headerlink" title="过期删除策略"></a>过期删除策略</h2><ol>
-<li>定时统一删除 (一般不用，卡太久)</li>
-<li>惰性删除(默认使用,访问时发现过期才删除)</li>
-<li>定期删除(默认使用,类似于增量删除,每次删除最近过期的)</li>
-</ol>
-<h2 id="redis持久化策略"><a href="#redis持久化策略" class="headerlink" title="redis持久化策略"></a>redis持久化策略</h2><ol>
-<li>RDB: 定期(比如五分钟)做一次快照; (<code>Redis DataBase</code>)</li>
-<li>AOF: 类似于WAL，存每条操作指令日志。(<code>Append only file</code>)</li>
-</ol>
-<h2 id="RDB和AOF下的过期删除"><a href="#RDB和AOF下的过期删除" class="headerlink" title="RDB和AOF下的过期删除"></a>RDB和AOF下的过期删除</h2><ol>
-<li>RDB:  主服务器生成快照时删除过期key; 从库则保留。从库只有收到主库DEL指令时候才会删除过期key。</li>
-<li>AOF:  保存DEL指令即可。</li>
-</ol>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">从库如果没有收到主库的DEL指令，即使已经key已经过期，也会返回给客户端。</span><br></pre></td></tr></table></figure>
-<p>主从复制要点：（中心化，一致性）<br><code>从库</code>只接受<code>主库</code>的<code>写</code>指令，自己只执行<code>读</code>。</p>
-<h1 id="通知机制"><a href="#通知机制" class="headerlink" title="通知机制"></a>通知机制</h1><p>两个功能:</p>
-<ol>
-<li>订阅某个key的所有操作; (只能知道发生了什么类型的操作,不知道操作数)</li>
-<li>订阅某个库下的所有DEL操作.(或者别的什么操作)<br>换句话说就是订阅某个库下key，或者订阅指令。</li>
-</ol>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/02/13/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B03-%E6%95%B0%E6%8D%AE%E5%BA%93/" data-id="ck96cxpp600g1maam1uc41333" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1042,6 +1068,10 @@
       <ul>
         
           <li>
+            <a href="/2022/02/16/2022-02/http-range/">http_range</a>
+          </li>
+        
+          <li>
             <a href="/2022/01/21/2022-01/voip-rtc/">VoIP和RTC</a>
           </li>
         
@@ -1055,10 +1085,6 @@
         
           <li>
             <a href="/2021/02/22/2021-02/%E5%A4%9A%E9%A1%B9%E7%9B%AE%E5%85%B1%E4%BA%AB%E4%BB%A3%E7%A0%81%E4%B9%8B%E2%80%94%E2%80%94git-subtree/">多项目共享代码之——git subtree</a>
-          </li>
-        
-          <li>
-            <a href="/2020/12/27/2020-12/%E8%B7%A8%E5%9F%9F%E7%9B%B8%E5%85%B3/">跨域相关</a>
           </li>
         
       </ul>
