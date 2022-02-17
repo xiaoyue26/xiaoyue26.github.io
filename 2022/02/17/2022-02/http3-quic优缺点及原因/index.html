@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>http3_quic优缺点及原因 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="WHAT: HTTP3&#x2F;QUIC是什么？QUIC: Quick UDP Internet Connections谷歌主导的网络协议，用udp代替tcp来作为http的传输协议。HTTP3就是HTTP over QUIC。  如上图所示是http2和http over quic的对比。可以看到图中的分层不是完全对齐的，这是因为以前的分层方式不合理，影响了性能，因此quic重新划分了更合理的分层结构。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="http3_quic优缺点及原因">
+<meta property="og:url" content="http://xiaoyue26.github.io/2022/02/17/2022-02/http3-quic%E4%BC%98%E7%BC%BA%E7%82%B9%E5%8F%8A%E5%8E%9F%E5%9B%A0/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="WHAT: HTTP3&#x2F;QUIC是什么？QUIC: Quick UDP Internet Connections谷歌主导的网络协议，用udp代替tcp来作为http的传输协议。HTTP3就是HTTP over QUIC。  如上图所示是http2和http over quic的对比。可以看到图中的分层不是完全对齐的，这是因为以前的分层方式不合理，影响了性能，因此quic重新划分了更合理的分层结构。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2022-02/quic_struct.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2022-02/quic_multi_stream.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2022-02/cubic_vs_bbr.png">
+<meta property="article:published_time" content="2022-02-17T02:09:02.000Z">
+<meta property="article:modified_time" content="2022-02-17T10:06:43.675Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="java">
+<meta property="article:tag" content="http">
+<meta property="article:tag" content="spring">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://xiaoyue26.github.io/images/2022-02/quic_struct.png">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2022-02/http3-quic优缺点及原因" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2022/02/17/2022-02/http3-quic%E4%BC%98%E7%BC%BA%E7%82%B9%E5%8F%8A%E5%8E%9F%E5%9B%A0/" class="article-date">
+  <time datetime="2022-02-17T02:09:02.000Z" itemprop="datePublished">2022-02-17</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/http/">http</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      http3_quic优缺点及原因
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="WHAT-HTTP3-QUIC是什么？"><a href="#WHAT-HTTP3-QUIC是什么？" class="headerlink" title="WHAT: HTTP3/QUIC是什么？"></a>WHAT: HTTP3/QUIC是什么？</h1><p>QUIC: <code>Quick UDP Internet Connections</code><br>谷歌主导的网络协议，用udp代替tcp来作为http的传输协议。<br>HTTP3就是<code>HTTP over QUIC</code>。</p>
+<img src="/images/2022-02/quic_struct.png" class="" width="800" height="1200" title="quic_struct">
+<p>如上图所示是http2和http over quic的对比。<br>可以看到图中的分层不是完全对齐的，这是因为以前的分层方式不合理，影响了性能，因此quic重新划分了更合理的分层结构。<br>原来的tcp(传输层)和tls(会话层)要分别建立连接，增加了不必要的rtt。<br>quic在tls1.3的基础上，统一建立连接，然后再基于udp传输。<br>QUIC层的分层:<br>UDP层: 只管传输，不管连接；<br>Connection层: 复杂建连相关、拥塞控制(bbr_v2)、安全(tls1.3)；通过cid来确认唯一连接;<br>Stream层: 负责多路复用；基于Connection层，通过StreamID进行唯一流确认，stream对stream frame进行传输管理;</p>
+<p>使用TCP的协议: SPDY/HTTP2<br>使用UDP的协议: quic/HTTP3</p>
+<h1 id="WHY-QUIC的优点-为啥要使用QUIC"><a href="#WHY-QUIC的优点-为啥要使用QUIC" class="headerlink" title="WHY: QUIC的优点(为啥要使用QUIC)"></a>WHY: QUIC的优点(为啥要使用QUIC)</h1><ul>
+<li>连接迁移优化</li>
+<li>队头阻塞优化</li>
+<li>拥塞控制优化</li>
+<li>握手优化</li>
+</ul>
+<p>quic的优点其实也对应着解决了以前http协议栈中的几个缺点。</p>
+<h2 id="连接迁移功能"><a href="#连接迁移功能" class="headerlink" title="连接迁移功能"></a>连接迁移功能</h2><h3 id="以前tcp的缺点"><a href="#以前tcp的缺点" class="headerlink" title="以前tcp的缺点"></a>以前tcp的缺点</h3><p>移动客户端ip变化以后，连接断开，需要重新握手、创建新的连接。<br>我们日常生活中坐车、旅行等场景下，用手机上网，经过不同的基站，移动网络切换是比较常见的场景，<br>因此可能会经历频繁的连接重建，体验较差。</p>
+<blockquote>
+<p>为什么tcp有这个缺点:<br>tcp用通信双方的ip+port(4元组)来标示一个连接，因此客户端ip变了的话，连接就变了。<br>tcp很老了，最早的时候手机还不普及，固定电脑的ip基本上不会变。</p>
+</blockquote>
+<p><code>http over quic</code>则可以在客户端ip变化时，依然保持连接不断，减少了rtt，提高了体验；</p>
+<h3 id="quic如何解决这个问题的"><a href="#quic如何解决这个问题的" class="headerlink" title="quic如何解决这个问题的"></a>quic如何解决这个问题的</h3><p>上面有说的tcp这个缺点的原因是标示连接唯一性的方式，所以很自然的思路是用别的方式来标示连接唯一性。<br>quic的方法是用connectionId（cid,64位）来唯一确定一个连接，客户端ip变化以后，cid不变，因此连接可以不断开。</p>
+<h3 id="实现"><a href="#实现" class="headerlink" title="实现"></a>实现</h3><p>对于quic server:<br>如果根据客户端ip路由，连接迁移会失败；得根据cid路由；<br>一般得路由到同主机、同进程，才能保证连接迁移成功。<br>或者把连接相关的有状态信息存储在分布式缓存中(比如把session ticket存储在redis中)。</p>
+<p>quic协议考虑到cid对于路由的重要性，因此cid是明文存储的。</p>
+<h2 id="解决了队头阻塞问题-多路复用功能增强"><a href="#解决了队头阻塞问题-多路复用功能增强" class="headerlink" title="解决了队头阻塞问题(多路复用功能增强)"></a>解决了队头阻塞问题(多路复用功能增强)</h2><img src="/images/2022-02/quic_multi_stream.png" class="" width="800" height="1200" title="quic_multi_stream">
+<h3 id="以前tcp的缺点-1"><a href="#以前tcp的缺点-1" class="headerlink" title="以前tcp的缺点"></a>以前tcp的缺点</h3><p>tcp队头阻塞的原因:<br>窗口更新机制: 滑动窗口的更新依赖于最左边的包的ack，如果队头的包一直没有ack，窗口不往后滑;<br>拥塞控制算法: 丢包以后启动丢包重传,窗口变小;<br>这些最终表现是tcp层面的队头阻塞。</p>
+<ul>
+<li>http1.0: 明文短连接，多个tcp连接；</li>
+<li>http1.1: keepalive机制，长连接，复用同一个tcp连接，降低了建立连接的开销（节省了握手时间）；<br>客户端:pipeline机制，可以并行发；<br>服务端:必须顺序回，有队头阻塞；（同域名下的请求复用同一个连接，但必须排队）</li>
+<li>http2: 用stream层解决http层面的队头阻塞（让同域名下的请求不排队了，间隔进行），但是还是有tcp层面的队头阻塞;<h3 id="quic如何解决这个问题的-1"><a href="#quic如何解决这个问题的-1" class="headerlink" title="quic如何解决这个问题的"></a>quic如何解决这个问题的</h3>解决TCP层面的队头阻塞，本质上是要开发一个新的流量控制、拥塞控制的整套方案放在UDP层之上。<br>quic的改进:<br>(1)窗口更新机制: 当已经读取的数据大于最大接收窗口的一半时，发送WINDOW_UPDATE帧告诉发送者，接收窗口已经更新。<br>(2)拥塞控制算法: 由于底层是udp，没有拥塞控制算法，因此quic需要实现拥塞控制算法。<br>quic在应用层实现拥塞控制算法，如bbr,bbr_v2，核心思想是用rtt来预测带宽情况。<br>tcp用丢包事件来判断带宽情况，比较不准。但tcp之所以这么傻，也是因为tcp中的一些约束，很难准确判断rtt的大小。<br>比如seq number机制，重传的时候无法判断是超时重传的包还是第一个包经过很长时间收到了，因为seq number相同。<br>quic的seq number改进: 通过streamId+offset, packet number的机制，重传的包packet number递增，这样可以算准rtt。</li>
+</ul>
+<h2 id="吞吐量更大（新拥塞控制算法）"><a href="#吞吐量更大（新拥塞控制算法）" class="headerlink" title="吞吐量更大（新拥塞控制算法）"></a>吞吐量更大（新拥塞控制算法）</h2><p>接上一节，quic开发了新的拥塞控制算法，吞吐量更大，更能利用带宽：<br>cubic vs bbr:</p>
+<img src="/images/2022-02/cubic_vs_bbr.png" class="" width="400" height="600" title="cubic_vs_bbr">
+<p>可以看到tcp默认的cubic拥塞控制算法频繁上下调整滑动窗口大小，锯齿状；<br>而bbr倾向于平稳发送，在实际带宽比较平稳的场景下，吞吐量更大。（图中折线下方的面积更大）</p>
+<p>原来tcp为什么没有解决这个问题：<br>(1)tcp在linux内核里，升级太困难了。<br>(2)参考上一节，tcp的一些约束导致rtt算不准。比如ack delay、重传包的seq number不变。</p>
+<h2 id="耗时短。握手-rtt减少；重连-0RTT特性。"><a href="#耗时短。握手-rtt减少；重连-0RTT特性。" class="headerlink" title="耗时短。握手-rtt减少；重连-0RTT特性。"></a>耗时短。握手-rtt减少；重连-0RTT特性。</h2><p>原来https over tcp的缺点:<br>(1)握手阶段: tls层和tcp层重复建立连接；<br>(2)握手阶段: tls1.2需要考虑历史包袱，考虑达到最大兼容性，握手需要2RTT;<br>(3)重连阶段: tls1.2需要一次握手;</p>
+<h3 id="quic如何解决这个问题的-2"><a href="#quic如何解决这个问题的-2" class="headerlink" title="quic如何解决这个问题的"></a>quic如何解决这个问题的</h3><p>(1)握手阶段合并: 只建立一次连接，省掉tcp握手的1rtt。<br>将建立连接这件事统一放在quic层里，udp只专心做传输的事情。<br>(2)握手阶段: 1RTT。运气不好的话还是2RTT。<br>参考tls1.3，去掉不安全的算法，在客户端预置一些密码套件。<br>第一个握手客户端就直接选定加密协议，并生成相应的随机数，相当于跳过了tls1.2第一个rtt的协商；<br>如果服务端不支持，则使用HelloRetryRequest继续。<br>大部分情况下，都可以省掉第一次的rtt;<br>(3)重连阶段: 0 RTT。<br>参考tls1.3的session ticket(quic叫server config)，客户端和服务端都缓存之前握手协商好的配置。<br>重连的时候，客户端直接把配置和数据一起发给服务端。</p>
+<h4 id="0RTT的前提："><a href="#0RTT的前提：" class="headerlink" title="0RTT的前提："></a>0RTT的前提：</h4><p>1。client不清缓存；（过期前）<br>2。通过cid路由到同一个server进程；<br>(或者服务端对于server config有统一缓存)<br>缺点：牺牲了一定时间内的前向安全；（过期时间内）</p>
+<h1 id="QUIC的缺点"><a href="#QUIC的缺点" class="headerlink" title="QUIC的缺点"></a>QUIC的缺点</h1><h2 id="CPU开销大"><a href="#CPU开销大" class="headerlink" title="CPU开销大"></a>CPU开销大</h2><p>http over quic与http over tcp相比，cpu开销可能会更大。<br>如果没有特别优化，单机qps可能下降50%。<br>主要有以下几个原因：</p>
+<h3 id="内核态vs用户态"><a href="#内核态vs用户态" class="headerlink" title="内核态vs用户态"></a>内核态vs用户态</h3><p>(1)原来拥塞控制在tcp，在内核，执行在内核态，性能更高；<br>解决方案: 暂时没想到;<br>(2)quic限定udp报文大小&lt;=1mtu(IPV6下为1350，IPV4下为1370)。<br>由于包的大小不能很大 =&gt; 因此包的数量会较多=&gt; 系统调用很多 =&gt; 性能下降。<br>解决方案:<br>(2.1)批处理；用sendmmsg，一次系统调用发多个udp包；<br>(2.2)网卡GSO offload方案，降低cpu消耗;</p>
+<blockquote>
+<p>quic对包的大小有两个限制<br>(1) initial包&gt;=1200: 预防UDP攻击；（反射攻击）<br>如果数据本身不足1200，用padding方式填充到1200字节。<br>反射攻击:<br>  被利用服务器输出流量与输入流量的比值我们称之为放大系数。<br>  这个系数与被利用服务器所提供的 UDP 服务有关。<br>  之前提到的利用 Memcache 漏洞的 DRDoS 攻击，可以获得稳定的 60000 倍放大系数。<br>  而我们日常使用的 DNS 则可以轻松的获得 50 倍的放大系数。<br>  由放大系数反推，我们可以知道，如果一个 UDP 服务被利用以后，放大系数小于等于1的话，则不存在利用价值.<br>  因为这个时候，只从带宽流量方面考虑的话，还不如直接利用攻击主机对被攻击服务器进行攻击效率高。 </p>
+<p>(2)&lt;=1MTU(IPV6下为1350，IPV4下为1370):<br>IP层是没有超时重传机制的，如果IP层对一个数据包进行了分片，只要有一个分片丢失了，只能依赖于传输层进行重传。<br>结果是所有的分片都要重传一遍，这个代价有点大。<br>由此可见，IP分片会大大降低传输层传送数据的成功率，所以我们要避免IP分片。</p>
+</blockquote>
+<h3 id="加解密开销大"><a href="#加解密开销大" class="headerlink" title="加解密开销大"></a>加解密开销大</h3><p>谷歌fork的openssl分支：boringSSL（笑死）<br>具体原因不太清楚，可能是谷歌选择的加解密算法比较安全、计算开销比较大。<br>也有可能是开源实现里，选择密码编码学算法比较普通，没有给生产环境级别的优化。</p>
+<p>解决方案：<br>如果在生产环境使用，需要相应修改加密套件。</p>
+<h2 id="容易被拦截"><a href="#容易被拦截" class="headerlink" title="容易被拦截"></a>容易被拦截</h2><p>因为一些运营商不待见udp。<br>根据腾讯的文档：<a href="https://toutiao.io/posts/tixau8w/preview" target="_blank" rel="noopener">https://toutiao.io/posts/tixau8w/preview</a><br>QUIC失败率较高的三个省份为：贵州、广西和新疆；<br>失败率较高的运营商为：教育网和长城宽带。</p>
+<p>解决方案：<br>需要支持降级到普通https。</p>
+<h2 id="nginx支持不全"><a href="#nginx支持不全" class="headerlink" title="nginx支持不全"></a>nginx支持不全</h2><p>比如nginx reload会断开已建立的quic连接.(因为对ng来说是udp)</p>
+<p>解决方案：<br>需要修改nginx内核。</p>
+<ul>
+<li>内核逻辑调试工具<br>systemtap 内核逻辑调试工具,查看内核调用栈<br>内核的timewait监控: /proc/net/netstat中 的 TCPTimeWaitOverflow<br>Broken pipe(32) tcp_max_tw_buckets</li>
+</ul>
+<h1 id="QUIC应用场景"><a href="#QUIC应用场景" class="headerlink" title="QUIC应用场景"></a>QUIC应用场景</h1><p>弱网环境：因为quic的拥塞控制算法bbr在丢包时性能更好；<br>        因为quic的重连、建连rtt少；<br>对安全重视的环境：因为tls1.3更安全；<br>移动端：因为连接迁移功能；<br>并发请求多的应用: 因为quic没有tcp层的队头阻塞，多路复用更彻底;</p>
+<h1 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h1><p>可以参考谷歌开源的chromium中的quic协议栈，以及相应的server demo。<br>谷歌浏览器内核支持quic，其他浏览器内核就不一定了。<br>谷歌: <a href="https://www.chromium.org/quic/" target="_blank" rel="noopener">https://www.chromium.org/quic/</a><br>腾讯：<a href="https://zhuanlan.zhihu.com/p/32560981" target="_blank" rel="noopener">https://zhuanlan.zhihu.com/p/32560981</a><br>微博: <a href="https://www.infoq.cn/article/2018%2F03%2Fweibo-quic" target="_blank" rel="noopener">https://www.infoq.cn/article/2018%2F03%2Fweibo-quic</a></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2022/02/17/2022-02/http3-quic%E4%BC%98%E7%BC%BA%E7%82%B9%E5%8F%8A%E5%8E%9F%E5%9B%A0/" data-id="ckzqp6ooc0000n2am93597kv9" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/http/" rel="tag">http</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spring/" rel="tag">spring</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+  
+    <a href="/2022/02/16/2022-02/http-range/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">http_range</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#WHAT-HTTP3-QUIC是什么？"><span class="toc-number">1.</span> <span class="toc-text">WHAT: HTTP3&#x2F;QUIC是什么？</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#WHY-QUIC的优点-为啥要使用QUIC"><span class="toc-number">2.</span> <span class="toc-text">WHY: QUIC的优点(为啥要使用QUIC)</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#连接迁移功能"><span class="toc-number">2.1.</span> <span class="toc-text">连接迁移功能</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#以前tcp的缺点"><span class="toc-number">2.1.1.</span> <span class="toc-text">以前tcp的缺点</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#quic如何解决这个问题的"><span class="toc-number">2.1.2.</span> <span class="toc-text">quic如何解决这个问题的</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#实现"><span class="toc-number">2.1.3.</span> <span class="toc-text">实现</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#解决了队头阻塞问题-多路复用功能增强"><span class="toc-number">2.2.</span> <span class="toc-text">解决了队头阻塞问题(多路复用功能增强)</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#以前tcp的缺点-1"><span class="toc-number">2.2.1.</span> <span class="toc-text">以前tcp的缺点</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#quic如何解决这个问题的-1"><span class="toc-number">2.2.2.</span> <span class="toc-text">quic如何解决这个问题的</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#吞吐量更大（新拥塞控制算法）"><span class="toc-number">2.3.</span> <span class="toc-text">吞吐量更大（新拥塞控制算法）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#耗时短。握手-rtt减少；重连-0RTT特性。"><span class="toc-number">2.4.</span> <span class="toc-text">耗时短。握手-rtt减少；重连-0RTT特性。</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#quic如何解决这个问题的-2"><span class="toc-number">2.4.1.</span> <span class="toc-text">quic如何解决这个问题的</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#0RTT的前提："><span class="toc-number">2.4.1.1.</span> <span class="toc-text">0RTT的前提：</span></a></li></ol></li></ol></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#QUIC的缺点"><span class="toc-number">3.</span> <span class="toc-text">QUIC的缺点</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#CPU开销大"><span class="toc-number">3.1.</span> <span class="toc-text">CPU开销大</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#内核态vs用户态"><span class="toc-number">3.1.1.</span> <span class="toc-text">内核态vs用户态</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#加解密开销大"><span class="toc-number">3.1.2.</span> <span class="toc-text">加解密开销大</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#容易被拦截"><span class="toc-number">3.2.</span> <span class="toc-text">容易被拦截</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#nginx支持不全"><span class="toc-number">3.3.</span> <span class="toc-text">nginx支持不全</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#QUIC应用场景"><span class="toc-number">4.</span> <span class="toc-text">QUIC应用场景</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#参考"><span class="toc-number">5.</span> <span class="toc-text">参考</span></a></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2022 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

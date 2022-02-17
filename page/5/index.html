@@ -72,6 +72,61 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-06/io中的缓冲" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/06/22/2019-06/io%E4%B8%AD%E7%9A%84%E7%BC%93%E5%86%B2/" class="article-date">
+  <time datetime="2019-06-22T02:56:52.000Z" itemprop="datePublished">2019-06-22</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/Netty/">Netty</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/06/22/2019-06/io%E4%B8%AD%E7%9A%84%E7%BC%93%E5%86%B2/">io中的缓冲——如何理解O_Direct</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>IO缓冲主要有4层:<br>1.用户自己的缓冲;<br>2.库缓冲;<br>3.内核缓冲;<br>4.磁盘缓冲。</p>
+<img src="/images/2019-06/io_layer.gif" class="" width="400" height="600" title="io_layer">
+<p>=== 应用层: (进程挂丢数据) 看到文件句柄<br><code>application buffer</code>: 比如我们代码中写的int[]arrayData;<br><code>clib buffer</code>: <code>fwrite</code>以后到这层。这里写的是c库(<code>IObuffer</code>)，也可能是java库中的缓冲(<code>BufferedOutputStream</code>)。<br>如果数据才到这一层库缓冲，还没系统调用，此时程序core dump的话，数据就丢了。<br>=== 内核层: (内核挂丢数据)  看到inode和数据块<br><code>page cache</code>: 内核层的缓冲。fflush以后到这里, fclose先到这里然后继续到磁盘。<br><code>driver</code>: 具体设备的驱动软件<br>=== 设备层: （断电丢数据） 看到扇区<br><code>disk cache</code>: 磁盘缓冲。fsync/fclose至少到这里。fsync是同步会完全等返回。</p>
+<h2 id="为啥要有库缓冲"><a href="#为啥要有库缓冲" class="headerlink" title="为啥要有库缓冲"></a>为啥要有库缓冲</h2><p>（比如<code>clib buffer</code>）<br>因为从应用层到内核层需要系统调用、内核态切换，开销比较大，为了减少这件事发生的次数，没有必要因为1个字节的改动发生系统调用。</p>
+<h3 id="绕过库缓冲的方案"><a href="#绕过库缓冲的方案" class="headerlink" title="绕过库缓冲的方案:"></a>绕过库缓冲的方案:</h3><p>用mmap(内存映射文件),把内核空间的page cache映射到用户空间。</p>
+<h2 id="为啥要有内核缓冲"><a href="#为啥要有内核缓冲" class="headerlink" title="为啥要有内核缓冲"></a>为啥要有内核缓冲</h2><p>内核用pdflush线程循环检测脏页,判断是否写回磁盘。<br>由于磁盘是单向旋转,重新排布写操作顺序可以减少旋转次数。(合并写入)<br>plus:<br><code>O_SYNC</code>参数: 访问内核缓冲时是异步还是同步。<code>O_SYNC</code>表示同步。</p>
+<h3 id="绕过内核缓冲的方案"><a href="#绕过内核缓冲的方案" class="headerlink" title="绕过内核缓冲的方案"></a>绕过内核缓冲的方案</h3><p>用<code>O_Direct</code>参数，直接怼Disk cache。</p>
+<h2 id="为啥要有磁盘缓冲"><a href="#为啥要有磁盘缓冲" class="headerlink" title="为啥要有磁盘缓冲"></a>为啥要有磁盘缓冲</h2><p>驱动通过DMA，将数据写入磁盘cache。<br>磁盘缓冲主要是保护磁盘不被cpu写坏。是与外部总线交换数据的场所。（断电丢数据）</p>
+<h4 id="绕过磁盘缓冲的方案"><a href="#绕过磁盘缓冲的方案" class="headerlink" title="绕过磁盘缓冲的方案"></a>绕过磁盘缓冲的方案</h4><p>用<code>RAW设备写</code>,直接写扇区: fdisk,dd,cpio工具。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/06/22/2019-06/io%E4%B8%AD%E7%9A%84%E7%BC%93%E5%86%B2/" data-id="ck96cxppt00inmaam0iy74lrn" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/io/" rel="tag">io</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2019-06/领域驱动设计-第一-六章笔记" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/06/08/2019-06/%E9%A2%86%E5%9F%9F%E9%A9%B1%E5%8A%A8%E8%AE%BE%E8%AE%A1-%E7%AC%AC%E4%B8%80-%E5%85%AD%E7%AB%A0%E7%AC%94%E8%AE%B0/" class="article-date">
@@ -884,68 +939,6 @@
 
 
   
-    <article id="post-2019-03/redis设计与实现笔记12-慢查询日志" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/03/18/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B012-%E6%85%A2%E6%9F%A5%E8%AF%A2%E6%97%A5%E5%BF%97/" class="article-date">
-  <time datetime="2019-03-18T01:20:07.000Z" itemprop="datePublished">2019-03-18</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/redis/">redis</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/03/18/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B012-%E6%85%A2%E6%9F%A5%E8%AF%A2%E6%97%A5%E5%BF%97/">redis设计与实现笔记12-慢查询日志与监视器</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="第23章-慢查询日志"><a href="#第23章-慢查询日志" class="headerlink" title="第23章 慢查询日志"></a>第23章 慢查询日志</h1><p>两个配置：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">slowlog-log-slower-than: 超过多少微秒的命令记录到慢查询日志；</span><br><span class="line">slowlog-max-len: 最多保存多少条慢查询日志。(删除最旧的，FIFO)</span><br></pre></td></tr></table></figure>
-
-<h2 id="查看慢查询日志"><a href="#查看慢查询日志" class="headerlink" title="查看慢查询日志"></a>查看慢查询日志</h2><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">slowlog get</span><br><span class="line">1) 1) (integer) 4 # 日志id: uid</span><br><span class="line">   2) (integer) 1578781447 # 日志执行时间戳</span><br><span class="line">   3) (integer) 13 # 执行了多少微秒</span><br><span class="line">   4) 1) "SET"     # 具体命令</span><br><span class="line">      2) "database"</span><br><span class="line">      3) "Redis"</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
-
-<h2 id="慢查询日志存储"><a href="#慢查询日志存储" class="headerlink" title="慢查询日志存储"></a>慢查询日志存储</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">redisServer</span>&#123;</span></span><br><span class="line">    <span class="comment">// 下一条慢查询日志的id:(类似于自增id)</span></span><br><span class="line">    <span class="keyword">long</span> <span class="keyword">long</span> slowlog_entry_id;</span><br><span class="line">    <span class="comment">// 保存了所有慢查询日志的链表:</span></span><br><span class="line">    <span class="built_in">list</span> *slowlog;</span><br><span class="line">    <span class="comment">// 配置:</span></span><br><span class="line">    <span class="keyword">long</span> <span class="keyword">long</span> slowlog_log_slower_than;</span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> slowlog_max_len;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">slowlogEntry</span>&#123;</span></span><br><span class="line">    <span class="keyword">long</span> <span class="keyword">long</span> id;</span><br><span class="line">    <span class="keyword">time_t</span> time;</span><br><span class="line">    <span class="keyword">long</span> <span class="keyword">long</span> duration;</span><br><span class="line">    robj **argv; <span class="comment">// 命令和参数</span></span><br><span class="line">    <span class="keyword">int</span> argc; <span class="comment">// 命令和参数数量</span></span><br><span class="line">    </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h1 id="第24章-监视器"><a href="#第24章-监视器" class="headerlink" title="第24章 监视器"></a>第24章 监视器</h1><p>Monitor命令:</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">redis&gt;</span><span class="bash"> MONITOR</span></span><br></pre></td></tr></table></figure>
-<p>然后客户端可以监视服务器当前处理的命令请求。</p>
-<img src="/images/2019-03/monitor.png" class="" width="800" height="1200" title="monitor">
-
-<h2 id="监视器实现"><a href="#监视器实现" class="headerlink" title="监视器实现"></a>监视器实现</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">redisServer</span>&#123;</span></span><br><span class="line">    <span class="comment">// 监视器链表:</span></span><br><span class="line">     <span class="comment">// 链表，保存了所有从服务器，以及所有监视器</span></span><br><span class="line">    <span class="built_in">list</span> *slaves, *monitors;    <span class="comment">/* List of slaves and MONITORs */</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-
-<h2 id="这本书戛然而止"><a href="#这本书戛然而止" class="headerlink" title="这本书戛然而止"></a>这本书戛然而止</h2>
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/03/18/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B012-%E6%85%A2%E6%9F%A5%E8%AF%A2%E6%97%A5%E5%BF%97/" data-id="ck96cxppk00hsmaamhljc66b7" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -972,6 +965,10 @@
       <ul>
         
           <li>
+            <a href="/2022/02/17/2022-02/http3-quic%E4%BC%98%E7%BC%BA%E7%82%B9%E5%8F%8A%E5%8E%9F%E5%9B%A0/">http3_quic优缺点及原因</a>
+          </li>
+        
+          <li>
             <a href="/2022/02/16/2022-02/http-range/">http_range</a>
           </li>
         
@@ -985,10 +982,6 @@
         
           <li>
             <a href="/2021/06/01/2021-06/%E7%BD%91%E7%BB%9C%E5%AE%89%E5%85%A8%E7%AC%94%E8%AE%B0-1/">网络安全笔记-1</a>
-          </li>
-        
-          <li>
-            <a href="/2021/02/22/2021-02/%E5%A4%9A%E9%A1%B9%E7%9B%AE%E5%85%B1%E4%BA%AB%E4%BB%A3%E7%A0%81%E4%B9%8B%E2%80%94%E2%80%94git-subtree/">多项目共享代码之——git subtree</a>
           </li>
         
       </ul>

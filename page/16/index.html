@@ -72,6 +72,104 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-mysql-sqoop-hive分隔符总结" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2017/10/01/mysql-sqoop-hive%E5%88%86%E9%9A%94%E7%AC%A6%E6%80%BB%E7%BB%93/" class="article-date">
+  <time datetime="2017-10-01T11:30:24.000Z" itemprop="datePublished">2017-10-01</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/hadoop/">hadoop</a>►<a class="article-category-link" href="/categories/hadoop/hive/">hive</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2017/10/01/mysql-sqoop-hive%E5%88%86%E9%9A%94%E7%AC%A6%E6%80%BB%E7%BB%93/">mysql,sqoop,hive分隔符总结</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="mysql分隔符"><a href="#mysql分隔符" class="headerlink" title="mysql分隔符"></a>mysql分隔符</h1><blockquote>
+<p>Mysql默认的分隔符设置，字段之间以逗号<code>,</code>隔开，行之间以换行<code>\n</code>隔开，默认转义符号是<code>\</code>，字段值以单引号<code>&#39;</code>包含起来。</p>
+</blockquote>
+<h1 id="sqoop分隔符"><a href="#sqoop分隔符" class="headerlink" title="sqoop分隔符"></a>sqoop分隔符</h1><blockquote>
+<p>sqoop可以设定分隔符按照mysql的约定.<br>使用配置 <code>--mysql-delimiters</code>.<br>也可以自定义以下设置:</p>
+</blockquote>
+<h2 id="enclosed-by-lt-char-gt-所有字段"><a href="#enclosed-by-lt-char-gt-所有字段" class="headerlink" title="--enclosed-by &lt;char&gt;  (所有字段)"></a><code>--enclosed-by &lt;char&gt;</code>  (所有字段)</h2><blockquote>
+<p>给字段值前后加上指定的字符，比如双引号，示例：–enclosed-by ‘&quot;‘，显示例子：”3”,”jimsss”,”<a href="mailto:dd@dd.com">dd@dd.com</a>“</p>
+</blockquote>
+<h2 id="optionally-enclosed-by-lt-char-gt-含有单-双-引号的字段"><a href="#optionally-enclosed-by-lt-char-gt-含有单-双-引号的字段" class="headerlink" title="--optionally-enclosed-by &lt;char&gt; (含有单(双)引号的字段)"></a><code>--optionally-enclosed-by &lt;char&gt;</code> (含有单(双)引号的字段)</h2><p>一般指定这一项为”‘“,而不指定<code>--enclosed-by &lt;char&gt;</code> </p>
+<h2 id="escaped-by-lt-char-gt"><a href="#escaped-by-lt-char-gt" class="headerlink" title="--escaped-by &lt;char&gt;"></a><code>--escaped-by &lt;char&gt;</code></h2><p>转义时使用的char,一般为”&quot;</p>
+<h2 id="fields-terminated-by-lt-char-gt"><a href="#fields-terminated-by-lt-char-gt" class="headerlink" title="--fields-terminated-by &lt;char&gt;"></a><code>--fields-terminated-by &lt;char&gt;</code></h2><p>字段分隔字段,默认为<code>,</code>. </p>
+<h2 id="lines-terminated-by-lt-char-gt"><a href="#lines-terminated-by-lt-char-gt" class="headerlink" title="--lines-terminated-by &lt;char&gt;"></a><code>--lines-terminated-by &lt;char&gt;</code></h2><p>行分隔符,默认为’\n’</p>
+<h1 id="hive分隔符"><a href="#hive分隔符" class="headerlink" title="hive分隔符"></a>hive分隔符</h1><blockquote>
+<p>hive不可以设置行分隔符,hive的行分隔符只能是’\n’.<br>hive可以设置的分隔符如下:</p>
+</blockquote>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">ROW FORMAT DELIMITED</span><br><span class="line">  FIELDS TERMINATED BY '\t'</span><br><span class="line">  COLLECTION ITEMS TERMINATED BY ','</span><br><span class="line">  MAP KEYS TERMINATED BY ':'</span><br></pre></td></tr></table></figure>
+<p>这些也可以设置为<code>\0001</code>,<code>\0002</code>,<code>\0003</code>.</p>
+<p>由于hive不能自定义行分隔符,因此sqoop导入hive时只能指定行分隔符为<code>\n</code>,因此sqoop导入hive的时候需要过滤掉hive默认使用的分隔符,可以使用参数:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">--hive-drop-import-delims</span></span><br></pre></td></tr></table></figure>
+<p>作用是把字符串类型的字段中的\r,\n,\001等字符丢弃.<br>这个参数可以与<code>--mysql-delimiters</code>同时使用.<br>也可以使用</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">--hive-delims-replacement</span></span><br><span class="line">` `</span><br></pre></td></tr></table></figure>
+<p>将对应字符换成空格,以保持原字符串的结构. </p>
+<h1 id="Solution"><a href="#Solution" class="headerlink" title="Solution"></a>Solution</h1><p>1)<br>由于hive的csv解析bug太多,使用sqoop和hive组合时,应该使用hive的分隔符,sqoop中配置<code>\0001</code>和hive中配置’\u0001’.<br>1.1)hive对于&#39;和’的识别是混乱的,如下述的构造数据,解析起来是有问题的:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">\&#39;异常的第一列,第二列</span><br></pre></td></tr></table></figure>
+<p>这行数据解析出来每一列都是NULL.</p>
+<p>1.2)另一种解析错误的数据如下:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">\&#39;异常的第一列,&#39;第二列,&#39;</span><br><span class="line">或:</span><br><span class="line">\\&#39;异常的第一列,&#39;第二列,&#39;</span><br></pre></td></tr></table></figure>
+<p>这两行解析的结果均为:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;&#x2F;第一列为:</span><br><span class="line">异常的第一列,第二列	</span><br><span class="line">&#x2F;&#x2F;第二列为:</span><br><span class="line">NULL</span><br></pre></td></tr></table></figure>
+<p>而实际我们期望的解析结果是:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;&#x2F;第一列为:</span><br><span class="line">&#39;异常的第一列</span><br><span class="line">&#x2F;&#x2F;第二列为:</span><br><span class="line">第二列,</span><br></pre></td></tr></table></figure>
+<p>hive这里解析的逻辑是,把</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">\&#39;异常的第一列,&#39;</span><br></pre></td></tr></table></figure>
+<p>看做一个整体,继续拼接剩余的字符串,直到遇到逗号.这种解析方法是错误的.</p>
+<p>2)<br>一种只对这种情况有效的解决方案,使用参数<code>--enclosed-by &lt;char&gt;</code></p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">--enclosed-by</span></span><br><span class="line">"'"</span><br></pre></td></tr></table></figure>
+<p>使用这种方法以后的数据会变成:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&#39;\&#39;异常的第一列&#39;,&#39;第二列&#39;</span><br></pre></td></tr></table></figure>
+<p>此时可以用<code>org.apache.hadoop.hive.serde2.OpenCSVSerde</code>类正常解析,注意这里若使用<code>--optionally-enclosed-by &lt;char&gt;</code>参数,<br>并不能自动加上第一列的单引号.<br>2.1)sqoop仅在它认为字段中出现了逗号时才自动加上单引号;<br>2.2)sqoop对于字段中出现的逗号进行转义,变为&#39;;<br>2.3)对于hive而言,出现单引号时,它会把这些单引号对内部的部分认为是一个整体,对这个整体内的逗号进行忽略. 但hive的bug之处在于,它遇到&#39;时候,也会试图去匹配下一个&#39;或’.</p>
+<p>3) 使用csv的opt:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line">import</span><br><span class="line">-D</span><br><span class="line">mapreduce.map.speculative=false</span><br><span class="line"><span class="comment">--append</span></span><br><span class="line"><span class="comment">--connect</span></span><br><span class="line">jdbc:mysql://apolo-publisher-reader:3306/apolo?useUnicode=true&amp;characterEncoding=UTF-8</span><br><span class="line"><span class="comment">--username</span></span><br><span class="line">xxx</span><br><span class="line"><span class="comment">--password</span></span><br><span class="line">xxx@xxx</span><br><span class="line"><span class="comment">--boundary-query</span></span><br><span class="line">'<span class="keyword">select</span> <span class="keyword">unix_timestamp</span>(<span class="string">"2017-07-23"</span>)*<span class="number">1000</span>,<span class="keyword">unix_timestamp</span>(<span class="keyword">date_add</span>(<span class="string">"2017-07-23"</span>,<span class="built_in">interval</span> <span class="number">1</span> <span class="keyword">day</span>))*<span class="number">1000</span><span class="string">'</span></span><br><span class="line"><span class="string">--query</span></span><br><span class="line"><span class="string">SELECT  * FROM question where updatedTime between unix_timestamp("2017-07-23")*1000 and unix_timestamp(date_sub("2017-07-23",interval -1 day))*1000 and $CONDITIONS</span></span><br><span class="line"><span class="string">--split-by</span></span><br><span class="line"><span class="string">updatedTime</span></span><br><span class="line"><span class="string">--hive-delims-replacement</span></span><br><span class="line"><span class="string">'</span> <span class="string">'</span></span><br><span class="line"><span class="string">--target-dir</span></span><br><span class="line"><span class="string">/user/fengmq01/test5/</span></span><br><span class="line"><span class="string">--enclosed-by</span></span><br><span class="line"><span class="string">"'</span><span class="string">"</span></span><br><span class="line"><span class="string">--m</span></span><br><span class="line"><span class="string">20</span></span><br><span class="line"><span class="string">--direct</span></span><br></pre></td></tr></table></figure>
+
+
+<p>4)最安全的solution,不使用csv:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line">import</span><br><span class="line">-D</span><br><span class="line">mapreduce.map.speculative=false</span><br><span class="line"><span class="comment">--append</span></span><br><span class="line"><span class="comment">--connect</span></span><br><span class="line">jdbc:mysql://apolo-publisher-reader:3306/apolo?useUnicode=true&amp;characterEncoding=UTF-8</span><br><span class="line"><span class="comment">--username</span></span><br><span class="line">xxx</span><br><span class="line"><span class="comment">--password</span></span><br><span class="line">xxx@xxx</span><br><span class="line"><span class="comment">--boundary-query</span></span><br><span class="line">'<span class="keyword">select</span> <span class="keyword">unix_timestamp</span>(<span class="string">"2017-07-23"</span>)*<span class="number">1000</span>,<span class="keyword">unix_timestamp</span>(<span class="keyword">date_add</span>(<span class="string">"2017-07-23"</span>,<span class="built_in">interval</span> <span class="number">1</span> <span class="keyword">day</span>))*<span class="number">1000</span><span class="string">'</span></span><br><span class="line"><span class="string">--query</span></span><br><span class="line"><span class="string">SELECT  * FROM question where updatedTime between unix_timestamp("2017-07-23")*1000 and unix_timestamp(date_sub("2017-07-23",interval -1 day))*1000 and $CONDITIONS</span></span><br><span class="line"><span class="string">--split-by</span></span><br><span class="line"><span class="string">updatedTime</span></span><br><span class="line"><span class="string">--hive-delims-replacement</span></span><br><span class="line"><span class="string">'</span> <span class="string">'</span></span><br><span class="line"><span class="string">--target-dir</span></span><br><span class="line"><span class="string">/user/fengmq01/test5/</span></span><br><span class="line"><span class="string">--fields-terminated-by</span></span><br><span class="line"><span class="string">"\0001"</span></span><br><span class="line"><span class="string">--m</span></span><br><span class="line"><span class="string">20</span></span><br><span class="line"><span class="string">--direct</span></span><br></pre></td></tr></table></figure>
+
+<p>对应的hive外部表参数:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">ROW FORMAT DELIMITED</span><br><span class="line">FIELDS TERMINATED BY '\u0001'</span><br><span class="line">COLLECTION ITEMS TERMINATED BY '\u0002'</span><br><span class="line">MAP KEYS TERMINATED BY '\u0003'</span><br></pre></td></tr></table></figure>
+
+
+<h3 id="csv外部表语句"><a href="#csv外部表语句" class="headerlink" title="csv外部表语句:"></a>csv外部表语句:</h3><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">drop</span> <span class="keyword">table</span> temp.feng_test1;</span><br><span class="line"><span class="keyword">create</span> <span class="keyword">table</span> temp.feng_test1</span><br><span class="line">(c1 <span class="keyword">string</span></span><br><span class="line">,c2 <span class="keyword">string</span></span><br><span class="line">,c3 <span class="keyword">string</span></span><br><span class="line">,c4 <span class="keyword">string</span></span><br><span class="line">)</span><br><span class="line">;</span><br><span class="line"><span class="keyword">load</span> <span class="keyword">data</span> <span class="keyword">local</span> inpath <span class="string">'input.csv'</span> <span class="keyword">into</span> <span class="keyword">table</span> temp.feng_test1;</span><br><span class="line"></span><br><span class="line"><span class="keyword">create</span> <span class="keyword">external</span> <span class="keyword">table</span> temp.feng_test2</span><br><span class="line">(c1 <span class="keyword">string</span></span><br><span class="line">,c2 <span class="keyword">string</span></span><br><span class="line">,c3 <span class="keyword">string</span></span><br><span class="line">,c4 <span class="keyword">string</span></span><br><span class="line">)</span><br><span class="line"><span class="keyword">ROW</span> <span class="keyword">FORMAT</span> SERDE</span><br><span class="line">  <span class="string">'org.apache.hadoop.hive.serde2.OpenCSVSerde'</span></span><br><span class="line"><span class="keyword">WITH</span> SERDEPROPERTIES (</span><br><span class="line">  <span class="string">'escapeChar'</span>=<span class="string">'\\'</span>,</span><br><span class="line">  <span class="string">'quoteChar'</span>=<span class="string">'\'',</span></span><br><span class="line"><span class="string">  '</span>separatorChar<span class="string">'='</span>,<span class="string">')</span></span><br><span class="line"><span class="string">STORED AS INPUTFORMAT</span></span><br><span class="line"><span class="string">  '</span>org.apache.hadoop.mapred.TextInputFormat<span class="string">'</span></span><br><span class="line"><span class="string">OUTPUTFORMAT</span></span><br><span class="line"><span class="string">  '</span>org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat<span class="string">'</span></span><br><span class="line"><span class="string">LOCATION</span></span><br><span class="line"><span class="string">  '</span>hdfs://f04/<span class="keyword">user</span>/hive/warehouse/temp.db/feng_test1<span class="string">'</span></span><br></pre></td></tr></table></figure>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2017/10/01/mysql-sqoop-hive%E5%88%86%E9%9A%94%E7%AC%A6%E6%80%BB%E7%BB%93/" data-id="ck96cxplp0046maam7rsnhwdx" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/hive/" rel="tag">hive</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/sqoop/" rel="tag">sqoop</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-sqoop学习笔记" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2017/09/28/sqoop%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/" class="article-date">
@@ -1150,118 +1248,6 @@ case class的companion object是隐式自动生成的<figure class="highlight pl
 
 
   
-    <article id="post-java并发编程实战笔记-6-7章" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2017/02/25/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-6-7%E7%AB%A0/" class="article-date">
-  <time datetime="2017-02-25T11:45:43.000Z" itemprop="datePublished">2017-02-25</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2017/02/25/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-6-7%E7%AB%A0/">java并发编程实战笔记-6-7章</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="6-1节-背景"><a href="#6-1节-背景" class="headerlink" title="6.1节 背景"></a>6.1节 背景</h1><p>(为了引出Executor框架)<br>任务执行方式:</p>
-<ol>
-<li>串行; 单线程,太慢;</li>
-<li>完全并行; 每个任务一个线程,开销太大.</li>
-<li>使用Executor框架. OK </li>
-</ol>
-<h1 id="6-2-Executor框架"><a href="#6-2-Executor框架" class="headerlink" title="6.2 Executor框架"></a>6.2 Executor框架</h1><p><code>java.util.concurrent</code>提供的线程池.<br>可以通过实现Executor接口,自定义执行策略:</p>
-<ol>
-<li>谁来执行;</li>
-<li>执行顺序;(FIFO,LIFO,优先级)</li>
-<li>并发度;</li>
-<li>线程池容量(包括等待的);</li>
-<li>什么时候拒绝任务,拒绝哪一个;</li>
-<li>执行任务前后的操作.</li>
-</ol>
-<p>或者直接使用<code>Executors</code>中编写好的线程池/执行策略:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">newFixedThreadPool &#x2F;&#x2F; 定长</span><br><span class="line">newCachedThreadPool &#x2F;&#x2F; 无限增长,但会复用原来的</span><br><span class="line">newSingleThreadExecutor &#x2F;&#x2F; 单线程</span><br><span class="line">newScheduledThreadPool &#x2F;&#x2F; 定长,但可以定时\延迟执行.</span><br><span class="line">newWorkStealingPool &#x2F;&#x2F; 用fork-join的,工作觅取的 &#x2F;&#x2F; 1.8新增.</span><br></pre></td></tr></table></figure>
-
-<h2 id="Executor的生命周期"><a href="#Executor的生命周期" class="headerlink" title="Executor的生命周期"></a>Executor的生命周期</h2><p>为了以各种方式关掉<code>Executor</code>,库中写了<code>ExecutorService</code>:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">public interface ExecutorService extends Executor &#123;</span><br><span class="line">        void shutdown();&#x2F;&#x2F;平缓得关闭,不再接收新任务,执行剩余的;</span><br><span class="line">        List&lt;Runnable&gt; shutdownNow();&#x2F;&#x2F;取消运行中的和未执行的;</span><br><span class="line">        boolean isShutdown();&#x2F;&#x2F;是否已经下达shutdown命令</span><br><span class="line">        boolean isTerminated();&#x2F;&#x2F;是否完成了shutdown命令</span><br><span class="line">        boolean awaitTermination(long timeout, TimeUnit unit)</span><br><span class="line">                throws InterruptedException;</span><br><span class="line">        &#x2F;&#x2F; ... 还有一些invoke和submit        </span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
-
-<p>ExecutorService生命周期有3种状态:<br>运行,关闭,已终止. </p>
-<p>ExecutorService中的任务的生命周期:<br>创建,提交,开始,完成.</p>
-<p>上述生命周期都是单向不可逆的.</p>
-<h1 id="线程池的局限"><a href="#线程池的局限" class="headerlink" title="线程池的局限"></a>线程池的局限</h1><ol>
-<li>适用于同构任务,异构任务分解粒度不够细,提升不够大;</li>
-</ol>
-<h1 id="第七章-取消与关闭"><a href="#第七章-取消与关闭" class="headerlink" title="第七章 取消与关闭"></a>第七章 取消与关闭</h1><h2 id="背景"><a href="#背景" class="headerlink" title="背景:"></a>背景:</h2><blockquote>
-<p>java中无法简单\安全得停止取消某个线程;<br>需要使用中断(一种协作机制),从一个线程发出取消请求,中断另一个线程.因此其实需要被中断的线程预先提供安全停止\取消的方法,其中包括清理资源等操作.</p>
-</blockquote>
-<h2 id="取消策略"><a href="#取消策略" class="headerlink" title="取消策略:"></a>取消策略:</h2><ol>
-<li>HOW: 其他线程如何请求取消;</li>
-<li>WHEN: 本线程何时受理取消请求;</li>
-<li>WHAT: 取消时具体要干什么.</li>
-</ol>
-<p>Thread中的中断方法:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">public class Thread&#123;</span><br><span class="line">public void interrupt()&#123;&#125;&#x2F;&#x2F; 中断此线程</span><br><span class="line">public boolean isInterrupted()&#123;&#125;&#x2F;&#x2F;查询中断状态</span><br><span class="line">public static boolean interrupted()&#123;&#125;&#x2F;&#x2F; 查询中断状态,且清除中断.</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h2 id="中断策略"><a href="#中断策略" class="headerlink" title="中断策略"></a>中断策略</h2><p>有些线程不支持取消,但可以支持中断. </p>
-<p>中断的方法:</p>
-<ol>
-<li><p>直接中断:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Thread.currentThread().interrupt();</span><br></pre></td></tr></table></figure></li>
-<li><p>限时任务:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Future&lt;?&gt;task&#x3D;exec.submit(r);</span><br><span class="line">task.get(timeout,unit);</span><br><span class="line">task.cancel();</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>处理不可中断的阻塞:</p>
-</li>
-</ol>
-<p>(1)java.io包中的同步Socket I/O:<br><code>InputStream</code>和<code>OutputStream</code>的read,write方法都不会响应中断.<br>中断方法: 关闭底层套接字,让read,write抛出SocketException. </p>
-<p>(2)java.io包中的同步I/O:<br>中断方法:<br>中断<code>InterruptibleChannel</code>.抛出<code>ClosedByInterruptExeception</code>.<br>关闭<code>InterruptibleChannel</code>.抛出<code>AsynchronousCloseException</code>.</p>
-<p>(3)Selector的异步I/O:(java.nio.channels)<br>中断方法:<br>close或wakeup方法. 抛出<code>ClosedSelectorException</code>.</p>
-<p>(4)等待内置锁.<br>使用Lock类中的<code>lockInterruptible</code>方法.</p>
-<h1 id="取消策略的设计"><a href="#取消策略的设计" class="headerlink" title="取消策略的设计"></a>取消策略的设计</h1><p>1.设置取消信号量.</p>
-<blockquote>
-<p>太山寨. 缺陷:<br>(1) while循环中不能有阻塞,否则无法取消.<br>因此需要检查while循环中的每一行代码,确保安全比较麻烦.</p>
-</blockquote>
-<p>2.捕获中断异常.自定义存盘操作.</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;&#x2F; 用cancel接口封装后调用.</span><br><span class="line">public void cancel()&#123;this.interrupt();&#125;</span><br></pre></td></tr></table></figure>
-
-<p>3.任务交给ExecutorService托管.// 本质上调了interrupt. </p>
-<p>4.使用毒丸对象.</p>
-<blockquote>
-<p>缺陷: 仅当生产者消费者数量已知情况.无界队列场景下使用.</p>
-</blockquote>
-<h2 id="Executors保存进度"><a href="#Executors保存进度" class="headerlink" title="Executors保存进度"></a>Executors保存进度</h2><p>shutdownNow会返回尚未开始的线程列表. 无法获得中途取消的.<br>可以自己封装一遍ExecutorsService. 重写execute方法,捕获异常判断状态,记录取消的线程.<br>详见代码:<br><a href="https://github.com/xiaoyue26/july/blob/master/src/main/java/practice/chapter7/TrackingExecutor.java" target="_blank" rel="noopener">https://github.com/xiaoyue26/july/blob/master/src/main/java/practice/chapter7/TrackingExecutor.java</a></p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2017/02/25/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-6-7%E7%AB%A0/" data-id="ck96cxpla002mmaam3khog7zl" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1288,6 +1274,10 @@ case class的companion object是隐式自动生成的<figure class="highlight pl
       <ul>
         
           <li>
+            <a href="/2022/02/17/2022-02/http3-quic%E4%BC%98%E7%BC%BA%E7%82%B9%E5%8F%8A%E5%8E%9F%E5%9B%A0/">http3_quic优缺点及原因</a>
+          </li>
+        
+          <li>
             <a href="/2022/02/16/2022-02/http-range/">http_range</a>
           </li>
         
@@ -1301,10 +1291,6 @@ case class的companion object是隐式自动生成的<figure class="highlight pl
         
           <li>
             <a href="/2021/06/01/2021-06/%E7%BD%91%E7%BB%9C%E5%AE%89%E5%85%A8%E7%AC%94%E8%AE%B0-1/">网络安全笔记-1</a>
-          </li>
-        
-          <li>
-            <a href="/2021/02/22/2021-02/%E5%A4%9A%E9%A1%B9%E7%9B%AE%E5%85%B1%E4%BA%AB%E4%BB%A3%E7%A0%81%E4%B9%8B%E2%80%94%E2%80%94git-subtree/">多项目共享代码之——git subtree</a>
           </li>
         
       </ul>
