@@ -72,6 +72,82 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-java线程同步之callable与future" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2015/10/14/java%E7%BA%BF%E7%A8%8B%E5%90%8C%E6%AD%A5%E4%B9%8Bcallable%E4%B8%8Efuture/" class="article-date">
+  <time datetime="2015-10-14T13:11:25.000Z" itemprop="datePublished">2015-10-14</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2015/10/14/java%E7%BA%BF%E7%A8%8B%E5%90%8C%E6%AD%A5%E4%B9%8Bcallable%E4%B8%8Efuture/">java线程同步之callable与future</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <ul>
+<li><p>背景：</p>
+<blockquote>
+<p>多线程编程中，若使用<code>Thread</code>或者<code>Runnable</code>则无法便捷地获取线程的执行结果；此外在线程同步时，处理超时任务时可以省得自己创建守护线程，所以应该使用<code>Callable</code>和<code>Future</code>,(<a href="http://www.cnblogs.com/dolphin0520/p/3949310.html" target="_blank" rel="noopener">Callable和Future的基本描述</a>)这样也能方便地配合<code>ExecutorService</code>使用。</p>
+</blockquote>
+</li>
+<li><p>基本用法:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">Future&lt;String&gt; future=DbThreadPool.INSTANCE.add(daemonThread);</span><br><span class="line"><span class="comment">//1秒内没得到结果就不再等待:</span></span><br><span class="line">future.get(<span class="number">1000</span>, TimeUnit.MILLISECONDS);</span><br><span class="line"><span class="comment">/*取消Callable任务,不管有没在执行：*/</span></span><br><span class="line">future.cancel(<span class="keyword">true</span>);</span><br><span class="line"><span class="comment">/**假如还没在执行,取消Callable任务：*/</span></span><br><span class="line">future.cancel(<span class="keyword">false</span>);</span><br></pre></td></tr></table></figure>
+
+</li>
+</ul>
+<hr>
+<p>这样线程同步就可以用语言特性方便地解决了。然而实际项目使用<code>tesseract</code>时，调用的是linux命令,所以创建的是进程,并没有在jdk中找到直接的语言特性支持来解决子进程的超时问题,还是得手动创建守护线程解决进程和线程的同步问题。</p>
+<blockquote>
+<p>其实也可以使用<code>tess4J</code>来调用<code>tesseract</code>,避免自己创建进程,但是经过测试,<code>tess4J</code>的效率低得惊人，而且包比较大，所以放弃使用它。</p>
+</blockquote>
+<p><strong>完整的代码:</strong></p>
+<ol>
+<li><p>首先创建线程池:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">enum</span> DbThreadPool &#123;</span><br><span class="line">    INSTANCE&#123;</span><br><span class="line">    <span class="keyword">int</span> cpuNums = Runtime.getRuntime().availableProcessors();</span><br><span class="line">    <span class="keyword">int</span> poolSize = <span class="number">10</span>;</span><br><span class="line">    <span class="keyword">int</span> numThreads = cpuNums * poolSize;</span><br><span class="line">    ExecutorService executorService = <span class="keyword">new</span> ThreadPoolExecutor(numThreads, numThreads, <span class="number">0L</span>,</span><br><span class="line">    TimeUnit.MILLISECONDS, <span class="keyword">new</span> LinkedBlockingQueue&lt;Runnable&gt;());</span><br><span class="line">     </span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">public</span> &lt;M&gt; <span class="function">Future&lt;M&gt; <span class="title">add</span><span class="params">(Callable&lt;M&gt; task)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> executorService.submit(task);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">add</span><span class="params">(Runnable task)</span> </span>&#123;</span><br><span class="line">        executorService.execute(task);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">shutdown</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="comment">//等待任务结束后关闭线程池.</span></span><br><span class="line">        executorService.shutdown();</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">protected</span> List&lt;Runnable&gt; <span class="title">shutdownNow</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="comment">//不等待任务结束,直接关闭线程池.</span></span><br><span class="line">        <span class="keyword">return</span> executorService.shutdownNow();</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    &#125;;</span><br><span class="line">    <span class="keyword">protected</span> <span class="keyword">abstract</span> &lt;M&gt; <span class="function">Future&lt;M&gt;  <span class="title">add</span><span class="params">(Callable&lt;M&gt; task)</span></span>;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">protected</span> <span class="keyword">abstract</span> <span class="keyword">void</span> <span class="title">add</span><span class="params">(Runnable task)</span></span>;</span><br><span class="line">    <span class="function"><span class="keyword">protected</span> <span class="keyword">abstract</span> <span class="keyword">void</span> <span class="title">shutdown</span><span class="params">()</span></span>;</span><br><span class="line">    <span class="function"><span class="keyword">protected</span> <span class="keyword">abstract</span> List&lt;Runnable&gt; <span class="title">shutdownNow</span><span class="params">()</span></span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></li>
+<li><p>守护线程:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">DaemonThread</span> <span class="keyword">implements</span> <span class="title">Callable</span>&lt;<span class="title">String</span>&gt; </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> Process process;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">DaemonThread</span><span class="params">(Process process)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.process = process;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> String <span class="title">call</span><span class="params">()</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            System.out.println(<span class="string">"睡了！"</span>);</span><br><span class="line">            Thread.sleep(<span class="number">500</span>); <span class="comment">// 延迟0.5秒</span></span><br><span class="line">            System.out.println(<span class="string">"醒了！"</span>);</span><br><span class="line">        &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">            System.out.println(e.getMessage());</span><br><span class="line">        &#125;</span><br><span class="line">        System.out.println(<span class="string">"操作前"</span>);</span><br><span class="line">        process.destroy();</span><br><span class="line">        System.out.println(<span class="string">"操作后"</span>);</span><br><span class="line">        <span class="keyword">return</span> <span class="string">"Success"</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>脚本调用类,其实这个也没必要用单例,只是自己想多写几次练熟一点:<br><code>synchronized</code>也不是必要的,只是实际使用时希望控制创建的子进程数量, 不希望创建太多子进程,而是维持在1个子进程。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> java.util.concurrent.Future;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">enum</span> CmdInvokeSingleton &#123;</span><br><span class="line">    INSTANCE &#123;</span><br><span class="line">        <span class="comment">/**</span></span><br><span class="line"><span class="comment">         * 运行shell脚本</span></span><br><span class="line"><span class="comment">         * <span class="doctag">@param</span> shell 需要运行的shell脚本</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">synchronized</span> <span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">execShell</span><span class="params">(String shell)</span> </span>&#123;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                Runtime rt = Runtime.getRuntime();</span><br><span class="line">                <span class="keyword">final</span> Process process = rt.exec(shell);</span><br><span class="line">                DaemonThread daemonThread = <span class="keyword">new</span> DaemonThread(process);</span><br><span class="line">                Future&lt;String&gt; future=DbThreadPool.INSTANCE.add(daemonThread);</span><br><span class="line">                <span class="keyword">int</span> exitcode = process.waitFor();</span><br><span class="line">                System.out.println(<span class="string">"exitcode:"</span> + exitcode);</span><br><span class="line">                future.cancel(<span class="keyword">true</span>);</span><br><span class="line">            &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">                e.printStackTrace();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">    &#125;;</span><br><span class="line">    <span class="function"><span class="keyword">protected</span> <span class="keyword">abstract</span> <span class="keyword">void</span> <span class="title">execShell</span><span class="params">(String shell)</span></span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2015/10/14/java%E7%BA%BF%E7%A8%8B%E5%90%8C%E6%AD%A5%E4%B9%8Bcallable%E4%B8%8Efuture/" data-id="ck96cxple0032maamdlqc13cf" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-git回退版本" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2015/10/13/git%E5%9B%9E%E9%80%80%E7%89%88%E6%9C%AC/" class="article-date">
@@ -648,76 +724,6 @@
 
 
   
-    <article id="post-ubuntu12-04下vncserver的安装" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2015/03/07/ubuntu12-04%E4%B8%8Bvncserver%E7%9A%84%E5%AE%89%E8%A3%85/" class="article-date">
-  <time datetime="2015-03-07T08:51:11.000Z" itemprop="datePublished">2015-03-07</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/%E9%85%8D%E7%BD%AE/">配置</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2015/03/07/ubuntu12-04%E4%B8%8Bvncserver%E7%9A%84%E5%AE%89%E8%A3%85/">ubuntu12.04下vncserver的安装</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <ol>
-<li><strong>安装：</strong><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo apt-get install vnc4server</span><br></pre></td></tr></table></figure></li>
-<li><strong>启动：</strong><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">vncserver :1</span><br></pre></td></tr></table></figure></li>
-</ol>
-<p><strong>关闭：</strong></p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">vncserver -kill :1</span><br></pre></td></tr></table></figure>
-
-<p>还需配置图形界面：<br>配置<code>~/.vnc/xstartup</code>：</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">unset SESSION_MANAGER</span><br><span class="line">unset DBUS_SESSION_BUS_ADDRESS</span><br><span class="line"><span class="meta">#</span><span class="bash"> <span class="built_in">exec</span> /etc/X11/xinit/xinitrc</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#</span><span class="bash"> 中间部分配置不变</span></span><br><span class="line"></span><br><span class="line"><span class="meta">#</span><span class="bash"> x-window-manager &amp;</span></span><br><span class="line">export DESKTOP_SESSION=ubuntu-2d</span><br><span class="line"><span class="meta">#</span><span class="bash"> 这个 `ubuntu-2d`参考 `/usr/share/gnome-session/sessions/` 下的文件名设置成不同的值：</span></span><br><span class="line">export GDMSESSION=ubuntu-2d</span><br><span class="line">export STARTUP="/usr/bin/gnome-session --session=ubuntu-2d"</span><br><span class="line"><span class="meta">$</span><span class="bash">STARTUP</span></span><br></pre></td></tr></table></figure>
-
-<p><strong>别漏了最后的$STARTUP。</strong><br>完整配置如下:</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash">!/bin/sh</span></span><br><span class="line"><span class="meta">#</span><span class="bash"> Uncomment the following two lines <span class="keyword">for</span> normal desktop:</span></span><br><span class="line">unset SESSION_MANAGER</span><br><span class="line">unset DBUS_SESSION_BUS_ADDRESS</span><br><span class="line"><span class="meta">#</span><span class="bash"> <span class="built_in">exec</span> /etc/X11/xinit/xinitrc</span></span><br><span class="line">[ -x /etc/vnc/xstartup ] &amp;&amp; exec /etc/vnc/xstartup</span><br><span class="line">[ -r $HOME/.Xresources ] &amp;&amp; xrdb $HOME/.Xresources</span><br><span class="line">xsetroot -solid grey</span><br><span class="line">vncconfig -iconic &amp;</span><br><span class="line">x-terminal-emulator -geometry 80x24+10+10 -ls -title "$VNCDESKTOP Desktop" &amp;</span><br><span class="line"><span class="meta">#</span><span class="bash">x-window-manager &amp;</span></span><br><span class="line">export DESKTOP_SESSION=ubuntu-2d</span><br><span class="line">export GDMSESSION=ubuntu-2d</span><br><span class="line">export STARTUP="/usr/bin/gnome-session --session=ubuntu-2d"</span><br><span class="line"><span class="meta">$</span><span class="bash">STARTUP</span></span><br></pre></td></tr></table></figure>
-
-<p>然后再启动vncserver就可以远程用vncviewer登录访问图形界面了。<br><strong>启动：</strong></p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">vncserver :1</span><br></pre></td></tr></table></figure>
-
-<p><strong>关闭：</strong></p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">vncserver -kill :1</span><br></pre></td></tr></table></figure>
-
-<p>例如win7下使用vncviewer，<code>vncserver</code>栏里输入ip和端口号<code>10.2.2.147:1</code>，其他保持默认,让vncserver选择。输入vncserver端启动<code>vncserver :1</code>时用户的密码。即可登录。</p>
-<ul>
-<li>vnc远程桌面屏幕大小：<br>在运行<code>vncserver</code>的时候可通过指定参数，在适合的屏幕下进行图形界面的访问。<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">vncserver -geometry 1600x900 -depth 24 :1</span><br><span class="line">vncserver -geometry 1920x1080 -depth 32 :1</span><br><span class="line">vncserver -geometry 1900x1000  :1</span><br></pre></td></tr></table></figure>
-</li>
-</ul>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2015/03/07/ubuntu12-04%E4%B8%8Bvncserver%E7%9A%84%E5%AE%89%E8%A3%85/" data-id="ck96cxpm3005omaamcw3g3nsi" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E9%85%8D%E7%BD%AE/" rel="tag">配置</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -744,6 +750,10 @@
       <ul>
         
           <li>
+            <a href="/2022/02/18/2022-02/%E6%8B%A5%E5%A1%9E%E7%AE%97%E6%B3%95bbr/">quic中的拥塞算法bbr</a>
+          </li>
+        
+          <li>
             <a href="/2022/02/17/2022-02/http3-quic%E4%BC%98%E7%BC%BA%E7%82%B9%E5%8F%8A%E5%8E%9F%E5%9B%A0/">http3_quic优缺点及原因</a>
           </li>
         
@@ -757,10 +767,6 @@
         
           <li>
             <a href="/2021/07/26/2021-07/metaspace%E7%AC%94%E8%AE%B0/">metaspace笔记</a>
-          </li>
-        
-          <li>
-            <a href="/2021/06/01/2021-06/%E7%BD%91%E7%BB%9C%E5%AE%89%E5%85%A8%E7%AC%94%E8%AE%B0-1/">网络安全笔记-1</a>
           </li>
         
       </ul>

@@ -72,6 +72,66 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-02/简单解释CAP原理" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/01/2019-02/%E7%AE%80%E5%8D%95%E8%A7%A3%E9%87%8ACAP%E5%8E%9F%E7%90%86/" class="article-date">
+  <time datetime="2019-02-01T01:33:53.000Z" itemprop="datePublished">2019-02-01</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F/">分布式</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/02/01/2019-02/%E7%AE%80%E5%8D%95%E8%A7%A3%E9%87%8ACAP%E5%8E%9F%E7%90%86/">简单解释CAP原理</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>关于CAP原理的术语描述很多,其实给理解带来了障碍。(以下是维基百科:)</p>
+<blockquote>
+<p>一致性（Consistency）： （等同于所有节点访问同一份最新的数据副本）<br>可用性（Availability）：（每次请求都能获取到非错的响应——但是不保证获取的数据为最新数据）<br>分区容错性（Partition tolerance）：（以实际效果而言，分区相当于对通信的时限要求。系统如果不能在时限内达成数据一致性，就意味着发生了分区的情况，必须就当前操作在C和A之间做出选择。）</p>
+</blockquote>
+<img src="/images/2019-02/cap.png" class="" width="800" height="1200" title="cap">
+<p>如图所示,CAP最多只能取两者。（如果每项要彻底达标，只能取2个，但也可以三者都不完全实现）</p>
+<p>改成自然语言，通俗解释一下，就容易理解多了:</p>
+<blockquote>
+<p>C: 一致性。达成一致的速度足够快、或者每次更新是整个集群原子性的操作。如果有一个中控节点(单点瓶颈)，很容易让值变更是原子性的。(但也牺牲了A)<br>A: 可用性。 没有单点瓶颈，挂1，2个节点也能正常工作。<br>P: 可分性。 把集群切两半，让它们失联，让两半都能正常工作。</p>
+</blockquote>
+<h2 id="具体案例的CAP取舍"><a href="#具体案例的CAP取舍" class="headerlink" title="具体案例的CAP取舍"></a>具体案例的CAP取舍</h2><p>大部分的分布式系统(或者说集群)都是先取P，然后取舍A或者C（引入单点，或者使用P2P的协议）。</p>
+<p><code>lease机制</code>: CP。例如hdfs中pipeline写入,client先申请租约lease，然后写入3备份后才返回。一致性由client单点控制完成,P由3副本完成，牺牲了A（有单点）。<br><code>Quorum机制</code>:C+0.5A+0.5P。N个副本，更新W个，读R个。<br><code>2PC/两阶段提交</code>: C+0.1A+0.1P。<br><code>Paxos</code>: C+0.8C+0.8P。</p>
+<p><code>redis-cluster</code>: AP。key的分布:用gossip协议(类似于p2p)达成一致性,因此C比较慢。<br><code>redis-sentile</code>: CP。key的分布:各节点完全独立,数据存在哪里完全由客户端单点维护。因此没有A。<br><code>codis</code>：CP。由代理单点维护key的分布，因此也没有A。</p>
+<p>一个实际的系统可能涉及到很多分布式协议，因此每个部分对于CAP的取舍可能会有不同。<br>HDFS系统: CP。大部分看起来是有单点。<br>ceph系统: AP。大部分看起来是p2p的，</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/01/2019-02/%E7%AE%80%E5%8D%95%E8%A7%A3%E9%87%8ACAP%E5%8E%9F%E7%90%86/" data-id="ck96cxppa00gkmaam2ka94wve" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/" rel="tag">分布式</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2019-01/redis的quicklist" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/01/19/2019-01/redis%E7%9A%84quicklist/" class="article-date">
@@ -910,161 +970,6 @@
 
 
   
-    <article id="post-2018-12/如何阅读thread-dump" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/12/06/2018-12/%E5%A6%82%E4%BD%95%E9%98%85%E8%AF%BBthread-dump/" class="article-date">
-  <time datetime="2018-12-06T01:24:17.000Z" itemprop="datePublished">2018-12-06</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/jvm/">jvm</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/12/06/2018-12/%E5%A6%82%E4%BD%95%E9%98%85%E8%AF%BBthread-dump/">如何阅读thread dump</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="生成thread-dump"><a href="#生成thread-dump" class="headerlink" title="生成thread dump"></a>生成thread dump</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">jstack &lt;PID&gt;</span><br></pre></td></tr></table></figure>
-
-<h1 id="查看thread-dump文件"><a href="#查看thread-dump文件" class="headerlink" title="查看thread dump文件"></a>查看thread dump文件</h1><ol>
-<li>保存成<code>xxx.tdump</code>文件,用<code>jvisualvm</code>打开;</li>
-<li>✔ 用网站打开: <a href="http://spotify.github.io/threaddump-analyzer/" target="_blank" rel="noopener">http://spotify.github.io/threaddump-analyzer/</a></li>
-<li>用文本编辑器打开.</li>
-</ol>
-<p>其中第二个方法，用网站查看最好用。<br>此外还可以用另一个网站: <a href="http://fastthread.io/" target="_blank" rel="noopener">http://fastthread.io/</a><br>这个网站还能看core dump和hs_err_pid142043.log</p>
-<h2 id="jvisualvm查看thread-dump"><a href="#jvisualvm查看thread-dump" class="headerlink" title="jvisualvm查看thread dump"></a>jvisualvm查看thread dump</h2><p>和用文本编辑器的区别只有一个，就是多了语法高亮(字体颜色有区分)。<br>某个日志如下:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">&quot;Attach Listener&quot; #16866 daemon prio&#x3D;9 os_prio&#x3D;0 tid&#x3D;0x00007f6574001000 nid&#x3D;0x2edea waiting on condition [0x0000000000000000]</span><br><span class="line">   java.lang.Thread.State: RUNNABLE</span><br></pre></td></tr></table></figure>
-
-<p>各部分含义:</p>
-<ul>
-<li>线程名称：<code>Attach Listener</code></li>
-<li>线程类型: <code>daemon</code></li>
-<li>tid: jvm内部线程id;</li>
-<li>nid: 线程id(系统真实)16进制;</li>
-<li>线程状态: RUNNABLE</li>
-<li>[0x0000000000000000]： 起始栈地址。</li>
-</ul>
-<h3 id="案例-遇到cpu100-的情况"><a href="#案例-遇到cpu100-的情况" class="headerlink" title="案例: 遇到cpu100%的情况"></a>案例: 遇到cpu100%的情况</h3><ol>
-<li>查看某进程下占用高的线程id:<br><code>top –H –p &lt;进程id&gt;</code><br>这里从结果里得到比如 16143 线程id;</li>
-<li>查看thread dump:<br><code>jstack -l &lt;进程id&gt;</code><br>上一步的线程id(16143)转换为16进制为<code>0x3f0f</code>,因此在thread dump中看看<code>0x3f0f</code>相关信息即可。（也就是上文中的nid）<br>（可以定位到具体是啥线程了）</li>
-</ol>
-<h2 id="网站查看thread-dump"><a href="#网站查看thread-dump" class="headerlink" title="网站查看thread dump"></a>网站查看thread dump</h2><p><a href="http://spotify.github.io/threaddump-analyzer" target="_blank" rel="noopener">http://spotify.github.io/threaddump-analyzer</a><br>几个改进:</p>
-<ol>
-<li>会合并相同栈的线程; (类似一个group by);</li>
-<li>会列出锁占用情况(<code>Synchronizers</code>面板);</li>
-<li>Top Methods From 50 Running Threads。<img src="/images/2018-12/groupbythread.png" class="" width="800" height="1200" title="groupbythread">
-<img src="/images/2018-12/spotify.png" class="" width="800" height="1200" title="spotify">
-<img src="/images/2018-12/topmethod.png" class="" width="800" height="1200" title="topmethod">
-
-</li>
-</ol>
-<h3 id="tip-10进制转16进制"><a href="#tip-10进制转16进制" class="headerlink" title="tip 10进制转16进制"></a>tip 10进制转16进制</h3><p>用<code>top -H -p pid</code>找到cpu占用高的线程id(10进制)以后，要去thread dump里找具体是哪个nid(16进制),因此需要用这个linux命令:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"># 把10进制的26转成16进制:</span><br><span class="line">echo &#39;obase&#x3D;16;ibase&#x3D;10;26&#39; | bc</span><br></pre></td></tr></table></figure>
-<p>或者用printf:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">printf %x&#39;\n&#39; 26</span><br><span class="line"># 结果是1a</span><br></pre></td></tr></table></figure>
-
-<h3 id="线程状态"><a href="#线程状态" class="headerlink" title="线程状态"></a>线程状态</h3><ul>
-<li>java中的线程状态:<br>线程状态转化大致如下:</li>
-</ul>
-<ol>
-<li><code>New</code>=&gt;<code>Runnable</code>=&gt;<code>Terminated</code> // 理想状态</li>
-<li><code>Runnable</code> =&gt; <code>Blocked</code>/<code>Waiting</code>/<code>Time_Waited</code>=&gt;<code>Runnable</code> // 可能误入的歧途</li>
-</ol>
-<table>
-<thead>
-<tr>
-<th>状态</th>
-<th>说明</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>New</td>
-<td>创建线程后,调用<code>start()</code>前.</td>
-</tr>
-<tr>
-<td>Runnable</td>
-<td>就绪和运行中.</td>
-</tr>
-<tr>
-<td>Terminated</td>
-<td>终止. 执行完毕</td>
-</tr>
-<tr>
-<td>Blocked</td>
-<td>阻塞.  阻塞于锁. (<code>synchronized</code>)</td>
-</tr>
-<tr>
-<td>Waiting</td>
-<td>等待.  等待其他线程的中断或者通知.(<code>Lock</code>类)</td>
-</tr>
-<tr>
-<td>Time_Waiting</td>
-<td>超时等待. 比Waiting多一个超时返回功能.(<code>Lock</code>类)</td>
-</tr>
-</tbody></table>
-<p><a href="http://xiaoyue26.github.io/2018/02/03/2018-02/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC%E5%9B%9B%E7%AB%A0/">http://xiaoyue26.github.io/2018/02/03/2018-02/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC%E5%9B%9B%E7%AB%A0/</a></p>
-<ul>
-<li><code>thread dump</code>中的线程状态:<br>示例状态与相应线程名:<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;&#x2F; java.lang.Thread.State: RUNNABLE</span><br><span class="line">RUNNABLE: Attach Listener</span><br><span class="line">TIMED_WAITING (parking): HikariPool-1 housekeeper</span><br><span class="line">TIMED_WAITING (on object monitor): Abandoned connection cleanup thread</span><br><span class="line">TIMED_WAITING (sleeping): Hashed wheel timer</span><br><span class="line">WAITING (on object monitor): Finalizer</span><br></pre></td></tr></table></figure>
-<img src="/images/2018-12/thread_dump.png" class="" width="800" height="1200" title="thread_dump">
-
-</li>
-</ul>
-<p>状态对应含义详解:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Runnable: 就绪或运行中</span><br><span class="line">Wait on condition: sleeping或者等待事件</span><br><span class="line">Waiting for Monitor Entry and in Object.wait(): 在synchronized,等待对象锁</span><br></pre></td></tr></table></figure>
-<p>其中<code>synchronized</code>与<code>obj.wait()</code>这对好基友:<br>对象锁: 每个对象的临界区<code>Monitor</code></p>
-<h3 id="线程栈示例"><a href="#线程栈示例" class="headerlink" title="线程栈示例"></a>线程栈示例</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">&quot;Abandoned connection cleanup thread&quot; #81 daemon prio&#x3D;5 os_prio&#x3D;0 tid&#x3D;0x00007f66acbbc000 nid&#x3D;0x279b in Object.wait() [0x00007f6646a8b000]</span><br><span class="line">   java.lang.Thread.State: TIMED_WAITING (on object monitor)</span><br><span class="line">	at java.lang.Object.wait(Native Method)</span><br><span class="line">	at java.lang.ref.ReferenceQueue.remove(ReferenceQueue.java:143)</span><br><span class="line">	- locked &lt;0x0000000080210720&gt; (a java.lang.ref.ReferenceQueue$Lock)</span><br><span class="line">	at com.mysql.jdbc.AbandonedConnectionCleanupThread.run(AbandonedConnectionCleanupThread.java:43)</span><br></pre></td></tr></table></figure>
-<p>先lock<code>0x0000000080210720</code>,然后wait.<br>可以想象代码可能是形如:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">synchronized(obj) &#123;  </span><br><span class="line">       obj.wait();  </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h3 id="Monitor、Entry-Set、Waiting-Set"><a href="#Monitor、Entry-Set、Waiting-Set" class="headerlink" title="Monitor、Entry Set、Waiting Set"></a>Monitor、Entry Set、Waiting Set</h3><p><code>Monitor</code>的两个set: <code>Entry Set</code>, <code>Waiting Set</code>.<br>首先得进入<code>Entry Set</code>,才能通往<code>Waiting Set</code>，因此要先<code>Synchronized</code>才行。<br><code>Entry Set</code>: <code>synchronized</code><br><code>Waiting Set</code>: <code>obj.wait()</code>// syn后。// 会释放对象锁。<br>唤醒<code>Waiting Set</code>： 在<code>synchronized</code>后调用<code>notify</code></p>
-<h3 id="问题定位"><a href="#问题定位" class="headerlink" title="问题定位"></a>问题定位</h3><h4 id="Cpu很忙：检查runnable的线程"><a href="#Cpu很忙：检查runnable的线程" class="headerlink" title="Cpu很忙：检查runnable的线程;"></a>Cpu很忙：检查runnable的线程;</h4><ol>
-<li>隔一段时间，收集几次thread dump;</li>
-<li>比较其中runnable的代码变化。</li>
-</ol>
-<p>没变化=&gt;可能在死循环;<br>有变化=&gt;正常。</p>
-<h3 id="Cpu很闲：检查waiting-for-monitor-entry的线程。"><a href="#Cpu很闲：检查waiting-for-monitor-entry的线程。" class="headerlink" title="Cpu很闲：检查waiting for monitor entry的线程。"></a>Cpu很闲：检查waiting for monitor entry的线程。</h3><ol>
-<li>隔一段时间，收集几次thread dump;</li>
-<li>比较其中waiting for monitor entry的代码变化。</li>
-</ol>
-<p>没变化=&gt;可能在死等(死锁); =&gt;可以<br>有变化=&gt;正常。</p>
-<h3 id="Thin-Lock-Fat-Lock-Spin-Lock"><a href="#Thin-Lock-Fat-Lock-Spin-Lock" class="headerlink" title="Thin Lock, Fat Lock, Spin Lock:"></a>Thin Lock, Fat Lock, Spin Lock:</h3><p><code>Thin Lock</code>: 某线程通过<code>CAS</code>获得<code>thin lock</code>,其他线程进入<code>spin lock</code>;<br><code>fat lock</code>:  <code>monitor_enter</code>/<code>monitor_exit</code>，其他线程进入<code>wait()</code>,不消耗cpu;<br>// 第二个获得锁的人把锁升级成<code>fat lock</code>。// 不能回退/降级</p>
-<p><code>Tasuki</code>锁：（Oracle的BEA JRockit与IBM的JVM）</p>
-<ol>
-<li><code>thin lock</code>取消忙等待；</li>
-<li><code>fat lock</code>可以回退/降级，通过采样数据分析决定。</li>
-</ol>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/12/06/2018-12/%E5%A6%82%E4%BD%95%E9%98%85%E8%AF%BBthread-dump/" data-id="ck96cxpox00f2maamd9r35835" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/jvm/" rel="tag">jvm</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1091,6 +996,10 @@
       <ul>
         
           <li>
+            <a href="/2022/02/18/2022-02/%E6%8B%A5%E5%A1%9E%E7%AE%97%E6%B3%95bbr/">quic中的拥塞算法bbr</a>
+          </li>
+        
+          <li>
             <a href="/2022/02/17/2022-02/http3-quic%E4%BC%98%E7%BC%BA%E7%82%B9%E5%8F%8A%E5%8E%9F%E5%9B%A0/">http3_quic优缺点及原因</a>
           </li>
         
@@ -1104,10 +1013,6 @@
         
           <li>
             <a href="/2021/07/26/2021-07/metaspace%E7%AC%94%E8%AE%B0/">metaspace笔记</a>
-          </li>
-        
-          <li>
-            <a href="/2021/06/01/2021-06/%E7%BD%91%E7%BB%9C%E5%AE%89%E5%85%A8%E7%AC%94%E8%AE%B0-1/">网络安全笔记-1</a>
           </li>
         
       </ul>

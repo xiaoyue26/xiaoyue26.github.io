@@ -72,6 +72,247 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-07/粗俗理解clickhouse" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/07/06/2019-07/%E7%B2%97%E4%BF%97%E7%90%86%E8%A7%A3clickhouse/" class="article-date">
+  <time datetime="2019-07-06T09:06:37.000Z" itemprop="datePublished">2019-07-06</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/clickhouse/">clickhouse</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/07/06/2019-07/%E7%B2%97%E4%BF%97%E7%90%86%E8%A7%A3clickhouse/">粗俗理解clickhouse</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="what-clickhouse是啥"><a href="#what-clickhouse是啥" class="headerlink" title="what: clickhouse是啥?"></a>what: clickhouse是啥?</h1><p>clickhouse是俄罗斯开源的一个用于OLAP分析的核心引擎，它可以基于海量的日志数据接受类sql查询，以秒~分钟量级的延迟返回查询结果。<br>它目前应用在了俄罗斯的搜索引擎Yandex.Metrica中、欧洲核子研究中心: PB级存储、统计分析查询，以及我国各大互联网公司的BI后台引擎中。</p>
+<h2 id="应用：-Yandex-Metrica"><a href="#应用：-Yandex-Metrica" class="headerlink" title="应用： Yandex.Metrica"></a>应用： Yandex.Metrica</h2><p>2014年: 每天120亿个事件。（点击、浏览）<br>374台服务器，20.3万亿行数据。<br>压缩后: 2PB<br>压缩前: 17PB</p>
+<p>详细介绍官网:<br><a href="https://clickhouse.yandex/docs/zh/" target="_blank" rel="noopener">https://clickhouse.yandex/docs/zh/</a><br>开源代码:<br><a href="https://github.com/yandex/ClickHouse" target="_blank" rel="noopener">https://github.com/yandex/ClickHouse</a><br>中文文档:<br><a href="https://github.com/yandex/ClickHouse/tree/master/docs/zh" target="_blank" rel="noopener">https://github.com/yandex/ClickHouse/tree/master/docs/zh</a></p>
+<h1 id="why-为啥选择clickhouse"><a href="#why-为啥选择clickhouse" class="headerlink" title="why: 为啥选择clickhouse?"></a>why: 为啥选择clickhouse?</h1><p>主要原因有: 性能高、跑分高、功能多、可用性高。</p>
+<h2 id="性能高、跑分高"><a href="#性能高、跑分高" class="headerlink" title="性能高、跑分高"></a>性能高、跑分高</h2><p>// 俄罗斯的程序员在算法方面的活跃度排名世界第一<br>// C++实现、老毛子轻易不开源,参见nginx</p>
+<blockquote>
+<p>摘自知乎: <a href="https://zhuanlan.zhihu.com/p/22165241" target="_blank" rel="noopener">https://zhuanlan.zhihu.com/p/22165241</a><br>1亿数据:<br>比Vertica快5倍,比Hive快279倍,比Mysql快801倍;<br>10亿数据:<br>比Vertica快5倍,mysql无法完成。</p>
+</blockquote>
+<h3 id="单机性能"><a href="#单机性能" class="headerlink" title="单机性能"></a>单机性能</h3><p>有page cache: 2-10GB／s（未压缩），上限30GB/s<br>无page cache: 1.2G/s(压缩率3)<br>(磁盘400MB/s)如果是10B的列，就是1-2亿行/s。 </p>
+<h2 id="功能多"><a href="#功能多" class="headerlink" title="功能多"></a>功能多</h2><p>最重要的是有<code>AggregatingMergeTree</code>表引擎，专门优化了三个数据分析最实用的查询:（海量数据快速计算）</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">uniq: 计算uv</span><br><span class="line">any: 抽样统计</span><br><span class="line">quantiles: 分位数</span><br></pre></td></tr></table></figure>
+<p>上述几个功能如果用sparkSql/hive,一般耗时都是15分钟以上。(甚至到半小时、1小时)<br>如果用mysql的话,则由于维度爆炸的问题可能存不下这么多数据，并且无法灵活新增维度。<br>clickhouse对于海量数据处理没有spark/hive那么灵活,但是特化了OLAP的即时查询性能,本质上是处在不同领域的工具。<br>从数据仓库的角度来看:<br>ods层: 用spark/hive进行ETL后产生;<br>dw层: ods载入clickhouse后直接产生预聚合的数仓,支持即时查询;<br>dm层: mysql</p>
+<h3 id="对比"><a href="#对比" class="headerlink" title="对比"></a>对比</h3><p>hbase/ES:一般用来支持海量数据点查询;<br>mysql: 用来支持无聚合的点查询;<br>clickhouse: 用来支持海量数据的聚合查询。<br>kylin: 比较接近clickhouse，底层是hbase+星型模型</p>
+<p>其他引擎:</p>
+<h4 id="ReplcingMergeTree"><a href="#ReplcingMergeTree" class="headerlink" title="ReplcingMergeTree"></a>ReplcingMergeTree</h4><p>删除相同主键的重复项(去重)</p>
+<h3 id="SummingMergeTree"><a href="#SummingMergeTree" class="headerlink" title="SummingMergeTree"></a>SummingMergeTree</h3><p>将一个part中，相同主键的所有行聚合成一行，包含一系列聚合函数状态。</p>
+<h3 id="CollapsingMergeTree"><a href="#CollapsingMergeTree" class="headerlink" title="CollapsingMergeTree"></a>CollapsingMergeTree</h3><p>提供折叠行功能： 把同主键的数据行去重到最多两行。（再次强调所有聚合都在part内）<br>场景: 用户访问状态记录、频繁变化的数据</p>
+<p>前面说的clickhouse不支持update数据，所以用这个引擎可以近似达到一部分update的效果。<br>本质上就是类似于git的revert、银行系统里的冲正、mysql的MVCC。</p>
+<p>比如我们要记录用户访问情况，先插入一条:<br><code>userid_0,5,146,1</code> 表示0号用户访问了5个页面，停留146秒(最后一列的1暂时忽略)。<br>然后过了一会儿想改成它访问了6个页面，停留185秒，那就插入:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">userid_0,5,146,-1</span><br><span class="line">userid_0,6,185,1</span><br></pre></td></tr></table></figure>
+<p>首先把原来的取消掉，标记列-1。然后插入最新的状态数据，标记列1.</p>
+<blockquote>
+<p>应当注意这些成对的1,-1会异步地被删除，所以不能查到状态变化历史,仅用于查最新。</p>
+</blockquote>
+<p>这种引擎的建表语句:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">CREATE</span> <span class="keyword">TABLE</span> UAct</span><br><span class="line">(</span><br><span class="line">    UserID UInt64,</span><br><span class="line">    PageViews UInt8,</span><br><span class="line">    <span class="keyword">Duration</span> UInt8,</span><br><span class="line">    <span class="keyword">Sign</span> <span class="built_in">Int8</span></span><br><span class="line">)</span><br><span class="line"><span class="keyword">ENGINE</span> = CollapsingMergeTree(<span class="keyword">Sign</span>)</span><br><span class="line"><span class="keyword">ORDER</span> <span class="keyword">BY</span> UserID</span><br></pre></td></tr></table></figure>
+<p>查询的时候的语法:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span></span><br><span class="line">    UserID,</span><br><span class="line">    <span class="keyword">sum</span>(PageViews * <span class="keyword">Sign</span>) <span class="keyword">AS</span> PageViews,</span><br><span class="line">    <span class="keyword">sum</span>(<span class="keyword">Duration</span> * <span class="keyword">Sign</span>) <span class="keyword">AS</span> <span class="keyword">Duration</span></span><br><span class="line"><span class="keyword">FROM</span> UAct</span><br><span class="line"><span class="keyword">GROUP</span> <span class="keyword">BY</span> UserID</span><br><span class="line"><span class="keyword">HAVING</span> <span class="keyword">sum</span>(<span class="keyword">Sign</span>) &gt; <span class="number">0</span></span><br></pre></td></tr></table></figure>
+
+<p><code>CollapsingMergeTree</code>要求插入的顺序不能乱来，要按状态的变化顺序。<br>如果顺序无法保证，可以使用<code>VersionedCollapsingMergeTree</code>,它的算法也很简单,就是要求用户多传一个version字段。</p>
+<h3 id="GraphiteMergeTree"><a href="#GraphiteMergeTree" class="headerlink" title="GraphiteMergeTree"></a>GraphiteMergeTree</h3><p>直接接到日志收集。<br>可以存metrics指标可视化系统Graphite的rollup数据。<br>如果不rollup，可以用别的引擎。</p>
+<h3 id="Log系列的引擎-非主打"><a href="#Log系列的引擎-非主打" class="headerlink" title="Log系列的引擎(非主打)"></a>Log系列的引擎(非主打)</h3><p>用于小数据量(&lt; 100w)的表。<br>包括: StripeLog,Log,TinyLog三个引擎。</p>
+<p>特性:</p>
+<ul>
+<li>追加写,不支持改</li>
+<li>不支持索引</li>
+<li>非原子写入(可能有损坏的数据)</li>
+</ul>
+<p>TinyLog：最简单的表引擎，适合一次写入即终身、多次查询的小数据，不支持并发数据访问，不支持同时写入同时读取。<br>Log：比TinyLog多一个偏移量优化.<br>Memory：以直接形式存储在内存中，读写变态快，但是记住是临时的，关机数据消失。<br>Buffer：缓冲，可以理解为将数据存储在内存中，然后达到一定阈值限制条件，那么先前的数据会自动写入设定的表格中。这样可以将部分热数据放在内存中缓存，快速访问和读取，而时间较为久远的数据写入表中释放内存，应该比较好理解。（可以实时盯数据）<br>External data：从字面理解，就是可以将文件数据等引入query语句中利用了。比如你想查找一些在你所给的名单中的用户的消费数据，那么你可以免除复制粘贴，直接将这个名单文件引入并使用，clickhouse会自动给这个文件建立一个临时表。</p>
+<h3 id="其他功能"><a href="#其他功能" class="headerlink" title="其他功能:"></a>其他功能:</h3><ul>
+<li>支持类SQL查询，相应的库函数很多：ip转换、数组、map、url转换、近似<br>计算uv、近似计算分位数、抽样统计等等；<br><a href="https://clickhouse.yandex/docs/zh/query_language/select/" target="_blank" rel="noopener">https://clickhouse.yandex/docs/zh/query_language/select/</a></li>
+<li>数据源支持繁多，可以是以kafka、tcp、jdbc、文件等等直接作为表。</li>
+<li>webUI支持: <a href="https://tabix.io/" target="_blank" rel="noopener">https://tabix.io/</a></li>
+<li>IDE支持: jetbrain打造的datagrip插件: <a href="https://blog.jetbrains.com/datagrip/tag/clickhouse/" target="_blank" rel="noopener">https://blog.jetbrains.com/datagrip/tag/clickhouse/</a><br><a href="http://www.clickhouse.com.cn/topic/5b6ce6359d28dfde2ddc6229" target="_blank" rel="noopener">http://www.clickhouse.com.cn/topic/5b6ce6359d28dfde2ddc6229</a></li>
+</ul>
+<h2 id="可用性高"><a href="#可用性高" class="headerlink" title="可用性高"></a>可用性高</h2><p>任何时候随时可以给表添加字段、属性、维度，不会拖慢或影响集群运行速度。<br>BI系统很大的一个痛点是维度的<strong>组合爆炸</strong>，而且经常需要新增，clickhouse针对性地优化了这一点。(如果是mysql要新增维度列,需要重做整个表,即使是mysql8的瞬加字段也不行)</p>
+<p>流水线式的数据处理流程，数据一旦进入系统，那么立即处于可以使用的状态，边读（查询）边写没有任何压力。</p>
+<h1 id="How-clickhouse的底层实现原理"><a href="#How-clickhouse的底层实现原理" class="headerlink" title="How: clickhouse的底层实现原理"></a>How: clickhouse的底层实现原理</h1><p>主要思想是根据OLAP的特征舍弃了一部分功能，然后针对性地优化了一部分功能。主要方法包括LSM（MergeTree系列表引擎）、稀疏索引（缓存友好）、列式存储+数据压缩、VectorWise、用概率算法进行近似等等。</p>
+<h2 id="需求分析"><a href="#需求分析" class="headerlink" title="需求分析"></a>需求分析</h2><h3 id="OLAP应用的特点"><a href="#OLAP应用的特点" class="headerlink" title="OLAP应用的特点:"></a>OLAP应用的特点:</h3><ol>
+<li>大多数是读请求</li>
+<li>数据总是以相当大的批(&gt; 1000 rows)进行写入</li>
+<li>不修改已添加的数据</li>
+<li>每次查询都从数据库中读取大量的行，但是同时又仅需要少量的列</li>
+<li>宽表，即每个表包含着大量的列</li>
+<li>较少的查询(通常每台服务器每秒数百个查询或更少)</li>
+<li>对于简单查询，允许延迟大约50毫秒</li>
+<li>列中的数据相对较小： 数字和短字符串(例如，每个URL 60个字节)</li>
+<li>处理单个查询时需要高吞吐量（每个服务器每秒高达数十亿行）</li>
+<li>事务不是必须的</li>
+<li>对数据一致性要求低</li>
+<li>每一个查询除了一个大表外都很小</li>
+<li>查询结果明显小于源数据，换句话说，数据被过滤或聚合后能够被盛放在单台服务器的内存中</li>
+</ol>
+<h3 id="面临的困难："><a href="#面临的困难：" class="headerlink" title="面临的困难："></a>面临的困难：</h3><ol>
+<li>维度组合爆炸；</li>
+<li>聚合数据后,如果有修改很蛋疼.</li>
+<li>URL这种无法预聚合.</li>
+</ol>
+<h3 id="需求洞察"><a href="#需求洞察" class="headerlink" title="需求洞察:"></a>需求洞察:</h3><p>用户只关心聚合后中极小一部分</p>
+<p>市场上的备胎: sparkSQL,Impala,Drill都不好用。</p>
+<h3 id="舍弃的功能"><a href="#舍弃的功能" class="headerlink" title="舍弃的功能"></a>舍弃的功能</h3><ol>
+<li>事务支持</li>
+<li>快速修改、删除数据。 (可以低速批量删除、修改)</li>
+<li>点查询(检索单行): 因为用的是稀疏索引。<br>(好处是稀疏所以索引能完全放入内存，范围查询很快)</li>
+<li>高并发查询: 只支持100/s量级查询,对于内网应用、分析型业务足够。 </li>
+<li>窗口函数。</li>
+</ol>
+<h2 id="实现"><a href="#实现" class="headerlink" title="实现"></a>实现</h2><p>基于上述几点需求分析的优化:</p>
+<ol>
+<li>cpu: VectorWise方法,将压缩的列数据整理成现代CPU容易处理的Vector模式。利用现代CPU的多线程。 SIMD: 每次处理一批Vector数据。</li>
+<li>提高内存利用率: 稀疏索引;</li>
+<li>硬盘: MergeTree系列表引擎(LSM算法),批量合并写入,提高IO吞吐率;</li>
+<li>算法: 近似算法/概率算法。</li>
+</ol>
+<p>架构: 表=&gt;shard=&gt;replica=&gt;partiton=&gt;part</p>
+<h2 id="稀疏索引"><a href="#稀疏索引" class="headerlink" title="稀疏索引"></a>稀疏索引</h2><p>对应<code>index_granularity</code>参数:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">M(SettingUInt64, index_granularity, <span class="number">8192</span>, <span class="string">"How many rows correspond to one primary key value."</span>) \</span><br></pre></td></tr></table></figure>
+<p>索引中相邻mark之间的数据行数,默认8192.<br>借助稀疏索引，它能存更多的索引在内存中。（相当于存了B树的前几层或二级索引）。</p>
+<p>其他配置:<br><a href="https://github.com/yandex/ClickHouse/blob/master/dbms/src/Storages/MergeTree/MergeTreeSettings.h" target="_blank" rel="noopener">https://github.com/yandex/ClickHouse/blob/master/dbms/src/Storages/MergeTree/MergeTreeSettings.h</a></p>
+<p>比如io配置:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">M(SettingUInt64, min_merge_bytes_to_use_direct_io, <span class="number">10U</span>LL * <span class="number">1024</span> * <span class="number">1024</span> * <span class="number">1024</span>, <span class="string">"Minimal amount of bytes to enable O_DIRECT in merge (0 - disabled)."</span>) \</span><br></pre></td></tr></table></figure>
+<p>超过多少Bytes以后绕过内核缓冲，进行直接IO。(节省内存开销、数据复制开销)</p>
+<p>其他配置的分三大块:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/** Merge settings. */</span> \    合并时的配置</span><br><span class="line"><span class="comment">/** Inserts settings. */</span> \  插入时的配置</span><br><span class="line"><span class="comment">/** Replication settings. */</span> \ 副本的配置</span><br><span class="line"><span class="comment">/** Check delay of replicas settings. */</span> \ 副本检查延迟配置</span><br><span class="line"><span class="comment">/** Compatibility settings */</span> \   兼容性配置</span><br></pre></td></tr></table></figure>
+
+<h3 id="稀疏索引示例"><a href="#稀疏索引示例" class="headerlink" title="稀疏索引示例"></a>稀疏索引示例</h3><p>数据存储:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">全部数据  :     [-------------------------------------------------------------------------]</span><br><span class="line">CounterID:      [aaaaaaaaaaaaaaaaaabbbbcdeeeeeeeeeeeeefgggggggghhhhhhhhhiiiiiiiiikllllllll]</span><br><span class="line">Date:           [1111111222222233331233211111222222333211111112122222223111112223311122333]</span><br><span class="line">标记:            |      |      |      |      |      |      |      |      |      |      |</span><br><span class="line">                a,1    a,2    a,3    b,3    e,2    e,3    g,1    h,2    i,1    i,3    l,3</span><br><span class="line">标记号:          0      1      2      3      4      5      6      7      8      9      10</span><br></pre></td></tr></table></figure>
+<ol>
+<li>CounterID in (‘a’, ‘h’): [0, 3) 和 [6, 8) 区间</li>
+<li>CounterID IN (‘a’, ‘h’) AND Date = 3 : [1, 3) 和 [7, 8) 区间</li>
+<li>Date = 3: 扫全表。</li>
+</ol>
+<p>表由按主键排序的数据 <code>part</code> 组成。<br>当数据被插入到表中时，会分成<code>part</code>并按主键的字典序排序。例如，主键是 (CounterID, Date) 时，part中数据按 CounterID 排序，具有相同 CounterID 的部分按 Date 排序。</p>
+<p>不会合并来自不同分区的数据片段。（性能考虑）<br>不保证相同主键的所有行都会合并到同一个数据片段中。(没有必要)</p>
+<p>索引文件： 每个part创建一个<br>每隔index_granularity一个索引行号(mark)；<br>对于每列，跟主键相同的索引行处也会写入mark。这些mark让你可以直接找到数据所在的列。</p>
+<h2 id="表引擎：MergeTree族引擎"><a href="#表引擎：MergeTree族引擎" class="headerlink" title="表引擎：MergeTree族引擎"></a>表引擎：MergeTree族引擎</h2><p>表引擎（即表的类型）决定了：</p>
+<blockquote>
+<p>数据的存储方式和位置，写到哪里以及从哪里读取数据<br>支持哪些查询以及如何支持。<br>并发数据访问。<br>索引的使用（如果存在）。<br>是否可以执行多线程请求。<br>数据复制参数。</p>
+</blockquote>
+<p>clickhouse中最强大的都是合并树引擎系列。</p>
+<ul>
+<li><p>理念:<br>批量写入,后台合并;</p>
+</li>
+<li><p>特点:</p>
+</li>
+</ul>
+<ol>
+<li>数据按主键排序; (类似于聚簇)</li>
+<li>允许使用主键分区; (类似于Hive)</li>
+<li>ReplicatedMergeTree系列支持副本(类似于hdfs)</li>
+<li>支持数据采样;(类似于Mysql performanceSchema)</li>
+</ol>
+<p>建表语句:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">CREATE</span> <span class="keyword">TABLE</span> [<span class="keyword">IF</span> <span class="keyword">NOT</span> <span class="keyword">EXISTS</span>] [db.]table_name [<span class="keyword">ON</span> CLUSTER cluster]</span><br><span class="line">(</span><br><span class="line">    name1 [type1] [<span class="keyword">DEFAULT</span>|<span class="keyword">MATERIALIZED</span>|<span class="keyword">ALIAS</span> expr1],</span><br><span class="line">    name2 [type2] [<span class="keyword">DEFAULT</span>|<span class="keyword">MATERIALIZED</span>|<span class="keyword">ALIAS</span> expr2],</span><br><span class="line">    ...</span><br><span class="line">    <span class="keyword">INDEX</span> index_name1 expr1 <span class="keyword">TYPE</span> type1(...) GRANULARITY value1,</span><br><span class="line">    <span class="keyword">INDEX</span> index_name2 expr2 <span class="keyword">TYPE</span> type2(...) GRANULARITY value2</span><br><span class="line">) <span class="keyword">ENGINE</span> = MergeTree()</span><br><span class="line">[<span class="keyword">PARTITION</span> <span class="keyword">BY</span> expr]</span><br><span class="line">[<span class="keyword">ORDER</span> <span class="keyword">BY</span> expr]</span><br><span class="line">[PRIMARY <span class="keyword">KEY</span> expr]</span><br><span class="line">[<span class="keyword">SAMPLE</span> <span class="keyword">BY</span> expr]</span><br><span class="line">[<span class="keyword">SETTINGS</span> <span class="keyword">name</span>=<span class="keyword">value</span>, ...]</span><br></pre></td></tr></table></figure>
+<p>示例语句:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">ENGINE MergeTree() </span><br><span class="line">PARTITION BY toYYYYMM(EventDate) </span><br><span class="line">ORDER BY (CounterID, EventDate, intHash32(UserID)) </span><br><span class="line">SAMPLE BY intHash32(UserID) </span><br><span class="line">SETTINGS index_granularity=8192</span><br></pre></td></tr></table></figure>
+<p>默认情况下主键跟排序键（由 ORDER BY 子句指定）相同。<br>这里可以看出它不支持唯一索引,重复是很自然的。由上层自己保证。</p>
+<p>SummingMergeTree 和 AggregatingMergeTree 引擎中<br>列分为两种:</p>
+<ul>
+<li>维度</li>
+<li>度量 (各种pv,uv等等)</li>
+</ul>
+<p>Mysql的做法是把所有维度作为主键; (每次新增维度很痛)<br>clickhouse的推荐做法是把旧的维度作为主键(保留少量),所有维度(旧维度+新维度)作为排序列。<br>这里排序列的修改是轻量级的:<br>旧的维度是整体排序列的前缀(已然有序)，仅需排序新加的行。</p>
+<p>推荐使用方案:<br>原始数据=&gt; MergeTree （确保原始数据不丢失）<br>原始数据=&gt; SummingMergeTree/AggregatingMergeTree (得到预聚合数据)</p>
+<blockquote>
+<p>引擎会定期合并相同主键的数据进行聚合。最终结果中多半还是有重复主键，但是同一个part中不会有。</p>
+</blockquote>
+<p>具体来说：<br><code>SummingMergeTree</code>: 把相同排序列的行聚合。<br>被聚合的列在建表语句中通过<code>columns</code>指定。（数值、非主键）<br>(如果<code>columns</code>为空会聚合所有非排序列)</p>
+<p>特殊情况:</p>
+<ol>
+<li>某行所有度量列值都是0，直接删除该行;(sum优化)</li>
+<li>非数值(无法汇总): 随机选一个值.</li>
+<li>支持sumMap函数: 某列是map结构。</li>
+</ol>
+<h4 id="AggregatingMergeTree引擎"><a href="#AggregatingMergeTree引擎" class="headerlink" title="AggregatingMergeTree引擎"></a>AggregatingMergeTree引擎</h4><p><code>SummingMergeTree</code>只支持算pv,<code>AggregatingMergeTree</code>能支持算uv,分位数,抽样,三个函数:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">uniq</span><br><span class="line">anyIf (any+If)</span><br><span class="line">quantiles</span><br></pre></td></tr></table></figure>
+
+<p><strong>创建:</strong>(物化视图)</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">CREATE</span> <span class="keyword">MATERIALIZED</span> <span class="keyword">VIEW</span> test.basic</span><br><span class="line"><span class="keyword">ENGINE</span> = AggregatingMergeTree() <span class="keyword">PARTITION</span> <span class="keyword">BY</span> toYYYYMM(StartDate) </span><br><span class="line"><span class="keyword">ORDER</span> <span class="keyword">BY</span> (CounterID, StartDate)</span><br><span class="line"><span class="keyword">AS</span> <span class="keyword">SELECT</span></span><br><span class="line">    CounterID,</span><br><span class="line">    StartDate,</span><br><span class="line">    sumState(<span class="keyword">Sign</span>)    <span class="keyword">AS</span> Visits, <span class="comment">-- 聚合1: pv</span></span><br><span class="line">    uniqState(UserID) <span class="keyword">AS</span> <span class="keyword">Users</span>  <span class="comment">-- 聚合2: uv 注意是记录了状态(特定的二进制表示法)</span></span><br><span class="line"><span class="keyword">FROM</span> test.visits</span><br><span class="line"><span class="keyword">GROUP</span> <span class="keyword">BY</span> CounterID, StartDate;</span><br></pre></td></tr></table></figure>
+<p>插入数据的时候只需要插入到<code>test.visits</code>.<br>视图中也会有数据，并且会聚合。</p>
+<p><strong>查询:</strong></p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span></span><br><span class="line">    StartDate,</span><br><span class="line">    sumMerge(Visits) <span class="keyword">AS</span> Visits, <span class="comment">-- 注意都变成了merge后缀</span></span><br><span class="line">    uniqMerge(<span class="keyword">Users</span>) <span class="keyword">AS</span> <span class="keyword">Users</span></span><br><span class="line"><span class="keyword">FROM</span> test.basic</span><br><span class="line"><span class="keyword">GROUP</span> <span class="keyword">BY</span> StartDate</span><br><span class="line"><span class="keyword">ORDER</span> <span class="keyword">BY</span> StartDate;</span><br></pre></td></tr></table></figure>
+
+<h2 id="算法-uniq"><a href="#算法-uniq" class="headerlink" title="算法: uniq"></a>算法: uniq</h2><p>上一节中<code>AggregatingMergeTree</code>的uniq求uv,其实有三个函数:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">uniq: 用UniquesHashSet近似求uv（BJKST算法）</span><br><span class="line">uniqHLL12: 用HLL近似求uv </span><br><span class="line">uniqExact: 用HashSet精确求uv</span><br></pre></td></tr></table></figure>
+
+<p>源码见:<br><a href="https://github.com/yandex/ClickHouse/blob/master/dbms/src/AggregateFunctions/AggregateFunctionUniq.cpp" target="_blank" rel="noopener">https://github.com/yandex/ClickHouse/blob/master/dbms/src/AggregateFunctions/AggregateFunctionUniq.cpp</a></p>
+<p>其中HLL就是HyperLogLog算法。</p>
+<p>而第一个<code>UniquesHashSet</code>(<a href="https://github.com/yandex/ClickHouse/blob/ef50601b5ceeeaf5763eab6c0013954c12eb00b1/dbms/src/AggregateFunctions/UniquesHashSet.h" target="_blank" rel="noopener">https://github.com/yandex/ClickHouse/blob/ef50601b5ceeeaf5763eab6c0013954c12eb00b1/dbms/src/AggregateFunctions/UniquesHashSet.h</a>)<br>两者的思想都是uv越大,不同的hash值越多。</p>
+<p><code>UniquesHashSet</code>的特点是内存消耗小,性能高。<br>具体实现是将输入hash到UInt32,然后插入到数组中,如果遇到碰撞则进行线性探测. (原始输入丢弃,只存hash值)随着插入进行达到阈值<code>UNIQUES_HASH_MAX_SIZE</code>时，则将当前存的值丢弃一半,只保留能整除2的值,提高<code>skip_degree</code>值,然后开始只接受能整除2的输入。依此类推,后续就是只接受整除4，8，16的值。最后获取结果:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">size_t</span> <span class="title">size</span><span class="params">()</span> <span class="keyword">const</span></span></span><br><span class="line"><span class="function">   </span>&#123;</span><br><span class="line">       <span class="keyword">if</span> (<span class="number">0</span> == skip_degree)</span><br><span class="line">           <span class="keyword">return</span> m_size;</span><br><span class="line">       <span class="keyword">size_t</span> res = m_size * (<span class="number">1U</span>LL &lt;&lt; skip_degree);</span><br><span class="line">       <span class="comment">/** Pseudo-random remainder - in order to be not visible,</span></span><br><span class="line"><span class="comment">         * that the number is divided by the power of two.</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">       res += (intHashCRC32(m_size) &amp; ((<span class="number">1U</span>LL &lt;&lt; skip_degree) - <span class="number">1</span>));</span><br><span class="line">       <span class="comment">/** Correction of a systematic error due to collisions during hashing in UInt32.</span></span><br><span class="line"><span class="comment">         * `fixed_res(res)` formula</span></span><br><span class="line"><span class="comment">         * - with how many different elements of fixed_res,</span></span><br><span class="line"><span class="comment">         *   when randomly scattered across 2^32 buckets,</span></span><br><span class="line"><span class="comment">         *   filled buckets with average of res is obtained.</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">       <span class="keyword">size_t</span> p32 = <span class="number">1U</span>LL &lt;&lt; <span class="number">32</span>;</span><br><span class="line">       <span class="keyword">size_t</span> fixed_res = round(p32 * (<span class="built_in">log</span>(p32) - <span class="built_in">log</span>(p32 - res)));</span><br><span class="line">       <span class="keyword">return</span> fixed_res;</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
+
+<p>rehash的实现:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">rehash</span><span class="params">()</span></span></span><br><span class="line"><span class="function">    </span>&#123;</span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">size_t</span> i = <span class="number">0</span>; i &lt; buf_size(); ++i)</span><br><span class="line">        &#123;</span><br><span class="line">            <span class="keyword">if</span> (buf[i] &amp;&amp; !good(buf[i]))</span><br><span class="line">            &#123;</span><br><span class="line">                buf[i] = <span class="number">0</span>;</span><br><span class="line">                --m_size;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">/** After removing the elements, there may have been room for items,</span></span><br><span class="line"><span class="comment">          * which were placed further than necessary, due to a collision.</span></span><br><span class="line"><span class="comment">          * You need to move them.</span></span><br><span class="line"><span class="comment">          */</span></span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">size_t</span> i = <span class="number">0</span>; i &lt; buf_size(); ++i)</span><br><span class="line">        &#123;</span><br><span class="line">            <span class="keyword">if</span> (unlikely(buf[i] &amp;&amp; i != place(buf[i])))</span><br><span class="line">            &#123;</span><br><span class="line">                HashValue x = buf[i];</span><br><span class="line">                buf[i] = <span class="number">0</span>;</span><br><span class="line">                reinsertImpl(x);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+<p>其中good函数含义就是能否被2^skip_degree整除。</p>
+<ul>
+<li>线性探测：<br>为了加快速度，增加了一个假设: 所有数据只插入Key/更新Key，不删除Key。<br>(这个假设在大数据处理/统计的场景下，大多都是成立的，spark中openHashSet也是线性探测)<br>有了这个假设它可以去掉拉链表，使用线性探测来实现哈希表。</li>
+<li>内存利用率高: 去掉了8B指针结构，能够创建更大的哈希表，冲突减少；</li>
+<li>内存紧凑: 位图操作快，一个内存page就能放下很多位图，8B就能放64个位置，缓存友好(while循环pos++)。</li>
+</ul>
+<h2 id="存储"><a href="#存储" class="headerlink" title="存储"></a>存储</h2><p>假如表结构是:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">create</span> <span class="keyword">table</span> test.mergetree1 </span><br><span class="line">(sdt  <span class="built_in">Date</span></span><br><span class="line">, <span class="keyword">id</span> UInt16</span><br><span class="line">, <span class="keyword">name</span> <span class="keyword">String</span></span><br><span class="line">, cnt UInt16) </span><br><span class="line"><span class="keyword">ENGINE</span>=MergeTree(sdt, (<span class="keyword">id</span>, <span class="keyword">name</span>), <span class="number">10</span>);</span><br></pre></td></tr></table></figure>
+<p>分区字段是日期sdt.<br>对应的目录结构:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">├── 20180601_20180601_1_1_0</span><br><span class="line">│   ├── checksums.txt</span><br><span class="line">│   ├── columns.txt <span class="comment">-- 元数据</span></span><br><span class="line">│   ├── id.bin <span class="comment">-- 压缩列</span></span><br><span class="line">│   ├── id.mrk <span class="comment">-- 索引mark</span></span><br><span class="line">│   ├── name.bin</span><br><span class="line">│   ├── name.mrk</span><br><span class="line">│   ├── cnt.bin</span><br><span class="line">│   ├── cnt.mrk </span><br><span class="line">│   ├── cnt.idx</span><br><span class="line">│   ├── primary.idx <span class="comment">-- 主键</span></span><br><span class="line">│   ├── sdt.bin</span><br><span class="line">│   └── sdt.mrk <span class="comment">-- 保存一下块偏移量</span></span><br><span class="line">├── 20180602_20180602_2_2_0</span><br><span class="line">│   └── ...</span><br><span class="line">├── 20180603_20180603_3_3_0</span><br><span class="line">│   └── ...</span><br><span class="line">├── format_version.txt</span><br><span class="line">└── detached <span class="comment">-- 破损数据</span></span><br></pre></td></tr></table></figure>
+
+<h1 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h1><p>clickhouse为啥比hive/spark快:</p>
+<ul>
+<li>7*24小时都在后台预聚合.hive/spark计算的时候才申请资源,平时只占一点点;</li>
+<li>可以用星型模型缩减数据类型、压缩友好;</li>
+<li>计算过程没有hive/spark中的shuffle概念,全是mapAgg;</li>
+</ul>
+<p>clickhouse为啥比mysql快:(仅限clickhouse擅长的查询)</p>
+<ul>
+<li>预聚合</li>
+<li>多核优化、vector优化更彻底</li>
+<li>分区+稀疏索引,整个索引能放内存,然后并发查part(这点还是要结合多核优化)</li>
+<li>根据排序键排序存放 </li>
+</ul>
+<p>优化的方面:</p>
+<ol>
+<li>cpu: VectorWise方法,将压缩的列数据整理成现代CPU容易处理的Vector模式。利用现代CPU的多线程。 SIMD: 每次处理一批Vector数据。</li>
+<li>提高内存利用率: 稀疏索引;</li>
+<li>硬盘: MergeTree系列表引擎(LSM算法),批量合并写入,提高IO吞吐率,牺牲随机读能力;</li>
+<li>算法: 近似算法/概率算法,HLL\BJKST算法等。</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/07/06/2019-07/%E7%B2%97%E4%BF%97%E7%90%86%E8%A7%A3clickhouse/" data-id="ck96cxppz00j2maamamimdlei" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/clickhouse/" rel="tag">clickhouse</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2019-06/io中的缓冲" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/06/22/2019-06/io%E4%B8%AD%E7%9A%84%E7%BC%93%E5%86%B2/" class="article-date">
@@ -843,102 +1084,6 @@
 
 
   
-    <article id="post-2019-03/spark语法概要" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/03/31/2019-03/spark%E8%AF%AD%E6%B3%95%E6%A6%82%E8%A6%81/" class="article-date">
-  <time datetime="2019-03-31T11:36:22.000Z" itemprop="datePublished">2019-03-31</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/spark/">spark</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/03/31/2019-03/spark%E8%AF%AD%E6%B3%95%E6%A6%82%E8%A6%81/">spark笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>job: action分割<br>task: shuffle分割<br>application: 多个job</p>
-<p>join\cogroup: 确保Rdd1.partitioner = Rdd2.partitioner = join.partitioner<br>换句话就是 rdd1的key和rdd2的key，还有join时用的key,三者是相等的。</p>
-<h1 id="语法概要"><a href="#语法概要" class="headerlink" title="语法概要"></a>语法概要</h1><p>官方示例代码库:<br><a href="http://spark.apache.org/examples.html" target="_blank" rel="noopener">http://spark.apache.org/examples.html</a><br>此外还有安装目录的<code>examples</code>目录。</p>
-<h2 id="生成rdd"><a href="#生成rdd" class="headerlink" title="生成rdd"></a>生成rdd</h2><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// (1) 从数组:</span></span><br><span class="line">data = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>]</span><br><span class="line">distData = sc.parallelize(data)</span><br><span class="line"><span class="comment">// (1)从文件:</span></span><br><span class="line">scala&gt; <span class="keyword">val</span> distFile = sc.textFile(<span class="string">"data.txt"</span>)</span><br><span class="line">distFile: org.apache.spark.rdd.<span class="type">RDD</span>[<span class="type">String</span>]</span><br></pre></td></tr></table></figure>
-
-<h2 id="RDD操作"><a href="#RDD操作" class="headerlink" title="RDD操作"></a>RDD操作</h2><p>RDD分为：</p>
-<ol>
-<li>普通RDD；</li>
-<li>PairRDD。<br>两者能用的函数大不相同，每次操作RDD前需要复核一下到底是普通RDD还是Pair RDD。</li>
-</ol>
-<p>方法分为:</p>
-<ol>
-<li>transform: 变换结构;</li>
-<li>action: 真正有输出，有动作（特例是forEachPartition这种类似遍历，反函数式编程的）。</li>
-</ol>
-<h2 id="普通RDD-transform"><a href="#普通RDD-transform" class="headerlink" title="普通RDD-transform"></a>普通RDD-transform</h2><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// scala用箭头=&gt;:</span></span><br><span class="line"><span class="keyword">val</span> lineLengths = lines.map(s =&gt; s.length)</span><br><span class="line"><span class="keyword">val</span> totalLength = lineLengths.reduce((a, b) =&gt; a + b)</span><br><span class="line"><span class="comment">// python用lambda:</span></span><br><span class="line">lineLengths = lines.map(lambda s: len(s))</span><br><span class="line">totalLength = lineLengths.reduce(lambda a, b: a + b)</span><br></pre></td></tr></table></figure>
-<p>也可以传递函数:</p>
-<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// scala借用object单例:</span></span><br><span class="line"><span class="class"><span class="keyword">object</span> <span class="title">MyFunctions</span> </span>&#123;</span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">func1</span></span>(s: <span class="type">String</span>): <span class="type">String</span> = &#123; ... &#125;</span><br><span class="line">&#125;</span><br><span class="line">myRdd.map(<span class="type">MyFunctions</span>.func1)</span><br></pre></td></tr></table></figure>
-<p>其他函数汇总:(因为不是pair rdd，因此基本都无shuffle)</p>
-<h3 id="无shuffle-1对1"><a href="#无shuffle-1对1" class="headerlink" title="无shuffle,1对1"></a>无shuffle,1对1</h3><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">map(func)： </span><br><span class="line">filter(func)：无shuffle</span><br></pre></td></tr></table></figure>
-<h3 id="无shuffle-1对多、多对多"><a href="#无shuffle-1对多、多对多" class="headerlink" title="无shuffle,1对多、多对多"></a>无shuffle,1对多、多对多</h3><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">flatMap(func)	:  每个item可以返回一个seq;</span><br><span class="line">mapPartitions(func)	:  输入迭代器，返回迭代器 </span><br><span class="line">mapPartitionsWithIndex(func):  输入迭代器，返回迭代器</span><br></pre></td></tr></table></figure>
-<h3 id="集合运算"><a href="#集合运算" class="headerlink" title="集合运算"></a>集合运算</h3><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">sample(withReplacement, fraction, seed)	</span><br><span class="line">union(otherDataset)	</span><br><span class="line">intersection(otherDataset)	</span><br><span class="line">distinct([numTasks])): 如果是pairRDD，有shuffle，可以定义并行度。</span><br><span class="line">coalesce(numPartitions)	</span><br><span class="line">repartition(numPartitions)	</span><br><span class="line">repartitionAndSortWithinPartitions(partitioner)</span><br></pre></td></tr></table></figure>
-<p>此外还有一个<code>forEachPartition</code>，返回值为空，是个遍历的action。<br>有shuffle的变换一般都可以定义<code>[numTasks]</code>，也就是可以定义并行度。</p>
-<h3 id="闭包"><a href="#闭包" class="headerlink" title="闭包"></a>闭包</h3><p>闭包是指 <code>executor</code> 要在<code>RDD</code>上进行计算时必须对执行节点可见的那些变量和方法。闭包被序列化并被发送到每个 <code>executor</code>。</p>
-<p>闭包的变量副本(序列化后)发给每个 <code>executor</code>.</p>
-<h2 id="Pair-RDD-transform"><a href="#Pair-RDD-transform" class="headerlink" title="Pair RDD-transform"></a>Pair RDD-transform</h2><p>加上了很多shuffle操作的函数(算子)</p>
-<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> pairs = lines.map(s =&gt; (s, <span class="number">1</span>))</span><br><span class="line"><span class="keyword">val</span> counts = pairs.reduceByKey((a, b) =&gt; a + b)</span><br></pre></td></tr></table></figure>
-<p>其他函数汇总:</p>
-<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">groupByKey([numTasks])： 返回(<span class="type">K</span>, <span class="type">Iterable</span>&lt;<span class="type">V</span>&gt;)，一般用reduceByKey代替这个算子</span><br><span class="line">reduceByKey(func, [numTasks])	</span><br><span class="line">aggregateByKey(zeroValue)(seqOp, combOp, [numTasks])	</span><br><span class="line">sortByKey([ascending], [numTasks])	</span><br><span class="line">join(otherDataset, [numTasks]): (<span class="type">K</span>, <span class="type">V</span>) 和 (<span class="type">K</span>, <span class="type">W</span>)  =&gt;  (<span class="type">K</span>, (<span class="type">V</span>, <span class="type">W</span>))</span><br><span class="line">cogroup(otherDataset, [numTasks])	</span><br><span class="line">cartesian(otherDataset)	</span><br><span class="line">partitionBy(partitioner): 一般比repartition靠谱，因为下一步能用到key，而不是随机划分</span><br></pre></td></tr></table></figure>
-
-
-<p>Action汇总:<br>可以注意到凡是最终需要输出、反函数式编程的（遍历）就是action，最后汇聚到driver单点处理。</p>
-<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">reduce(func): 注意和map相反,reduce是action。数据最后聚合成单点。</span><br><span class="line">collect()	</span><br><span class="line">count()	</span><br><span class="line">first()	</span><br><span class="line">take(n)</span><br><span class="line">takeSample(withReplacement, num, [seed])	</span><br><span class="line">takeOrdered(n, [ordering])	</span><br><span class="line">saveAsTextFile(path)	</span><br><span class="line">saveAsSequenceFile(path)	</span><br><span class="line">countByKey()	: 因为整合了reduce的功能</span><br><span class="line">foreach(func) 以及foreachPartition等。</span><br></pre></td></tr></table></figure>
-
-<h3 id="自定义UDAF的核心-combineByKey"><a href="#自定义UDAF的核心-combineByKey" class="headerlink" title="自定义UDAF的核心: combineByKey"></a>自定义UDAF的核心: combineByKey</h3><p>大部分shuffle算子都是调用<code>combineByKey</code>实现的，可以说<code>combineByKey</code>就是shuffle的核心。<br>combineByKey定义:</p>
-<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">combineByKey</span></span>[<span class="type">C</span>](</span><br><span class="line">  createCombiner: <span class="type">V</span> =&gt; <span class="type">C</span>,</span><br><span class="line">  mergeValue: (<span class="type">C</span>, <span class="type">V</span>) =&gt; <span class="type">C</span>,</span><br><span class="line">  mergeCombiners: (<span class="type">C</span>, <span class="type">C</span>) =&gt; <span class="type">C</span>): <span class="type">RDD</span>[(<span class="type">K</span>, <span class="type">C</span>)] = self.withScope &#123;</span><br><span class="line">combineByKeyWithClassTag(createCombiner, mergeValue, mergeCombiners)(<span class="literal">null</span>)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<h4 id="示例"><a href="#示例" class="headerlink" title="示例"></a>示例</h4><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> pairs = sc.parallelize(<span class="type">List</span>((<span class="string">"prova"</span>, <span class="number">1</span>), (<span class="string">"ciao"</span>, <span class="number">2</span>),</span><br><span class="line">                                (<span class="string">"prova"</span>, <span class="number">2</span>), (<span class="string">"ciao"</span>, <span class="number">4</span>),</span><br><span class="line">                                (<span class="string">"prova"</span>, <span class="number">3</span>), (<span class="string">"ciao"</span>, <span class="number">6</span>)))</span><br><span class="line"><span class="comment">// aggregateByKey:</span></span><br><span class="line">pairs.aggregateByKey(<span class="type">List</span>[<span class="type">Any</span>]())(</span><br><span class="line">  (aggr, value) =&gt; aggr ::: (value :: <span class="type">Nil</span>),</span><br><span class="line">  (aggr1, aggr2) =&gt; aggr1 ::: aggr2</span><br><span class="line">).collect().toMap</span><br><span class="line"><span class="comment">// combineByKey:</span></span><br><span class="line">pairs.combineByKey(</span><br><span class="line">  (value) =&gt; <span class="type">List</span>(value),</span><br><span class="line">  (aggr: <span class="type">List</span>[<span class="type">Any</span>], value) =&gt; aggr ::: (value :: <span class="type">Nil</span>),</span><br><span class="line">  (aggr1: <span class="type">List</span>[<span class="type">Any</span>], aggr2: <span class="type">List</span>[<span class="type">Any</span>]) =&gt; aggr1 ::: aggr2</span><br><span class="line">).collect().toMap</span><br></pre></td></tr></table></figure>
-<p>combineByKey比aggregateByKey更加通用，区别是它的第一个参数创建初始聚合器都是函数，而aggregateByKey第一个参数是一个初始值。</p>
-<h2 id="缓存"><a href="#缓存" class="headerlink" title="缓存"></a>缓存</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">cache()</span><br><span class="line">persist([LEVEL])</span><br></pre></td></tr></table></figure>
-<p>在 shuffle 操作中（例如 reduceByKey），即便是用户没有调用 persist 方法，Spark 也会自动缓存部分中间数据.</p>
-<h2 id="广播变量"><a href="#广播变量" class="headerlink" title="广播变量"></a>广播变量</h2><p><code>immutable</code><br>先用action从sc(driver)上广播出去，然后用<code>.value</code>访问。</p>
-<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">scala&gt; <span class="keyword">val</span> broadcastVar = sc.broadcast(<span class="type">Array</span>(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>))</span><br><span class="line">broadcastVar: org.apache.spark.broadcast.<span class="type">Broadcast</span>[<span class="type">Array</span>[<span class="type">Int</span>]] = <span class="type">Broadcast</span>(<span class="number">0</span>)</span><br><span class="line"></span><br><span class="line">scala&gt; broadcastVar.value</span><br><span class="line">res0: <span class="type">Array</span>[<span class="type">Int</span>] = <span class="type">Array</span>(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>)</span><br></pre></td></tr></table></figure>
-
-
-<h2 id="累加器"><a href="#累加器" class="headerlink" title="累加器"></a>累加器</h2><p>数值型。<br>可变。</p>
-<img src="/images/2019-03/acc.jpg" class="" width="800" height="1200" title="acc">
-<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">scala&gt; <span class="keyword">val</span> accum = sc.longAccumulator(<span class="string">"My Accumulator"</span>)</span><br><span class="line">accum: org.apache.spark.util.<span class="type">LongAccumulator</span> = <span class="type">LongAccumulator</span>(id: <span class="number">0</span>, name: <span class="type">Some</span>(<span class="type">My</span> <span class="type">Accumulator</span>), value: <span class="number">0</span>)</span><br><span class="line"></span><br><span class="line">scala&gt; sc.parallelize(<span class="type">Array</span>(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>)).foreach(x =&gt; accum.add(x))</span><br><span class="line">...</span><br><span class="line"><span class="number">10</span>/<span class="number">09</span>/<span class="number">29</span> <span class="number">18</span>:<span class="number">41</span>:<span class="number">08</span> <span class="type">INFO</span> <span class="type">SparkContext</span>: <span class="type">Tasks</span> finished in <span class="number">0.317106</span> s</span><br><span class="line"></span><br><span class="line">scala&gt; accum.value</span><br><span class="line">res2: <span class="type">Long</span> = <span class="number">10</span></span><br></pre></td></tr></table></figure>
-<p>自定义累加器需要实现的3个方法:（类似于<code>combineByKey</code>）</p>
-<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">reset : 清零。防止重算。</span><br><span class="line">add: 累加</span><br><span class="line">merge: 合并累加器。</span><br></pre></td></tr></table></figure>
-<p>示例:</p>
-<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">VectorAccumulatorV2</span> <span class="keyword">extends</span> <span class="title">AccumulatorV2</span>[<span class="type">MyVector</span>, <span class="type">MyVector</span>] </span>&#123;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">private</span> <span class="keyword">val</span> myVector: <span class="type">MyVector</span> = <span class="type">MyVector</span>.createZeroVector</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">reset</span></span>(): <span class="type">Unit</span> = &#123;</span><br><span class="line">    myVector.reset()</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">add</span></span>(v: <span class="type">MyVector</span>): <span class="type">Unit</span> = &#123;</span><br><span class="line">    myVector.add(v)</span><br><span class="line">  &#125;</span><br><span class="line">  ...</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// Then, create an Accumulator of this type:</span></span><br><span class="line"><span class="keyword">val</span> myVectorAcc = <span class="keyword">new</span> <span class="type">VectorAccumulatorV2</span></span><br><span class="line"><span class="comment">// Then, register it into spark context:</span></span><br><span class="line">sc.register(myVectorAcc, <span class="string">"MyVectorAcc1"</span>) <span class="comment">// 注册一下</span></span><br></pre></td></tr></table></figure>
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/03/31/2019-03/spark%E8%AF%AD%E6%B3%95%E6%A6%82%E8%A6%81/" data-id="ck96cxppm00hzmaam5jf963fq" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spark/" rel="tag">spark</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -965,6 +1110,10 @@
       <ul>
         
           <li>
+            <a href="/2022/02/18/2022-02/%E6%8B%A5%E5%A1%9E%E7%AE%97%E6%B3%95bbr/">quic中的拥塞算法bbr</a>
+          </li>
+        
+          <li>
             <a href="/2022/02/17/2022-02/http3-quic%E4%BC%98%E7%BC%BA%E7%82%B9%E5%8F%8A%E5%8E%9F%E5%9B%A0/">http3_quic优缺点及原因</a>
           </li>
         
@@ -978,10 +1127,6 @@
         
           <li>
             <a href="/2021/07/26/2021-07/metaspace%E7%AC%94%E8%AE%B0/">metaspace笔记</a>
-          </li>
-        
-          <li>
-            <a href="/2021/06/01/2021-06/%E7%BD%91%E7%BB%9C%E5%AE%89%E5%85%A8%E7%AC%94%E8%AE%B0-1/">网络安全笔记-1</a>
           </li>
         
       </ul>
