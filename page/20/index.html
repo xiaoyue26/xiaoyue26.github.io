@@ -72,6 +72,142 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-mybatis批量插入和更新" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2015/10/19/mybatis%E6%89%B9%E9%87%8F%E6%8F%92%E5%85%A5%E5%92%8C%E6%9B%B4%E6%96%B0/" class="article-date">
+  <time datetime="2015-10-19T12:47:36.000Z" itemprop="datePublished">2015-10-19</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/orm/">orm</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2015/10/19/mybatis%E6%89%B9%E9%87%8F%E6%8F%92%E5%85%A5%E5%92%8C%E6%9B%B4%E6%96%B0/">mybatis批量插入和更新</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <ol>
+<li><p>批量插入:<br><code>mysql</code>下批量插入的sql语句:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">insert</span> <span class="keyword">into</span> user_info (uname,unumber) <span class="keyword">values</span> </span><br><span class="line">(<span class="string">'xiaoyue1'</span>,<span class="string">'1'</span>),</span><br><span class="line">(<span class="string">'xiaoyue2'</span>,<span class="string">'2'</span>);</span><br></pre></td></tr></table></figure>
+<p>似乎很简单,<br>然而,经过复杂的条件判断和动态构造就变成了这样:</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">insert</span> <span class="attr">id</span>=<span class="string">"insertMass"</span> <span class="attr">useGeneratedKeys</span>=<span class="string">"true"</span> <span class="attr">keyProperty</span>=<span class="string">"id"</span>&gt;</span></span><br><span class="line">		insert into user_info</span><br><span class="line">		<span class="tag">&lt;<span class="name">trim</span> <span class="attr">prefix</span>=<span class="string">"("</span> <span class="attr">suffixOverrides</span>=<span class="string">","</span> <span class="attr">suffix</span>=<span class="string">")"</span>&gt;</span></span><br><span class="line">			<span class="tag">&lt;<span class="name">if</span> <span class="attr">test</span>=<span class="string">"list[0].id != null"</span>&gt;</span>id,<span class="tag">&lt;/<span class="name">if</span>&gt;</span></span><br><span class="line">			<span class="tag">&lt;<span class="name">if</span> <span class="attr">test</span>=<span class="string">"list[0].uname!= null"</span>&gt;</span>uname,<span class="tag">&lt;/<span class="name">if</span>&gt;</span></span><br><span class="line">			<span class="tag">&lt;<span class="name">if</span> <span class="attr">test</span>=<span class="string">"list[0].unumber!= null"</span>&gt;</span>unumber,<span class="tag">&lt;/<span class="name">if</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;/<span class="name">trim</span>&gt;</span></span><br><span class="line">		values</span><br><span class="line">		<span class="tag">&lt;<span class="name">foreach</span> <span class="attr">collection</span>=<span class="string">"list"</span> <span class="attr">item</span>=<span class="string">"item"</span> <span class="attr">index</span>=<span class="string">"index"</span></span></span><br><span class="line"><span class="tag">			<span class="attr">separator</span>=<span class="string">","</span>&gt;</span></span><br><span class="line">			<span class="tag">&lt;<span class="name">trim</span> <span class="attr">prefix</span>=<span class="string">"("</span> <span class="attr">suffixOverrides</span>=<span class="string">","</span> <span class="attr">suffix</span>=<span class="string">")"</span>&gt;</span></span><br><span class="line">				<span class="tag">&lt;<span class="name">if</span> <span class="attr">test</span>=<span class="string">"item.id != null"</span>&gt;</span>#&#123;item.id&#125;,<span class="tag">&lt;/<span class="name">if</span>&gt;</span></span><br><span class="line">				<span class="tag">&lt;<span class="name">if</span> <span class="attr">test</span>=<span class="string">"item.uname!= null"</span>&gt;</span>#&#123;item.uname&#125;,<span class="tag">&lt;/<span class="name">if</span>&gt;</span></span><br><span class="line">				<span class="tag">&lt;<span class="name">if</span> <span class="attr">test</span>=<span class="string">"item.unumber!= null"</span>&gt;</span>#&#123;item.unumber&#125;,<span class="tag">&lt;/<span class="name">if</span>&gt;</span></span><br><span class="line">			<span class="tag">&lt;/<span class="name">trim</span>&gt;</span></span><br><span class="line">		<span class="tag">&lt;/<span class="name">foreach</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">insert</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>用<code>useGeneratedKeys</code>和<code>keyProperty</code>接收自增主键返回的id,而且此处返回的是第一个插入的记录的id,而不是最后一条记录的id。注意调用代码传入的<code>map</code>中必须有<code>id</code>这一项以接收返回值。</li>
+<li>用<code>trim</code>标签消除末尾的逗号，同时在首尾加上括号。</li>
+<li>用<code>foreach</code>标签遍历传入的<code>list</code>, 传入的<code>map</code>中<code>key</code>为<code>list</code>的对象即为<code>userInfo</code>数组。</li>
+<li><code>list[0]</code>表示对象数组的第一项。</li>
+</ul>
+</li>
+</ol>
+<ol start="2">
+<li>对应的调用代码:<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">insertMass</span><span class="params">(List&lt;UserInfo&gt; users)</span> </span>&#123;</span><br><span class="line">		Map&lt;String, Object&gt; paraMap = <span class="keyword">new</span> HashMap&lt;&gt;();</span><br><span class="line">		paraMap.put(<span class="string">"list"</span>, users);</span><br><span class="line">		paraMap.put(<span class="string">"id"</span>, <span class="number">0</span>);<span class="comment">//note</span></span><br><span class="line">		userInfoMapper.insertMass(paraMap);</span><br><span class="line">		<span class="keyword">int</span> beginId = (<span class="keyword">int</span>) paraMap.get(<span class="string">"id"</span>);</span><br><span class="line">		<span class="keyword">for</span> (UserInfo userInfo : users) &#123;</span><br><span class="line">			userInfo.setId(beginId);</span><br><span class="line">			++beginId;</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br></pre></td></tr></table></figure>
+
+</li>
+</ol>
+<hr>
+<ol start="3">
+<li>批量更新:<br>本来是打算用<code>case when</code>语句写的,然而太过复杂没能写出来,可能得用<code>java</code>拼接好<code>sql</code>语句再传给<code>mybatis</code>；<code>replace into</code>虽然简练但可能改变其他不想改变的字段；最后折中写了<code>insert into..on duplicate key UPDATE...</code>。</li>
+</ol>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">insert</span> <span class="attr">id</span>=<span class="string">"updateMass"</span>&gt;</span> <span class="comment">&lt;!--on duplicate key, mysql特有语法 --&gt;</span></span><br><span class="line">		insert into user_info</span><br><span class="line">		(</span><br><span class="line">		<span class="tag">&lt;<span class="name">if</span> <span class="attr">test</span>=<span class="string">"list[0].unumber != null"</span>&gt;</span> unumber,<span class="tag">&lt;/<span class="name">if</span>&gt;</span></span><br><span class="line">		uname,</span><br><span class="line">		id<span class="comment">&lt;!-- id is necessary --&gt;</span></span><br><span class="line">		)</span><br><span class="line">		values</span><br><span class="line">		<span class="tag">&lt;<span class="name">foreach</span> <span class="attr">collection</span>=<span class="string">"list"</span> <span class="attr">item</span>=<span class="string">"item"</span> <span class="attr">index</span>=<span class="string">"index"</span></span></span><br><span class="line"><span class="tag">			<span class="attr">separator</span>=<span class="string">","</span>&gt;</span></span><br><span class="line">			(</span><br><span class="line">			<span class="tag">&lt;<span class="name">if</span> <span class="attr">test</span>=<span class="string">"item.unumber!= null"</span>&gt;</span> #&#123;item.unumber&#125;,<span class="tag">&lt;/<span class="name">if</span>&gt;</span></span><br><span class="line">			<span class="tag">&lt;<span class="name">if</span> <span class="attr">test</span>=<span class="string">"item.uname!= null"</span>&gt;</span>#&#123;item.uname&#125;,<span class="tag">&lt;/<span class="name">if</span>&gt;</span></span><br><span class="line">			#&#123;item.id&#125;</span><br><span class="line">			)</span><br><span class="line">		<span class="tag">&lt;/<span class="name">foreach</span>&gt;</span></span><br><span class="line">		on duplicate key UPDATE</span><br><span class="line">		<span class="tag">&lt;<span class="name">if</span> <span class="attr">test</span>=<span class="string">"list[0].unumber != null"</span>&gt;</span>unumber=values(unumber),<span class="tag">&lt;/<span class="name">if</span>&gt;</span></span><br><span class="line">		uname=values(uname) <span class="comment">&lt;!-- 至少更新一项 --&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">insert</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<ul>
+<li>这次没使用<code>trim</code>标签，可读性好了一点点,可以和上面对比一下;</li>
+<li>传入参数没设置类型,因为<code>mybatis</code>自己会判断, 其实类型是<code>map</code>。<code>map</code>中<code>list</code>项中存着要更新的对象数组。</li>
+</ul>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2015/10/19/mybatis%E6%89%B9%E9%87%8F%E6%8F%92%E5%85%A5%E5%92%8C%E6%9B%B4%E6%96%B0/" data-id="ck96cxplo0041maam6uuna4l1" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mybatis/" rel="tag">mybatis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-RTTI与反射" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2015/10/18/RTTI%E4%B8%8E%E5%8F%8D%E5%B0%84/" class="article-date">
+  <time datetime="2015-10-18T12:53:45.000Z" itemprop="datePublished">2015-10-18</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2015/10/18/RTTI%E4%B8%8E%E5%8F%8D%E5%B0%84/">RTTI与反射</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <blockquote>
+<ul>
+<li><code>RTTI</code>:<br>  运行期类型鉴定。在编译期通过载入和检查<code>.class</code>文件,从而鉴定类型。</li>
+<li><code>反射</code>:<br>  运行期类信息。应用场景:反序列化,远程调用(RM)，访问私用变量和方法。编译期<code>.class</code>文件不可用,只能在运行期获得<code>.class</code>文件，在运行期载入和检查<code>.class</code>文件。</li>
+</ul>
+</blockquote>
+<p>1.<code>RTTI</code>:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//RTTI的例子:</span></span><br><span class="line"><span class="keyword">if</span>(<span class="keyword">boolean</span><span class="class">.<span class="keyword">class</span></span>==Boolean.TYPE)</span><br><span class="line">    System.out.println(<span class="string">"boolean true"</span>);</span><br><span class="line">Gun gun=<span class="keyword">new</span> Gun();</span><br><span class="line"><span class="keyword">if</span><span class="comment">//(Gun.class.isInstance(gun))//方式1;</span></span><br><span class="line">(Class.forName(<span class="string">"test1.RTTI$Gun"</span>).isInstance(gun ))<span class="comment">//方式2反射。</span></span><br><span class="line">    System.out.println(<span class="string">"gun is instance of  Gun"</span>);</span><br><span class="line">    <span class="comment">//此处Gun是test1包下RTTI类中的一个内部类。</span></span><br></pre></td></tr></table></figure>
+<p>2.反射:<br><a href="http://blog.csdn.net/stevenhu_223/article/details/9286121" target="_blank" rel="noopener">http://blog.csdn.net/stevenhu_223/article/details/9286121</a></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">Class&lt;?&gt; class1 = Class.forName(<span class="string">"test1.RTTI$Gun"</span>);</span><br><span class="line">Method[] methods = class1.getMethods();</span><br><span class="line"><span class="keyword">for</span> (Method method : methods)</span><br><span class="line">	out.println(method);</span><br><span class="line">out.println(<span class="string">"constructos:--"</span>);</span><br><span class="line">Constructor[] constructors=class1.getConstructors();</span><br><span class="line"><span class="keyword">for</span> (Constructor method : constructors)</span><br><span class="line">	out.println(method);</span><br><span class="line">Method me1=class1.getMethod(<span class="string">"getdata"</span>, <span class="keyword">int</span><span class="class">.<span class="keyword">class</span>)</span>;</span><br><span class="line">Type returnType=me1.getReturnType();</span><br><span class="line">Object output=me1.invoke(class1.newInstance(),<span class="number">3</span>);</span><br><span class="line">out.println(output);</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p><code>getFields</code>方法获取所有<code>public</code>属性；<br><code>getDeclaredFields</code>方法获取所有属性,包括<code>private</code>。<br><code>getMethods</code>方法获取所有<code>public</code>方法;<br><code>getDeclaredMethods</code>方法获取所有方法,包括<code>private</code>。</p>
+</blockquote>
+<p>可通过<code>getDeclaredMethods</code>获取私有方法；<br>然后<code>nameMethod.setAccessible(true);</code><br>然后就可以执行<code>private</code>方法了。</p>
+<p>此外，获取方法时，除了指定方法名，还要指定参数类型列表，多个参数时可这样写:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Class&lt;?&gt; clazz=Gun<span class="class">.<span class="keyword">class</span></span>;</span><br><span class="line">Method allValuesMethod = clazz.getDeclaredMethod(<span class="string">"setAllValues"</span>, <span class="keyword">new</span> Class[]&#123;String<span class="class">.<span class="keyword">class</span>, <span class="title">int</span>.<span class="title">class</span>, <span class="title">float</span>.<span class="title">class</span>&#125;)</span>;</span><br></pre></td></tr></table></figure>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2015/10/18/RTTI%E4%B8%8E%E5%8F%8D%E5%B0%84/" data-id="ck96cxpkh0007maam3ataayqq" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-java线程同步之callable与future" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2015/10/14/java%E7%BA%BF%E7%A8%8B%E5%90%8C%E6%AD%A5%E4%B9%8Bcallable%E4%B8%8Efuture/" class="article-date">
@@ -610,120 +746,6 @@
 
 
   
-    <article id="post-tesseract-ocr-centos6-5" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2015/09/27/tesseract-ocr-centos6-5/" class="article-date">
-  <time datetime="2015-09-27T04:55:02.000Z" itemprop="datePublished">2015-09-27</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/%E9%85%8D%E7%BD%AE/">配置</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2015/09/27/tesseract-ocr-centos6-5/">tesseract_ocr_centos6.5</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p> 1.安装依赖：</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">sudo yum -y groupinstall "Development Tools"</span><br><span class="line">sudo yum -y gcc gcc-c++ kernel-devel make</span><br><span class="line">sudo yum -y install libpng-devel.x86_64</span><br><span class="line">sudo yum -y install libjpeg-devel.x86_64</span><br><span class="line">sudo yum -y install libtiff-devel.x86_64</span><br><span class="line">sudo yum -y install zlib-devel.x86_64</span><br></pre></td></tr></table></figure>
-<p>2.下载leptonica和tesseract：</p>
-<blockquote>
-<p><a href="https://code.google.com/p/leptonica/downloads/list" target="_blank" rel="noopener">https://code.google.com/p/leptonica/downloads/list</a><br><a href="https://code.google.com/p/tesseract-ocr/downloads/list" target="_blank" rel="noopener">https://code.google.com/p/tesseract-ocr/downloads/list</a><br><a href="http://www.leptonica.org/download.html" target="_blank" rel="noopener">http://www.leptonica.org/download.html</a><br><a href="https://code.google.com/p/tesseract-ocr/" target="_blank" rel="noopener">https://code.google.com/p/tesseract-ocr/</a></p>
-</blockquote>
-<hr>
-<p>3.解压下载好的压缩包：<br><code>tesseract-ocr-3.02.02.tar.gz</code><br><code>leptonica-1.72.tar.gz</code><br><code>tesseract-ocr-3.02.eng.tar.gz</code><br>4.进入<code>leptonica</code>目录编译安装：</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">./configure</span><br><span class="line">make </span><br><span class="line">sudo make install</span><br></pre></td></tr></table></figure>
-<p>5.进入<code>tesseract-ocr</code>目录编译安装：</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">./autogen.sh</span><br><span class="line">./configure</span><br><span class="line">make </span><br><span class="line">sudo make install</span><br><span class="line">sudo ldconfig</span><br></pre></td></tr></table></figure>
-<p>6.解压语言包<code>tesseract-ocr-3.02.eng.tar.gz</code>，<br>解压后将<code>tesseract-ocr/tessdata</code> 下的所有文件全部拷贝到 <code>/usr/local/share/tessdata</code> 下。</p>
-<p>7.测试安装成功：<br>进入<code>tesseract-ocr</code>目录：</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">tesseract phototest.tif phototest -l eng</span><br></pre></td></tr></table></figure>
-<p>若生成phototest.txt,且其中内容与phototest.tif相同则成功。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2015/09/27/tesseract-ocr-centos6-5/" data-id="ck96cxpm2005lmaambq9l9bk6" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E9%85%8D%E7%BD%AE/" rel="tag">配置</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-vagrant笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2015/07/06/vagrant%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2015-07-06T11:29:02.000Z" itemprop="datePublished">2015-07-06</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/%E9%85%8D%E7%BD%AE/">配置</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2015/07/06/vagrant%E7%AC%94%E8%AE%B0/">vagrant笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>##操作环境为win7物理机vmware中的Ubuntu12.04.5 amd64，客户机自带virtural box.<br>1.直接安装：</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">sudo apt-get install ruby rubygems</span><br><span class="line">sudo apt-get install vagrant#1.x版本</span><br></pre></td></tr></table></figure>
-<p>或者官网下载最新版然后安装：</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo dpkg -i vagrant_1.7.4_x86_64.deb</span><br></pre></td></tr></table></figure>
-<p>从vagrant的[box列表][1]下载一个base box，例如presice32.box。<br>（由于笔者的虚拟机没法再次虚拟化<code>64</code>位的系统,所以选用了<code>32</code>位box。猜测应该是没有打开cpu或者bios的虚拟化设置。）<br>首先移动到工作目录，如<code>~/vagrant_workplace/boxes/ubuntu12.04</code>。<br>##从本地添加一个box,并命名为ubuntu12.04：<br><code>vagrant box add ubuntu12.04 ./precise32.box</code><br>##初始化box:<br><code>vagrant init ubuntu12.04</code><br>##启动虚拟机box:<br><code>vagrant up</code><br>##ssh登录到box:<br><code>vagrant ssh</code><br>##重启：<br><code>vagrant reload</code><br>##打包分发 以虚拟机ubuntu12.04为Base创建myubuntu32.box：<br><code>vagrant package –output myubuntu32.box –base ubuntu12.04</code><br>##关闭虚拟机<br><code>vagrant halt</code><br>##销毁虚拟机<br><code>vagrant destroy</code><br>##移除添加的box:<br><code>vagrant box remove ubuntu12.04</code></p>
-<p>box下载列表：<br><a href="http://www.vagrantbox.es/" target="_blank" rel="noopener">http://www.vagrantbox.es/</a><br><a href="https://atlas.hashicorp.com/boxes/search?utm_source=vagrantcloud.com&amp;vagrantcloud=1" target="_blank" rel="noopener">https://atlas.hashicorp.com/boxes/search?utm_source=vagrantcloud.com&amp;vagrantcloud=1</a></p>
-<p>下一步学stash<br>  [1]: <a href="http://www.vagrantbox.es/" target="_blank" rel="noopener">http://www.vagrantbox.es/</a></p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2015/07/06/vagrant%E7%AC%94%E8%AE%B0/" data-id="ck96cxpm8005zmaamhvt56xbp" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E9%85%8D%E7%BD%AE/" rel="tag">配置</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -750,6 +772,14 @@
       <ul>
         
           <li>
+            <a href="/2022/02/24/2022-02/%E4%B8%BA%E4%BB%80%E4%B9%88%E5%85%88hash%E5%90%8E%E5%8A%A0%E5%AF%86%E7%9A%84%E6%96%B9%E6%B3%95%E5%AE%B9%E6%98%93%E9%81%AD%E9%81%87padding%E6%94%BB%E5%87%BB/">为什么先hash后加密的方法容易遭遇padding攻击</a>
+          </li>
+        
+          <li>
+            <a href="/2022/02/24/2022-02/keepalive/">http和tcp层面的keepAlive机制</a>
+          </li>
+        
+          <li>
             <a href="/2022/02/18/2022-02/%E6%8B%A5%E5%A1%9E%E7%AE%97%E6%B3%95bbr/">quic中的拥塞算法bbr</a>
           </li>
         
@@ -759,14 +789,6 @@
         
           <li>
             <a href="/2022/02/16/2022-02/http-range/">http_range</a>
-          </li>
-        
-          <li>
-            <a href="/2022/01/21/2022-01/voip-rtc/">VoIP和RTC</a>
-          </li>
-        
-          <li>
-            <a href="/2021/07/26/2021-07/metaspace%E7%AC%94%E8%AE%B0/">metaspace笔记</a>
           </li>
         
       </ul>

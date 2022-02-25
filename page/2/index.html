@@ -72,6 +72,171 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2020-12/线上性能优化-查看方法级耗时" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/12/20/2020-12/%E7%BA%BF%E4%B8%8A%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-%E6%9F%A5%E7%9C%8B%E6%96%B9%E6%B3%95%E7%BA%A7%E8%80%97%E6%97%B6/" class="article-date">
+  <time datetime="2020-12-20T12:36:32.000Z" itemprop="datePublished">2020-12-20</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E6%80%A7%E8%83%BD/">性能</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2020/12/20/2020-12/%E7%BA%BF%E4%B8%8A%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-%E6%9F%A5%E7%9C%8B%E6%96%B9%E6%B3%95%E7%BA%A7%E8%80%97%E6%97%B6/">线上性能debug-查看方法级耗时</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="摘要"><a href="#摘要" class="headerlink" title="摘要"></a>摘要</h1><p>可以手动挨个儿方法打debug日志；<br>可以用AOP集中拦截打日志；<br>可以用async-profiler查看火焰图；<br>可以用groovy动态执行benchmark;<br>可以用arthas的trace命令。</p>
+<h1 id="目标-问题背景"><a href="#目标-问题背景" class="headerlink" title="目标(问题背景)"></a>目标(问题背景)</h1><p>背景是线上某个接口慢，需要优化。为了找到优化的方向，首先需要知道接口的各个部分的耗时，这样才能找到耗时比例最高的部分针对性地优化。<br>有些时候我们可以使用公司基础架构提供的<code>trace</code>\ <code>rpc monitor</code>来查看rpc调用粒度的耗时；（很多时候慢都是因为某个rpc服务调用慢）<br>但有些时候我们还是需要知道更细粒度、方法粒度的耗时或者耗时占比, 因为<code>trace</code>中的<code>span</code>一般粒度都是IO调用、如数据库访问、redis访问、rpc调用这种级别。</p>
+<h1 id="实操"><a href="#实操" class="headerlink" title="实操"></a>实操</h1><h2 id="方法1：每个方法打日志"><a href="#方法1：每个方法打日志" class="headerlink" title="方法1：每个方法打日志"></a>方法1：每个方法打日志</h2><p>直接在每个方法开始结束的地方打上debug日志，然后在需要查看耗时的时候，运行时调整日志级别，用arthas:</p>
+<figure class="highlight groovy"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ognl <span class="string">'@com.xxx.spring.BeanFactory@getBean("xxxxServiceImpl").logger.setLevel(@ch.qos.logback.classic.Level@DEBUG)'</span></span><br></pre></td></tr></table></figure>
+
+<p>这里不一定用<code>com.xxx.spring.BeanFactory</code>, 也可以用某个<code>applicationAware</code>、能拿到<code>applicatoinContext</code>的类，反正只要能用一行代码访问到logger就行。<br>如果logger所在的bean没有在<code>ApplicationContext</code>里(比如<code>interceptor</code>)，可以考虑把logger改成<code>static</code>的。 </p>
+<h2 id="方法2：AOP集中拦截打日志"><a href="#方法2：AOP集中拦截打日志" class="headerlink" title="方法2：AOP集中拦截打日志"></a>方法2：AOP集中拦截打日志</h2><p>这个方法其实算是方法1的简单升级，毕竟每个方法都加上两行开始结束的日志代码量太大，实现上不可能做到。可以用AOP的表达式把所有需要监控的方法都覆盖进去。</p>
+<p>这种方法也需要改动代码。</p>
+<h2 id="方法3：用async-profiler查看火焰图"><a href="#方法3：用async-profiler查看火焰图" class="headerlink" title="方法3：用async-profiler查看火焰图"></a>方法3：用async-profiler查看火焰图</h2><p>前两种方法都需要改动代码，改造成本较高。一个很自然的思路查看耗时占比是我们手动疯狂jstack，统计一下最多次停留的方法，就是耗时占比最高的方法。</p>
+<p>代替手动jstack的工具就是<a href="https://github.com/jvm-profiling-tools/async-profiler。" target="_blank" rel="noopener">https://github.com/jvm-profiling-tools/async-profiler。</a><br>可以使用命令(采样30秒)： </p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">./profiler.sh -d 30 -f time.svg &lt;pid&gt;</span><br></pre></td></tr></table></figure>
+<p>有时候会发现意外的耗时瓶颈。（简单的过滤入口操作）<br>生成的svg文件可以直接用谷歌浏览器打开，可视化的结果，支持点击展开任意层级，非常得方便。</p>
+<img src="/images/2020-12/svg.png" class="" width="800" height="1200" title="svg">
+
+
+<h2 id="方法4：用groovy脚本动态执行benchmark"><a href="#方法4：用groovy脚本动态执行benchmark" class="headerlink" title="方法4：用groovy脚本动态执行benchmark"></a>方法4：用groovy脚本动态执行benchmark</h2><p>有时候线上接口有缓存，阻碍了我们收集p95耗时的瓶颈。这个时候我们可以用groovy脚本动态传入需要执行的java代码。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 某个bean中的预留方法:</span></span><br><span class="line"><span class="function"><span class="keyword">private</span> Object <span class="title">debug</span><span class="params">(String code)</span></span>&#123;</span><br><span class="line">        String groovyStr = code; <span class="comment">// 需要执行的benchmark代码</span></span><br><span class="line">        Binding binding = <span class="keyword">new</span> Binding();</span><br><span class="line">        GroovyShell groovyShell = <span class="keyword">new</span> GroovyShell(binding);</span><br><span class="line">        Script script = groovyShell.parse(groovyStr);</span><br><span class="line">        <span class="keyword">return</span> script.run();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这里由于当做脚本语言来用了，安全隐患就是不能让我们以外的人调用，因此如果是内网业务可以鉴权后调用；<br>外网业务则让可以这个方法没有任何地方调用，需要用的时候我们自己登到机器上用arthas来调用。<br>(如果黑客入侵到这个程度的话，也无所谓有没有这个方法了)</p>
+<h2 id="方法5：用arthas的trace命令"><a href="#方法5：用arthas的trace命令" class="headerlink" title="方法5：用arthas的trace命令"></a>方法5：用arthas的trace命令</h2><p>如果不仅需要知道耗时占比，还想知道耗时的具体大小，可以用arthas的trace命令:</p>
+<figure class="highlight groovy"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">trace --skipJDKMethod <span class="literal">false</span> com.xxx.service.impl.XXXXServiceImpl method1 <span class="string">'#cost &gt; 200'</span></span><br></pre></td></tr></table></figure>
+<p>需要注意一定要加<code>--skipJDKMethod false</code>这个参数，因为我们很多时候用了java8的stream方法，如果跳过了jdk方法的统计，会发现各个子方法的耗时加起来不等于总耗时。</p>
+<p>这个不像<code>async-profiler</code>一样能看到所有层级的调用，默认是一层，如果加了这个参数，能看到很多时候耗时最高的方法是 <code>collect</code>方法。</p>
+<img src="/images/2020-12/trace.png" class="" width="800" height="1200" title="trace">
+
+
+
+<h1 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h1><p>方法3可以看到整个调用栈展开后的耗时占比；<br>方法4可以构造多次的调用；<br>方法5只能每次看一层，需要一层一层手动去找，而且官方给的通过listenId增强的方法需要用到telnet，而容器里往往根本没有telnet。因此实际上需要我们一层层去找。</p>
+<p>实际工作上往往需要我们结合方法3、4、5。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2020/12/20/2020-12/%E7%BA%BF%E4%B8%8A%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-%E6%9F%A5%E7%9C%8B%E6%96%B9%E6%B3%95%E7%BA%A7%E8%80%97%E6%97%B6/" data-id="cklkmfo8z0003pdam0q8a4i0z" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/arthas/" rel="tag">arthas</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/groovy/" rel="tag">groovy</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/" rel="tag">性能优化</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2020-12/升级HTTP2笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/12/19/2020-12/%E5%8D%87%E7%BA%A7HTTP2%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2020-12-19T07:45:17.000Z" itemprop="datePublished">2020-12-19</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/http/">http</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2020/12/19/2020-12/%E5%8D%87%E7%BA%A7HTTP2%E7%AC%94%E8%AE%B0/">升级HTTP2笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="已知的坑"><a href="#已知的坑" class="headerlink" title="已知的坑"></a>已知的坑</h1><h2 id="header大小写"><a href="#header大小写" class="headerlink" title="header大小写"></a>header大小写</h2><p>header names按http1.1协议是不区分大小写的，http2里全是小写，nginx反向代理会保留大小写，所以如果以前的代码依赖大写，就会挂掉。</p>
+<p>(为啥h2里变小写了: HPACK算法, 解压的时候查表还原header names, 类似于哈夫曼算法)</p>
+<h2 id="与websocket不能共用域名-只支持https"><a href="#与websocket不能共用域名-只支持https" class="headerlink" title="与websocket不能共用域名, 只支持https"></a>与websocket不能共用域名, 只支持https</h2><p>websocket和http2都是从http协议握手协商升级过去的，也就是起点是http1.1。 两种协商过程:</p>
+<ul>
+<li>http1.1 -Upgrade=&gt; websocket+ssl (wss)</li>
+<li>http1.1 -Upgrade=&gt; http2</li>
+</ul>
+<p>H2是基于https的，因此如果某个域名切换到H2以后，就只能支持https的链接了，不再支持http;<br>如果硬要不加密、不安全，可以使用H2C，但是主流浏览器都声称不会支持H2C，因此这个选项其实并不实际。</p>
+<p> (这个倒是不能算坑，只能算一个特性)</p>
+<h1 id="Why-为什么要升级到H2"><a href="#Why-为什么要升级到H2" class="headerlink" title="Why: 为什么要升级到H2"></a>Why: 为什么要升级到H2</h1><p>主要是性能上的优化。</p>
+<p>Http2的修改:</p>
+<p>1.header压缩: HPACK算法;</p>
+<p>2.服务器推送: server push，推送html里的css,js; </p>
+<p>3.pipeline请求;</p>
+<p>4.多路复用，同域名单个TCP连接，划分stream id;</p>
+<p>5.二进制传输;</p>
+<p>其中1、3、5肯定提升性能；</p>
+<p>2则取决于缓存策略，因为可能服务器push了客户端已经缓存的资源，浪费带宽；</p>
+<p>4取决于优先级策略，因为把以前前端手动控制的优先级策略，交给浏览器内核来自动实现，按<a href="https://blog.cloudflare.com/zh/better-http-2-prioritization-for-a-faster-web-zh/" target="_blank" rel="noopener">https://blog.cloudflare.com/zh/better-http-2-prioritization-for-a-faster-web-zh/</a> ， 谷歌内核是最接近最优策略的。但是由于以前可以多开TCP连接，现在是单开，因此如果有大图片，会阻塞后面的小图片。</p>
+<p>谷歌的优先级处理逻辑如下：</p>
+<img src="/images/2020-12/chrome_loading-1.gif" class="" width="800" height="1200" title="loading">
+
+<p>此外，由于有了特性4，不再需要前端内联资源，因此一些针对http1.1的优化可以回滚，好处是可以简化代码，提高缓存效率，去掉重复建立连接的开销；</p>
+<p>坏处就是不能再依赖多开TCP连接了，图片只能一张一张刷开。</p>
+<h1 id="HOW-怎么升级到H2"><a href="#HOW-怎么升级到H2" class="headerlink" title="HOW:怎么升级到H2"></a>HOW:怎么升级到H2</h1><p>根据nginx官网的指导，没有必要全链路H2,只需要client到nginx是H2就够了(terminate protocol)。后端服务可以维持原来的协议。（类似于以前升级https）</p>
+<p>因此只需要修改nginx配置即可，对后端服务无感知。(如下图)</p>
+<img src="/images/2020-12/ng.png" class="" width="800" height="1200" title="ng">
+
+<p>ng官网指导: <a href="https://www.nginx.com/blog/7-tips-for-faster-http2-performance/" target="_blank" rel="noopener">https://www.nginx.com/blog/7-tips-for-faster-http2-performance/</a></p>
+<h2 id="为什么没必要全链路H2"><a href="#为什么没必要全链路H2" class="headerlink" title="为什么没必要全链路H2:"></a>为什么没必要全链路H2:</h2><p>按ng官网的说法，H2的主要优点是性能提高，对于内网网速来说，这点提升意义不大；</p>
+<p>因此nginx只在服务端支持H2, 不支持客户端H2(转发的时候)。</p>
+<p>如果想要全链路H2, 就不能用nginx了。</p>
+<h1 id="参考资料："><a href="#参考资料：" class="headerlink" title="参考资料："></a>参考资料：</h1><p>1.<a href="https://zhuanlan.zhihu.com/p/276057825" target="_blank" rel="noopener">https://zhuanlan.zhihu.com/p/276057825</a></p>
+<p>2.<a href="https://www.cnblogs.com/confach/p/10141273.html" target="_blank" rel="noopener">https://www.cnblogs.com/confach/p/10141273.html</a></p>
+<p>3.<a href="https://zhuanlan.zhihu.com/p/89471776" target="_blank" rel="noopener">https://zhuanlan.zhihu.com/p/89471776</a></p>
+<p>4.<a href="https://juejin.im/post/6844903745218674695" target="_blank" rel="noopener">https://juejin.im/post/6844903745218674695</a></p>
+<p>5.<a href="https://blog.cloudflare.com/zh/better-http-2-prioritization-for-a-faster-web-zh/" target="_blank" rel="noopener">https://blog.cloudflare.com/zh/better-http-2-prioritization-for-a-faster-web-zh/</a></p>
+<p>6.<a href="https://hpbn.co/http2/#stream-prioritization" target="_blank" rel="noopener">https://hpbn.co/http2/#stream-prioritization</a></p>
+<p>7.<a href="https://calendar.perfplanet.com/2018/http2-prioritization/" target="_blank" rel="noopener">https://calendar.perfplanet.com/2018/http2-prioritization/</a></p>
+<p>8.<a href="https://www.jianshu.com/p/e57ca4fec26f" target="_blank" rel="noopener">https://www.jianshu.com/p/e57ca4fec26f</a></p>
+<p>9.<a href="https://zhuanlan.zhihu.com/p/26559480" target="_blank" rel="noopener">https://zhuanlan.zhihu.com/p/26559480</a></p>
+<p>10.<a href="https://www.cnblogs.com/ranFengHua/p/10816956.html" target="_blank" rel="noopener">https://www.cnblogs.com/ranFengHua/p/10816956.html</a></p>
+<p>11.<a href="https://blog.csdn.net/liujiyong7/article/details/64478317" target="_blank" rel="noopener">https://blog.csdn.net/liujiyong7/article/details/64478317</a></p>
+<p>12.<a href="https://www.nginx.com/blog/7-tips-for-faster-http2-performance/" target="_blank" rel="noopener">https://www.nginx.com/blog/7-tips-for-faster-http2-performance/</a></p>
+<p>13.<a href="https://www.cnblogs.com/operationhome/p/12577540.html" target="_blank" rel="noopener">https://www.cnblogs.com/operationhome/p/12577540.html</a></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2020/12/19/2020-12/%E5%8D%87%E7%BA%A7HTTP2%E7%AC%94%E8%AE%B0/" data-id="cklkmfo8y0001pdam8kzy25s3" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/http/" rel="tag">http</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/nginx/" rel="tag">nginx</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2020-07/ES实战笔记" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2020/07/22/2020-07/ES%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0/" class="article-date">
@@ -1090,169 +1255,6 @@
 
 
   
-    <article id="post-2020-03/redis大key问题" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2020/03/23/2020-03/redis%E5%A4%A7key%E9%97%AE%E9%A2%98/" class="article-date">
-  <time datetime="2020-03-23T06:22:37.000Z" itemprop="datePublished">2020-03-23</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/redis/">redis</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2020/03/23/2020-03/redis%E5%A4%A7key%E9%97%AE%E9%A2%98/">redis大key问题</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <ol start="0">
-<li>为啥不能有大key;</li>
-<li>有一些方法，避免大key;</li>
-<li>有大key，安全删除大key;</li>
-</ol>
-<h1 id="what：-什么是大key问题"><a href="#what：-什么是大key问题" class="headerlink" title="what： 什么是大key问题"></a>what： 什么是大key问题</h1><p>就是一个key的value特别大，比如一个hashmap中存了超多k,v;<br>或者一个列表key中存了超长列表，等等；<br>多大算大： hashmap中有100w的k,v =&gt; 1s延迟；<br>删除大Key的时间复杂度: O(N), N代表大key里的值数量，因为redis是单线程一个个删。<br>所以删大key也会卡qps。</p>
-<h2 id="开发规范"><a href="#开发规范" class="headerlink" title="开发规范"></a>开发规范</h2><h3 id="单key大小"><a href="#单key大小" class="headerlink" title="单key大小"></a>单key大小</h3><p>Redis限制每个String类型value大小不超过512MB， 实际开发中，不要超过10KB，否则会对CPU和网卡造成极大负载。 hash、list、set、zset元素个数不要超过5000。</p>
-<p>理论上限: 每个hashset里头元素数量&lt; 2^32. </p>
-<h3 id="key的数量"><a href="#key的数量" class="headerlink" title="key的数量"></a>key的数量</h3><p>官方评测： 单实例2.5亿<br>理论上限: 32位，2^32。约40亿</p>
-<h2 id="测试删除大key"><a href="#测试删除大key" class="headerlink" title="测试删除大key"></a>测试删除大key</h2><p>可以用<code>slowlog</code>命令来查看删除耗时:</p>
-<figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">DEL big_key1</span><br><span class="line">SLOWLOG GET <span class="number">2</span></span><br></pre></td></tr></table></figure>
-
-
-<h1 id="why-为啥不能有大key"><a href="#why-为啥不能有大key" class="headerlink" title="why: 为啥不能有大key"></a>why: 为啥不能有大key</h1><p>redis的基础假设是每个操作都很快，所以设计成单线程处理；<br>所以如果有大key，基础设计就不成立了，会阻塞；</p>
-<p>问题： </p>
-<ol>
-<li>数据倾斜，部分redis分片节点存储占用很高；</li>
-<li>查询突然很慢，qps降低；</li>
-</ol>
-<h1 id="How-如何避免大key"><a href="#How-如何避免大key" class="headerlink" title="How: 如何避免大key"></a>How: 如何避免大key</h1><p>分治法，加一些key前缀\后置分解（如时间、哈希前缀、用户id后缀）;</p>
-<h1 id="安全删除大key"><a href="#安全删除大key" class="headerlink" title="安全删除大key"></a>安全删除大key</h1><ol>
-<li>首先要找到大key才能删除;</li>
-<li>如何删除；</li>
-</ol>
-<h2 id="找到大key、删除大Key"><a href="#找到大key、删除大Key" class="headerlink" title="找到大key、删除大Key"></a>找到大key、删除大Key</h2><h3 id="当版本-lt-4-0"><a href="#当版本-lt-4-0" class="headerlink" title="当版本&lt;4.0"></a>当版本&lt;4.0</h3><p> 1、导出rdb文件分析: <code>bgsave</code>, <code>redis-rdb-tool</code>;<br> 2、命令: <code>redis-cli --bigkeys</code>,找出最大的key；<br> 3、自己写脚本扫描;<br> 4、单个key查看: <code>debug object key</code>： 查看某个key序列化后的长度，每次看1个key的信息,比较没效率。</p>
-<h3 id="删除大Key"><a href="#删除大Key" class="headerlink" title="删除大Key:"></a>删除大Key:</h3><p>分解删除操作：<br>list: 逐步ltrim;<br>zset: 逐步zremrangebyscore;<br>hset: hscan出500个，然后hdel删除；<br>set: sscan扫描出500个，然后srem删除；<br>依次类推；</p>
-<h3 id="当版本-gt-4-0"><a href="#当版本-gt-4-0" class="headerlink" title="当版本&gt;=4.0"></a>当版本&gt;=4.0</h3><h4 id="寻找大key"><a href="#寻找大key" class="headerlink" title="寻找大key"></a>寻找大key</h4><p>命令: <code>memory usage</code></p>
-<h4 id="删除大key：-lazyfree机制"><a href="#删除大key：-lazyfree机制" class="headerlink" title="删除大key： lazyfree机制"></a>删除大key： lazyfree机制</h4><p><code>unlink</code>命令：代替DEL命令；<br>会把对应的大key放到<code>BIO_LAZY_FREE</code>后台线程任务队列，然后在后台异步删除；</p>
-<p>类似的异步删除命令:</p>
-<figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">flushdb async: 异步清空数据库</span><br><span class="line">flushall async: 异步清空所有数据库</span><br></pre></td></tr></table></figure>
-<p>异步删除配置:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">slave-lazy-flush: slave接受完rdb文件后，异步清空数据库；</span><br><span class="line">lazyfree-lazy-eviction: 异步淘汰key;</span><br><span class="line">lazyfree-lazy-expire:   异步key过期;</span><br><span class="line">lazyfree-lazy-server-del: 异步内部删除key；生效于rename命令</span><br><span class="line">## rename命令: RENAME mykey new_name </span><br><span class="line">## 如果new_name已经存在，会先删除new_name，此时触发上述lazy机制</span><br></pre></td></tr></table></figure>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2020/03/23/2020-03/redis%E5%A4%A7key%E9%97%AE%E9%A2%98/" data-id="ck96cxpqk00l8maam082dboea" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-2020-03/分布式事务" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2020/03/23/2020-03/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/" class="article-date">
-  <time datetime="2020-03-23T06:20:40.000Z" itemprop="datePublished">2020-03-23</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2020/03/23/2020-03/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/">分布式事务</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <blockquote>
-<p>参考:<br><a href="https://segmentfault.com/a/1190000016397619#item-1-1" target="_blank" rel="noopener">https://segmentfault.com/a/1190000016397619#item-1-1</a><br><a href="https://www.cnblogs.com/duanxz/p/5226316.html" target="_blank" rel="noopener">https://www.cnblogs.com/duanxz/p/5226316.html</a></p>
-</blockquote>
-<p>文中提到的主要是微信支付数据库层面的分布式事务优化。</p>
-<h2 id="优化前"><a href="#优化前" class="headerlink" title="优化前"></a>优化前</h2><p>架构上分为:<br>客户端;<br>CN: Coordinator,协调节点, 类似于对外的服务接口、代理，帮忙协调锁资源;<br>GTM： Global Transaction Manager, 类似于全局锁，全局事务管理器<br>DN: 具体数据节点; </p>
-<p>逻辑很简单，就是CN每次向GTM申请锁，确保分布式事务的安全；<br>CN估计有多个，可能是react模式。<br>这种锁就像直接synchronized了全局，并发纯靠GTM单点纵向拓展。</p>
-<h2 id="优化后"><a href="#优化后" class="headerlink" title="优化后"></a>优化后</h2><p>锁下放到DN层。</p>
-<h1 id="分布式事务"><a href="#分布式事务" class="headerlink" title="分布式事务"></a>分布式事务</h1><p>分布式事务： 多个子系统一致成功、或一致失败回滚。</p>
-<p>4种类型: </p>
-<ol>
-<li>优先考虑避免分布式事务：可以将两个子系统的数据库表放在同一个从库下时：直接使用mysql事务，避免分布式事务;</li>
-<li>无法放在同一个从库下时: 使用TCC;</li>
-<li>特殊限制下: TCC+MQ;</li>
-<li>只要求最终一致性时: 使用MQ异步处理，反复重试。</li>
-</ol>
-<p>2PC和TCC的区别:<br>2PC: 数据库层，性能差(数据库锁)；<br>TCC: 应用层，性能高，开发成本高(需要保证幂等性)。</p>
-<h1 id="TCC"><a href="#TCC" class="headerlink" title="TCC"></a>TCC</h1><p>TCC： Try-Cancel-Commit<br>开源实现: <code>ByteTCC</code></p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">1、Try：尝试执行业务。</span><br><span class="line">完成所有业务检查(一致性)</span><br><span class="line">预留必须业务资源(准隔离性)</span><br><span class="line"></span><br><span class="line">2、Confirm：确认执行业务。</span><br><span class="line">真正执行业务</span><br><span class="line">不做任何业务检查</span><br><span class="line">只使用Try阶段预留的业务资源</span><br><span class="line"></span><br><span class="line">3、Cancel：取消执行业务</span><br><span class="line">释放Try阶段预留的业务资源</span><br></pre></td></tr></table></figure>
-<p>其中Confirm和cancel接口需要是幂等的。</p>
-<img src="/images/2020-03/tcc.png" class="" width="800" height="1200" title="tcc">
-<p>每个子事务实现TCC的几个幂等接口。</p>
-<ol>
-<li>使用try锁定资源;</li>
-<li>所有子事务: 写redo日志(持久化)\undo日志(回滚), 执行操作;</li>
-<li>所有子事务: commit提交;</li>
-<li>失败则cancel取消。</li>
-</ol>
-<h2 id="特例"><a href="#特例" class="headerlink" title="特例"></a>特例</h2><p>最后一个子事务可以只实现TryCommit合并:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">IF(代金券.Try) &#123;</span><br><span class="line">    IF(现金支付.TryAndCommit) &#123;</span><br><span class="line">        代金券.Commit</span><br><span class="line">    &#125;  &#123;</span><br><span class="line">        代金券.Cancel</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-
-<h1 id="特殊限制下"><a href="#特殊限制下" class="headerlink" title="特殊限制下"></a>特殊限制下</h1><p>超强一致性：两个从库之间转账。<br>特殊限制： </p>
-<p>加钱: 可以try\commit\cancel;<br>减钱: 不能try，只能tryCommit(也就是一步到位,不能打日志反复重试(不让记录redo log(什么？你想记录用户的密码？))，不能cancel(有undo日志也无法回滚)),能失败。</p>
-<h3 id="方案"><a href="#方案" class="headerlink" title="方案"></a>方案</h3><p>方案1： 从库A先+100，然后从库B-100，最后都提交。<br>方案2： 从库B先-100，然后从库A+100，最后都提交。</p>
-<p>方案1, 需要平台先垫钱，肯定是不行的。<br>方案2, 如果-100的操作是无法try的(比如依赖银行系统)，只能直接tryCommit，也就是只能位于末尾，否则就无法符合TCC的模式了。</p>
-<p>方案3：<br>从库A+100:  Try;<br>从库B-100： TryCommit;<br>从库A+100:  Commit;</p>
-<p>方案3可行，略麻烦。<br>方案3的简化：<br>从库B-100: TryCommit;<br>发布事件到MQ;<br>从库A订阅事件，反复重试+100。 </p>
-<h1 id="最终一致性"><a href="#最终一致性" class="headerlink" title="最终一致性"></a>最终一致性</h1><p>将只需要最终一致性的子事务全部放在MQ中。<br>(类似发通知之类的事件)<br>发布事件到MQ，反复异步重试直到成功（削峰、错峰重试(随机探测)）</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2020/03/23/2020-03/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/" data-id="ck96cxpql00lcmaamb3uahuf3" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/" rel="tag">分布式事务</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%B9%B6%E5%8F%91/" rel="tag">并发</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1279,6 +1281,14 @@
       <ul>
         
           <li>
+            <a href="/2022/02/24/2022-02/%E4%B8%BA%E4%BB%80%E4%B9%88%E5%85%88hash%E5%90%8E%E5%8A%A0%E5%AF%86%E7%9A%84%E6%96%B9%E6%B3%95%E5%AE%B9%E6%98%93%E9%81%AD%E9%81%87padding%E6%94%BB%E5%87%BB/">为什么先hash后加密的方法容易遭遇padding攻击</a>
+          </li>
+        
+          <li>
+            <a href="/2022/02/24/2022-02/keepalive/">http和tcp层面的keepAlive机制</a>
+          </li>
+        
+          <li>
             <a href="/2022/02/18/2022-02/%E6%8B%A5%E5%A1%9E%E7%AE%97%E6%B3%95bbr/">quic中的拥塞算法bbr</a>
           </li>
         
@@ -1288,14 +1298,6 @@
         
           <li>
             <a href="/2022/02/16/2022-02/http-range/">http_range</a>
-          </li>
-        
-          <li>
-            <a href="/2022/01/21/2022-01/voip-rtc/">VoIP和RTC</a>
-          </li>
-        
-          <li>
-            <a href="/2021/07/26/2021-07/metaspace%E7%AC%94%E8%AE%B0/">metaspace笔记</a>
           </li>
         
       </ul>

@@ -72,6 +72,174 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-10/flask多线程下，连接泄露的bug" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/10/23/2018-10/flask%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%8B%EF%BC%8C%E8%BF%9E%E6%8E%A5%E6%B3%84%E9%9C%B2%E7%9A%84bug/" class="article-date">
+  <time datetime="2018-10-23T08:35:52.000Z" itemprop="datePublished">2018-10-23</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/10/23/2018-10/flask%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%8B%EF%BC%8C%E8%BF%9E%E6%8E%A5%E6%B3%84%E9%9C%B2%E7%9A%84bug/">flask多线程下，连接泄露的bug</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="架构图"><a href="#架构图" class="headerlink" title="架构图"></a>架构图</h1><img src="/images/2018-10/flask.png" class="" width="400" height="600" title="flask">
+
+<p>如图所示，底层使用mysql，web服务使用<code>flask-SqlAlchemy</code>的连接池（复用连接，减少创建销毁开销），逻辑层代码使用线程池（异步IO操作，如果要异步cpu操作，可以很方便改成进程池）。</p>
+<h1 id="基础知识"><a href="#基础知识" class="headerlink" title="基础知识"></a>基础知识</h1><ol>
+<li>使用<code>db.engine.execute(sql)</code>: 从连接池获取一个连接,执行完sql后自动<code>commit</code>;(<code>commit</code>操作的回调是: 归还连接到池里); </li>
+<li>使用<code>session</code>的<code>orm</code>(<code>xxxModel.query等</code>): 默认配置及推荐配置是<code>autocommit=false</code>，执行完增删查改后，处于事务未提交的状态，也就是没有归还连接。如果要归还连接，可以使用语句:<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">db.session.commit()</span><br><span class="line">db.session.rollback()</span><br><span class="line">db.session.close()</span><br><span class="line">db.session.remove(): 底层会调用db.session.close()</span><br></pre></td></tr></table></figure>
+
+</li>
+</ol>
+<p>小结:</p>
+<blockquote>
+<p>db.engine.execute(sql) =&gt; 自动commit =&gt; 自动归还<br>session(orm) =&gt; 手动commit =&gt; 手动归还<br>因此db.engine.execute(sql)是绝对安全的;<br>orm是有条件的。接着往下看orm的安全条件。</p>
+</blockquote>
+<h2 id="线程与session"><a href="#线程与session" class="headerlink" title="线程与session"></a>线程与session</h2><p>使用flask的SqlAlchemy插件<code>flask-SqlAlchemy</code>时，每个线程可以直接用<code>db.session</code>获得session，即使不显式获得，使用orm的model时，其实也隐式得获得了<code>session</code>。</p>
+<h3 id="线程与session的关系"><a href="#线程与session的关系" class="headerlink" title="线程与session的关系:"></a>线程与session的关系:</h3><p>每个线程有自己的<code>threadlocal</code>的<code>session</code>对象，并且随着线程销毁，会自动释放<code>session</code>,也就是会隐式调用<code>session.remove</code>，也就是会隐式释放<code>session</code>的连接。</p>
+<p>多线程两种使用:</p>
+<ol>
+<li><code>t1=threading.Thread(...)</code>;</li>
+<li>线程池: <code>future= pool.submit(...)</code>.<br>方法1的线程使用完以后自动销毁=&gt;session自动销毁=&gt;连接自动释放;<br>方法2的线程使用完以后归还线程池=&gt;session手动销毁=&gt;连接释放。</li>
+</ol>
+<p>小结:<br>不使用线程池=&gt;连接自动释放;<br>使用线程池=&gt;连接手动释放.<br>手动释放的方法:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">db.session.remove()</span><br></pre></td></tr></table></figure>
+
+<h1 id="空闲连接超时与连接释放bug"><a href="#空闲连接超时与连接释放bug" class="headerlink" title="空闲连接超时与连接释放bug"></a>空闲连接超时与连接释放bug</h1><p>前面说到使用线程池时，连接没有自动释放，一直维护在线程的threadlocal存储中(tls)。那么这样似乎也没有什么关系，只要线程池大小&lt;连接池大小,这样连接池有空闲连接，每个线程也有自己的连接可以用，一切似乎也相安无事。</p>
+<p>然而，这里有一个之前没有提到的机制：空闲连接超时回收。</p>
+<h3 id="空闲连接超时回收"><a href="#空闲连接超时回收" class="headerlink" title="空闲连接超时回收"></a>空闲连接超时回收</h3><h4 id="mysql服务端"><a href="#mysql服务端" class="headerlink" title="mysql服务端:"></a>mysql服务端:</h4><p>定期检查现存连接的空闲时间，把超出<code>wait_timeout</code>的连接删除，此时客户端保存的长连接引用就失效了; 这个时间的设定:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">global</span> <span class="keyword">variables</span> <span class="keyword">like</span> <span class="string">'wait_timeout'</span>;</span><br><span class="line"><span class="keyword">set</span> <span class="keyword">global</span> wait_timeout=<span class="number">10</span>*<span class="number">60</span>; <span class="comment">-- seconds</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="web服务"><a href="#web服务" class="headerlink" title="web服务:"></a>web服务:</h4><p>flask会定期检查连接池里的连接，把空闲连接删除，重新向mysql服务端申请新的连接，这样就不会访问到失效的连接引用了。其中定期的时间是: <code>app.config[&#39;SQLALCHEMY_POOL_RECYCLE&#39;] =xxx</code>(秒，应当设置为小于<code>wait_timeout</code>)。这就是为什么最好连接用完及时归还，否则可能就没法被flask刷新成新连接。</p>
+<h4 id="空闲连接超时与连接释放bug-1"><a href="#空闲连接超时与连接释放bug-1" class="headerlink" title="空闲连接超时与连接释放bug"></a>空闲连接超时与连接释放bug</h4><p>bug发生的流程</p>
+<ol>
+<li>mysql服务端清除了空闲时间过长的连接;</li>
+<li>线程池中线程一直不销毁，因此持有了活了很久的session;</li>
+<li>活了很久的session持有了空闲很久的连接, 这个连接其实已经被服务端销毁了，因此已经不可用了，但是由于其一直没有归还到连接池中，因此一直没有得到更新。</li>
+<li>此时web服务收到数据请求，使用该线程中的该session中的连接，就会抛异常了，因为连接已经不可用了。</li>
+</ol>
+<p>一般来说，空闲时间很长以后，线程池里所有线程的所有session的所有连接都会失效，因此就会完全无法通过orm访问数据库了。</p>
+<p>相关异常信息:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">MySQL server has gone away</span><br><span class="line">Can&#39;t reconnect until invalid transaction is rolled back</span><br></pre></td></tr></table></figure>
+<p>这里之所以说<code>invalid transaction is rolled back</code>，是因为老session收到数据请求后，准备要用连接了。<br>而连接上的事务没有自动提交，也没有rollback，因此不能直接用。<br>因此尝试把连接上，上一次请求的事务提交，但由于连接已经失效，所以失败了。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/10/23/2018-10/flask%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%8B%EF%BC%8C%E8%BF%9E%E6%8E%A5%E6%B3%84%E9%9C%B2%E7%9A%84bug/" data-id="ck96cxpop00e4maamerbl1rgc" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/flask/" rel="tag">flask</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/python/" rel="tag">python</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2018-10/mysql优化实战-范围查询转点查询" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/10/22/2018-10/mysql%E4%BC%98%E5%8C%96%E5%AE%9E%E6%88%98-%E8%8C%83%E5%9B%B4%E6%9F%A5%E8%AF%A2%E8%BD%AC%E7%82%B9%E6%9F%A5%E8%AF%A2/" class="article-date">
+  <time datetime="2018-10-22T02:28:25.000Z" itemprop="datePublished">2018-10-22</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/10/22/2018-10/mysql%E4%BC%98%E5%8C%96%E5%AE%9E%E6%88%98-%E8%8C%83%E5%9B%B4%E6%9F%A5%E8%AF%A2%E8%BD%AC%E7%82%B9%E6%9F%A5%E8%AF%A2/">mysql优化实战-范围查询转点查询</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="反直觉优化"><a href="#反直觉优化" class="headerlink" title="反直觉优化"></a>反直觉优化</h1><h2 id="慢查询"><a href="#慢查询" class="headerlink" title="慢查询:"></a>慢查询:</h2><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> *</span><br><span class="line">    <span class="keyword">from</span> layer_data.layers_push b</span><br><span class="line">    <span class="keyword">where</span> group_key=<span class="string">'nopushtest'</span></span><br><span class="line">    <span class="keyword">AND</span> utype=<span class="string">'10w1'</span></span><br><span class="line">    <span class="keyword">AND</span> dt&gt;=<span class="number">20180620</span> <span class="keyword">AND</span> dt&lt;=<span class="number">20181020</span></span><br><span class="line">    <span class="keyword">AND</span> bucket_id=<span class="number">60</span></span><br></pre></td></tr></table></figure>
+<p>上述SQL执行时间约在2.10秒,通过查看执行计划,可以发现有一个异常的指标,预估扫描的行数(<code>rows</code>)为96W，而实际结果行数应该在几十条。(查询涉及到的列合起来是联合主键)<br>此外<code>type</code>为<code>range</code>，执行的是范围扫描。<br>查询计划:(<code>explain exntended select ...</code>)</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">+----+-------------+-------------+-------+---------------+---------+---------+------+--------+-------------+</span><br><span class="line">| id | select_type | table       | type  | possible_keys | key     | key_len | ref  | rows   | Extra       |</span><br><span class="line">+----+-------------+-------------+-------+---------------+---------+---------+------+--------+-------------+</span><br><span class="line">|  1 | SIMPLE      | layers_push | range | PRIMARY       | PRIMARY | 216     | NULL | 989236 | Using where |</span><br><span class="line">+----+-------------+-------------+-------+---------------+---------+---------+------+--------+-------------+</span><br></pre></td></tr></table></figure>
+
+
+<h2 id="快查询-（反直觉优化）"><a href="#快查询-（反直觉优化）" class="headerlink" title="快查询:（反直觉优化）"></a>快查询:（反直觉优化）</h2><p>基于上面观察到预估行数异常，一个自然的思路就是引入一个很小的辅助表来帮助优化器减少扫描的行数。辅助表的主键与原表分布相同: </p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> b.*</span><br><span class="line"><span class="keyword">from</span> layer_data.layers__nopushtest a</span><br><span class="line"><span class="keyword">join</span> layer_data.layers_push b</span><br><span class="line"> <span class="keyword">ON</span> a.dt=b.dt</span><br><span class="line"><span class="keyword">AND</span> a.bucket_id=b.bucket_id</span><br><span class="line"><span class="keyword">AND</span> b.group_key=<span class="string">'nopushtest'</span></span><br><span class="line"><span class="keyword">AND</span> b.dt <span class="keyword">between</span> <span class="number">20180620</span> <span class="keyword">AND</span> <span class="number">20181020</span></span><br><span class="line"><span class="keyword">AND</span> b.utype=<span class="string">'10w1'</span></span><br><span class="line">    <span class="keyword">where</span> a.dt&gt;=<span class="number">20180620</span> <span class="keyword">and</span> a.dt&lt;=<span class="number">20181020</span></span><br><span class="line">    <span class="keyword">and</span> a.utype=<span class="string">'w1'</span></span><br><span class="line">    <span class="keyword">and</span> a.bucket_id=<span class="number">60</span></span><br></pre></td></tr></table></figure>
+<p>优化后,执行时间大约在0.05秒,快了40多倍。<br>优化后的执行计划:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">+----+-------------+-------+--------+---------------+---------+---------+-----------------------------------+-------+--------------------------+</span><br><span class="line">| id | select_type | table | type   | possible_keys | key     | key_len | ref                               | rows  | Extra                    |</span><br><span class="line">+----+-------------+-------+--------+---------------+---------+---------+-----------------------------------+-------+--------------------------+</span><br><span class="line">|  1 | SIMPLE      | a     | range  | PRIMARY       | PRIMARY | 38      | NULL                              | 23925 | Using where; Using index |</span><br><span class="line">|  1 | SIMPLE      | b     | eq_ref | PRIMARY       | PRIMARY | 216     | layer_data.a.dt,const,const,const |     1 | Using where              |</span><br><span class="line">+----+-------------+-------+--------+---------------+---------+---------+-----------------------------------+-------+--------------------------+</span><br></pre></td></tr></table></figure>
+<p>执行流程:<br>第一步:范围扫描表a,得到连接键的所有可能取值;<br>第二步: 表b的type是eq_ref(等值连接,而且是唯一键),ref是<code>layer_data.a.dt,const,const,const</code>，预估扫描的行数变成只有1。</p>
+<h1 id="原理分析"><a href="#原理分析" class="headerlink" title="原理分析"></a>原理分析</h1><h2 id="慢查询的执行计划"><a href="#慢查询的执行计划" class="headerlink" title="慢查询的执行计划:"></a>慢查询的执行计划:</h2><p>预估的行数有96w，执行计划是从dt为20180620的数据页顺序扫描到dt为20181020的数据页。</p>
+<h3 id="范围查询的扫描行数预估："><a href="#范围查询的扫描行数预估：" class="headerlink" title="范围查询的扫描行数预估："></a>范围查询的扫描行数预估：</h3><p>这里由于使用的mysql版本是5.6(可以通过<code>select version();</code>语句查看)，预估的流程:</p>
+<ol>
+<li>取符合where条件的最左边的数据页及后续的8个页，再加上符合where条件的最右边的数据页,共计10个页进行采样;</li>
+<li>根据上述采样结果，以及与总数据的采样比，估算出需要扫描的行数。</li>
+</ol>
+<h2 id="快查询的执行计划"><a href="#快查询的执行计划" class="headerlink" title="快查询的执行计划:"></a>快查询的执行计划:</h2><p>因为有辅助的小表帮忙，扫描的行数减少。执行计划是先范围扫描小表，得到所有连接键的取值后，用表b的索引挨个儿进行点查询（<code>type</code>是<code>eq_ref</code>，而不是<code>range</code>）,扫描的数据页大大减少。</p>
+<p><code>range</code>类型查询:</p>
+<blockquote>
+<p>以下操作符会导致查询计划为range:<br>=, &lt;&gt;, &gt;, &gt;=, &lt;, &lt;=, IS NULL, &lt;=&gt;, BETWEEN, IN (…)</p>
+</blockquote>
+<h1 id="符合直觉的优化"><a href="#符合直觉的优化" class="headerlink" title="符合直觉的优化"></a>符合直觉的优化</h1><p>由于mysql对in有特殊的优化: 把范围查询转换为多次点查询。<br>此时虽然查询计划是<code>range</code>，但实际执行时候不会进行范围扫描，而会进行点查询。<br>因此也可以把查询改写成:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span>   *</span><br><span class="line">    <span class="keyword">from</span> layer_data.layers_push b</span><br><span class="line">    <span class="keyword">where</span> group_key=<span class="string">'nopushtest'</span></span><br><span class="line">    <span class="keyword">AND</span> utype=<span class="string">'10w1'</span></span><br><span class="line">    <span class="keyword">AND</span> dt  <span class="keyword">in</span>  (<span class="number">20180805</span>,<span class="number">20180806</span>,<span class="number">20180807</span>,<span class="number">20180808</span>,<span class="number">20180809</span>,<span class="number">20180810</span>,<span class="number">20180811</span>,<span class="number">20180812</span>,<span class="number">20180813</span>,<span class="number">20180814</span>,<span class="number">20180815</span>,<span class="number">20180816</span>,<span class="number">20180817</span>,<span class="number">20180818</span>,<span class="number">20180819</span>,<span class="number">20180820</span>,<span class="number">20180821</span>,<span class="number">20180822</span>,<span class="number">20180823</span>,<span class="number">20180824</span>,<span class="number">20180825</span>,<span class="number">20180826</span>,<span class="number">20180827</span>,<span class="number">20180828</span>,<span class="number">20180829</span>,<span class="number">20180830</span>,<span class="number">20180831</span></span><br><span class="line">,<span class="number">20180901</span>,<span class="number">20180902</span>,<span class="number">20180903</span>,<span class="number">20180904</span>,<span class="number">20180905</span>,<span class="number">20180906</span>,<span class="number">20180907</span>,<span class="number">20180908</span>,<span class="number">20180909</span>,<span class="number">20180910</span>,<span class="number">20180911</span>,<span class="number">20180912</span>,<span class="number">20180913</span>,<span class="number">20180914</span>,<span class="number">20180915</span>,<span class="number">20180916</span>,<span class="number">20180917</span>,<span class="number">20180918</span>,<span class="number">20180919</span>,<span class="number">20180920</span>,<span class="number">20180921</span>,<span class="number">20180922</span>,<span class="number">20180923</span>,<span class="number">20180924</span>,<span class="number">20180925</span>,<span class="number">20180926</span>,<span class="number">20180927</span>,<span class="number">20180928</span>,<span class="number">20180929</span>,<span class="number">20180930</span></span><br><span class="line">,<span class="number">20181001</span>,<span class="number">20181002</span>,<span class="number">20181003</span>,<span class="number">20181004</span>,<span class="number">20181005</span>,<span class="number">20181006</span>,<span class="number">20181007</span>,<span class="number">20181008</span>,<span class="number">20181009</span>,<span class="number">20181010</span>,<span class="number">20181011</span>,<span class="number">20181012</span>,<span class="number">20181013</span>,<span class="number">20181014</span>,<span class="number">20181015</span>,<span class="number">20181016</span>,<span class="number">20181017</span>,<span class="number">20181018</span>,<span class="number">20181019</span>,<span class="number">20181020</span>,<span class="number">20181021</span>,<span class="number">20181022</span>,<span class="number">20181023</span>,<span class="number">20181024</span>,<span class="number">20181025</span>,<span class="number">20181026</span>,<span class="number">20181027</span>)</span><br><span class="line">    <span class="keyword">AND</span> bucket_id=<span class="number">60</span></span><br></pre></td></tr></table></figure>
+<p>优点:<br>直观,速度最快。<br>缺点:<br>啰嗦，改写起来比较麻烦，只适用于能使用代码预处理sql的地方，而且有最大长度限制。</p>
+<h3 id="in查询的扫描行数预估"><a href="#in查询的扫描行数预估" class="headerlink" title="in查询的扫描行数预估"></a>in查询的扫描行数预估</h3><p>有两种方式:</p>
+<ol>
+<li>精确计算(<code>index_dive</code>): 直接查询对应的行;</li>
+<li>采样预估(<code>index statistics</code>): 采样10个数据页,通过索引的选择性统计数据，预估总行数。</li>
+</ol>
+<p>具体采取哪种方式，由<code>eq_range_index_dive_limit</code>参数控制(默认是10)。<br>小于<code>eq_range_index_dive_limit</code>的时候，采用方法1，精确计算；<br>大于等于<code>eq_range_index_dive_limit</code>的时候，采用方法2, 采样预估。</p>
+<h1 id="执行计划耗时"><a href="#执行计划耗时" class="headerlink" title="执行计划耗时"></a>执行计划耗时</h1><p>可以通过命令查看某个查询的具体耗时及具体发生了哪些操作:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">set</span> profiling=<span class="number">1</span>;</span><br><span class="line"><span class="comment">-- select * from xxx ;</span></span><br><span class="line"><span class="keyword">show</span> <span class="keyword">profiles</span>;</span><br><span class="line"><span class="keyword">show</span> profile <span class="keyword">for</span> <span class="keyword">query</span> <span class="number">1</span>;</span><br><span class="line"><span class="keyword">show</span> profile <span class="keyword">all</span> <span class="keyword">for</span> <span class="keyword">query</span> <span class="number">1</span>; <span class="comment">-- cpu,io等详细信息</span></span><br></pre></td></tr></table></figure>
+<p>这里可以看到之前的慢查询发生了51w个block io input。</p>
+<h1 id="优化器查询计划选择"><a href="#优化器查询计划选择" class="headerlink" title="优化器查询计划选择"></a>优化器查询计划选择</h1><p>可以通过命令查看某个查询生成执行计划时，考虑过哪些方案，以及对于where条件的等价变换，最终选择了哪个方案(<code>chosen:true</code>)。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">set</span> optimizer_trace=<span class="string">"enabled=on"</span>;</span><br><span class="line"><span class="keyword">SET</span> optimizer_trace_max_mem_size=<span class="number">1000000</span>;</span><br><span class="line"><span class="keyword">explain</span> <span class="keyword">select</span> xxx</span><br><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> information_schema.OPTIMIZER_TRACE\G</span><br></pre></td></tr></table></figure>
+<p>可以看到对于之前慢查询的查询条件只用到了dt条件，其他where条件是在服务器层进行过滤的。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/10/22/2018-10/mysql%E4%BC%98%E5%8C%96%E5%AE%9E%E6%88%98-%E8%8C%83%E5%9B%B4%E6%9F%A5%E8%AF%A2%E8%BD%AC%E7%82%B9%E6%9F%A5%E8%AF%A2/" data-id="ck96cxpoq00e7maam5h9zcfq9" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-10/Netty-in-action第14-15章案例研究-笔记" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/10/14/2018-10/Netty-in-action%E7%AC%AC14-15%E7%AB%A0%E6%A1%88%E4%BE%8B%E7%A0%94%E7%A9%B6-%E7%AC%94%E8%AE%B0/" class="article-date">
@@ -456,13 +624,15 @@
 <blockquote>
 <p>1994年，NetScape公司设计了SSL协议（Secure Sockets Layer）的1.0版，但是未发布。<br>1995年，NetScape公司发布SSL 2.0版，很快发现有严重漏洞。<br>1996年，SSL 3.0版问世，得到大规模应用。<br>1999年，互联网标准化组织ISOC接替NetScape公司，发布了SSL的升级版TLS 1.0版。<br>2006年和2008年，TLS 1.1版和TLS 1.2版发布。（TLS1.2已经获得主流浏览器支持）<br>2008年8月，TLS 1.3版发布，性能好。移除了很多东西，速度快了很多，少了一次握手。</p>
 </blockquote>
-<p>综上，可以先用<code>TLS 1.2</code>。</p>
+<p>TLS1.2: 兼容性高；握手需要2RTT；（重连需要1RTT）<br>TLS1.3: 安全、性能高；握手需要1RTT；(重连需要0RTT)</p>
+<p>综上，可以先用<code>TLS 1.2</code>获得最大的兼容性。</p>
 <h1 id="原理"><a href="#原理" class="headerlink" title="原理"></a>原理</h1><p>和以前莉姐课上说的<code>PGP</code>协议差不多，都是三板斧：摘要、非对称加密、对称加密。</p>
 <h2 id="要解决的问题"><a href="#要解决的问题" class="headerlink" title="要解决的问题"></a>要解决的问题</h2><pre><code>1. 窃听。解决方案：加密
 2. 篡改。解决方案：摘要 （解决数据完整性）
 3. 冒充。解决方案：数字签名 （解决中间人攻击）</code></pre><h2 id="架构"><a href="#架构" class="headerlink" title="架构"></a>架构</h2><p>ISO七层协议:<br><code>TCP</code> :  传输层<br><code>TLS</code> :  会话层<br>    <em>表示层略</em><br><code>HTTP</code>:  应用层<br>（<code>TLS</code>+<code>HTTP</code>=&gt;<code>HTTPS</code>）</p>
 <p>所以是先进行<code>3</code>次握手建立<code>TCP</code>,然后<code>4</code>次握手建立<code>TLS</code>,然后进行<code>HTTP</code>数据传输。</p>
 <p>如果在<code>TCP</code>层抓包的话，里头是<code>TLS</code>加密过的数据。（中间人无法知道内容）<br>如果在<code>HTTP</code>层（应用层）收取数据的话，是已经解密过的明文。(但是中间人不太可能在应用层，除非已经嵌入到业务层代码了。)</p>
+<p>这个分层架构的划分其实不太合理，quic重新做了分层，详见:<br><a href="http://xiaoyue26.github.io/2022/02/17/2022-02/http3-quic%E4%BC%98%E7%BC%BA%E7%82%B9%E5%8F%8A%E5%8E%9F%E5%9B%A0/">http://xiaoyue26.github.io/2022/02/17/2022-02/http3-quic%E4%BC%98%E7%BC%BA%E7%82%B9%E5%8F%8A%E5%8E%9F%E5%9B%A0/</a></p>
 <h2 id="简化版加密通信"><a href="#简化版加密通信" class="headerlink" title="简化版加密通信"></a>简化版加密通信</h2><p>假设用三个算法做一下加密通信，可以怎么实现呢？<br>定义如下：<br><code>RSA</code>: 一种非对称加密算法<br><code>AES</code>: 一种对称加密算法<br><code>SHA1</code>: 一种摘要算法</p>
 <h3 id="方案1：AES-K-data"><a href="#方案1：AES-K-data" class="headerlink" title="方案1：AES(K,data)"></a>方案1：AES(K,data)</h3><p>假如客户端是<code>C</code>，服务端是<code>S</code>，<code>C</code>和<code>S</code>要传输的数据<code>data</code>。<br>直接传明文肯定是不行，可以加密一下。用一个密钥<code>K</code>，加密成<code>AES(K,data)</code>。<br>这里为啥用AES呢，不用RSA呢，因为非对称加密(RSA)太慢了。</p>
 <img src="/images/2018-09/tls1.png" class="" width="400" height="600" title="加密">
@@ -493,6 +663,14 @@
 <h4 id="总结"><a href="#总结" class="headerlink" title="总结:"></a>总结:</h4><pre><code>数字签名: RSA(私钥K2,data)
 加密一份只有指定人能解开的数据: RSA(公钥K1,data)。</code></pre><p>这个过程中客户端如何得到公钥K1呢?<br>可以由服务端发给客户端数字证书，证书由CA签名证明服务端的公钥确实是K1。</p>
 <p>客户端是因为信任CA,所以信任CA作保的服务端公钥K1，所以才可以用K1验证服务端的数字签名。（信任传递）<br>也就是说即使是网络世界，也还是需要签发证书的机构的。类似于一种官方机构。如果没有这种信任的基础，匿名的网络世界是很难建立起互信机制的。</p>
+<h2 id="TLS组成部分"><a href="#TLS组成部分" class="headerlink" title="TLS组成部分"></a>TLS组成部分</h2><p>握手协议+记录协议</p>
+<p>1。握手协议包括：</p>
+<ul>
+<li>握手：证书认证、协商算法和密钥；</li>
+<li>密码规格变更协议：v1.3删除了；</li>
+<li>警告协议: 错误的时候通知对方；</li>
+<li>应用数据协议: 传输数据协议；<br>2。记录协议：负责使用对称密码对消息进行加密；</li>
+</ul>
 <h2 id="TLS运行流程"><a href="#TLS运行流程" class="headerlink" title="TLS运行流程"></a>TLS运行流程</h2><p>简单地说就是2个步骤：先协商一个密钥，之后的通信就用这个密钥加密数据。<br><code>TLS 1.2</code>:<br>协商: 4次握手，协商出一个对称加密的密钥K；<br>通信：双方用K加密数据以后通信。</p>
 <img src="/images/2018-09/tls3.png" class="" width="400" height="600" title="tls3.png">
 <p>如上图所示，这4次握手就是想要协商出一个对称加密的密钥KEY,以及摘要算法的密钥。<br>图中的变量定义:</p>
@@ -523,9 +701,26 @@ r3是关键的加密保护的随机数，r1,r2,r3一起生成key。<br>r1,r2的�
 
 </li>
 </ol>
+<h3 id="DH密钥交换算法（怎么用3个随机数算出密钥）"><a href="#DH密钥交换算法（怎么用3个随机数算出密钥）" class="headerlink" title="DH密钥交换算法（怎么用3个随机数算出密钥）"></a>DH密钥交换算法（怎么用3个随机数算出密钥）</h3><img src="/images/2022-02/DH_scret.png" class="" width="400" height="600" title="DH_scret">
+<p>如上图所示:<br>客户端计算密钥:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">A&#x3D; g^a mod p </span><br><span class="line">K &#x3D; B^a mod p</span><br></pre></td></tr></table></figure>
+<p>服务端计算密钥: b</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">B &#x3D; g^b mod p</span><br><span class="line">K &#x3D; A^b mod p</span><br></pre></td></tr></table></figure>
+<p>同模推导:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">K &#x3D; A^b mod p </span><br><span class="line">&#x3D; (g^a mod p) ^ b mod p </span><br><span class="line">&#x3D; g^ab mod p</span><br><span class="line">&#x3D; (g^b mod p ) ^ a mod p</span><br><span class="line">&#x3D; B^a mod p</span><br></pre></td></tr></table></figure>
+<p>三个随机数中，有一个是本地随机生成的，不用网络传输；<br>（对于服务端来说是a，客户端是b，而网络传输的是A和B，因此中间人进行反向破解难度大）<br>由于网络上传输的只是p,g和A,B，难以破解出a,b，因此中间人也难以破解出K。</p>
+<h3 id="tls1-2实际加密方式"><a href="#tls1-2实际加密方式" class="headerlink" title="tls1.2实际加密方式"></a>tls1.2实际加密方式</h3><p>实际上加密算法是需要padding的，最早的padding方法是:<br><code>AES(text+MAC(text)+padding)</code><br>后来因为这种方式容易遭遇padding攻击，因此tls1.3采用了更安全的padding方法:<br>先<code>E=AES(text+padding)</code><br>然后： <code>E+MAC(E)</code></p>
+<blockquote>
+<p>padding攻击，通过反复修改部分内容、并触发解密过程，从而探测猜测加密算法的密钥；</p>
+</blockquote>
+<h3 id="tls1-3的前向安全性"><a href="#tls1-3的前向安全性" class="headerlink" title="tls1.3的前向安全性"></a>tls1.3的前向安全性</h3><p>前向安全: 当前会话的密钥泄露后，不能用来解密以前会话的消息，也就是不影响以前会话的安全性。<br>例如如果每次会话都用ECDHE协商新的密钥，这次会话的密钥无法用于以前的会话解密，则可以达到前向安全性。</p>
+<p><code>Ephemeral Secret</code> (ES)：每个连接新鲜的 ECDHE 协商得出的值。凡是从 ES 得出的值，都是前向安全的（当然，在 PSK only模式下，不是前向安全的）。<br><code>Static Secret</code> (SS)：从静态，或者半静态key得出的值。例如psk，或者服务器的半静态 ECDH 公钥。</p>
+<p>如果用Session ticket或者server config机制来实现0RTT的快速建立连接，本质上是客户端缓存了一部分上次建连的密钥信息；<br>因此tls1.3虽然提高了性能，但是牺牲了一定时间(配置过期时间内)的前向安全性。</p>
 <h2 id="可能的优化"><a href="#可能的优化" class="headerlink" title="可能的优化"></a>可能的优化</h2><p>TLS1.2的4次握手可以优化成近似3次握手。<br>因此协商过程中唯一不会被中间人破译的是客户端第三次握手发送的随机数r3，只要确保这一性质即可。这个r3之所以不会被破译，是因为是用服务端公钥加密的，只有服务端私钥能解开。<br>因此如果客户端事先知道服务端的公钥，可以在第一次握手的时候，就发送由服务端公钥加密的r3。（对于以前曾经通信过的服务端，这一前提是可行的）</p>
 <p>因此整个流程就是：<br>1.客户端=&gt;服务端:<br>(1)r1; //防重放<br>(2)RSA(K1,r3+hash(r3)); //可以把自己支持的所有协议的随机数都算好，加密好。<br>(3)支持的协议、算法;<br>2.服务端=&gt;客户端:<br>(1)RSA(对r1的回应),顺便签名证明自己的身份,也消除了重放攻击;<br>(2)r2; 明文即可<br>(3)确定的协议、算法;<br>(4)AES(Key,finish信息+HMAC(finish信息)); // 客户端知道上述两个信息，就能算出对称加密的key了。</p>
 <p>3.客户端=&gt;服务端: AES(Key,finish信息+HMAC(finish信息))</p>
+<h2 id="TLS-1-3实际的优化"><a href="#TLS-1-3实际的优化" class="headerlink" title="TLS 1.3实际的优化"></a>TLS 1.3实际的优化</h2><p>回顾TLS1.2:<br>第1个RTT:协商用什么协议，client hello + server hello;<br>第2个RTT:协商对应协议下，用什么随机数，client key exchange + server key exchange;</p>
+<p>TLS1.3的选择:<br>牺牲兼容性，去掉第一次rtt的密钥协议协商，直接按自己选择的成熟安全的密钥套件生成对应参数，然后发送给服务端;<br>如果失败，再走HelloRetryRequest。<br>因此Tls1.3只需要1RTT就可以建连。（第二次建立是甚至0RTT，连协商过程都省了，直接告诉服务器用上次的密钥）</p>
 <p>参考链接:<br><a href="https://www.cnblogs.com/lovesong/p/5186200.html" target="_blank" rel="noopener">https://www.cnblogs.com/lovesong/p/5186200.html</a><br><a href="https://blog.soaer.com/1/3eac1f9d9045410fb249dbc81cff6b22.html" target="_blank" rel="noopener">https://blog.soaer.com/1/3eac1f9d9045410fb249dbc81cff6b22.html</a><br><a href="http://www.ruanyifeng.com/blog/2014/02/ssl_tls.html" target="_blank" rel="noopener">http://www.ruanyifeng.com/blog/2014/02/ssl_tls.html</a></p>
 
       
@@ -1185,301 +1380,6 @@ r3是关键的加密保护的随机数，r1,r2,r3一起生成key。<br>r1,r2的�
 
 
   
-    <article id="post-2018-09/Netty-in-action第五章-ByteBuf笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/09/01/2018-09/Netty-in-action%E7%AC%AC%E4%BA%94%E7%AB%A0-ByteBuf%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2018-09-01T10:40:59.000Z" itemprop="datePublished">2018-09-01</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/Netty/">Netty</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/09/01/2018-09/Netty-in-action%E7%AC%AC%E4%BA%94%E7%AB%A0-ByteBuf%E7%AC%94%E8%AE%B0/">Netty in Action第五章-ByteBuf笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>目录</p>
-<blockquote>
-<p>ByteBuf-Netty的数据容器<br>API详细信息<br>用例<br>内存分配</p>
-</blockquote>
-<p><code>ByteBuffer</code>: JAVA NIO使用的字节容器，使用复杂；<br><code>ByteBuf</code>:  Netty提供的字节容器，更简单灵活。</p>
-<h1 id="ByteBuf-API"><a href="#ByteBuf-API" class="headerlink" title="ByteBuf API"></a>ByteBuf API</h1><p><strong>优点</strong></p>
-<ul>
-<li>用户可以自定义缓冲区类型扩展</li>
-<li>透明的零拷贝</li>
-<li>容量按需增长</li>
-<li>读写切换不需要<code>flip()</code>方法</li>
-<li>读写使用不同索引</li>
-<li>支持方法链式调用</li>
-<li>支持引用计数 </li>
-<li>支持池化</li>
-</ul>
-<h1 id="外部接口"><a href="#外部接口" class="headerlink" title="外部接口:"></a>外部接口:</h1><ol>
-<li>从<code>Channel</code>或者<code>ctx</code>获取<code>ByteBuffAllocator</code>，然后再分配；</li>
-<li>用<code>Unpooled</code>工具类直接创建。<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 1. 从channel:</span></span><br><span class="line">Channel channel = ...;</span><br><span class="line">ByteBufAllocator allocator = channel.alloc(); <span class="comment">//1</span></span><br><span class="line">ByteBuf buf=allocator.heapBuffer();</span><br><span class="line"><span class="comment">// 2. 从ctx:</span></span><br><span class="line">ChannelHandlerContext ctx = ...;</span><br><span class="line">ByteBufAllocator allocator2 = ctx.alloc(); <span class="comment">//2</span></span><br><span class="line">ByteBuf buf=allocator.heapBuffer();</span><br><span class="line"><span class="comment">// 3. </span></span><br><span class="line">ByteBuf buf=Unpooled.buffer();</span><br></pre></td></tr></table></figure>
-
-</li>
-</ol>
-<h1 id="内部工作机制"><a href="#内部工作机制" class="headerlink" title="内部工作机制"></a>内部工作机制</h1><img src="/images/2018-09/5.1.jpg" class="" width="400" height="600" title="读写索引">
-<p>维护两个索引: <code>readerIndex</code>,<code>writerIndex</code><br>// 这样就省得用<code>flip</code>来回切换读写状态了。</p>
-<p>如上图,起始为空，读的时候发现<code>readerIndex</code>&gt;=<code>writerIndex</code>,因此失败。</p>
-<h1 id="使用模式"><a href="#使用模式" class="headerlink" title="使用模式"></a>使用模式</h1><h2 id="堆缓冲区-使用模式-也称支撑数组backing-array"><a href="#堆缓冲区-使用模式-也称支撑数组backing-array" class="headerlink" title="堆缓冲区-使用模式 (也称支撑数组backing array)"></a>堆缓冲区-使用模式 (也称支撑数组backing array)</h2><h2 id="（heap-buffer）"><a href="#（heap-buffer）" class="headerlink" title="（heap buffer）"></a>（heap buffer）</h2><p>最常用，将数据存储在<code>JVM</code>堆中。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">static</span> Random random = <span class="keyword">new</span> Random();</span><br><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> ByteBuf BYTE_BUF_FROM_SOMEWHERE = Unpooled.buffer(<span class="number">1024</span>);</span><br><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> Channel CHANNEL_FROM_SOMEWHERE = <span class="keyword">new</span> NioSocketChannel();</span><br><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> ChannelHandlerContext CHANNEL_HANDLER_CONTEXT_FROM_SOMEWHERE = DUMMY_INSTANCE;</span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">heapBuffer</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    ByteBuf heapBuf = BYTE_BUF_FROM_SOMEWHERE; <span class="comment">//get reference form somewhere</span></span><br><span class="line">    <span class="comment">//检查 ByteBuf 是否有一个支撑数组</span></span><br><span class="line">    <span class="keyword">if</span> (heapBuf.hasArray()) &#123;</span><br><span class="line">        <span class="comment">//如果有，则获取对该数组的引用</span></span><br><span class="line">        <span class="keyword">byte</span>[] array = heapBuf.array();</span><br><span class="line">        <span class="comment">//计算第一个字节的偏移量</span></span><br><span class="line">        <span class="keyword">int</span> offset = heapBuf.arrayOffset() + heapBuf.readerIndex();</span><br><span class="line">        <span class="comment">//获得可读字节数</span></span><br><span class="line">        <span class="keyword">int</span> length = heapBuf.readableBytes();</span><br><span class="line">        <span class="comment">//使用数组、偏移量和长度作为参数调用你的方法</span></span><br><span class="line">        handleArray(array, offset, length);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h2 id="直接缓冲区-使用模式"><a href="#直接缓冲区-使用模式" class="headerlink" title="直接缓冲区-使用模式"></a>直接缓冲区-使用模式</h2><h2 id="（direct-buffer）"><a href="#（direct-buffer）" class="headerlink" title="（direct buffer）"></a>（direct buffer）</h2><p>堆外内存，<code>directBuffer</code>,性能最好，省去一次复制。<br>缺点时要注意管理堆外内存。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">directBuffer</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    ByteBuf directBuf = BYTE_BUF_FROM_SOMEWHERE; <span class="comment">//get reference form somewhere</span></span><br><span class="line">    <span class="comment">//检查 ByteBuf 是否由数组支撑。如果不是，则这是一个直接缓冲区</span></span><br><span class="line">    <span class="keyword">if</span> (!directBuf.hasArray()) &#123;</span><br><span class="line">        <span class="comment">//获取可读字节数</span></span><br><span class="line">        <span class="keyword">int</span> length = directBuf.readableBytes();</span><br><span class="line">        <span class="comment">//分配一个新的数组来保存具有该长度的字节数据</span></span><br><span class="line">        <span class="keyword">byte</span>[] array = <span class="keyword">new</span> <span class="keyword">byte</span>[length];</span><br><span class="line">        <span class="comment">//将字节复制到该数组</span></span><br><span class="line">        directBuf.getBytes(directBuf.readerIndex(), array);</span><br><span class="line">        <span class="comment">//使用数组、偏移量和长度作为参数调用你的方法</span></span><br><span class="line">        handleArray(array, <span class="number">0</span>, length);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h2 id="复合缓冲区-使用模式"><a href="#复合缓冲区-使用模式" class="headerlink" title="复合缓冲区-使用模式"></a>复合缓冲区-使用模式</h2><h2 id="（composite-buffer）"><a href="#（composite-buffer）" class="headerlink" title="（composite buffer）"></a>（composite buffer）</h2><p>把上述两个模式复合，把多个<code>ByteBuf</code>聚合成一个视图处理。<br>消除了没有必要的复制，同时对外是一个通用的接口。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"> <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">byteBufComposite</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    CompositeByteBuf messageBuf = Unpooled.compositeBuffer();</span><br><span class="line">    ByteBuf headerBuf = BYTE_BUF_FROM_SOMEWHERE; <span class="comment">// can be backing or direct</span></span><br><span class="line">    ByteBuf bodyBuf = BYTE_BUF_FROM_SOMEWHERE;   <span class="comment">// can be backing or direct</span></span><br><span class="line">    <span class="comment">//将 ByteBuf 实例追加到 CompositeByteBuf</span></span><br><span class="line">    messageBuf.addComponents(headerBuf, bodyBuf);</span><br><span class="line">    <span class="comment">//...</span></span><br><span class="line">    <span class="comment">//删除位于索引位置为 0（第一个组件）的 ByteBuf</span></span><br><span class="line">    messageBuf.removeComponent(<span class="number">0</span>); <span class="comment">// remove the header</span></span><br><span class="line">    <span class="comment">//循环遍历所有的 ByteBuf 实例</span></span><br><span class="line">    <span class="keyword">for</span> (ByteBuf buf : messageBuf) &#123;</span><br><span class="line">        System.out.println(buf.toString());</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">byteBufCompositeArray</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    CompositeByteBuf compBuf = Unpooled.compositeBuffer();</span><br><span class="line">    <span class="comment">//获得可读字节数</span></span><br><span class="line">    <span class="keyword">int</span> length = compBuf.readableBytes();</span><br><span class="line">    <span class="comment">//分配一个具有可读字节数长度的新数组</span></span><br><span class="line">    <span class="keyword">byte</span>[] array = <span class="keyword">new</span> <span class="keyword">byte</span>[length];</span><br><span class="line">    <span class="comment">//将字节读到该数组中</span></span><br><span class="line">    compBuf.getBytes(compBuf.readerIndex(), array);</span><br><span class="line">    <span class="comment">//使用偏移量和长度作为参数使用该数组</span></span><br><span class="line">    handleArray(array, <span class="number">0</span>, array.length);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p><code>CompositeByteBuf</code>附加了许多功能。</p>
-<h1 id="字节级操作"><a href="#字节级操作" class="headerlink" title="字节级操作"></a>字节级操作</h1><h2 id="随机访问-（可以重复消费）-getXXX之类的方法"><a href="#随机访问-（可以重复消费）-getXXX之类的方法" class="headerlink" title="随机访问 （可以重复消费）(getXXX之类的方法)"></a>随机访问 （可以重复消费）(getXXX之类的方法)</h2><p><code>ByteBuf</code>的随机访问与普通数组类似:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span>(<span class="keyword">int</span> i;i&lt;buffer.capacity();i++)&#123;</span><br><span class="line">    <span class="keyword">byte</span> b=buffer.getByte(i);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>普通访问不会改变<code>readerIndex</code>和<code>writerIndex</code>。<br>要改变需要调用<code>readerIndex(index)</code>和<code>writerIndex(index)</code>。</p>
-<h2 id="顺序访问-（不会重复消费）-readXXX-skipXXX之类的方法"><a href="#顺序访问-（不会重复消费）-readXXX-skipXXX之类的方法" class="headerlink" title="顺序访问 （不会重复消费）(readXXX/skipXXX之类的方法)"></a>顺序访问 （不会重复消费）(readXXX/skipXXX之类的方法)</h2><img src="/images/2018-09/5.4.png" class="" width="400" height="600" title="读写索引">
-<p>如上图所示，这种访问方式可以看作消费数据，通过移动readerIndex，扩大了可丢弃字节（已读），减少了可读字节。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//迭代缓冲区的可读字节。</span></span><br><span class="line"> ByteBuf buffer = ...;</span><br><span class="line"> <span class="keyword">while</span> (buffer.isReadable()) &#123;</span><br><span class="line">     System.out.println(buffer.readByte());</span><br><span class="line"> &#125;</span><br></pre></td></tr></table></figure>
-
-<h2 id="丢弃discardable-bytes-类似于compact-gc"><a href="#丢弃discardable-bytes-类似于compact-gc" class="headerlink" title="丢弃discardable bytes(类似于compact/gc)"></a>丢弃discardable bytes(类似于compact/gc)</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//调用:</span></span><br><span class="line">byteBuf.discardReadBytes();</span><br></pre></td></tr></table></figure>
-<p>丢弃已读部分回收空间，本质上是扩大了可写字节。<br>底层的实现是把可读的数据移动到首部，<code>readerIndex=0;writerIndex-=readerIndex.</code>，因此导致内存复制，有性能开销，所以尽量不要调用。</p>
-<h2 id="顺序写入"><a href="#顺序写入" class="headerlink" title="顺序写入:"></a>顺序写入:</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 1.</span></span><br><span class="line">byteBuf.writeBytes(otherByteBuf);</span><br><span class="line"><span class="comment">// 2.</span></span><br><span class="line">byteBuf.writeInt(<span class="number">26</span>);</span><br></pre></td></tr></table></figure>
-
-<h2 id="索引修改"><a href="#索引修改" class="headerlink" title="索引修改"></a>索引修改</h2><p><code>readerIndex</code>和<code>writerIndex</code>这俩变量，除了因为上述数据操作而间接发生改变，也可以直接强行改它们而不管数据：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">markReaderIndex()<span class="comment">// 标记为x</span></span><br><span class="line">resetReaderIndex()<span class="comment">// 回到x,注意不是0</span></span><br><span class="line">markWriterIndex() <span class="comment">// 标记为y</span></span><br><span class="line">resetWriterIndex()<span class="comment">// 回到y,注意不是0</span></span><br><span class="line">clear() <span class="comment">// 这个才是双双清0</span></span><br><span class="line">readerIndex(<span class="keyword">int</span>)</span><br><span class="line">writerIndex(<span class="keyword">int</span>)</span><br><span class="line"></span><br><span class="line"><span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> ByteBuf <span class="title">markReaderIndex</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        markedReaderIndex = readerIndex;</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">this</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> ByteBuf <span class="title">resetReaderIndex</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        readerIndex(markedReaderIndex);</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">this</span>;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
-<p>这些操作不改变数据，所以是O(1)的。</p>
-<h2 id="查找（类似于Scan-And-Filter操作"><a href="#查找（类似于Scan-And-Filter操作" class="headerlink" title="查找（类似于Scan And Filter操作)"></a>查找（类似于Scan And Filter操作)</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//1:</span></span><br><span class="line"><span class="keyword">int</span> index = byteBuf.indexOf(xxx)</span><br><span class="line"><span class="comment">//2.</span></span><br><span class="line"><span class="keyword">int</span> index = byteBuf.forEachByte(ByteBufProcessor.FIND_CR);</span><br><span class="line"><span class="comment">// ByteBufProcessor 4.1版本改为 io.netty.util.ByteProcessor</span></span><br></pre></td></tr></table></figure>
-
-<h2 id="派生缓冲区-类似于视图，可读写-浅拷贝"><a href="#派生缓冲区-类似于视图，可读写-浅拷贝" class="headerlink" title="派生缓冲区(类似于视图，可读写) // 浅拷贝"></a>派生缓冲区(类似于视图，可读写) // 浅拷贝</h2><p>创建的方法:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">duplicate()</span><br><span class="line">slice(<span class="keyword">int</span>,<span class="keyword">int</span>)</span><br><span class="line">Unpooled.unmodifiableBuffer(...)</span><br><span class="line">order(ByteOrder)</span><br><span class="line">readSlice(<span class="keyword">int</span>)</span><br></pre></td></tr></table></figure>
-<p>这些派生的<code>ByteBuf</code>实例，底层数据是和原来共享的，只是有自己的读写索引。</p>
-<h2 id="深拷贝"><a href="#深拷贝" class="headerlink" title="深拷贝"></a>深拷贝</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">copy(<span class="keyword">int</span>,<span class="keyword">int</span>)</span><br></pre></td></tr></table></figure>
-
-<h1 id="ByteBufHolder接口"><a href="#ByteBufHolder接口" class="headerlink" title="ByteBufHolder接口"></a>ByteBufHolder接口</h1><p><code>ByteBufHolder</code>接口就是把<code>ButeBuf</code>再封装一层，只暴露几个大的API:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">ByteBuf <span class="title">content</span><span class="params">()</span><span class="comment">// 返回持有的ByteBuf</span></span></span><br><span class="line"><span class="function"><span class="title">copy</span><span class="params">()</span></span></span><br><span class="line"><span class="function"><span class="title">duplicate</span><span class="params">()</span><span class="comment">// 浅拷贝</span></span></span><br></pre></td></tr></table></figure>
-<p>这样只需要声明实现这个接口，相当于宣布这个类内部有成员变量是<code>ByteBuf</code>，换言之就是一个承载数据的对象了。</p>
-<h1 id="ByteBuf分配"><a href="#ByteBuf分配" class="headerlink" title="ByteBuf分配"></a>ByteBuf分配</h1><h2 id="按需分配-ByteBufAllocator接口"><a href="#按需分配-ByteBufAllocator接口" class="headerlink" title="按需分配: ByteBufAllocator接口"></a>按需分配: ByteBufAllocator接口</h2><p>从<code>channel</code>或者<code>ctx</code>获得<code>ByteBufAllocator</code>，降低分配和释放内存的开销。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 1. 从channel:</span></span><br><span class="line">Channel channel = ...;</span><br><span class="line">ByteBufAllocator allocator = channel.alloc(); <span class="comment">//1</span></span><br><span class="line"><span class="comment">// 2. 从ctx:</span></span><br><span class="line">ChannelHandlerContext ctx = ...;</span><br><span class="line">ByteBufAllocator allocator2 = ctx.alloc(); <span class="comment">//2</span></span><br></pre></td></tr></table></figure>
-<p>拿到分配器以后，可以进行的操作:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Buffer()</span><br><span class="line">heapBuffer() </span><br><span class="line">directBuffer() </span><br><span class="line">compositeBuffer()</span><br><span class="line">...<span class="comment">// 总之就是各种创建ByteBuf的方法</span></span><br></pre></td></tr></table></figure>
-<p>netty的两个<code>ByteBufAllocator</code>的实现:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">PooledByteBufAllocator  <span class="comment">// 池化的,性能最高 </span></span><br><span class="line">UnpooledByteBufAllocator <span class="comment">// 非池化的</span></span><br></pre></td></tr></table></figure>
-<p><code>Channel</code>具体返回的分配器是池化还是非池化,可以通过<code>ChannelConfig</code>配置，或者设定<code>bootstrap</code>参数。</p>
-<h2 id="Unpooled缓冲区"><a href="#Unpooled缓冲区" class="headerlink" title="Unpooled缓冲区"></a>Unpooled缓冲区</h2><p>非网络项目时，或其他不能从<code>channel</code>,<code>ctx</code>获取<code>BufAllocator</code>时，可以用<code>Unpooled</code>工具类来创建未池化的<code>ByteBuf</code>实例。<br>它的方法与上述两个类似，只不过去掉了<code>heapBuf</code>,用<code>buffer()</code>方法代替，默认直接返回堆内存buf。</p>
-<h2 id="ByteBufUtil类"><a href="#ByteBufUtil类" class="headerlink" title="ByteBufUtil类"></a>ByteBufUtil类</h2><p>顾名思义，有一些用于<code>ByteBuf</code>的辅助方法，看起来比较有用包括:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">firstIndexof</span><br><span class="line">lastIndexof</span><br><span class="line">hexdump()<span class="comment">// 打印</span></span><br><span class="line">equals(buf1,buf2)</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
-
-<h2 id="引用计数-ReferenceCounted"><a href="#引用计数-ReferenceCounted" class="headerlink" title="引用计数 // ReferenceCounted"></a>引用计数 // ReferenceCounted</h2><p>由于<code>ByteBuf</code>一般比较大，所以实际数据一般只会存一份，引用却会有很多。<br>然后引用的生命周期一般很长，。<br>所以<code>netty</code>除了<code>gcroot</code>的方法管理，还用了原始的引用计数:<br><code>ReferenceCounted</code>接口。<br>上文中的<code>ByteBufHolder</code>接口就是它的子接口。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">ByteBufHolder =&gt; ReferenceCounted</span><br><span class="line"><span class="comment">// 引用计数:</span></span><br><span class="line">ByteBuf buf=allocator.directBuffer();</span><br><span class="line"><span class="keyword">assert</span> buffer.refCnt()==<span class="number">1</span>; </span><br><span class="line"><span class="comment">// 释放:</span></span><br><span class="line"><span class="keyword">boolean</span> released = buffer.release();</span><br></pre></td></tr></table></figure>
-
-<p>四种<code>ByteBuf</code>:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">UnpooledHeapByteBuf: 堆内存，可以被jvm gc；</span><br><span class="line">UnpooledDirectByteBuf:  堆外，可以被jvm gc，但最好自己回收;</span><br><span class="line">PooledHeapByteBuf: 不可以被jvm gc <span class="comment">// 因为在池子里头</span></span><br><span class="line">PooledDirectByteBuf: 不可以被jvm gc. <span class="comment">// 因为在池子里头</span></span><br></pre></td></tr></table></figure>
-<p>换言之：<br>池化的jvm不管；<br>非池化的jvm可以管。</p>
-<p>增加计数器的操作:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">retain()</span><br><span class="line"><span class="comment">//或者刚出生的时候会有1.</span></span><br></pre></td></tr></table></figure>
-<p>减少计数器的操作:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">release()</span><br></pre></td></tr></table></figure>
-
-<p>编程规范:</p>
-<blockquote>
-<ol>
-<li>pipeline里最后一个处理者要负责release()</li>
-<li>中间某一个抛异常了，不往下传了，也要负责release()。 </li>
-<li>中间某一个往下传了别的数据，要负责release传入的原来那个数据。</li>
-</ol>
-</blockquote>
-<p>内存泄露提示:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">LEAK: ByteBuf.release() was not called before it’s garbage-collected. Enable advanced leak reporting to find out where the leak occurred. To enable advanced leak reporting, specify the JVM option ‘-Dio.netty.leakDetectionLevel=advanced’ or call ResourceLeakDetector.setLevel()</span><br></pre></td></tr></table></figure>
-<p>出现了这个说明有地方没有<code>release()</code>.可以提高检测级别打印出具体泄露点。</p>
-<p>参考:<br><a href="http://chen-tao.github.io/2015/10/03/netty/" target="_blank" rel="noopener">http://chen-tao.github.io/2015/10/03/netty/</a><br><a href="http://calvin1978.blogcn.com/articles/directbytebuffer.html" target="_blank" rel="noopener">http://calvin1978.blogcn.com/articles/directbytebuffer.html</a></p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/09/01/2018-09/Netty-in-action%E7%AC%AC%E4%BA%94%E7%AB%A0-ByteBuf%E7%AC%94%E8%AE%B0/" data-id="ck96cxpoi00dbmaam4dug4m4k" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Netty/" rel="tag">Netty</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-2018-08/Netty-in-action第四章-传输-笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/08/19/2018-08/Netty-in-action%E7%AC%AC%E5%9B%9B%E7%AB%A0-%E4%BC%A0%E8%BE%93-%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2018-08-19T12:07:49.000Z" itemprop="datePublished">2018-08-19</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/Netty/">Netty</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/08/19/2018-08/Netty-in-action%E7%AC%AC%E5%9B%9B%E7%AB%A0-%E4%BC%A0%E8%BE%93-%E7%AC%94%E8%AE%B0/">Netty in action第四章-传输-笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="Netty通用api"><a href="#Netty通用api" class="headerlink" title="Netty通用api"></a>Netty通用api</h1><p><code>Netty</code>为<code>oio</code>/<code>nio</code>的传输实现封装了一个通用<code>api</code>。<br>方便用户低成本切换。<br>代码见:<br><a href="https://github.com/xiaoyue26/netty-in-action-cn/blob/ChineseVersion/chapter4/" target="_blank" rel="noopener">https://github.com/xiaoyue26/netty-in-action-cn/blob/ChineseVersion/chapter4/</a></p>
-<p>使用<code>netty</code>的话,阻塞和非阻塞实现的切换只需两行:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// oio</span></span><br><span class="line">NioEventLoopGroup group = <span class="keyword">new</span> NioEventLoopGroup();</span><br><span class="line">b.group(group).channel(OioServerSocketChannel<span class="class">.<span class="keyword">class</span>)</span></span><br><span class="line"><span class="class"></span></span><br><span class="line"><span class="class">// <span class="title">nio</span></span></span><br><span class="line"><span class="class"><span class="title">NioEventLoopGroup</span> <span class="title">group</span> </span>= <span class="keyword">new</span> NioEventLoopGroup();</span><br><span class="line">b.group(group).channel(NioServerSocketChannel<span class="class">.<span class="keyword">class</span>)</span></span><br></pre></td></tr></table></figure>
-<p>也就是把<code>EvenLoopGroup</code>和<code>SeverSocketChannel</code>的实现换一下。</p>
-<h2 id="Channel接口"><a href="#Channel接口" class="headerlink" title="Channel接口"></a>Channel接口</h2><img src="/images/2018-08/4.1.jpg" class="" width="400" height="600" title="Channel接口">
-<p><code>Channel</code>接口的父接口包括:</p>
-<blockquote>
-<p>Comparable<Channel>: 每个Channel是独一无二的,不可以相等,但是可以排序;<br>AttributeMap: 获得各种属性</p>
-</blockquote>
-<p>依赖的接口:</p>
-<blockquote>
-<p>ChannelPipeLine: 有个方法返回它的pipeline;// 实现上大多有这个成员<br>ChannelConfig: 有个方法返回它的config;</p>
-</blockquote>
-<p>子接口:</p>
-<blockquote>
-<p>ServerChannel<br>AbstractChannel: 如果引用不相等，保证当hash值相同时,CompareTo方法会抛出Error。</p>
-</blockquote>
-<p>相关代码：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">final</span> <span class="keyword">int</span> <span class="title">compareTo</span><span class="params">(Channel o)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (<span class="keyword">this</span> == o) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">long</span> ret = hashCode - o.hashCode();</span><br><span class="line">        <span class="keyword">if</span> (ret &gt; <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="number">1</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> (ret &lt; <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="keyword">return</span> -<span class="number">1</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        ret = System.identityHashCode(<span class="keyword">this</span>) - System.identityHashCode(o);</span><br><span class="line">        <span class="keyword">if</span> (ret != <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="keyword">return</span> (<span class="keyword">int</span>) ret;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">// Jackpot! - different objects with same hashes</span></span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> Error();</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
-
-
-
-
-
-<p><code>ChannelPipeLine</code>中的设计模式: 拦截过滤器.(类似于Unix管道命令)</p>
-<p>Netty提供的<code>Channel</code>实现都是线程安全的，可以支持多个线程并发写一个<code>Channel</code>。</p>
-<h2 id="Netty提供的传输实现"><a href="#Netty提供的传输实现" class="headerlink" title="Netty提供的传输实现"></a>Netty提供的传输实现</h2><p>包括:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">NIO  : 基于选择器</span><br><span class="line">Epoll: JNI驱动，支持linux上才有的特性,比NIO更快;</span><br><span class="line">OIO :  阻塞流</span><br><span class="line">Local: VM内部通过管道进行通信</span><br><span class="line">Embedded: 测试时使用。</span><br></pre></td></tr></table></figure>
-
-<h3 id="NIO传输实现"><a href="#NIO传输实现" class="headerlink" title="NIO传输实现"></a>NIO传输实现</h3><img src="/images/2018-08/4.2.jpg" class="" width="400" height="600" title="Channel接口">
-<p>实现上基于选择器，类似于一个注册表，用户注册各种事件的处理函数。<br>可能的状态变化包括:<br>op_accept: 接受新连接并创建<code>channel</code>时;<br>op_connect: 建立一个连接时；<br>op_read: 可以读时；<br>op_write: 可以写时。</p>
-<h3 id="Epoll传输实现"><a href="#Epoll传输实现" class="headerlink" title="Epoll传输实现"></a>Epoll传输实现</h3><p>性能比NIO更高。代码更改:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">EpollEventLoopGroup</span><br><span class="line">EpollServerSocketChannel<span class="class">.<span class="keyword">class</span></span></span><br></pre></td></tr></table></figure>
-
-<h3 id="水平触发LT"><a href="#水平触发LT" class="headerlink" title="水平触发LT"></a>水平触发LT</h3><blockquote>
-<p>只要有事件没消费完就一直提醒。(底层把没处理完的回调重新加入readylist)</p>
-</blockquote>
-<h3 id="边缘触发ET"><a href="#边缘触发ET" class="headerlink" title="边缘触发ET"></a>边缘触发ET</h3><blockquote>
-<p>有新事件才提醒。（底层省略了重新加入readylist那一步）</p>
-</blockquote>
-<p>优缺点对比:</p>
-<table>
-<thead>
-<tr>
-<th align="center">属性</th>
-<th align="left">水平触发(LT)</th>
-<th align="center">边缘触发(ET)</th>
-</tr>
-</thead>
-<tbody><tr>
-<td align="center">开销</td>
-<td align="left">较大</td>
-<td align="center">较小</td>
-</tr>
-<tr>
-<td align="center">时效性</td>
-<td align="left">时效性高</td>
-<td align="center">时效性较低</td>
-</tr>
-<tr>
-<td align="center">数据安全</td>
-<td align="left">无遗漏</td>
-<td align="center">需要小心编程，否则有遗漏风险</td>
-</tr>
-</tbody></table>
-<p>单线程时: 水平触发时效性好一些；<br>高并发时: 边缘触发并发度好一些。</p>
-<p>jdk实现: 水平触发<br>netty实现: 边缘触发</p>
-<h3 id="OIO传输实现"><a href="#OIO传输实现" class="headerlink" title="OIO传输实现"></a>OIO传输实现</h3><p>Netty使用超时机制来让OIO和NIO的API统一。</p>
-<h3 id="Local传输实现"><a href="#Local传输实现" class="headerlink" title="Local传输实现"></a>Local传输实现</h3><p>用于在同一个JVM中运行的客户端和服务端之间的通信。<br>服务端并不绑定物理网络地址，也不接受真正的网络流量。<br>可以一开始先使用<code>Local</code>传输实现，方便以后有需求的时候迁移到<code>NIO</code>,<code>Epoll</code>实现。</p>
-<h3 id="Embedded传输实现"><a href="#Embedded传输实现" class="headerlink" title="Embedded传输实现"></a>Embedded传输实现</h3><p>用途： 创建单元测试。</p>
-<h2 id="传输的用例"><a href="#传输的用例" class="headerlink" title="传输的用例"></a>传输的用例</h2><p>Netty4支持的网络协议:</p>
-<table>
-<thead>
-<tr>
-<th align="center">传输实现</th>
-<th align="left">TCP</th>
-<th align="center">UDP</th>
-<th align="center">SCTP</th>
-<th align="center">UDT</th>
-</tr>
-</thead>
-<tbody><tr>
-<td align="center">NIO</td>
-<td align="left">√</td>
-<td align="center">√</td>
-<td align="center">√</td>
-<td align="center">√</td>
-</tr>
-<tr>
-<td align="center">Epoll</td>
-<td align="left">√</td>
-<td align="center">√</td>
-<td align="center">X</td>
-<td align="center">X</td>
-</tr>
-<tr>
-<td align="center">OIO</td>
-<td align="left">√</td>
-<td align="center">√</td>
-<td align="center">√</td>
-<td align="center">√</td>
-</tr>
-<tr>
-<td align="center">网络协议备注</td>
-<td align="left"></td>
-<td align="center"></td>
-<td align="center">串流控制传输协议，较冷门，目前主要应用在电信领域</td>
-<td align="center">基于UDP的可靠传输</td>
-</tr>
-</tbody></table>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/08/19/2018-08/Netty-in-action%E7%AC%AC%E5%9B%9B%E7%AB%A0-%E4%BC%A0%E8%BE%93-%E7%AC%94%E8%AE%B0/" data-id="ck96cxpod00csmaama7v53sj5" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Netty/" rel="tag">Netty</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1506,6 +1406,14 @@ r3是关键的加密保护的随机数，r1,r2,r3一起生成key。<br>r1,r2的�
       <ul>
         
           <li>
+            <a href="/2022/02/24/2022-02/%E4%B8%BA%E4%BB%80%E4%B9%88%E5%85%88hash%E5%90%8E%E5%8A%A0%E5%AF%86%E7%9A%84%E6%96%B9%E6%B3%95%E5%AE%B9%E6%98%93%E9%81%AD%E9%81%87padding%E6%94%BB%E5%87%BB/">为什么先hash后加密的方法容易遭遇padding攻击</a>
+          </li>
+        
+          <li>
+            <a href="/2022/02/24/2022-02/keepalive/">http和tcp层面的keepAlive机制</a>
+          </li>
+        
+          <li>
             <a href="/2022/02/18/2022-02/%E6%8B%A5%E5%A1%9E%E7%AE%97%E6%B3%95bbr/">quic中的拥塞算法bbr</a>
           </li>
         
@@ -1515,14 +1423,6 @@ r3是关键的加密保护的随机数，r1,r2,r3一起生成key。<br>r1,r2的�
         
           <li>
             <a href="/2022/02/16/2022-02/http-range/">http_range</a>
-          </li>
-        
-          <li>
-            <a href="/2022/01/21/2022-01/voip-rtc/">VoIP和RTC</a>
-          </li>
-        
-          <li>
-            <a href="/2021/07/26/2021-07/metaspace%E7%AC%94%E8%AE%B0/">metaspace笔记</a>
           </li>
         
       </ul>

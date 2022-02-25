@@ -72,6 +72,154 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-01/java并发编程实战笔记-8章" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/01/01/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-8%E7%AB%A0/" class="article-date">
+  <time datetime="2018-01-01T07:34:18.000Z" itemprop="datePublished">2018-01-01</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/01/01/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-8%E7%AB%A0/">java并发编程实战笔记-8章</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="线程池的使用"><a href="#线程池的使用" class="headerlink" title="线程池的使用"></a>线程池的使用</h1><p>这章介绍实际应用中配置调优的一些高级选项. 以及各种坑.</p>
+<h1 id="8-1-任务与执行策略的隐形耦合"><a href="#8-1-任务与执行策略的隐形耦合" class="headerlink" title="8.1  任务与执行策略的隐形耦合"></a>8.1  任务与执行策略的隐形耦合</h1><p>有些任务需要指定执行策略:</p>
+<ol>
+<li>依赖性任务: 就是任务之间不独立</li>
+<li>线程不封闭的: 就是只能单线程跑的.</li>
+<li>对响应时间敏感的: 如GUI. </li>
+<li>使用ThreadLocal的: 线程池会重用线程. 因此可能有风险.</li>
+</ol>
+<h2 id="8-1-1-死锁"><a href="#8-1-1-死锁" class="headerlink" title="8.1.1 死锁"></a>8.1.1 死锁</h2><p>有界线程池不能无限提交. 如果里头的任务都死锁了,线程池也死锁了.</p>
+<h2 id="8-1-2-响应时间"><a href="#8-1-2-响应时间" class="headerlink" title="8.1.2 响应时间"></a>8.1.2 响应时间</h2><p>如果任务都很慢,线程池的响应时间自然也慢.<br>可以限时或者增大线程池容量.</p>
+<h1 id="8-2-线程池大小公式"><a href="#8-2-线程池大小公式" class="headerlink" title="8.2 线程池大小公式"></a>8.2 线程池大小公式</h1><p>N = cpu数量 = Runtime.getRuntime().availableProcessors();<br>U = 目标cpu利用率<br>W/C= 等待时间和执行时间的比率 (响应度)<br>SIZE = N*U/(1+W/C) </p>
+<h1 id="8-3-配置ThreadPoolExecutor"><a href="#8-3-配置ThreadPoolExecutor" class="headerlink" title="8.3 配置ThreadPoolExecutor"></a>8.3 配置ThreadPoolExecutor</h1><p>可以通过Executors获取jdk设计好的一些线程池实现.</p>
+<h2 id="8-3-1-线程的创建与取消"><a href="#8-3-1-线程的创建与取消" class="headerlink" title="8.3.1 线程的创建与取消"></a>8.3.1 线程的创建与取消</h2><p>基本大小: 没有任务时候的线程大小.<br>最大大小: 上限.<br>存活时间: 线程空闲时间达到存活时间,则被回收.</p>
+<h2 id="8-3-2-管理队列任务"><a href="#8-3-2-管理队列任务" class="headerlink" title="8.3.2 管理队列任务"></a>8.3.2 管理队列任务</h2><p>线程池满了以后,提交的任务进入等待队列.<br>newFixedThreadPool: 无界等待队列 LinkedBlockingQueue<br>newSingleThreadExecutor: 无界等待队列 LinkedBlockingQueue</p>
+<p>有界等待队列的话,需要饱和策略. </p>
+<h2 id="8-3-3-饱和策略"><a href="#8-3-3-饱和策略" class="headerlink" title="8.3.3 饱和策略"></a>8.3.3 饱和策略</h2><ol>
+<li>中止(默认): abort. 抛异常.</li>
+<li>调用者运行: 让主线程自己干. 拥塞会外延到TCP层. </li>
+<li>丢弃: 抛弃该任务. 不抛异常.</li>
+<li>丢弃最老: 丢弃下一个将要执行的.(如果用了优先级队列,就是抛弃优先级最高的,会造成错误.)</li>
+</ol>
+<h1 id="8-4-扩展ThreadPoolExecutor"><a href="#8-4-扩展ThreadPoolExecutor" class="headerlink" title="8.4 扩展ThreadPoolExecutor"></a>8.4 扩展ThreadPoolExecutor</h1><p>需要实际需求和应用案例才能学会. </p>
+<h1 id="8-5-递归算法的并行化"><a href="#8-5-递归算法的并行化" class="headerlink" title="8.5 递归算法的并行化"></a>8.5 递归算法的并行化</h1><p>首先循环可以并行化:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span>(<span class="keyword">final</span> Ele e: eles)&#123;</span><br><span class="line">    exec.execute(</span><br><span class="line">    <span class="keyword">new</span> Runnable()&#123;</span><br><span class="line">      <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span></span>&#123;process(e);&#125;</span><br><span class="line">    &#125;</span><br><span class="line">    );</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>递归也一样, 遍历依然是递归的, 但把每一个节点的计算收集到线程池中,异步计算.</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">dfs(node,exec,results)&#123;</span><br><span class="line"> exec.execute(...);</span><br><span class="line"> dfs(node.children());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<p>第九章是图形界面,略过.</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/01/01/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-8%E7%AB%A0/" data-id="ck96cxpnu00aemaam6euicert" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2017-12/hive调优之数据倾斜" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2017/12/26/2017-12/hive%E8%B0%83%E4%BC%98%E4%B9%8B%E6%95%B0%E6%8D%AE%E5%80%BE%E6%96%9C/" class="article-date">
+  <time datetime="2017-12-26T11:35:00.000Z" itemprop="datePublished">2017-12-26</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/hadoop/">hadoop</a>►<a class="article-category-link" href="/categories/hadoop/hive/">hive</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2017/12/26/2017-12/hive%E8%B0%83%E4%BC%98%E4%B9%8B%E6%95%B0%E6%8D%AE%E5%80%BE%E6%96%9C/">hive调优之数据倾斜</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>上一篇中记录了hive调优的一些常规手段. 但对于某些数据集, 常规手段是无能为力的, 例如数据倾斜时.</p>
+<p>对于hive而言,数据倾斜就是某个reducer跑得特别慢,这一点可以从日志中reducer开在99%或某个值很久看出,也可以从web ui中查看:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">运行后:</span><br><span class="line">http:&#x2F;&#x2F;xxx:19888&#x2F;jobhistory&#x2F;tasks&#x2F;job_1472710912354_3070682&#x2F;r</span><br><span class="line">运行前:</span><br><span class="line">http:&#x2F;&#x2F;xxx:8088&#x2F;proxy&#x2F;application_1472710912354_3070684&#x2F;mapreduce&#x2F;tasks&#x2F;job_1472710912354_3070684&#x2F;r</span><br></pre></td></tr></table></figure>
+<p>如果具体看日志的话,会发现大部分时间在进行外排.<br>对于这种任务最重要的是消除外排,有如下几种优化手段:</p>
+<h2 id="1-加内存"><a href="#1-加内存" class="headerlink" title="1. 加内存"></a>1. 加内存</h2><p>最简单粗暴就是给reduce加内存了. 让它别外排:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">set</span> mapreduce.reduce.memory.mb=<span class="number">10240</span>;</span><br></pre></td></tr></table></figure>
+<p>类似的,如果mapper内存不够,可以减小每个mapper处理的数据量,增大mapper的数量:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">set</span> mapreduce.input.fileinputformat.split.maxsize=<span class="number">64000000</span>;</span><br></pre></td></tr></table></figure>
+
+<h2 id="2-倾斜key单独处理"><a href="#2-倾斜key单独处理" class="headerlink" title="2. 倾斜key单独处理"></a>2. 倾斜key单独处理</h2><p>第二种手段也比较简单, 就是把出现倾斜的key找出来,假如很少的话,可以把它们摘出来,单独处理(或遗弃). 开启hive自动消除数据倾斜:(效果有效)</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">set</span> hive.optimize.skewjoin = <span class="literal">true</span>;</span><br><span class="line"><span class="keyword">set</span> hive.skewjoin.key=<span class="number">1000</span>;</span><br><span class="line"><span class="keyword">set</span> hive.groupby.skewindata=<span class="literal">true</span>;</span><br><span class="line"><span class="keyword">set</span> hive.groupby.mapaggr.checkinterval=<span class="number">100</span>;</span><br></pre></td></tr></table></figure>
+
+<h2 id="3-局部聚合-1-相同value聚合"><a href="#3-局部聚合-1-相同value聚合" class="headerlink" title="3. 局部聚合(1): 相同value聚合"></a>3. 局部聚合(1): 相同value聚合</h2><p>(没有什么优化是增加一个阶段不能解决的.如果有,就再加一个阶段)<br>为了减少最后汇聚到reducer上的数据量,可以在之前增加一个阶段,对某个key的数据进行局部聚合. </p>
+<p>以某次需求为例,需要求各个省市区维度下的丢包率\延迟的50,90,99分位数.数据量每天200G. 分位数计算极其耗时, 尤其是计算周统计数据时, 数据量达到TB级. </p>
+<p>在使用了前一篇优化笔记手段以及上述手段后,依然耗时4小时.原来查询最耗时的部分如下:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span>  es</span><br><span class="line">       ,province</span><br><span class="line">       ,city</span><br><span class="line">       ,ipOprator</span><br><span class="line">       ,percentile(xxx,<span class="number">0.5</span>,<span class="number">0.9</span>,<span class="number">0.99</span>)</span><br><span class="line"><span class="keyword">FROM</span> ttt</span><br><span class="line"><span class="keyword">GROUP</span> <span class="keyword">BY</span> es,province,ipOprator <span class="keyword">with</span> <span class="keyword">cube</span></span><br></pre></td></tr></table></figure>
+<p>查看hive的percentile源码实现,其对于同一个key的处理逻辑大致这么几步:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">(依次输入每个value)</span><br><span class="line">1. O(n)</span><br><span class="line">把所有value放进一个Map&lt;value,LongWriteable&gt;里,相同的value则增加map中的计数值;</span><br><span class="line">2. O(nlogn)</span><br><span class="line">在reduce中把map中的所有entry放入一个List中,然后对List根据value值进行全排序(&#96;Collections.sort(entriesList, new MyComparator());&#96;);</span><br><span class="line">3. O(n)</span><br><span class="line">从头开始扫一遍上一步的List, 根据计数器的值总和,分位数,定位到对应的分位数,返回.</span><br></pre></td></tr></table></figure>
+<p>将其重写为可以进行局部聚合, 从而略去第一步:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span>  es</span><br><span class="line">       ,province</span><br><span class="line">       ,city</span><br><span class="line">       ,ipOprator</span><br><span class="line">      ,percent_new(c1,<span class="keyword">num</span>,<span class="number">0.5</span>,<span class="number">0.9</span>,<span class="number">0.99</span>)</span><br><span class="line"><span class="keyword">FROM</span> (<span class="keyword">select</span> es,province,ipOprator,c1,<span class="keyword">count</span>(<span class="number">1</span>) <span class="keyword">as</span> <span class="keyword">num</span></span><br><span class="line">    <span class="keyword">FROM</span> xxx</span><br><span class="line">    <span class="keyword">GROUP</span> <span class="keyword">BY</span> es,province,ipOprator,c1</span><br><span class="line">) <span class="keyword">as</span> t </span><br><span class="line"><span class="keyword">GROUP</span> <span class="keyword">BY</span> es,province,ipOprator <span class="keyword">with</span> <span class="keyword">cube</span></span><br></pre></td></tr></table></figure>
+<p>优化后,时间缩短到30分钟.</p>
+<ul>
+<li>TODO:<br>优化第二步中的全排序. </li>
+</ul>
+<h2 id="4-局部聚合2-相同key聚合"><a href="#4-局部聚合2-相同key聚合" class="headerlink" title="4. 局部聚合2: 相同key聚合"></a>4. 局部聚合2: 相同key聚合</h2><p>由于上一案例中的聚合函数是分位数计算,聚合的粒度只能达到相同value聚合,对于其他聚合函数,如最大值,最小值等,如果语义上能对相同key先聚合,问题的规模就可以进一步缩小. 方法是先把相同key的数据分拆成不同的key,加上前缀或后缀 如:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">key -&gt; key_1</span><br><span class="line">key -&gt; key_2</span><br><span class="line">...</span><br><span class="line">key -&gt; key_10</span><br></pre></td></tr></table></figure>
+<p>分拆的数量等于并行度,取决于原有的数据集, 然后先进行一阶段聚合,最后去掉前缀后缀,再进行一次聚合得到最后的结果.<br>这种方法的关键就是要求同一个key的聚合计算可以分拆.</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2017/12/26/2017-12/hive%E8%B0%83%E4%BC%98%E4%B9%8B%E6%95%B0%E6%8D%AE%E5%80%BE%E6%96%9C/" data-id="ck96cxpnk0090maam4d5qhboj" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/hive/" rel="tag">hive</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2017-12/hive调优" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2017/12/25/2017-12/hive%E8%B0%83%E4%BC%98/" class="article-date">
@@ -757,414 +905,6 @@
 
 
   
-    <article id="post-2017-11/库带来的智子攻击" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2017/11/01/2017-11/%E5%BA%93%E5%B8%A6%E6%9D%A5%E7%9A%84%E6%99%BA%E5%AD%90%E6%94%BB%E5%87%BB/" class="article-date">
-  <time datetime="2017-11-01T11:56:10.000Z" itemprop="datePublished">2017-11-01</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/%E6%97%A5%E5%BF%97/">日志</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2017/11/01/2017-11/%E5%BA%93%E5%B8%A6%E6%9D%A5%E7%9A%84%E6%99%BA%E5%AD%90%E6%94%BB%E5%87%BB/">库带来的智子攻击</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <ul>
-<li>智子攻击: <blockquote>
-<p>&lt;&lt;三体&gt;&gt;中的三体人为了封锁地球科技,使用智子干扰微观粒子的行为,影响人类对于基础科学的实验与研究. </p>
-</blockquote>
-</li>
-</ul>
-<p>对于程序猿来说,由于现成代码库封装了底层实现,同时引入了很多术语\名词,隐藏了问题的本质, 影响了程序猿真正学会相关技术, 以及超越原有实现.<br>由于前人对于某一个问题, 往往会根据自己的理解, 创建相关的DSL(领域特定语言),<br>后人想理解原本一个基础原理,往往不得不先理解这些或简洁或奇怪的术语,越过重重迷雾最后才能接触到真相.</p>
-<p>解决方案:</p>
-<ol>
-<li>堆砌时间: 每周研究一次库的底层实现.</li>
-</ol>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2017/11/01/2017-11/%E5%BA%93%E5%B8%A6%E6%9D%A5%E7%9A%84%E6%99%BA%E5%AD%90%E6%94%BB%E5%87%BB/" data-id="ck96cxpni008rmaamc46phijp" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E6%97%A5%E5%BF%97/" rel="tag">日志</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-spring实战笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2017/10/24/spring%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2017-10-24T11:38:24.000Z" itemprop="datePublished">2017-10-24</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/spring/">spring</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2017/10/24/spring%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0/">spring实战笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="第一章-主要特性"><a href="#第一章-主要特性" class="headerlink" title="第一章 主要特性"></a>第一章 主要特性</h1><h1 id="DI"><a href="#DI" class="headerlink" title="DI"></a>DI</h1><ul>
-<li>依赖注入.<blockquote>
-<p>让Spring容器来管理对象的创建和销毁,注入;依赖关系更为明确,耦合程度降低.<br>以前是bean工厂,现在是各种ApplicationContext容器.</p>
-</blockquote>
-</li>
-</ul>
-<h1 id="AOP"><a href="#AOP" class="headerlink" title="AOP"></a>AOP</h1><ul>
-<li>切面.<blockquote>
-<p>声明切点,注入before,after事件,降低代码耦合.</p>
-</blockquote>
-<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">aop:config</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">aop:aspect</span> <span class="attr">ref</span>=<span class="string">"minstrel"</span>&gt;</span></span><br><span class="line">      <span class="tag">&lt;<span class="name">aop:pointcut</span> <span class="attr">id</span>=<span class="string">"embark"</span></span></span><br><span class="line"><span class="tag">          <span class="attr">expression</span>=<span class="string">"execution(* *.embarkOnQuest(..))"</span>/&gt;</span></span><br><span class="line">        </span><br><span class="line">      <span class="tag">&lt;<span class="name">aop:before</span> <span class="attr">pointcut-ref</span>=<span class="string">"embark"</span> </span></span><br><span class="line"><span class="tag">          <span class="attr">method</span>=<span class="string">"singBeforeQuest"</span>/&gt;</span></span><br><span class="line"></span><br><span class="line">      <span class="tag">&lt;<span class="name">aop:after</span> <span class="attr">pointcut-ref</span>=<span class="string">"embark"</span> </span></span><br><span class="line"><span class="tag">          <span class="attr">method</span>=<span class="string">"singAfterQuest"</span>/&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">aop:aspect</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;/<span class="name">aop:config</span>&gt;</span></span><br></pre></td></tr></table></figure>
-
-</li>
-</ul>
-<h1 id="模板"><a href="#模板" class="headerlink" title="模板"></a>模板</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">jdbcTemplate+RowMapper, 简化jdbc查询.</span><br><span class="line">&#x2F;&#x2F; 用JPA的话就不用写RowMapper了.</span><br></pre></td></tr></table></figure>
-
-<h2 id="bean的生命周期"><a href="#bean的生命周期" class="headerlink" title="bean的生命周期"></a>bean的生命周期</h2><ol>
-<li>实例化</li>
-<li>填充属性</li>
-<li>setBeanName</li>
-<li>setBeanFactory</li>
-<li>setApplicationContext</li>
-<li>调用BeanPostProcessor的预初始化方法</li>
-<li>调用InitializingBean的afterProperties set方法</li>
-<li>调用自定义的初始化方法</li>
-<li>调用BeanPostProcessor的初始化后方法</li>
-<li>—— bean的使用</li>
-<li>—— 容器关闭</li>
-<li>调用DisposableBean的destroy方法</li>
-<li>调用自定义的销毁方法</li>
-</ol>
-<h1 id="第二章-DI"><a href="#第二章-DI" class="headerlink" title="第二章 DI"></a>第二章 DI</h1><p>讲了一下声明和使用Bean的方法. 与Springboot实战相同,略过.</p>
-<h1 id="第三章-条件化配置-高级装配"><a href="#第三章-条件化配置-高级装配" class="headerlink" title="第三章 条件化配置\高级装配"></a>第三章 条件化配置\高级装配</h1><p>各种profile切换,条件bean,配置注入等等,与Springboot实战相同,略过.</p>
-<h1 id="第四章-AOP"><a href="#第四章-AOP" class="headerlink" title="第四章 AOP"></a>第四章 AOP</h1><p>具体实现机制:</p>
-<blockquote>
-<p>Spring 采用jdk动态代理模式来实现Aop机制。Spring AOP采用动态代理过程：1.将切面使用动态代理的方式动态织入到目标对象，形成一个代理对象。2.目标对象如果没有实现代理接口，那么spring会采用CGLib来生成代理对象，该代理对象是目标对象的子类。3.目标对象如果是final类，也没有实现接口，就不能运用AOP</p>
-</blockquote>
-<p>AspectJ是AOP的一个实现,Spring借鉴了AspectJ.(有合作)</p>
-<h2 id="术语"><a href="#术语" class="headerlink" title="术语"></a>术语</h2><ul>
-<li><p>Advice : 通知(增强)(Before,After,Around)</p>
-<blockquote>
-<p>描述横切逻辑和方法的具体织入点（方法前、方法后、方法的两端等）</p>
-</blockquote>
-</li>
-<li><p>PointCut: 切点(例子中的切点是execution表达式规定的方法)</p>
-<blockquote>
-<p>指定在哪些类的哪些方法上织入横切逻辑.</p>
-</blockquote>
-</li>
-<li><p>JoinPoint: 连接点 (粒度是方法)</p>
-</li>
-<li><p>Advisor(切面): </p>
-<blockquote>
-<p>将Pointcut和Advice两者组装起来。有了Advisor的信息，Spring就可以利用JDK或CGLib的动态代理技术采用统一的方式为目标Bean创建织入切面的代理对象了</p>
-</blockquote>
-</li>
-</ul>
-<p>例子:</p>
-<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">aop:config</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">aop:aspect</span> <span class="attr">ref</span>=<span class="string">"minstrel"</span>&gt;</span></span><br><span class="line">      <span class="tag">&lt;<span class="name">aop:pointcut</span> <span class="attr">id</span>=<span class="string">"embark"</span></span></span><br><span class="line"><span class="tag">          <span class="attr">expression</span>=<span class="string">"execution(* *.embarkOnQuest(..))"</span>/&gt;</span></span><br><span class="line">        </span><br><span class="line">      <span class="tag">&lt;<span class="name">aop:before</span> <span class="attr">pointcut-ref</span>=<span class="string">"embark"</span> </span></span><br><span class="line"><span class="tag">          <span class="attr">method</span>=<span class="string">"singBeforeQuest"</span>/&gt;</span></span><br><span class="line"></span><br><span class="line">      <span class="tag">&lt;<span class="name">aop:after</span> <span class="attr">pointcut-ref</span>=<span class="string">"embark"</span> </span></span><br><span class="line"><span class="tag">          <span class="attr">method</span>=<span class="string">"singAfterQuest"</span>/&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">aop:aspect</span>&gt;</span></span><br><span class="line">  <span class="tag">&lt;/<span class="name">aop:config</span>&gt;</span></span><br></pre></td></tr></table></figure>
-
-<ul>
-<li>spring支持的AspectJ切点表达式(挺多的记不住,就不列全了):<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">arg()</span><br><span class="line"><span class="keyword">this</span></span><br><span class="line">target</span><br><span class="line">execution</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
-
-</li>
-</ul>
-<p>用切点表达式来选取某个方法示例:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">execution(* concert.Performance.perform(..))</span><br><span class="line"><span class="comment">// * :  返回任意类型</span></span><br><span class="line"><span class="comment">// 方法所属的类是: concert.Performance</span></span><br><span class="line"><span class="comment">// 具体方法名是: perform</span></span><br><span class="line"><span class="comment">// 方法参数是: 任意参数(两个点..)</span></span><br></pre></td></tr></table></figure>
-
-<p>简单总结一下步骤(用注解):</p>
-<ol>
-<li>写一个config,把观众和演员都注册为Bean.加上<code>@EnableAspectJAutoProxy</code>.</li>
-<li>观众类上加<code>@Aspect</code>,写各种@Before,@After方法;</li>
-</ol>
-<p>代码见:<br><a href="https://github.com/xiaoyue26/spring-gradle/tree/master/src/main/java/com/xiaoyue/nov/practice/concert" target="_blank" rel="noopener">https://github.com/xiaoyue26/spring-gradle/tree/master/src/main/java/com/xiaoyue/nov/practice/concert</a></p>
-<p>书里还提供了一个思路,通过AOP扩展原来的类,而不改动原来的源代码.</p>
-<h2 id="原理总结"><a href="#原理总结" class="headerlink" title="原理总结"></a>原理总结</h2><ul>
-<li><p>动态代理</p>
-<blockquote>
-<p><code>JDK动态代理</code>：只能为接口创建动态代理实例，而不能针对类 。<br><code>CGLib</code> :<br>（Code GenerationLibrary）动态代理：可以为任何类创建织入横切逻辑代理对象，主要是对指定的类生成一个子类，覆盖其中的方法，因为是继承，所以该类或方法最好不要声明成final。</p>
-</blockquote>
-</li>
-<li><p>原理对比：(尽量用接口,不用final)</p>
-</li>
-</ul>
-<p>JDK动态代理：(只能是接口)</p>
-<blockquote>
-<p>JDK动态代理技术。通过需要代理的目标类的getClass().getInterfaces()方法获取到接口信息（这里实际上是使用了Java反射技术。getClass()和getInterfaces()函数都在Class类中，Class对象描述的是一个正在运行期间的Java对象的类和接口信息），通过读取这些代理接口信息生成一个实现了代理接口的动态代理Class（动态生成代理类的字节码），然后通过反射机制获得动态代理类的构造函数，并利用该构造函数生成该Class的实例对象（InvokeHandler作为构造函数的入参传递进去），在调用具体方法前调用InvokeHandler来处理。</p>
-</blockquote>
-<ul>
-<li><p>CGLib动态代理：(不能是final类)</p>
-<blockquote>
-<p>字节码技术。利用asm开源包，把代理对象类的class文件加载进来，通过修改其字节码生成子类来处理。采用非常底层的字节码技术，为一个类创建子类，并在子类中采用方法拦截的技术拦截所有父类方法的调用，并顺势织入横切逻辑。</p>
-</blockquote>
-</li>
-<li><p>两种配置切换:<br>1、如果目标对象实现了接口，默认情况下会采用JDK的动态代理实现AOP<br>2、如果目标对象实现了接口，可以强制使用CGLIB实现AOP<br>3、如果目标对象没有实现接口，必须采用CGLIB库，spring会自动在JDK动态代理和CGLIB之间转换</p>
-</li>
-</ul>
-<h1 id="第二部分-WEB"><a href="#第二部分-WEB" class="headerlink" title="第二部分 WEB"></a>第二部分 WEB</h1><h1 id="第五章-构建"><a href="#第五章-构建" class="headerlink" title="第五章 构建"></a>第五章 构建</h1><h1 id="第六第七章-SpringMVC"><a href="#第六第七章-SpringMVC" class="headerlink" title="第六第七章 SpringMVC"></a>第六第七章 SpringMVC</h1><p>内容,比较繁琐</p>
-<h1 id="第八章-Spring-Web-Flow"><a href="#第八章-Spring-Web-Flow" class="headerlink" title="第八章 Spring Web Flow"></a>第八章 Spring Web Flow</h1><p>stackoverflow上有个帖子详细解释了为啥不能用这个框架.<br><a href="https://stackoverflow.com/questions/29750720/what-are-the-spring-web-flow-advantages" target="_blank" rel="noopener">https://stackoverflow.com/questions/29750720/what-are-the-spring-web-flow-advantages</a><br>包括:</p>
-<ol>
-<li>xml配置难用;</li>
-<li>不直观;</li>
-<li>与第三方库(如模板引擎)整合复杂;<br>… // 看了前三个缺点就没耐心看后几个缺点了…<br>核心还是难用,比普通spring的xml配置复杂得多,几乎没有人能坚持看十分钟攻略.</li>
-</ol>
-<h1 id="第九章-安全-Spring-Security"><a href="#第九章-安全-Spring-Security" class="headerlink" title="第九章 安全 Spring Security"></a>第九章 安全 Spring Security</h1><p>原理:</p>
-<ol>
-<li>用的filter. (AOP用的interpretor)</li>
-</ol>
-<p>antMatchers用的是<br>ant pattern,和普通的通配符有点不一样,是专门用于url的通配符:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">? 匹配任何单字符 </span><br><span class="line">* 匹配0或者任意数量的字符 </span><br><span class="line">** 匹配0或者更多的目录</span><br></pre></td></tr></table></figure>
-<p>其实就是:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">* 匹配任何字符，不含 “&#x2F;”</span><br><span class="line">** 匹配任何字符，含 “&#x2F;”</span><br></pre></td></tr></table></figure>
-
-<p>匹配上路径以后,配置能够做什么.</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">access(<span class="string">"hasRole('READER')"</span>) 设置SpEL表达式为<span class="keyword">true</span>时允许访问;</span><br><span class="line">anonymous()  允许匿名访问</span><br><span class="line">authenticated() 允许认证过的用户访问</span><br><span class="line">denyAll() 拒绝所有</span><br><span class="line">fullyAuthenticated() 允许认证过的,但排除remember-me的</span><br><span class="line">hasAnyAuthority(String...) 具备某个权限</span><br><span class="line">hasAnyRole(String ...) 具有某个Role</span><br><span class="line">hasAuthority(String) 某有某个权限</span><br><span class="line">hasRole(String) 具有某个Role</span><br><span class="line">hasIpAddress(String) 具有某个IP</span><br><span class="line">not() 对其他访问方法的结果取反</span><br><span class="line">permitAll() 允许所有</span><br><span class="line">rememberMe() 允许通过Remember-me的.</span><br></pre></td></tr></table></figure>
-<p>最后的default条件就是 <code>anyRequest().denyAll()</code>. </p>
-<p><code>SpEL</code>: <code>Spring Expression Language</code>:</p>
-<blockquote>
-<p>access方法里头使用,可以代替其他方法,如:<br>access(“hasRole(‘ROLE_READER’ and hasIpAddress(‘192.168.1.2’))”);</p>
-</blockquote>
-<h2 id="Authentication与Authorization区别"><a href="#Authentication与Authorization区别" class="headerlink" title="Authentication与Authorization区别"></a>Authentication与Authorization区别</h2><p><code>Authentication</code>: 鉴权,用户是谁.<br><code>Authorization</code>: 授权,是否可以.</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 获得用户是谁: 如果没有鉴权就是null</span></span><br><span class="line">SecurityContextHolder.getContext().getAuthentication()</span><br><span class="line"><span class="comment">// 获得用户的权限:</span></span><br><span class="line">SecurityContextHolder.getContext().getAuthentication().getAuthorities()</span><br></pre></td></tr></table></figure>
-
-
-
-<h2 id="其他概念-自顶向下"><a href="#其他概念-自顶向下" class="headerlink" title="其他概念(自顶向下)"></a>其他概念(自顶向下)</h2><p><code>SecurityContextHolder</code>:<br>    为使用者提供全局的SecurityContext//ThreadLocal变量,每个线程唯一.<br><code>SecurityContext</code>:<br>    为了hold住Authentication<br><code>Authentication</code>:// 鉴权<br>    主要负责两方面信息，一个是当前用户的详细信息(Principal、UserDetails)，一个是用户鉴权时需要的信息。<br><code>Principal</code>: 安全主体<br><code>Authorization</code>: 授权,访问控制.<br><code>GrantedAuthority</code>:<br>    提供当前用户(UserDetails)所获得的系统范围内的授权。<br><code>UserDetails</code>:<br>    提供了用户的详细信息，主要被用来构建Authentication。<br><code>UserDetailsService</code>:<br>    这个接口的实现主要是负责通过用户名查找并提供用户的详细信息(UserDetails)。</p>
-<p>密码的比较:<br>由<code>AuthenticationManager</code>以及<code>AuthenticationProvider</code>负责.</p>
-<h2 id="鉴权流程"><a href="#鉴权流程" class="headerlink" title="鉴权流程"></a>鉴权流程</h2><ol>
-<li>用户名,密码 =&gt; <code>UsernamePasswordAuthenticationToken</code>对象;<br>//<code>Authentication</code>的一个实现.</li>
-<li>=&gt; <code>AuthenticationManager</code>对它进行验证;</li>
-<li>=&gt; 提取<code>UserDetails</code>,<code>GrantedAuthority</code> =&gt; <code>Authentication</code>对象</li>
-<li><code>Authentication</code>=&gt; <code>SecurityContextHolder.getContext().setAuthentication</code>.</li>
-</ol>
-<p>其中第一步在:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">UsernamePasswordAuthenticationFilter类中:</span><br><span class="line">UsernamePasswordAuthenticationToken authRequest &#x3D; new UsernamePasswordAuthenticationToken(</span><br><span class="line">				username, password);</span><br></pre></td></tr></table></figure>
-
-<h1 id="第十章-模板方法设计模式"><a href="#第十章-模板方法设计模式" class="headerlink" title="第十章 模板方法设计模式"></a>第十章 模板方法设计模式</h1><p>实现分为: 模板(template,固定部分)和回调(callback,可变部分)<br>Spring提供的模板包括:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">jdbcTemplate</span><br><span class="line">SimpleJdbcTemplate -- Spring3后已废弃</span><br><span class="line">HibernateTemplate</span><br><span class="line">JdoTemplate</span><br><span class="line">JpaTemplate</span><br></pre></td></tr></table></figure>
-
-<h1 id="第十一章-ORM"><a href="#第十一章-ORM" class="headerlink" title="第十一章 ORM"></a>第十一章 ORM</h1><ol>
-<li>DSL<br>JPA repository的DSL(黑话):<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">readSpitterByFirstnameOrLastnameOrderByLastname();</span><br><span class="line"></span><br><span class="line">动词: read,get,find,count. &#x2F;&#x2F; 前三个等效</span><br><span class="line">Spitter: 主题 &#x2F;&#x2F; 还可以加Distinct</span><br><span class="line">断言: 还可以有: isAfter,isNull,isLike,IgnoringCase等等.</span><br></pre></td></tr></table></figure>
-只要按这个模式命名方法名,就会自动被实现.</li>
-</ol>
-<p>2.<code>@Query</code>自定义查询</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Query</span>(<span class="string">"select username,password,fullname from Reader"</span>)</span><br><span class="line">    <span class="function">List&lt;Reader&gt; <span class="title">findAllGmailReaders</span><span class="params">()</span></span>;</span><br></pre></td></tr></table></figure>
-
-<p>3.混合自定义实现<br>上述情况都是声明一个<code>ReaderRepository</code>接口,<br>继承JPARepository&lt;Reader,String&gt;<br>(对象和对象主键类型),<br>Spring就会自动生成一个Impl,根据定义的方法名自动生成实现.(类似于用iBatis时,工具生成map)<br>如果有比较复杂的自定义SQL操作,可以创建一个<code>ReaderRepositoryImpl</code>,<br>和原来的名字相比增加<code>Impl</code>后缀,(这个是默认后缀,可以通过注解配置调整),<br>然后继承同一个接口(比如都继承/实现<code>ReaderSweeper</code>).<br>Spring就会混合自动生成的实现和自定义的实现.</p>
-<p>//详见github.</p>
-<h1 id="第十二章-NoSQL"><a href="#第十二章-NoSQL" class="headerlink" title="第十二章 NoSQL"></a>第十二章 NoSQL</h1><ol>
-<li>MongoDb 及其template</li>
-<li>note4j 及其template</li>
-<li>redis 及其template<br>依赖:</li>
-</ol>
-<figure class="highlight groovy"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">compile <span class="string">"redis.clients:jedis:2.9.0"</span></span><br><span class="line">compile <span class="string">'org.springframework.boot:spring-boot-starter-data-redis'</span></span><br></pre></td></tr></table></figure>
-<p>yaml配置:</p>
-<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">spring:</span></span><br><span class="line">  <span class="attr">redis:</span></span><br><span class="line">    <span class="attr">host:</span> <span class="string">localhost</span></span><br><span class="line">    <span class="attr">password:</span> <span class="string">redis123</span></span><br><span class="line">    <span class="attr">port:</span> <span class="number">6379</span></span><br></pre></td></tr></table></figure>
-<p>配置:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Bean</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> RedisTemplate&lt;String, Product&gt; <span class="title">redisTemplate</span><span class="params">(RedisConnectionFactory cf)</span> </span>&#123;</span><br><span class="line">        RedisTemplate&lt;String, Product&gt; redis = <span class="keyword">new</span> RedisTemplate&lt;&gt;();</span><br><span class="line">        redis.setConnectionFactory(cf);</span><br><span class="line">        <span class="keyword">return</span> redis;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
-<p>最后一步如果用不着template的话,甚至可以不用配.还蛮简单的.</p>
-<h2 id="序列化相关"><a href="#序列化相关" class="headerlink" title="序列化相关:"></a>序列化相关:</h2><p>Spring Data Redis提供的序列化器:</p>
-<ol>
-<li><code>RedisTemplate</code>会使用<code>JdkSerializationRedisSerializer</code>;</li>
-<li><code>StringRedisTemplate</code>默认会使用<code>StringRedis-Serializer</code>;</li>
-<li>可以在创建<code>RedisTemplate</code>的时候配置其他序列化器:<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Bean</span></span><br><span class="line">   <span class="function"><span class="keyword">public</span> RedisTemplate&lt;String, Product&gt; <span class="title">redisTemplate</span><span class="params">(RedisConnectionFactory cf)</span> </span>&#123;</span><br><span class="line">       RedisTemplate&lt;String, Product&gt; redis = <span class="keyword">new</span> RedisTemplate&lt;&gt;();</span><br><span class="line">       redis.setConnectionFactory(cf);</span><br><span class="line">       redis.setStringSerializer(<span class="keyword">new</span> StringRedisSerializer());</span><br><span class="line">       redis.setValueSerializer(<span class="keyword">new</span> Jackson2JsonRedisSerializer&lt;Product&gt;(Product<span class="class">.<span class="keyword">class</span>))</span>;</span><br><span class="line">       <span class="keyword">return</span> redis;</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
-
-</li>
-</ol>
-<h1 id="第十三章-缓存技术-切面实现"><a href="#第十三章-缓存技术-切面实现" class="headerlink" title="第十三章 缓存技术 (切面实现)"></a>第十三章 缓存技术 (切面实现)</h1><ul>
-<li>EhCache 跳过.</li>
-</ul>
-<p>1.声明缓存管理器</p>
-<ul>
-<li>RedisCacheManager :单个缓存管理器<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Configuration</span></span><br><span class="line"><span class="meta">@EnableCaching</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">CachingConfig</span> </span>&#123;</span><br><span class="line">    <span class="meta">@Bean</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> CacheManager <span class="title">cacheManager</span><span class="params">(RedisTemplate redisTemplate)</span></span>&#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">new</span> RedisCacheManager(redisTemplate);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></li>
-<li>多个缓存管理器:CompositeCacheManager<br>会迭代查找添加的各个缓存管理器.</li>
-</ul>
-<p>2.使用缓存<br>4个相关注解: // 可用于类或方法级别.</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">@Cacheable : 先找之前缓存的值,没有则调用.</span><br><span class="line">@CachePut :  只是放到缓存里,始终调用. &#x2F;&#x2F; 一般用于save方法.</span><br><span class="line">@CacheEvict : 清除n个缓存</span><br><span class="line">@Caching : 分组</span><br></pre></td></tr></table></figure>
-
-<p><code>@CachePut</code>:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@CachePut</span>(value=<span class="string">"spittleCache"</span>, key=<span class="string">"#result.id"</span>)</span><br><span class="line">  <span class="function">Spittle <span class="title">save</span><span class="params">(Spittle spittle)</span></span>;</span><br></pre></td></tr></table></figure>
-
-<ul>
-<li><p>条件缓存:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Cacheable</span>(value=<span class="string">"spittleCache"</span></span><br><span class="line">unless=<span class="string">"#result.message.contains('Nocache')"</span></span><br><span class="line">condition=<span class="string">"#id &gt;= 10"</span></span><br><span class="line"><span class="function">Spittle <span class="title">findOne</span><span class="params">(Long id)</span></span>;</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>移除缓存:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@CacheEvict</span>(<span class="string">"spittleCache"</span>)</span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">remove</span><span class="params">(<span class="keyword">long</span> spittleid)</span></span>;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>组合缓存操作:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Caching</span>(   <span class="comment">// 增加id查找,email查找,username查找的缓存</span></span><br><span class="line">        put = &#123;  </span><br><span class="line">                <span class="meta">@CachePut</span>(value = <span class="string">"user"</span>, key = <span class="string">"#user.id"</span>),  </span><br><span class="line">                <span class="meta">@CachePut</span>(value = <span class="string">"user"</span>, key = <span class="string">"#user.username"</span>),  </span><br><span class="line">                <span class="meta">@CachePut</span>(value = <span class="string">"user"</span>, key = <span class="string">"#user.email"</span>)  </span><br><span class="line">        &#125;  </span><br><span class="line">)  </span><br><span class="line"><span class="function"><span class="keyword">public</span> User <span class="title">save</span><span class="params">(User user)</span> </span>&#123;...&#125;;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>自定义注解:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Caching</span>(  </span><br><span class="line">        put = &#123;  </span><br><span class="line">                <span class="meta">@CachePut</span>(value = <span class="string">"user"</span>, key = <span class="string">"#user.id"</span>),  </span><br><span class="line">                <span class="meta">@CachePut</span>(value = <span class="string">"user"</span>, key = <span class="string">"#user.username"</span>),  </span><br><span class="line">                <span class="meta">@CachePut</span>(value = <span class="string">"user"</span>, key = <span class="string">"#user.email"</span>)  </span><br><span class="line">        &#125;  </span><br><span class="line">)  </span><br><span class="line"><span class="meta">@Target</span>(&#123;ElementType.METHOD, ElementType.TYPE&#125;)  </span><br><span class="line"><span class="meta">@Retention</span>(RetentionPolicy.RUNTIME)  </span><br><span class="line"><span class="meta">@Inherited</span>  </span><br><span class="line"><span class="keyword">public</span> <span class="meta">@interface</span> UserSaveCache &#123;  </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-</li>
-</ul>
-<h1 id="第十四章-保护方法应用"><a href="#第十四章-保护方法应用" class="headerlink" title="第十四章 保护方法应用"></a>第十四章 保护方法应用</h1><ol>
-<li>保护方法调用 // SecuredConfig</li>
-<li>使用表达式定义安全规则 //JSR250Config</li>
-<li>创建安全表达式计算器 //  ExpressionSecurityConfig<br>详见源码chapter_14.<br>配置上:<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@EnableGlobalMethodSecurity</span>(securedEnabled=<span class="keyword">true</span>)</span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">SecuredConfig</span> <span class="keyword">extends</span> <span class="title">GlobalMethodSecurityConfiguration</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">  <span class="meta">@Override</span></span><br><span class="line">  <span class="function"><span class="keyword">protected</span> <span class="keyword">void</span> <span class="title">configure</span><span class="params">(AuthenticationManagerBuilder auth)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">    auth</span><br><span class="line">    .inMemoryAuthentication()</span><br><span class="line">      .withUser(<span class="string">"user"</span>).password(<span class="string">"password"</span>).roles(<span class="string">"USER"</span>);</span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
-相关注解:<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">@PreAuthorize 方法调用之前,用表达式限制调用</span><br><span class="line">@PostAuthorize 方法调用之后,检查表达式,抛出异常</span><br><span class="line">@PostFilter 允许方法调用,按表达式过滤结果</span><br><span class="line">@PreFilter 允许方法调用,按表达式过滤输入值</span><br></pre></td></tr></table></figure>
-
-</li>
-</ol>
-<p>service:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Secured</span>(&#123;<span class="string">"ROLE_SPITTER"</span>, <span class="string">"ROLE_ADMIN"</span>&#125;)</span><br></pre></td></tr></table></figure>
-
-<h1 id="第十五章-远程调用"><a href="#第十五章-远程调用" class="headerlink" title="第十五章 远程调用"></a>第十五章 远程调用</h1><p>里头的RMI都是java的,不能跨语言.跳过.</p>
-<h1 id="第十六章-rest-api"><a href="#第十六章-rest-api" class="headerlink" title="第十六章 rest api"></a>第十六章 rest api</h1><ol>
-<li>内容协商 <code>Content negotiation</code>:选择一个能用的视图</li>
-<li>消息转化器 <code>Message conversion</code>:转换成客户端使用的形式</li>
-</ol>
-<h2 id="协商"><a href="#协商" class="headerlink" title="协商"></a>协商</h2><p>一维协商:// 只有视图名</p>
-<blockquote>
-<p>Controller返回 -&gt; 视图名 // 或void,原视图<br>-&gt; DispatcherServlet -&gt; 视图解析器. </p>
-</blockquote>
-<p>二维协商: // (视图名,内容类型)</p>
-<ul>
-<li><p><code>ContentNegotiatingViewResolver</code></p>
-<blockquote>
-<p>内容协商的两个步骤:<br>确定请求的媒体类型;<br>找到适合媒体类型的最佳视图.</p>
-</blockquote>
-</li>
-<li><p>确定请求的媒体类型:</p>
-</li>
-</ul>
-<p>1.查看url的文件后缀名.<br>2.使用Accept首部类型<br>3.使用默认类型.</p>
-<p>协商优点:<br>可以同时提供给人看的html和给客户端服务用的json. //重用controller<br>协商缺点:<br>客户端不能发送json或xml.<br>返回值是一个Model,也就是一个kv,比普通的多一层嵌套.</p>
-<h2 id="信息转换器"><a href="#信息转换器" class="headerlink" title="信息转换器"></a>信息转换器</h2><p>流程:<br>Accept头信息(application/json)<br>-&gt;处理方法返回的对象交给MappingJacksonHttpMessageConverter.<br>// 引入 Jackson JSON Processor库.</p>
-<p>Spring提供的HTTP信息转化器包括:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">AtomFeedHttpMessageConverter</span><br><span class="line">BufferedImages</span><br><span class="line">ByteArrayHttpMessageConverter</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
-
-<ul>
-<li><code>@ResponseBody</code>: 发送数据时使用转换器; 配合<code>produces</code><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@RequestMapping</span>(method=RequestMethod.GET, produces=<span class="string">"application/json"</span>)</span><br><span class="line">  <span class="function"><span class="keyword">public</span> List&lt;Spittle&gt; <span class="title">spittles</span><span class="params">(</span></span></span><br><span class="line"><span class="function"><span class="params">      @RequestParam(value=<span class="string">"max"</span>, defaultValue=MAX_LONG_AS_STRING)</span> <span class="keyword">long</span> max,</span></span><br><span class="line"><span class="function">      @<span class="title">RequestParam</span><span class="params">(value=<span class="string">"count"</span>, defaultValue=<span class="string">"20"</span>)</span> <span class="keyword">int</span> count) </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> spittleRepository.findSpittles(max, count);</span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure></li>
-<li><code>@RequestBody</code>: 接受数据时使用转换器. 配合<code>consumes</code><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@RequestMapping</span>(method=RequestMethod.POST, consumes=<span class="string">"application/json"</span>)</span><br><span class="line">  <span class="meta">@ResponseStatus</span>(HttpStatus.CREATED)</span><br><span class="line">  <span class="function"><span class="keyword">public</span> ResponseEntity&lt;Spittle&gt; <span class="title">saveSpittle</span><span class="params">(@RequestBody Spittle spittle, UriComponentsBuilder ucb)</span> </span>&#123;</span><br><span class="line">    Spittle saved = spittleRepository.save(spittle);</span><br><span class="line">    </span><br><span class="line">    HttpHeaders headers = <span class="keyword">new</span> HttpHeaders();</span><br><span class="line">    URI locationUri = ucb.path(<span class="string">"/spittles/"</span>)</span><br><span class="line">        .path(String.valueOf(saved.getId()))</span><br><span class="line">        .build()</span><br><span class="line">        .toUri();</span><br><span class="line">    headers.setLocation(locationUri);</span><br><span class="line">    </span><br><span class="line">    ResponseEntity&lt;Spittle&gt; responseEntity = <span class="keyword">new</span> ResponseEntity&lt;Spittle&gt;(saved, headers, HttpStatus.CREATED);</span><br><span class="line">    <span class="keyword">return</span> responseEntity;</span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
-
-
-</li>
-</ul>
-<ul>
-<li><code>@RestController</code>注解:<br>为所有方法增加@ResponseBody.方法的输入参数增加@RequestBody.<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@PathVariable</span> <span class="keyword">long</span> id</span><br><span class="line"><span class="comment">// 用路径中的&#123;id&#125;注入id; </span></span><br><span class="line"><span class="meta">@RequestParam</span>(value=<span class="string">"max"</span>, defaultValue=MAX_LONG_AS_STRING) <span class="keyword">long</span> max</span><br><span class="line"><span class="comment">// 用请求参数注入</span></span><br><span class="line"></span><br><span class="line"><span class="meta">@RequestMapping</span>(method=RequestMethod.POST, consumes=<span class="string">"application/json"</span>)</span><br><span class="line">  <span class="meta">@ResponseStatus</span>(HttpStatus.CREATED)</span><br><span class="line"> <span class="comment">// 详见chapter_16 spittr-api-message-converters源码项目</span></span><br></pre></td></tr></table></figure>
-
-</li>
-</ul>
-<h1 id="第十七章-异步消息"><a href="#第十七章-异步消息" class="headerlink" title="第十七章 异步消息"></a>第十七章 异步消息</h1><ul>
-<li>简介</li>
-<li>JMS java消息服务 略过</li>
-<li>AMQP 高级消息队列服务 (rabbitMQ)</li>
-<li>POJO</li>
-</ul>
-<h2 id="简介"><a href="#简介" class="headerlink" title="简介"></a>简介</h2><p>RMI是同步的,异步的只要投递完就返回.</p>
-<ol>
-<li>发送</li>
-</ol>
-<ul>
-<li>broker: 消息代理</li>
-<li>destination: 目的地</li>
-</ul>
-<p>dest分为两种:</p>
-<ul>
-<li>topic 主题,发布/订阅模型</li>
-<li>queue 队列,点对点模型</li>
-</ul>
-<h2 id="JMS"><a href="#JMS" class="headerlink" title="JMS"></a>JMS</h2><p>api规范.支持点对点和发布订阅.<br>//旧</p>
-<h2 id="AMQP"><a href="#AMQP" class="headerlink" title="AMQP"></a>AMQP</h2><p>高级MQ协议. 不但约束了api,还使不同实现之间可以合作.<br>加入了Exchange,Binding,解耦了队列,<br>可以灵活实现除了点对点\发布订阅以外的模型.</p>
-<p><code>Exchange</code>类型:</p>
-<ul>
-<li><p>Direct: </p>
-<blockquote>
-<p>判读消息和binding的key相等.<br>把消息路由到key相等的binding上.(binding的队列)</p>
-</blockquote>
-</li>
-<li><p>Topic:  </p>
-<blockquote>
-<p>判读消息key符合binding的通配符.<br>把消息路由到key匹配的binding上. </p>
-</blockquote>
-</li>
-<li><p>Headers: </p>
-<blockquote>
-<p>判断消息的headers与bingding参数匹配.</p>
-</blockquote>
-</li>
-<li><p>Fanout:</p>
-<blockquote>
-<p>无条件匹配. 广播到所有队列上.</p>
-</blockquote>
-</li>
-</ul>
-<p>默认会有一个没有名字的Direct Exchange, 所有队列都会绑定到这个Exchange上,并且routing key和队列名相同.</p>
-<p>使用rabbitTemplate时,如果不指定exchange<br>,就会发送到默认的exchange,也就是上面说的默认Direct Exchange. </p>
-<p>// 其他内容写入&lt;&lt; rabbitmq in action笔记 &gt;&gt; </p>
-<h1 id="第十八章-websocket"><a href="#第十八章-websocket" class="headerlink" title="第十八章 websocket"></a>第十八章 websocket</h1><p>与http同级.<br>持久连接和前端通信(浏览器).用http的话,服务端无法向客户端发消息.</p>
-<h1 id="1-直接使用websocket"><a href="#1-直接使用websocket" class="headerlink" title="1. 直接使用websocket"></a>1. 直接使用websocket</h1><p>前端: 使用ws://协议,或安全的wss://.<br>后端: 继承<code>AbstractWebSocketHandler</code>接口,引入依赖:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">compile &#39;org.springframework.boot:spring-boot-starter-websocket&#39;</span><br></pre></td></tr></table></figure>
-<p>为了防止浏览器不兼容的情况,使用sockjs:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">registry.addHandler(marcoHandler(), &quot;&#x2F;marco&quot;).withSockJS();</span><br></pre></td></tr></table></figure>
-<p>相应的,前端也引入sockjs库.</p>
-<h1 id="2-使用封装以后的STOMP"><a href="#2-使用封装以后的STOMP" class="headerlink" title="2. 使用封装以后的STOMP"></a>2. 使用封装以后的STOMP</h1><p>STOMP: Simple Text Oriented Messaging Protocol<br>简单文本的消息协议.<br>主要是加了个代理,消息流如下:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">两条消息,目的地分别为: &#x2F;app&#x2F;marco,&#x2F;topic&#x2F;polo</span><br><span class="line">&#x3D;&gt;请求通道</span><br><span class="line">&#x3D;&gt;&#x2F;app: 发送到 AnnotationMethodMessageHandler &#x3D;&gt; 代理通道</span><br><span class="line">  &#x2F;topic: SimpleBrokerMessageHandler</span><br><span class="line">  &#x2F;queue: SimpleBrokerMessageHandler</span><br><span class="line">&#x3D;&gt;响应通道</span><br></pre></td></tr></table></figure>
-<p>如果要二进制的,还有别的协议MQTT.</p>
-<h1 id="第十九章-邮件"><a href="#第十九章-邮件" class="headerlink" title="第十九章 邮件"></a>第十九章 邮件</h1><p>用qq邮箱代发即可,配置依赖以后,用springboot能自动获得相关bean,调用即可.不使用ssl的话需要配置:</p>
-<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">spring.mail.username:</span> <span class="string">xxx@qq.com</span></span><br><span class="line"><span class="attr">spring.mail.password:</span> <span class="string">password</span></span><br><span class="line"><span class="attr">spring.mail.port:</span> <span class="number">25</span> <span class="comment"># SSL  465</span></span><br><span class="line"><span class="attr">spring.mail.protocol:</span> <span class="string">smtp</span></span><br><span class="line"><span class="attr">spring.mail.host:</span> <span class="string">smtp.exmail.qq.com</span> <span class="comment"># smtp.qq.com </span></span><br><span class="line"><span class="attr">spring.mail.properties.mail.smtp.auth:</span> <span class="literal">true</span></span><br></pre></td></tr></table></figure>
-
-<h1 id="第二十章-使用JMX"><a href="#第二十章-使用JMX" class="headerlink" title="第二十章 使用JMX"></a>第二十章 使用JMX</h1><p>注册MBean到JMX中.<br>就试试Jconsole.</p>
-<h1 id="第二十一章-Springboot"><a href="#第二十一章-Springboot" class="headerlink" title="第二十一章 Springboot"></a>第二十一章 Springboot</h1><p>起步依赖具体引入了什么:</p>
-<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">spring-boot-starter-actuator=&gt;</span></span><br><span class="line"> <span class="string">spring-boot-starter</span></span><br><span class="line"><span class="string">,spring-boot-actuator</span></span><br><span class="line"><span class="string">,spring-core</span></span><br><span class="line"></span><br><span class="line"><span class="string">spring-boot-start-amqp=&gt;</span></span><br><span class="line"> <span class="string">spring-boot-start</span></span><br><span class="line"><span class="string">,spring-boot-rabbit</span></span><br><span class="line"><span class="string">,spring-core</span></span><br><span class="line"><span class="string">,spring-tx</span></span><br><span class="line"></span><br><span class="line"><span class="string">spring-boot-aop=&gt;</span></span><br><span class="line"> <span class="string">spring-boot-starter</span></span><br><span class="line"><span class="string">,spring-boot-aop</span></span><br><span class="line"><span class="string">,AspectJ</span> <span class="string">Runtime</span></span><br><span class="line"><span class="string">,AspectJ</span> <span class="string">Weaver</span></span><br><span class="line"><span class="string">,spring-core</span></span><br><span class="line"></span><br><span class="line"><span class="string">spring-boot-starter-batch</span></span><br><span class="line"> <span class="string">spring-boot-starter</span></span><br><span class="line"><span class="string">,HSQLDB</span></span><br><span class="line"><span class="string">,spring-jdbc</span></span><br><span class="line"><span class="string">,spring-batch-core</span></span><br><span class="line"><span class="string">,spring-core</span></span><br><span class="line"><span class="string">...</span> <span class="string">太多了,以后有需要再查吧.</span></span><br></pre></td></tr></table></figure>
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2017/10/24/spring%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0/" data-id="ck96cxpm0005dmaamask44c5c" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spring/" rel="tag">spring</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1191,6 +931,14 @@
       <ul>
         
           <li>
+            <a href="/2022/02/24/2022-02/%E4%B8%BA%E4%BB%80%E4%B9%88%E5%85%88hash%E5%90%8E%E5%8A%A0%E5%AF%86%E7%9A%84%E6%96%B9%E6%B3%95%E5%AE%B9%E6%98%93%E9%81%AD%E9%81%87padding%E6%94%BB%E5%87%BB/">为什么先hash后加密的方法容易遭遇padding攻击</a>
+          </li>
+        
+          <li>
+            <a href="/2022/02/24/2022-02/keepalive/">http和tcp层面的keepAlive机制</a>
+          </li>
+        
+          <li>
             <a href="/2022/02/18/2022-02/%E6%8B%A5%E5%A1%9E%E7%AE%97%E6%B3%95bbr/">quic中的拥塞算法bbr</a>
           </li>
         
@@ -1200,14 +948,6 @@
         
           <li>
             <a href="/2022/02/16/2022-02/http-range/">http_range</a>
-          </li>
-        
-          <li>
-            <a href="/2022/01/21/2022-01/voip-rtc/">VoIP和RTC</a>
-          </li>
-        
-          <li>
-            <a href="/2021/07/26/2021-07/metaspace%E7%AC%94%E8%AE%B0/">metaspace笔记</a>
           </li>
         
       </ul>

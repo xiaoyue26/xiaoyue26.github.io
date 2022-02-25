@@ -16,8 +16,9 @@
 <meta property="og:image" content="http://xiaoyue26.github.io/images/2018-09/tls2.png">
 <meta property="og:image" content="http://xiaoyue26.github.io/images/2018-09/tls3.png">
 <meta property="og:image" content="http://xiaoyue26.github.io/images/2018-09/real3.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2022-02/DH_scret.png">
 <meta property="article:published_time" content="2018-09-26T12:07:37.000Z">
-<meta property="article:modified_time" content="2022-02-07T08:33:44.112Z">
+<meta property="article:modified_time" content="2022-02-24T08:38:18.565Z">
 <meta property="article:author" content="风梦七">
 <meta property="article:tag" content="java">
 <meta property="article:tag" content="Netty">
@@ -121,13 +122,15 @@
 <blockquote>
 <p>1994年，NetScape公司设计了SSL协议（Secure Sockets Layer）的1.0版，但是未发布。<br>1995年，NetScape公司发布SSL 2.0版，很快发现有严重漏洞。<br>1996年，SSL 3.0版问世，得到大规模应用。<br>1999年，互联网标准化组织ISOC接替NetScape公司，发布了SSL的升级版TLS 1.0版。<br>2006年和2008年，TLS 1.1版和TLS 1.2版发布。（TLS1.2已经获得主流浏览器支持）<br>2008年8月，TLS 1.3版发布，性能好。移除了很多东西，速度快了很多，少了一次握手。</p>
 </blockquote>
-<p>综上，可以先用<code>TLS 1.2</code>。</p>
+<p>TLS1.2: 兼容性高；握手需要2RTT；（重连需要1RTT）<br>TLS1.3: 安全、性能高；握手需要1RTT；(重连需要0RTT)</p>
+<p>综上，可以先用<code>TLS 1.2</code>获得最大的兼容性。</p>
 <h1 id="原理"><a href="#原理" class="headerlink" title="原理"></a>原理</h1><p>和以前莉姐课上说的<code>PGP</code>协议差不多，都是三板斧：摘要、非对称加密、对称加密。</p>
 <h2 id="要解决的问题"><a href="#要解决的问题" class="headerlink" title="要解决的问题"></a>要解决的问题</h2><pre><code>1. 窃听。解决方案：加密
 2. 篡改。解决方案：摘要 （解决数据完整性）
 3. 冒充。解决方案：数字签名 （解决中间人攻击）</code></pre><h2 id="架构"><a href="#架构" class="headerlink" title="架构"></a>架构</h2><p>ISO七层协议:<br><code>TCP</code> :  传输层<br><code>TLS</code> :  会话层<br>    <em>表示层略</em><br><code>HTTP</code>:  应用层<br>（<code>TLS</code>+<code>HTTP</code>=&gt;<code>HTTPS</code>）</p>
 <p>所以是先进行<code>3</code>次握手建立<code>TCP</code>,然后<code>4</code>次握手建立<code>TLS</code>,然后进行<code>HTTP</code>数据传输。</p>
 <p>如果在<code>TCP</code>层抓包的话，里头是<code>TLS</code>加密过的数据。（中间人无法知道内容）<br>如果在<code>HTTP</code>层（应用层）收取数据的话，是已经解密过的明文。(但是中间人不太可能在应用层，除非已经嵌入到业务层代码了。)</p>
+<p>这个分层架构的划分其实不太合理，quic重新做了分层，详见:<br><a href="http://xiaoyue26.github.io/2022/02/17/2022-02/http3-quic%E4%BC%98%E7%BC%BA%E7%82%B9%E5%8F%8A%E5%8E%9F%E5%9B%A0/">http://xiaoyue26.github.io/2022/02/17/2022-02/http3-quic%E4%BC%98%E7%BC%BA%E7%82%B9%E5%8F%8A%E5%8E%9F%E5%9B%A0/</a></p>
 <h2 id="简化版加密通信"><a href="#简化版加密通信" class="headerlink" title="简化版加密通信"></a>简化版加密通信</h2><p>假设用三个算法做一下加密通信，可以怎么实现呢？<br>定义如下：<br><code>RSA</code>: 一种非对称加密算法<br><code>AES</code>: 一种对称加密算法<br><code>SHA1</code>: 一种摘要算法</p>
 <h3 id="方案1：AES-K-data"><a href="#方案1：AES-K-data" class="headerlink" title="方案1：AES(K,data)"></a>方案1：AES(K,data)</h3><p>假如客户端是<code>C</code>，服务端是<code>S</code>，<code>C</code>和<code>S</code>要传输的数据<code>data</code>。<br>直接传明文肯定是不行，可以加密一下。用一个密钥<code>K</code>，加密成<code>AES(K,data)</code>。<br>这里为啥用AES呢，不用RSA呢，因为非对称加密(RSA)太慢了。</p>
 <img src="/images/2018-09/tls1.png" class="" width="400" height="600" title="加密">
@@ -158,6 +161,14 @@
 <h4 id="总结"><a href="#总结" class="headerlink" title="总结:"></a>总结:</h4><pre><code>数字签名: RSA(私钥K2,data)
 加密一份只有指定人能解开的数据: RSA(公钥K1,data)。</code></pre><p>这个过程中客户端如何得到公钥K1呢?<br>可以由服务端发给客户端数字证书，证书由CA签名证明服务端的公钥确实是K1。</p>
 <p>客户端是因为信任CA,所以信任CA作保的服务端公钥K1，所以才可以用K1验证服务端的数字签名。（信任传递）<br>也就是说即使是网络世界，也还是需要签发证书的机构的。类似于一种官方机构。如果没有这种信任的基础，匿名的网络世界是很难建立起互信机制的。</p>
+<h2 id="TLS组成部分"><a href="#TLS组成部分" class="headerlink" title="TLS组成部分"></a>TLS组成部分</h2><p>握手协议+记录协议</p>
+<p>1。握手协议包括：</p>
+<ul>
+<li>握手：证书认证、协商算法和密钥；</li>
+<li>密码规格变更协议：v1.3删除了；</li>
+<li>警告协议: 错误的时候通知对方；</li>
+<li>应用数据协议: 传输数据协议；<br>2。记录协议：负责使用对称密码对消息进行加密；</li>
+</ul>
 <h2 id="TLS运行流程"><a href="#TLS运行流程" class="headerlink" title="TLS运行流程"></a>TLS运行流程</h2><p>简单地说就是2个步骤：先协商一个密钥，之后的通信就用这个密钥加密数据。<br><code>TLS 1.2</code>:<br>协商: 4次握手，协商出一个对称加密的密钥K；<br>通信：双方用K加密数据以后通信。</p>
 <img src="/images/2018-09/tls3.png" class="" width="400" height="600" title="tls3.png">
 <p>如上图所示，这4次握手就是想要协商出一个对称加密的密钥KEY,以及摘要算法的密钥。<br>图中的变量定义:</p>
@@ -188,9 +199,26 @@ r3是关键的加密保护的随机数，r1,r2,r3一起生成key。<br>r1,r2的�
 
 </li>
 </ol>
+<h3 id="DH密钥交换算法（怎么用3个随机数算出密钥）"><a href="#DH密钥交换算法（怎么用3个随机数算出密钥）" class="headerlink" title="DH密钥交换算法（怎么用3个随机数算出密钥）"></a>DH密钥交换算法（怎么用3个随机数算出密钥）</h3><img src="/images/2022-02/DH_scret.png" class="" width="400" height="600" title="DH_scret">
+<p>如上图所示:<br>客户端计算密钥:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">A&#x3D; g^a mod p </span><br><span class="line">K &#x3D; B^a mod p</span><br></pre></td></tr></table></figure>
+<p>服务端计算密钥: b</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">B &#x3D; g^b mod p</span><br><span class="line">K &#x3D; A^b mod p</span><br></pre></td></tr></table></figure>
+<p>同模推导:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">K &#x3D; A^b mod p </span><br><span class="line">&#x3D; (g^a mod p) ^ b mod p </span><br><span class="line">&#x3D; g^ab mod p</span><br><span class="line">&#x3D; (g^b mod p ) ^ a mod p</span><br><span class="line">&#x3D; B^a mod p</span><br></pre></td></tr></table></figure>
+<p>三个随机数中，有一个是本地随机生成的，不用网络传输；<br>（对于服务端来说是a，客户端是b，而网络传输的是A和B，因此中间人进行反向破解难度大）<br>由于网络上传输的只是p,g和A,B，难以破解出a,b，因此中间人也难以破解出K。</p>
+<h3 id="tls1-2实际加密方式"><a href="#tls1-2实际加密方式" class="headerlink" title="tls1.2实际加密方式"></a>tls1.2实际加密方式</h3><p>实际上加密算法是需要padding的，最早的padding方法是:<br><code>AES(text+MAC(text)+padding)</code><br>后来因为这种方式容易遭遇padding攻击，因此tls1.3采用了更安全的padding方法:<br>先<code>E=AES(text+padding)</code><br>然后： <code>E+MAC(E)</code></p>
+<blockquote>
+<p>padding攻击，通过反复修改部分内容、并触发解密过程，从而探测猜测加密算法的密钥；</p>
+</blockquote>
+<h3 id="tls1-3的前向安全性"><a href="#tls1-3的前向安全性" class="headerlink" title="tls1.3的前向安全性"></a>tls1.3的前向安全性</h3><p>前向安全: 当前会话的密钥泄露后，不能用来解密以前会话的消息，也就是不影响以前会话的安全性。<br>例如如果每次会话都用ECDHE协商新的密钥，这次会话的密钥无法用于以前的会话解密，则可以达到前向安全性。</p>
+<p><code>Ephemeral Secret</code> (ES)：每个连接新鲜的 ECDHE 协商得出的值。凡是从 ES 得出的值，都是前向安全的（当然，在 PSK only模式下，不是前向安全的）。<br><code>Static Secret</code> (SS)：从静态，或者半静态key得出的值。例如psk，或者服务器的半静态 ECDH 公钥。</p>
+<p>如果用Session ticket或者server config机制来实现0RTT的快速建立连接，本质上是客户端缓存了一部分上次建连的密钥信息；<br>因此tls1.3虽然提高了性能，但是牺牲了一定时间(配置过期时间内)的前向安全性。</p>
 <h2 id="可能的优化"><a href="#可能的优化" class="headerlink" title="可能的优化"></a>可能的优化</h2><p>TLS1.2的4次握手可以优化成近似3次握手。<br>因此协商过程中唯一不会被中间人破译的是客户端第三次握手发送的随机数r3，只要确保这一性质即可。这个r3之所以不会被破译，是因为是用服务端公钥加密的，只有服务端私钥能解开。<br>因此如果客户端事先知道服务端的公钥，可以在第一次握手的时候，就发送由服务端公钥加密的r3。（对于以前曾经通信过的服务端，这一前提是可行的）</p>
 <p>因此整个流程就是：<br>1.客户端=&gt;服务端:<br>(1)r1; //防重放<br>(2)RSA(K1,r3+hash(r3)); //可以把自己支持的所有协议的随机数都算好，加密好。<br>(3)支持的协议、算法;<br>2.服务端=&gt;客户端:<br>(1)RSA(对r1的回应),顺便签名证明自己的身份,也消除了重放攻击;<br>(2)r2; 明文即可<br>(3)确定的协议、算法;<br>(4)AES(Key,finish信息+HMAC(finish信息)); // 客户端知道上述两个信息，就能算出对称加密的key了。</p>
 <p>3.客户端=&gt;服务端: AES(Key,finish信息+HMAC(finish信息))</p>
+<h2 id="TLS-1-3实际的优化"><a href="#TLS-1-3实际的优化" class="headerlink" title="TLS 1.3实际的优化"></a>TLS 1.3实际的优化</h2><p>回顾TLS1.2:<br>第1个RTT:协商用什么协议，client hello + server hello;<br>第2个RTT:协商对应协议下，用什么随机数，client key exchange + server key exchange;</p>
+<p>TLS1.3的选择:<br>牺牲兼容性，去掉第一次rtt的密钥协议协商，直接按自己选择的成熟安全的密钥套件生成对应参数，然后发送给服务端;<br>如果失败，再走HelloRetryRequest。<br>因此Tls1.3只需要1RTT就可以建连。（第二次建立是甚至0RTT，连协商过程都省了，直接告诉服务器用上次的密钥）</p>
 <p>参考链接:<br><a href="https://www.cnblogs.com/lovesong/p/5186200.html" target="_blank" rel="noopener">https://www.cnblogs.com/lovesong/p/5186200.html</a><br><a href="https://blog.soaer.com/1/3eac1f9d9045410fb249dbc81cff6b22.html" target="_blank" rel="noopener">https://blog.soaer.com/1/3eac1f9d9045410fb249dbc81cff6b22.html</a><br><a href="http://www.ruanyifeng.com/blog/2014/02/ssl_tls.html" target="_blank" rel="noopener">http://www.ruanyifeng.com/blog/2014/02/ssl_tls.html</a></p>
 
       
@@ -300,7 +328,7 @@ r3是关键的加密保护的随机数，r1,r2,r3一起生成key。<br>r1,r2的�
       
         <strong class="toc-title">文章目录</strong>
         <div class="toc-widget-list">
-              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#区别-历史"><span class="toc-number">1.</span> <span class="toc-text">区别(历史)</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#原理"><span class="toc-number">2.</span> <span class="toc-text">原理</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#要解决的问题"><span class="toc-number">2.1.</span> <span class="toc-text">要解决的问题</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#架构"><span class="toc-number">2.2.</span> <span class="toc-text">架构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#简化版加密通信"><span class="toc-number">2.3.</span> <span class="toc-text">简化版加密通信</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#方案1：AES-K-data"><span class="toc-number">2.3.1.</span> <span class="toc-text">方案1：AES(K,data)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#方案2：AES-K-data-SHA1-data"><span class="toc-number">2.3.2.</span> <span class="toc-text">方案2：AES(K,data+SHA1(data))</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#协商密钥"><span class="toc-number">2.3.3.</span> <span class="toc-text">协商密钥</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#相关原理"><span class="toc-number">2.3.3.1.</span> <span class="toc-text">相关原理:</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#总结"><span class="toc-number">2.3.3.2.</span> <span class="toc-text">总结:</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#TLS运行流程"><span class="toc-number">2.4.</span> <span class="toc-text">TLS运行流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#几个小细节"><span class="toc-number">2.4.1.</span> <span class="toc-text">几个小细节</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#可能的优化"><span class="toc-number">2.5.</span> <span class="toc-text">可能的优化</span></a></li></ol></li></ol>
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#区别-历史"><span class="toc-number">1.</span> <span class="toc-text">区别(历史)</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#原理"><span class="toc-number">2.</span> <span class="toc-text">原理</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#要解决的问题"><span class="toc-number">2.1.</span> <span class="toc-text">要解决的问题</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#架构"><span class="toc-number">2.2.</span> <span class="toc-text">架构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#简化版加密通信"><span class="toc-number">2.3.</span> <span class="toc-text">简化版加密通信</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#方案1：AES-K-data"><span class="toc-number">2.3.1.</span> <span class="toc-text">方案1：AES(K,data)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#方案2：AES-K-data-SHA1-data"><span class="toc-number">2.3.2.</span> <span class="toc-text">方案2：AES(K,data+SHA1(data))</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#协商密钥"><span class="toc-number">2.3.3.</span> <span class="toc-text">协商密钥</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#相关原理"><span class="toc-number">2.3.3.1.</span> <span class="toc-text">相关原理:</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#总结"><span class="toc-number">2.3.3.2.</span> <span class="toc-text">总结:</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#TLS组成部分"><span class="toc-number">2.4.</span> <span class="toc-text">TLS组成部分</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#TLS运行流程"><span class="toc-number">2.5.</span> <span class="toc-text">TLS运行流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#几个小细节"><span class="toc-number">2.5.1.</span> <span class="toc-text">几个小细节</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#DH密钥交换算法（怎么用3个随机数算出密钥）"><span class="toc-number">2.5.2.</span> <span class="toc-text">DH密钥交换算法（怎么用3个随机数算出密钥）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#tls1-2实际加密方式"><span class="toc-number">2.5.3.</span> <span class="toc-text">tls1.2实际加密方式</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#tls1-3的前向安全性"><span class="toc-number">2.5.4.</span> <span class="toc-text">tls1.3的前向安全性</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#可能的优化"><span class="toc-number">2.6.</span> <span class="toc-text">可能的优化</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#TLS-1-3实际的优化"><span class="toc-number">2.7.</span> <span class="toc-text">TLS 1.3实际的优化</span></a></li></ol></li></ol>
           </div>
       </div>
     </div>

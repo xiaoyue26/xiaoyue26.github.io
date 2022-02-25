@@ -72,6 +72,143 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-拷贝工厂" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2017/03/03/%E6%8B%B7%E8%B4%9D%E5%B7%A5%E5%8E%82/" class="article-date">
+  <time datetime="2017-03-03T11:51:39.000Z" itemprop="datePublished">2017-03-03</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/">设计模式</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2017/03/03/%E6%8B%B7%E8%B4%9D%E5%B7%A5%E5%8E%82/">拷贝工厂</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>尽量不使用继承，使用聚合。</p>
+<blockquote>
+<p>聚合:雁群与雁<br>组合:雁与翅膀</p>
+</blockquote>
+<p>除了builder模式，还有一个有用的技巧：<code>拷贝工厂</code>。</p>
+<p><code>cloneable</code>接口和<code>clone</code>方法依赖于整个对象继承树的健壮性，由于设计理念是链式调用父类的<code>clone</code>方法，维护难度过高，出错概率太大。</p>
+<p>可行的方案之一是使用拷贝构造函数。</p>
+<p>更推荐的方案是使用<code>拷贝工厂</code>，例如下文的:<br><code>public static ClassA newInstance(ClassA obj);</code></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> test1;</span><br><span class="line"><span class="keyword">import</span> <span class="keyword">static</span> java.lang.System.out;</span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">ClassA</span> </span>&#123;</span><br><span class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">		ClassA a1=<span class="keyword">new</span> ClassA(<span class="string">"a1"</span>,<span class="number">1</span>);</span><br><span class="line">		ClassA a2=ClassA.newInstance(a1);</span><br><span class="line">		a1.AInt=<span class="number">2</span>;</span><br><span class="line">		a1.AString=<span class="string">"changed"</span>;</span><br><span class="line">		a1.array[<span class="number">0</span>]=<span class="number">100</span>;</span><br><span class="line">		out.println(a1.AString);</span><br><span class="line">		out.println(a2.AString);</span><br><span class="line">		out.println(a1.AInt);</span><br><span class="line">		out.println(a2.AInt);</span><br><span class="line">		out.println(a1.array[<span class="number">0</span>]);</span><br><span class="line">		out.println(a2.array[<span class="number">0</span>]);</span><br><span class="line">	&#125;</span><br><span class="line">	String AString;</span><br><span class="line">	<span class="keyword">int</span> AInt;</span><br><span class="line">	<span class="keyword">int</span> array[];</span><br><span class="line">	<span class="function"><span class="keyword">public</span> <span class="title">ClassA</span><span class="params">(String aString,<span class="keyword">int</span> aInt)</span> </span>&#123;</span><br><span class="line">		<span class="keyword">this</span>.AString=aString;</span><br><span class="line">		<span class="keyword">this</span>.AInt=aInt;</span><br><span class="line">		array=<span class="keyword">new</span> <span class="keyword">int</span>[<span class="number">1</span>];</span><br><span class="line">		array[<span class="number">0</span>]=<span class="number">1</span>;</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="function"><span class="keyword">private</span> <span class="title">ClassA</span><span class="params">()</span> </span>&#123;&#125;</span><br><span class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">static</span> ClassA <span class="title">newInstance</span><span class="params">(ClassA obj)</span> </span>&#123;</span><br><span class="line">		ClassA classA = <span class="keyword">new</span> ClassA();</span><br><span class="line">		classA.AInt = obj.AInt;</span><br><span class="line">		classA.AString = obj.AString;<span class="comment">// 并没有任何问题 </span></span><br><span class="line">		classA.array = obj.array.clone();<span class="comment">// 基本对象</span></span><br><span class="line">		<span class="comment">//other deepcopy here</span></span><br><span class="line">		<span class="keyword">return</span> classA;</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2017/03/03/%E6%8B%B7%E8%B4%9D%E5%B7%A5%E5%8E%82/" data-id="ck96cxpmc006fmaamdp9c9ra8" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/" rel="tag">设计模式</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-log4j2配置学习笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2017/03/02/log4j2%E9%85%8D%E7%BD%AE%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2017-03-02T11:55:27.000Z" itemprop="datePublished">2017-03-02</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E9%85%8D%E7%BD%AE/">配置</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2017/03/02/log4j2%E9%85%8D%E7%BD%AE%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/">log4j2配置学习笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>根节点(1级): Configuraion</p>
+<h1 id="2级节点"><a href="#2级节点" class="headerlink" title="2级节点:"></a>2级节点:</h1><h1 id="Appenders"><a href="#Appenders" class="headerlink" title="Appenders"></a>Appenders</h1><p>常见三种: </p>
+<ul>
+<li>Console : 控制台</li>
+<li>File: 指定位置的文件. fileName可带路径.</li>
+<li>RoolingFile: 超过指定大小自动删除旧的创建新的Appender. <ul>
+<li>filePattern: 指定新建日志文件的名称格式.</li>
+<li>Policies: 可以以时间滚动\文件大小滚动\日志文件数量.</li>
+</ul>
+</li>
+</ul>
+<h1 id="Loggers"><a href="#Loggers" class="headerlink" title="Loggers"></a>Loggers</h1><p>常见两种:Root和Logger</p>
+<ul>
+<li>Root: 默认配置,Logger里没有的就会继承Root里的.<ul>
+<li>level: ALL&lt;Trace&lt;Debug&lt;Info&lt;Warn&lt;Error&lt;Fatal&lt;OFF</li>
+<li>AppenderRef: 具体输出到哪个Appender. </li>
+</ul>
+</li>
+<li>Logger: 比如为指定包下的class指定不同的日志级别.<ul>
+<li>name: 指定所适用的类或包的全路径.</li>
+</ul>
+</li>
+</ul>
+<h1 id="异步logger"><a href="#异步logger" class="headerlink" title="异步logger"></a>异步logger</h1><p>需要加入依赖:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">compile group: &#39;com.lmax&#39;, name: &#39;disruptor&#39;, version: &#39;3.3.7&#39;</span><br></pre></td></tr></table></figure>
+
+<p><code>log4j2.component.properties</code>文件:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">log4j2.AsyncQueueFullPolicy: Discard</span><br><span class="line">#AsyncLoggerConfig.RingBufferSize: 524288</span><br></pre></td></tr></table></figure>
+
+<p>异步配置:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br></pre></td><td class="code"><pre><span class="line">Configuration:</span><br><span class="line">  properties:</span><br><span class="line">    property:</span><br><span class="line">      - name: logPath</span><br><span class="line">        value: &#x2F;Users&#x2F;xiaoyue26&#x2F;learn&#x2F;logs&#x2F;</span><br><span class="line">      - name: filename</span><br><span class="line">        value: dev.log</span><br><span class="line">      - name: pattern</span><br><span class="line">        value: &quot;%d&#123;yyyy-MM-dd HH:mm:ss.SSS&#125; [%p] [%t] [%c] @@@traceId&#x3D;%X&#123;TRACE_ID&#125;@@@ %m%n&quot;</span><br><span class="line">      - name: httpRequestPattern</span><br><span class="line">        value: &quot;%-d&#123;yyyy-MM-dd HH:mm:ss.SSS&#125; @@@traceId&#x3D;%X&#123;TRACE_ID&#125;@@@ %m%n&quot;</span><br><span class="line"></span><br><span class="line">  status: &quot;info&quot;</span><br><span class="line">  Appenders:</span><br><span class="line">    RollingRandomAccessFile:</span><br><span class="line">      - name: &quot;FileAppender&quot;</span><br><span class="line">        fileName: &quot;$&#123;logPath&#125;$&#123;filename&#125;&quot;</span><br><span class="line">        filePattern: &quot;$&#123;logPath&#125;$&#123;filename&#125;.%d&#123;yyyy-MM-dd&#125;&quot;</span><br><span class="line">        PatternLayout:</span><br><span class="line">          pattern: &quot;$&#123;pattern&#125;&quot;</span><br><span class="line">        Policies:</span><br><span class="line">          TimeBasedTriggeringPolicy: &#123;&#125;</span><br><span class="line">        immediateFlush: false</span><br><span class="line">      - name: &quot;AnalysisFileAppender&quot;</span><br><span class="line">        fileName: &quot;$&#123;logPath&#125;analysis-$&#123;filename&#125;&quot;</span><br><span class="line">        filePattern: &quot;$&#123;logPath&#125;analysis-$&#123;filename&#125;.%d&#123;yyyy-MM-dd&#125;&quot;</span><br><span class="line">        PatternLayout:</span><br><span class="line">          pattern: &quot;$&#123;pattern&#125;&quot;</span><br><span class="line">        Policies:</span><br><span class="line">          TimeBasedTriggeringPolicy: &#123;&#125;</span><br><span class="line">        immediateFlush: false</span><br><span class="line">      - name: &quot;HTTPRequestFileAppender&quot;</span><br><span class="line">        fileName: &quot;$&#123;logPath&#125;http-request-$&#123;filename&#125;&quot;</span><br><span class="line">        filePattern: &quot;$&#123;logPath&#125;http-request-$&#123;filename&#125;.%d&#123;yyyy-MM-dd&#125;&quot;</span><br><span class="line">        PatternLayout:</span><br><span class="line">          pattern: &quot;$&#123;httpRequestPattern&#125;&quot;</span><br><span class="line">        Policies:</span><br><span class="line">          TimeBasedTriggeringPolicy: &#123;&#125;</span><br><span class="line">        immediateFlush: false</span><br><span class="line">      - name: &quot;RPCRequestFileAppender&quot;</span><br><span class="line">        fileName: &quot;$&#123;logPath&#125;rpc-request-$&#123;filename&#125;&quot;</span><br><span class="line">        filePattern: &quot;$&#123;logPath&#125;rpc-request-$&#123;filename&#125;.%d&#123;yyyy-MM-dd&#125;&quot;</span><br><span class="line">        PatternLayout:</span><br><span class="line">          pattern: &quot;$&#123;pattern&#125;&quot;</span><br><span class="line">        Policies:</span><br><span class="line">          TimeBasedTriggeringPolicy: &#123;&#125;</span><br><span class="line">        immediateFlush: false</span><br><span class="line">    Async:</span><br><span class="line">      - name: &quot;AsyncFileAppender&quot;</span><br><span class="line">        AppenderRef:</span><br><span class="line">          - ref: FileAppender</span><br><span class="line">        bufferSize: 10000</span><br><span class="line">      - name: &quot;AsyncAnalysisFileAppender&quot;</span><br><span class="line">        AppenderRef:</span><br><span class="line">          - ref: AnalysisFileAppender</span><br><span class="line">        bufferSize: 15000</span><br><span class="line">      - name: &quot;AsyncHTTPRequestFileAppender&quot;</span><br><span class="line">        AppenderRef:</span><br><span class="line">          - ref: HTTPRequestFileAppender</span><br><span class="line">        bufferSize: 10000</span><br><span class="line">      - name: &quot;AsyncRPCRequestFileAppender&quot;</span><br><span class="line">        AppenderRef:</span><br><span class="line">          - ref: RPCRequestFileAppender</span><br><span class="line">        bufferSize: 10000</span><br><span class="line"></span><br><span class="line">  Loggers:</span><br><span class="line">    AsyncLogger:</span><br><span class="line">      - name: &quot;RequestLogger&quot;</span><br><span class="line">        level: info</span><br><span class="line">        additivity: false</span><br><span class="line">        AppenderRef:</span><br><span class="line">          - ref: AsyncHTTPRequestFileAppender</span><br><span class="line">      - name: &quot;RpcRequestLogger&quot;</span><br><span class="line">        level: info</span><br><span class="line">        additivity: false</span><br><span class="line">        AppenderRef:</span><br><span class="line">          - ref: AsyncRPCRequestFileAppender</span><br><span class="line">      - name: &quot;AnalysisLogger&quot;</span><br><span class="line">        level: info</span><br><span class="line">        additivity: false</span><br><span class="line">        AppenderRef:</span><br><span class="line">          - ref: AsyncAnalysisFileAppender</span><br><span class="line">    AsyncRoot:</span><br><span class="line">      level: info</span><br><span class="line">      AppenderRef:</span><br><span class="line">        - ref: AsyncFileAppender</span><br></pre></td></tr></table></figure>
+
+
+<p>示例同步配置<code>yml</code>:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><span class="line">Configutation:</span><br><span class="line">  status: warn</span><br><span class="line"></span><br><span class="line">  Appenders:</span><br><span class="line">    Console: # 控制台的appender</span><br><span class="line">      name: CONSOLE</span><br><span class="line">      target: SYSTEM_OUT</span><br><span class="line">      PatternLayout:</span><br><span class="line">        Pattern: &quot;%d&#123;ISO8601&#125; %-5p [%c&#123;3&#125;] [%t] %m%n&quot;</span><br><span class="line">    RollingFile: # 输出到文件,超过的归档</span><br><span class="line">      - name: APPLICATION</span><br><span class="line">        fileName: &#x2F;Users&#x2F;xiaoyue26&#x2F;learn&#x2F;logs&#x2F;test.log</span><br><span class="line">        filePattern: &quot;&#x2F;Users&#x2F;xiaoyue26&#x2F;learn&#x2F;logs&#x2F;$$&#123;date:yyyy-MM&#125;&#x2F;test-%d&#123;yyyy-MM-dd&#125;-%i.log.gz&quot;</span><br><span class="line">        PatternLayout:</span><br><span class="line">          Pattern: &quot;%d&#123;ISO8601&#125; %-5p [%c&#123;3&#125;] [%t] %m%n&quot;</span><br><span class="line">        policies:</span><br><span class="line">          TimeBasedTriggeringPolicy:</span><br><span class="line">            interval: 1 # 1小时</span><br><span class="line">            modulate: true # 自动对齐时间间隙</span><br><span class="line"></span><br><span class="line">  Loggers:</span><br><span class="line">      Root:</span><br><span class="line">        level: info</span><br><span class="line">        AppenderRef:</span><br><span class="line">          - ref: CONSOLE</span><br><span class="line">          - ref: APPLICATION</span><br><span class="line">      Logger:</span><br><span class="line">        - name: com.myco.myapp.Foo</span><br><span class="line">          additivity: false</span><br><span class="line">          level: info</span><br><span class="line">          AppenderRef:</span><br><span class="line">            - ref: CONSOLE</span><br><span class="line">            - ref: APPLICATION</span><br><span class="line">        - name: com.myco.myapp.Bar</span><br><span class="line">          additivity: false # 不输出到Root的appenderRef里了</span><br><span class="line">          level: debug</span><br><span class="line">          AppenderRef:</span><br><span class="line">            - ref: CONSOLE</span><br><span class="line">            - ref: APPLICATION</span><br></pre></td></tr></table></figure>
+
+
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2017/03/02/log4j2%E9%85%8D%E7%BD%AE%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/" data-id="ck96cxpll003qmaamg6bp1j2n" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/log4j2/" rel="tag">log4j2</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E9%85%8D%E7%BD%AE/" rel="tag">配置</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-kafka学习笔记" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2017/03/01/kafka%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/" class="article-date">
@@ -1120,148 +1257,6 @@
 
 
   
-    <article id="post-hive-udf" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2017/01/15/hive-udf/" class="article-date">
-  <time datetime="2017-01-15T11:29:01.000Z" itemprop="datePublished">2017-01-15</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/hadoop/">hadoop</a>►<a class="article-category-link" href="/categories/hadoop/hive/">hive</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2017/01/15/hive-udf/">hive udf</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>中位数算法:<br><a href="https://segmentfault.com/a/1190000008322873" target="_blank" rel="noopener">https://segmentfault.com/a/1190000008322873</a><br><a href="http://www.voidcn.com/article/p-yzrnuwwi-bdv.html" target="_blank" rel="noopener">http://www.voidcn.com/article/p-yzrnuwwi-bdv.html</a></p>
-<h1 id="hive类型和java类型"><a href="#hive类型和java类型" class="headerlink" title="hive类型和java类型"></a>hive类型和java类型</h1><table>
-<tr><td>Hive column type</td>    <td>UDF types</td></tr>
-<tr><td>string    </td>    
-<td>java.lang.String, org.apache.hadoop.io.Text</td></tr>
-<tr><td>int    </td>    
-<td>int, java.lang.Integer, org.apache.hadoop.io.IntWritable</td></tr>
-<tr><td>boolean    </td>    
-<td>bool, java.lang.Boolean, org.apache.hadoop.io.BooleanWritable</td></tr>
-<tr><td>array<type>    </td>    <td>java.util.List<Java type></td></tr>
-<tr><td>map<ktype, vtype>    </td>    
-<td>java.util.Map<Java type for K, Java type for V></td></tr>
-<tr><td>struct    </td>    <td>Don't use Simple UDF, use GenericUDF</td></tr>
-</table>
-
-
-<h1 id="UDAF"><a href="#UDAF" class="headerlink" title="UDAF"></a>UDAF</h1><p><a href="http://www.cnblogs.com/ggjucheng/archive/2013/02/01/2888051.html" target="_blank" rel="noopener">http://www.cnblogs.com/ggjucheng/archive/2013/02/01/2888051.html</a><br><code>GenericUDAFEvaluator</code>的几种<code>MODE</code>定义如下:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">public static enum Mode &#123;</span><br><span class="line">    &#x2F;**</span><br><span class="line">     * PARTIAL1: 这个是mapreduce的map阶段:从原始数据到部分数据聚合</span><br><span class="line">     * 将会调用iterate()和terminatePartial()</span><br><span class="line">     *&#x2F;</span><br><span class="line">    PARTIAL1,</span><br><span class="line">        &#x2F;**</span><br><span class="line">     * PARTIAL2: 这个是mapreduce的map端的Combiner阶段，负责在map端合并map的数据::从部分数据聚合到部分数据聚合:</span><br><span class="line">     * 将会调用merge() 和 terminatePartial() </span><br><span class="line">     *&#x2F;</span><br><span class="line">    PARTIAL2,</span><br><span class="line">        &#x2F;**</span><br><span class="line">     * FINAL: mapreduce的reduce阶段:从部分数据的聚合到完全聚合 </span><br><span class="line">     * 将会调用merge()和terminate()</span><br><span class="line">     *&#x2F;</span><br><span class="line">    FINAL,</span><br><span class="line">        &#x2F;**</span><br><span class="line">     * COMPLETE: 如果出现了这个阶段，表示mapreduce只有map，没有reduce，所以map端就直接出结果了:从原始数据直接到完全聚合</span><br><span class="line">      * 将会调用 iterate()和terminate()</span><br><span class="line">     *&#x2F;</span><br><span class="line">    COMPLETE</span><br><span class="line">  &#125;;</span><br></pre></td></tr></table></figure>
-
-<p>特别提醒：<br>Merge函数的输入参数是(State other),因为other对象会被复用,因此other里的成员的使用不能是浅拷贝,(比如直接塞到当前state里),可以用深拷贝.(对于List,Map等容器)</p>
-<p>系统内置的UDAF函数可以从:<code>FunctionRegistry</code>类中查看.<br>流程控制更为精细的UDAF,AVG:<br><code>org.apache.hadoop.hive.ql.udf.generic.GenericUDAFAverage</code></p>
-<p>hive调用java方法:<br>select java_method(“java.lang.Math”,”max”,1,2);</p>
-<h1 id="UDF数据类型相关"><a href="#UDF数据类型相关" class="headerlink" title="UDF数据类型相关"></a>UDF数据类型相关</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">select array(1,2,3) -- &#x3D;&gt; [1,2,3]</span><br><span class="line">select array(1,&#39;2&#39;,3) -- &#x3D;&gt; [&#39;1&#39;,&#39;2&#39;,&#39;3&#39;] 只要有一个string,就全是string</span><br><span class="line">select array(1,NULL,3) -- &#x3D;&gt; [1,NULL,3] NULL则不影响类型转换.</span><br></pre></td></tr></table></figure>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2017/01/15/hive-udf/" data-id="ck96cxpl50023maamai3w6mig" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/hive/" rel="tag">hive</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-Hive-Serde" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2017/01/14/Hive-Serde/" class="article-date">
-  <time datetime="2017-01-14T11:26:56.000Z" itemprop="datePublished">2017-01-14</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/hadoop/">hadoop</a>►<a class="article-category-link" href="/categories/hadoop/hive/">hive</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2017/01/14/Hive-Serde/">Hive Serde</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="Serde相关"><a href="#Serde相关" class="headerlink" title="Serde相关"></a>Serde相关</h1><p><a href="https://www.coder4.com/archives/4031" target="_blank" rel="noopener">https://www.coder4.com/archives/4031</a><br>反序列化原理(<code>Deserialize</code>):</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">HDFS files –&gt; InputFileFormat –&gt; &lt;key, value&gt; –&gt; Deserializer –&gt; Row object</span><br></pre></td></tr></table></figure>
-<p>序列化原理(<code>Serialize</code>):</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Row object –&gt; Serializer –&gt; &lt;key, value&gt; –&gt; OutputFileFormat –&gt; HDFS files</span><br></pre></td></tr></table></figure>
-<blockquote>
-<p>hive的serde内置:<br>Avro<br>ORC<br>RegEx<br>Thrift<br>Parquet<br>CSV<br>JsonSerDe</p>
-</blockquote>
-<h3 id="自定义Serde"><a href="#自定义Serde" class="headerlink" title="自定义Serde:"></a>自定义Serde:</h3><blockquote>
-<p>需要extends AbstractSerDe, 实现6个方法:<br>initialize<br>,deserialize,getSerializedClass,serialize<br>,getSerDeStats,getObjectInspector<br>参见Hive1.2.1的openCSV实现,可以总结各个方法的作用.</p>
-</blockquote>
-<p>1.<code>initialize</code>方法:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">读取hadoop配置和表配置(建表语句中的),准备一些和元数据有关的数据.</span><br><span class="line">比如所有列的类型,输出列的size,分隔符等等.将这些信息存到对象里备用.</span><br></pre></td></tr></table></figure>
-
-<p>2.<code>serialize</code>方法:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">序列化. </span><br><span class="line">由原理可知,输入是一个Row对象,输出是一些Key,value对,以便被OutputFileFormat解析.</span><br><span class="line">由于OpenCSV使用的OutputFileFormat是</span><br><span class="line">org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat</span><br><span class="line">因此,这个方法的输出要与之吻合.</span><br><span class="line">    &#x2F;**</span><br><span class="line">     * 输入: 行对象 (行数据Obj,行类型ObjOI)</span><br><span class="line">     * 输出: Key,value.  要和hive默认的outputFileFormat吻合.</span><br><span class="line">     * 即要和 org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat</span><br><span class="line">     * 的输入相同. 而这个类是忽略Key的,因此这个方法的实际输出只有Value.</span><br><span class="line">     * *&#x2F;</span><br><span class="line">OpenCSV里的大致内容就是把行类型ObjOI转成StructOI,</span><br><span class="line">然后把每一列的类型取出来,再用类型把数据取出来,再把数据全转成String,</span><br><span class="line">传给CSVWriter,写到一个StringWriter里,然后转成一个Text返回.</span><br></pre></td></tr></table></figure>
-
-<p>3.<code>deserialize</code>方法:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">反序列化.</span><br><span class="line">由原理可知,输入是一个Key,Value,输出是一个行对象.</span><br><span class="line">其中Key,Value由InputFileFormat生成,对于OpenCSV来说就是默认的Hive设定:</span><br><span class="line">org.apache.hadoop.mapred.TextInputFormat</span><br><span class="line">输出实际上是一个List&lt;String&gt;. </span><br><span class="line"></span><br><span class="line">OpenCSV里的大致内容就是把输入转成Text再转成String然后用CSVReader读出来,</span><br><span class="line">写到一个String[]里,再存到一个List&lt;String&gt;里(补一些缺的,确保列数一样),然后返回.</span><br></pre></td></tr></table></figure>
-
-<p>4.<code>getObjectInspector</code>方法:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">返回整个表的结构类型OI.</span><br><span class="line">从内容上看返回了StructOI.(包括列名和列数,每一列的类型)</span><br><span class="line">对于OpenCSV来说每一列都是String.</span><br></pre></td></tr></table></figure>
-
-<p>5.<code>getSerializedClass</code>方法:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">获取写的时候返回的类.</span><br><span class="line">对于OpenCSV来说,返回Text.class.</span><br><span class="line">因为它的Serialize方法的下游是hive的</span><br><span class="line">org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat</span><br><span class="line">而且Serialize的实现实际上也返回了一个Text.(声明的只是Writable)</span><br></pre></td></tr></table></figure>
-
-<p>6.<code>getSerDeStats</code>方法:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">返回序列化类的写入状态信息,具体包括RawDataSize和RowCount. 也就是原始数据大小和行数.</span><br><span class="line">Hive1.2.1实现的不是很健全.自己用得也很少.</span><br><span class="line">只在两处提取了这个信息:</span><br><span class="line">1. FileSinkOperator. 写入数据的时候获取了一下RawDataSize.</span><br><span class="line">2. MapOperator. 读取数据的时候获取了一下RawDataSize.</span><br><span class="line"></span><br><span class="line">甚至对于openCSV,它直接返回了一个null.</span><br><span class="line">对于Hive1.2.1,我们自定义实现Serde的时候,也可以返回null,因为Hive1.2.1的源码中对于这个返回值都是有null判定的. 但如果要对性能做进一步研究,要记录这两个数据,可以参考</span><br><span class="line">LazySimpleSerDe中的实现.</span><br></pre></td></tr></table></figure>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2017/01/14/Hive-Serde/" data-id="ck96cxpkj000dmaam13eoalec" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/hive/" rel="tag">hive</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1288,6 +1283,14 @@
       <ul>
         
           <li>
+            <a href="/2022/02/24/2022-02/%E4%B8%BA%E4%BB%80%E4%B9%88%E5%85%88hash%E5%90%8E%E5%8A%A0%E5%AF%86%E7%9A%84%E6%96%B9%E6%B3%95%E5%AE%B9%E6%98%93%E9%81%AD%E9%81%87padding%E6%94%BB%E5%87%BB/">为什么先hash后加密的方法容易遭遇padding攻击</a>
+          </li>
+        
+          <li>
+            <a href="/2022/02/24/2022-02/keepalive/">http和tcp层面的keepAlive机制</a>
+          </li>
+        
+          <li>
             <a href="/2022/02/18/2022-02/%E6%8B%A5%E5%A1%9E%E7%AE%97%E6%B3%95bbr/">quic中的拥塞算法bbr</a>
           </li>
         
@@ -1297,14 +1300,6 @@
         
           <li>
             <a href="/2022/02/16/2022-02/http-range/">http_range</a>
-          </li>
-        
-          <li>
-            <a href="/2022/01/21/2022-01/voip-rtc/">VoIP和RTC</a>
-          </li>
-        
-          <li>
-            <a href="/2021/07/26/2021-07/metaspace%E7%AC%94%E8%AE%B0/">metaspace笔记</a>
           </li>
         
       </ul>
