@@ -72,6 +72,135 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-java里的一些技巧" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2015/10/30/java%E9%87%8C%E7%9A%84%E4%B8%80%E4%BA%9B%E6%8A%80%E5%B7%A7/" class="article-date">
+  <time datetime="2015-10-30T02:17:55.000Z" itemprop="datePublished">2015-10-30</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2015/10/30/java%E9%87%8C%E7%9A%84%E4%B8%80%E4%BA%9B%E6%8A%80%E5%B7%A7/">java里的一些技巧</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>一开始在<code>quora</code>上看到<code>tricks</code>:<br><a href="https://www.quora.com/What-are-some-cool-Java-tricks" target="_blank" rel="noopener">https://www.quora.com/What-are-some-cool-Java-tricks</a><br>我是拒绝的，然而定语是<code>cool</code>，所以我就很<code>cool</code>地点进去了。</p>
+<ul>
+<li>注解:<br><code>java6+</code>以来，注解处理器一直是一个未被充分利用的<code>trick</code>，它能在编译期就找出错误，而不是等到运行时(这样会增大找出错误的难度)。<br>然后答主<code>Chris Hansen</code>还推荐使用<a href="http://square.github.io/dagger/" target="_blank" rel="noopener">Dragger</a>框架进行依赖注入。</li>
+</ul>
+<ul>
+<li>注释中运行代码:<br>后续的答案除了使用JMX检测死锁的线程、如何序列化一个枚举类等，还有一个是讲如何在注释中插入能运行的部分的：<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String... args)</span> </span>&#123;   </span><br><span class="line">    <span class="comment">// The comment below is no typo.    </span></span><br><span class="line">    <span class="comment">// \u000d System.out.println("This Comment Executed!"); </span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+</li>
+</ul>
+<p>比如这里注释中的<code>System.out.println</code>输出语句就是可以运行的。XD简直是无比邪恶的技巧。其他比较好懂的:</p>
+<ul>
+<li>类型推断：<br>还有一个<code>tricks</code>就是类型推断，例如：<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> &lt;T&gt; <span class="function">Set&lt;T&gt; <span class="title">hashSet</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> (Set&lt;T&gt;)(<span class="keyword">new</span> HashSet&lt;T&gt;());</span><br><span class="line">&#125;</span><br><span class="line">&#123;</span><br><span class="line">Set&lt;String&gt; set1 = hashSet();</span><br><span class="line">Set&lt;Long&gt; set2 = hashSet();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+这对于数据类型参数化是很有用的。</li>
+</ul>
+<ul>
+<li><p>变长参数列表：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">example</span><span class="params">(String...strings)</span> </span>&#123;&#125;;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>在泛型参数上使用联合：其中<code>Bar</code>为接口，<code>Foo</code>可为类或接口。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">Baz</span>&lt;<span class="title">T</span> <span class="keyword">extends</span> <span class="title">Foo</span> &amp; <span class="title">Bar</span>&gt; </span>&#123;&#125;</span><br></pre></td></tr></table></figure></li>
+<li><p>使用标号进行流程控制:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">outer: </span><br><span class="line">    <span class="keyword">for</span> (i = <span class="number">0</span>; i &lt; arr.length; i++) &#123;</span><br><span class="line">        <span class="keyword">for</span> (j = <span class="number">0</span>; j &lt; arr[i].length;  j++) &#123; </span><br><span class="line">            <span class="keyword">if</span> (someCondition(i, j)) &#123; </span><br><span class="line">                <span class="keyword">break</span> outer; </span><br><span class="line">             &#125; </span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>google java编程风格指南:<br><a href="http://www.topthink.com/topic/12834.html" target="_blank" rel="noopener">http://www.topthink.com/topic/12834.html</a></p>
+</li>
+</ul>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2015/10/30/java%E9%87%8C%E7%9A%84%E4%B8%80%E4%BA%9B%E6%8A%80%E5%B7%A7/" data-id="ck96cxplf0036maamhx3d2lvm" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-使用JMX轮询发现死锁" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2015/10/30/%E4%BD%BF%E7%94%A8JMX%E8%BD%AE%E8%AF%A2%E5%8F%91%E7%8E%B0%E6%AD%BB%E9%94%81/" class="article-date">
+  <time datetime="2015-10-30T02:15:48.000Z" itemprop="datePublished">2015-10-30</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2015/10/30/%E4%BD%BF%E7%94%A8JMX%E8%BD%AE%E8%AF%A2%E5%8F%91%E7%8E%B0%E6%AD%BB%E9%94%81/">使用JMX轮询发现死锁</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p><a href="http://download.oracle.com/technetwork/java/javase/6/docs/zh/api/java/lang/management/ThreadMXBean.html" target="_blank" rel="noopener">ThreadMXBean</a>是Java虚拟机线程系统的管理接口，可以使用其中的<code>findDeadlockedThreads</code>方法自动发现死锁的线程，jdk1.6下包括:</p>
+<blockquote>
+<ol>
+<li><code>owner locks(java.util.concurrent)</code>引起的死锁；</li>
+<li><code>monitor locks</code>（例如，同步块）引起的死锁。</li>
+</ol>
+</blockquote>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">DeadLockDetector</span> <span class="keyword">extends</span> <span class="title">Thread</span> </span>&#123;</span><br><span class="line">  <span class="meta">@Override</span></span><br><span class="line">  <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">while</span>(<span class="keyword">true</span>) &#123;</span><br><span class="line">        ThreadMXBean threadMXBean = ManagementFactory.getThreadMXBean();</span><br><span class="line">        <span class="keyword">long</span>[] ids = threadMXBean.findDeadlockedThreads();</span><br><span class="line">        <span class="keyword">if</span> (ids != <span class="keyword">null</span>) &#123;</span><br><span class="line">          System.exit(<span class="number">127</span>);</span><br><span class="line">      &#125;</span><br><span class="line">      <span class="keyword">try</span> &#123;</span><br><span class="line">        Thread.sleep(<span class="number">1000</span>);<span class="comment">//定期轮询</span></span><br><span class="line">      &#125; <span class="keyword">catch</span> (InterruptedException e) &#123; &#125;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">  Process process = <span class="keyword">null</span>;</span><br><span class="line">  <span class="keyword">int</span> exitcode = <span class="number">0</span>;</span><br><span class="line">  <span class="keyword">try</span> &#123;</span><br><span class="line">    <span class="keyword">while</span> (<span class="keyword">true</span>) &#123;</span><br><span class="line">        process = Runtime.getRuntime().exec(<span class="string">"java -cp . DeadlockedApp"</span>);</span><br><span class="line">        exitcode = process.waitFor();</span><br><span class="line">        System.out.println(<span class="string">"exit code: "</span> + exitcode);</span><br><span class="line">        <span class="keyword">if</span> (exitcode == <span class="number">0</span>)</span><br><span class="line">          <span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">    <span class="keyword">if</span> (process != <span class="keyword">null</span>) &#123;</span><br><span class="line">       process.destroy();</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>然而轮询和检测死锁显然都是相当耗费资源的操作，尽量还是自己做好线程的管理。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2015/10/30/%E4%BD%BF%E7%94%A8JMX%E8%BD%AE%E8%AF%A2%E5%8F%91%E7%8E%B0%E6%AD%BB%E9%94%81/" data-id="ck96cxpm90067maam83kmf1uj" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/JMX/" rel="tag">JMX</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E7%BA%BF%E7%A8%8B/" rel="tag">线程</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-mybatis批量插入和更新" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2015/10/19/mybatis%E6%89%B9%E9%87%8F%E6%8F%92%E5%85%A5%E5%92%8C%E6%9B%B4%E6%96%B0/" class="article-date">
@@ -625,127 +754,6 @@
 
 
   
-    <article id="post-springmvc笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2015/10/02/springmvc%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2015-10-02T09:49:41.000Z" itemprop="datePublished">2015-10-02</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/spring/">spring</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2015/10/02/springmvc%E7%AC%94%E8%AE%B0/">springmvc笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <ol>
-<li>调用顺序：<br>(1)以<code>web.xml</code>为入口，(<code>context-param</code>里各种环境的配置)编码由<code>filter-mapping</code>拦截，<code>servlet-mappin</code>g匹配<code>servlet</code>所服务的url模式,例如当此<code>servlet</code>加载配置<code>classpath:spring-mvc.xml</code>之后：<br>(2)扫描<code>base-package</code>下的<code>controller</code>，<code>controller</code>中<code>@RequestMapping</code>匹配url模式，调用<code>service</code>，调用<code>service.impl</code>，调用<code>Mapper(DAO)</code>，调用<code>mapping</code>包中<code>mapper.xml</code>中的<code>sql</code>语句。<br>所以编写顺序：<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">mapper.xml</span><br><span class="line">Mapper(DAO)</span><br><span class="line">service</span><br><span class="line">service.impl</span><br><span class="line">controller</span><br></pre></td></tr></table></figure>
-调用顺序：<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">controller</span><br><span class="line">service.impl</span><br><span class="line">Mapper(DAO)</span><br><span class="line">mapper.xml</span><br></pre></td></tr></table></figure></li>
-<li>需要检查注解的地方：<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">Controller：</span><br><span class="line">@Controller  </span><br><span class="line"></span><br><span class="line">@RequestMapping(&quot;&#x2F;user&quot;)  类</span><br><span class="line"></span><br><span class="line">@Autowired (service)</span><br><span class="line"></span><br><span class="line">@RequestMapping(&quot;&#x2F;showInfo&#x2F;&#123;userId&#125;&quot;)  方法</span><br><span class="line">#两层递进的request mapping，url可以不止两层，因为方法前的url可以很多斜杠，类前的不知道。</span><br><span class="line"></span><br><span class="line">service.impl:</span><br><span class="line"></span><br><span class="line">@Service(&quot;userService&quot;)</span><br><span class="line"></span><br><span class="line">@Autowired mapper</span><br></pre></td></tr></table></figure>
-方法前注解记录：<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">@ResponseBody</span><br><span class="line">标注后，返回String对象的结果为response内容体，不标注的话，作为dispatcher url使用。</span><br><span class="line">@PathVariable </span><br><span class="line">允许将请求路径的一部分当做方法的传入形参使用</span><br></pre></td></tr></table></figure>
-方法的返回值：<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">void: </span><br><span class="line">	此时逻辑视图名由请求处理方法对应的URL确定，如请求welcome,则返回welcome.jsp</span><br><span class="line">String:</span><br><span class="line">	此时逻辑视图名为返回的字符，如return &quot;&#x2F;user&#x2F;showInfo&quot;;则返回&#x2F;user&#x2F;showInfo.jsp。  </span><br><span class="line">ModelMap：</span><br><span class="line">	跟void一样。</span><br></pre></td></tr></table></figure>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">spring-context:</span><br><span class="line">1.将Cinema.java的头部标注为@Component说明该类交由Spring托管</span><br><span class="line">2.Cinema.java中的属性MoviceService标注为@Autowired，则Spring在初始化Cinema类时会从Application Context中找到类型为MovieService的Bean，并赋值给Cinema</span><br><span class="line">3.在Application.java中我们声明了一个类型为MovieService的Bean。并且标注Application.java为@Configuration,这是告诉Spring在Application.java中定义了一个或多个@Bean方法，让Spring容器可以在运行时生成这些Bean。</span><br><span class="line">4.@ComponentScan则会让Spring容器自动扫描当前package下的标有@Component的class，这些class都将由Spring托管。</span><br></pre></td></tr></table></figure>
-此外还有未开启的注解，测试项目中未能涉及。<br>运行步骤：<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">1. maven build, goal: clean compile package</span><br><span class="line">2. run on server</span><br><span class="line">3. http:&#x2F;&#x2F;localhost:8080&#x2F;sunday&#x2F;user&#x2F;showInfos.htmls</span><br><span class="line">4. http:&#x2F;&#x2F;localhost:8080&#x2F;sunday&#x2F;user&#x2F;showInfo&#x2F;1.htmls 显示id为1的数据</span><br><span class="line">   http:&#x2F;&#x2F;localhost:8080&#x2F;sunday&#x2F;user&#x2F;showInfo&#x2F;4.htmls 显示id为4的数据</span><br></pre></td></tr></table></figure></li>
-<li>Sql_map中带有的两个函数是：<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">updateByPrimaryKeySelective</span><br><span class="line">updateByPrimaryKey</span><br></pre></td></tr></table></figure>
-前者只是更新新的model中不为空的字段。<br>后者则会将为空的字段在数据库中置为NULL。</li>
-</ol>
-<p><a href="http://blog.csdn.net/hao947_hao947/article/details/34594695?utm_source=tuicool" target="_blank" rel="noopener">http://blog.csdn.net/hao947_hao947/article/details/34594695?utm_source=tuicool</a></p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line">resultMap ：  </span><br><span class="line">id：resultMap的唯一标识</span><br><span class="line">type：映射实体类的数据类型</span><br><span class="line">property：实体类里的属性名</span><br><span class="line">column:库表的字段名</span><br><span class="line">&lt;!--id:当前sql的唯一标识  </span><br><span class="line">         parameterType：输入参数的数据类型   </span><br><span class="line">         resultType：返回值的数据类型   </span><br><span class="line">         #&#123;&#125;:用来接受参数的，如果是传递一个参数#&#123;id&#125;内容任意，如果是多个参数就有一定的规则,采用的是预编译的形式</span><br><span class="line">select * from person p where p.id &#x3D; ? ，安全性很高 --&gt;</span><br><span class="line"></span><br><span class="line">&lt;!-- sql语句返回值类型使用resultMap --&gt;  </span><br><span class="line">&lt;select id&#x3D;&quot;selectPersonById&quot; parameterType&#x3D;&quot;java.lang.Integer&quot;  </span><br><span class="line">        resultMap&#x3D;&quot;BaseResultMap&quot;&gt;  </span><br><span class="line">        select * from person p where p.person_id &#x3D; #&#123;id&#125;  </span><br><span class="line">&lt;&#x2F;select&gt;  </span><br><span class="line">&lt;!-- resultMap:适合使用返回值是自定义实体类的情况   </span><br><span class="line">    resultType：适合使用返回值的数据类型是非自定义的，即jdk的提供的类型 --&gt;  </span><br><span class="line">&lt;select id&#x3D;&quot;selectPersonCount&quot; resultType&#x3D;&quot;java.lang.Integer&quot;&gt;  </span><br><span class="line">        select count(*) from  </span><br><span class="line">        person  </span><br><span class="line">&lt;&#x2F;select&gt;  </span><br><span class="line"></span><br><span class="line">&lt;select id&#x3D;&quot;selectPersonByIdWithMap&quot; parameterType&#x3D;&quot;java.lang.Integer&quot;  </span><br><span class="line">        resultType&#x3D;&quot;java.util.Map&quot;&gt;  </span><br><span class="line">        select * from person p where p.person_id&#x3D; #&#123;id&#125;  </span><br><span class="line">&lt;&#x2F;select&gt;</span><br></pre></td></tr></table></figure>
-<p><a href="http://www.open-open.com/lib/view/open1325862592062.html" target="_blank" rel="noopener">http://www.open-open.com/lib/view/open1325862592062.html</a><br><code>ofType</code>也是表示返回类型，这里的返回类型是集合内部的类型，之所以用ofType而不是用type是MyBatis内部为了和关联association进行区别。</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">&lt;resultMap type&#x3D;&quot;Blog&quot; id&#x3D;&quot;BlogResult&quot;&gt;</span><br><span class="line"></span><br><span class="line">	&lt;id column&#x3D;&quot;id&quot; property&#x3D;&quot;id&quot;&#x2F;&gt;</span><br><span class="line">	&lt;collection property&#x3D;&quot;comments&quot; select&#x3D;&quot;selectCommentsByBlog&quot; column&#x3D;&quot;id&quot; ofType&#x3D;&quot;Comment&quot;&#x2F;&gt;</span><br><span class="line">&lt;&#x2F;resultMap&gt;</span><br><span class="line"></span><br><span class="line">&lt;resultMap type&#x3D;&quot;Comment&quot; id&#x3D;&quot;CommentResult&quot;&gt;</span><br><span class="line">	&lt;association property&#x3D;&quot;blog&quot; javaType&#x3D;&quot;Blog&quot; column&#x3D;&quot;blog&quot; select&#x3D;&quot;selectBlog&quot;&#x2F;&gt;</span><br><span class="line"></span><br><span class="line">&lt;&#x2F;resultMap&gt;</span><br></pre></td></tr></table></figure>
-<pre><code>注意collection和association，ofType和javaType的不同。此处column=&quot;blog&quot;中的blog为外键名。
-
-第一次猜测#{title}中引用的应该是传入参数对象的实体类中的属性名。(应该不是数据库中的列名。)
-比如传入参数类型是Blog,#{blogid}就应该是Blog类的blogid属性。 
-
-在看http://zhuyuehua.iteye.com/blog/1721715之后：</code></pre><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">&lt;select id&#x3D;&quot;selectRole&quot; parameterType&#x3D;&quot;java.lang.Long&quot; resultType&#x3D;&quot;Role&quot; &gt;     </span><br><span class="line">    select * from Role where id &#x3D;#&#123;id&#125;     </span><br><span class="line">&lt;&#x2F;select&gt;   </span><br><span class="line">	selectRole的SQL输入参数可以随便给名称，只要是输入参数与压入进去的值类型相同就行了，可以写成：</span><br><span class="line">	select * from Role where id &#x3D; #&#123;sfffs&#125;   </span><br><span class="line">	mybatis最终会执行：select * from role where id &#x3D;resultSet.getLong(&quot;role_id&quot;);  </span><br><span class="line">	其中传入参数的语句可能是：</span><br><span class="line">&lt;association property&#x3D;&quot;role&quot; column&#x3D;&quot;role_id&quot; javaType&#x3D;&quot;Role&quot; select&#x3D;&quot;selectRole&quot;&#x2F;&gt;</span><br></pre></td></tr></table></figure>
-<p>存疑。<br>    继续看<a href="http://zhuyuehua.iteye.com/blog/1721715。" target="_blank" rel="noopener">http://zhuyuehua.iteye.com/blog/1721715。</a></p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2015/10/02/springmvc%E7%AC%94%E8%AE%B0/" data-id="ck96cxplz0058maamdfribue5" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/springmvc/" rel="tag">springmvc</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-maven3笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2015/10/02/maven3%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2015-10-02T09:44:48.000Z" itemprop="datePublished">2015-10-02</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/%E9%85%8D%E7%BD%AE/">配置</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2015/10/02/maven3%E7%AC%94%E8%AE%B0/">maven3笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <ol>
-<li>从maven官网下载maven压缩包，解压缩，配置<code>MAVEN_HOME</code>；</li>
-<li>最新版的eclipse(mars) j2ee版本直接集成了maven插件m2e；</li>
-<li><code>[ERROR] No plugin found for prefix &#39;archetype&#39; in the current project and ..</code><br>在<code>conf/setting</code>中加入镜像地址：<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">&lt;mirror&gt; </span><br><span class="line">       &lt;id&gt;ibiblio.org&lt;&#x2F;id&gt; </span><br><span class="line">       &lt;name&gt;ibiblio Mirror of http:&#x2F;&#x2F;repo1.maven.org&#x2F;maven2&#x2F;&lt;&#x2F;name&gt; </span><br><span class="line">       &lt;url&gt;http:&#x2F;&#x2F;mirrors.ibiblio.org&#x2F;pub&#x2F;mirrors&#x2F;maven2&lt;&#x2F;url&gt; </span><br><span class="line">       &lt;mirrorOf&gt;central&lt;&#x2F;mirrorOf&gt; </span><br><span class="line">       &lt;!-- United States, North Carolina --&gt; </span><br><span class="line">&lt;&#x2F;mirror&gt;</span><br><span class="line">&lt;mirror&gt;  </span><br><span class="line">     &lt;id&gt;jboss-public-repository-group&lt;&#x2F;id&gt;  </span><br><span class="line">     &lt;mirrorOf&gt;central&lt;&#x2F;mirrorOf&gt;  </span><br><span class="line">     &lt;name&gt;JBoss Public Repository Group&lt;&#x2F;name&gt;  </span><br><span class="line">     &lt;url&gt;http:&#x2F;&#x2F;repository.jboss.org&#x2F;nexus&#x2F;content&#x2F;groups&#x2F;public&lt;&#x2F;url&gt;  </span><br><span class="line">&lt;&#x2F;mirror&gt;</span><br></pre></td></tr></table></figure></li>
-<li>若maven的conf下<code>setting.xml</code>文件中修改了本地仓库reposity的路径，则在eclipse中也要在<code>windows-&gt;prefrence-&gt;maven-&gt;user settings</code>中相应修改路径。</li>
-</ol>
-<p>参考链接:<br><a href="http://www.cnblogs.com/leiOOlei/p/3376155.html" target="_blank" rel="noopener">http://www.cnblogs.com/leiOOlei/p/3376155.html</a><br><a href="http://blog.csdn.net/hay24/article/details/8246203" target="_blank" rel="noopener">http://blog.csdn.net/hay24/article/details/8246203</a><br><a href="http://mvnrepository.com/artifact/org.springframework/spring-context" target="_blank" rel="noopener">http://mvnrepository.com/artifact/org.springframework/spring-context</a></p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2015/10/02/maven3%E7%AC%94%E8%AE%B0/" data-id="ck96cxplm003tmaam32wgc20z" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E9%85%8D%E7%BD%AE/" rel="tag">配置</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -772,6 +780,14 @@
       <ul>
         
           <li>
+            <a href="/2022/03/13/2022-03/ss%E5%91%BD%E4%BB%A4/">ss命令</a>
+          </li>
+        
+          <li>
+            <a href="/2022/03/13/2022-03/UDP%E6%89%B9%E5%A4%84%E7%90%86%E4%BC%98%E5%8C%96-GSO-GRO/">UDP批处理优化-GSO/GRO</a>
+          </li>
+        
+          <li>
             <a href="/2022/02/24/2022-02/%E4%B8%BA%E4%BB%80%E4%B9%88%E5%85%88hash%E5%90%8E%E5%8A%A0%E5%AF%86%E7%9A%84%E6%96%B9%E6%B3%95%E5%AE%B9%E6%98%93%E9%81%AD%E9%81%87padding%E6%94%BB%E5%87%BB/">为什么先hash后加密的方法容易遭遇padding攻击</a>
           </li>
         
@@ -781,14 +797,6 @@
         
           <li>
             <a href="/2022/02/18/2022-02/%E6%8B%A5%E5%A1%9E%E7%AE%97%E6%B3%95bbr/">quic中的拥塞算法bbr</a>
-          </li>
-        
-          <li>
-            <a href="/2022/02/17/2022-02/http3-quic%E4%BC%98%E7%BC%BA%E7%82%B9%E5%8F%8A%E5%8E%9F%E5%9B%A0/">http3_quic优缺点及原因</a>
-          </li>
-        
-          <li>
-            <a href="/2022/02/16/2022-02/http-range/">http_range</a>
           </li>
         
       </ul>

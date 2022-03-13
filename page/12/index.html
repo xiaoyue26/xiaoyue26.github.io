@@ -72,6 +72,187 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-07/sparkstreaming调优小结" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/07/22/2018-07/sparkstreaming%E8%B0%83%E4%BC%98%E5%B0%8F%E7%BB%93/" class="article-date">
+  <time datetime="2018-07-22T13:10:41.000Z" itemprop="datePublished">2018-07-22</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/spark/">spark</a>►<a class="article-category-link" href="/categories/spark/streaming/">streaming</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/07/22/2018-07/sparkstreaming%E8%B0%83%E4%BC%98%E5%B0%8F%E7%BB%93/">sparkstreaming调优小结</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>需求：</p>
+<blockquote>
+<ol>
+<li>消费速度必须高于生产速度;(天哪)</li>
+<li>即使有峰值也不能挂;</li>
+<li>资源占用尽量少，其中cores比内存稀缺;</li>
+<li>必须使用receiver模式，不提供direct接口。(天哪)</li>
+</ol>
+</blockquote>
+<p>措施:</p>
+<blockquote>
+<ol>
+<li>receiver数量与分区数一致，与executor数一致； </li>
+<li>duartion调优；</li>
+<li>persist选memory_and_disk；</li>
+<li>每个executor分3个core、6g内存;</li>
+<li>代码对于每个partition保存一次数据;</li>
+<li>关闭backpressure.enabled;</li>
+<li>receiver.maxRate设得超大。</li>
+</ol>
+</blockquote>
+<p>可能挂的场景：</p>
+<blockquote>
+<ol>
+<li>处理速度跟不上，缓存的数据失效了，rdd失联退出；</li>
+<li>delay越积越多，OOM。</li>
+</ol>
+</blockquote>
+<ol>
+<li><code>maxRate</code>与<code>backpressure.enabled false</code><br>由于底层架构不可控，api被别的部门重新封装，只开放了receiver模式，而且也不给zk连，因此只能使用receiver模式。</li>
+</ol>
+<p>这个模式的特点就是会先保存一份数据到wal，相当于所有数据会有两份。<br>当然也有优点就是编程简单，不用自己维护offset了。</p>
+<p>为了保证消费速度高于生产速度，设置了与分区数一致的receiver数量，并且：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">backpressure.enabled false</span><br><span class="line">receiver.maxRate	149600</span><br></pre></td></tr></table></figure>
+<p>前者true的话，意思是发现处理不过来的时候，会帮忙降低消费的速度；<br>后者就是设置最大消费速度。</p>
+<ol start="2">
+<li><p>为了使处理速度够快，设置了3个核，6g内存，相当于每个核2g内存。<br>由于receiver占用一个核，相当于每个executor上能有两个核同时处理task。</p>
+</li>
+<li><p>由于receiver模式接受到数据会首先缓存一份rdd。<br>默认所有rdd会继承dstream的缓存级别，而dstream的缓存级别默认是<code>MEMORY_ONLY_SER</code>。（题外话，spark任务的rdd默认缓存级别是<code>memory_only</code>）<br><code>MEMORY_ONLY_SER</code>级别的特点是占用内存少，而牺牲一点计算时间。<br>由于我们比较不缺内存，因此将存储级别改成<code>memory_and_disk</code>。<br>两个改变：<br>（1） 取消了反序列化的时间；<br>（2） 存不下的放disk，应对峰值可能出现的极端情况。</p>
+</li>
+<li><p>duration调优。<br>duration设置得小的话，内存占用小（缓存rdd），但是提交任务频繁，默认的启动计算开销占比大。<br>duration设置得大的话，内存占用大（缓存rdd），启动计算开销占比小。</p>
+</li>
+</ol>
+<p>最小资源占比：处理时间正好稍小于duration。<br>我的设置： 平时处理时间是duartion的1/3，以应对峰值。</p>
+<ol start="5">
+<li><p>保存数据时候的代码优化。<br>（1）每个partition保存一次；<br>（2）在executor上保存：<br>试了一下collect到driver上保存，发现慢了很多，出现了单点瓶颈。于是还是改到在每个executor上保存，每个executor上的线程访问自己的<code>threadlocal</code>对象，减少竞态条件。</p>
+</li>
+<li><p>gc时间：<br>使用CMS收集器，查看exector的gc日志，2小时内没有full gc,3秒一次gc。<br>gc总时间占task时间的4%：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">XX:MaxPermSize&#x3D;256m -XX:SurvivorRatio&#x3D;4 -XX:+UseMembar -XX:+UseConcMarkSweepGC -XX:+CMSParallelRemarkEnabled -XX:+CMSScavengeBeforeRemark -XX:ParallelCMSThreads&#x3D;4 -XX:+UseCMSCompactAtFullCollection -XX:+CMSClassUnloadingEnabled -XX:CMSInitiatingOccupancyFraction&#x3D;50 -XX:+UseCompressedOops</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>序列化类<br><code>spark.serializer</code>已经是<code>kyro</code>了。</p>
+</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/07/22/2018-07/sparkstreaming%E8%B0%83%E4%BC%98%E5%B0%8F%E7%BB%93/" data-id="ck96cxpo900cemaam29togwze" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spark/" rel="tag">spark</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/streaming/" rel="tag">streaming</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2018-07/LinkedTransferQueue笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/07/14/2018-07/LinkedTransferQueue%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2018-07-14T12:48:42.000Z" itemprop="datePublished">2018-07-14</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/07/14/2018-07/LinkedTransferQueue%E7%AC%94%E8%AE%B0/">LinkedTransferQueue笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>本文主要讨论两个容器: <code>SynchronousQueue</code>和<code>LinkedTransferQueue</code>。重点是<code>LinkedTransferQueue</code>.<br>背景:</p>
+<blockquote>
+<p><a href="https://stackoverflow.com/questions/5102570/implementation-of-blockingqueue-what-are-the-differences-between-synchronousque" target="_blank" rel="noopener">https://stackoverflow.com/questions/5102570/implementation-of-blockingqueue-what-are-the-differences-between-synchronousque</a><br>有了LinkedBlockingQueue,为啥还要使用SynchronousQueue呢?<br>队列元素较少情况下: SynchronousQueue优于LinkedBlockingQueue<br>队列元素较多情况下: LinkedBlockingQueue优于SynchronousQueue。</p>
+</blockquote>
+<p><code>LinkedTransferQueue</code>的意义在于兼顾了可读性,易用性和高性能。</p>
+<blockquote>
+<p>高性能,无锁: <code>SynchronousQueue</code>,<code>ConcurrentLinkedQueue</code><br>可读性,易用性,有锁: <code>LinkedBlockingQueue</code><br>兼顾上述优点: <code>LinkedTransferQueue</code></p>
+</blockquote>
+<p><code>BlockingQueue</code>的实现:<br>大多是锁整个队列，并发量大的时候，锁比较耗费资源和时间。</p>
+<p><code>SynchronousQueue</code>:<br>无锁，只是传递元素，性能远高于<code>LinkedBlockingQueue</code>。</p>
+<p><code>ConcurrentLinkedQueue</code>:<br>无锁,性能高用CAS实现非阻塞的并发,但没有实现<code>BlockingQueue</code>接口,因此不能当阻塞队列使用(不能直接用于生产者消费者场景下).</p>
+<p>具体来说:<br><code>ConcurrentLinkedQueue</code>是<code>Queue</code>接口的一个实现.<br><code>SynchronousQueue</code>是<code>BlockingQueue</code>接口的一个实现:<br><code>LinkedTransferQueue</code>是<code>TransferQueue</code>接口的一个实现:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">LinkedTransferQueue-&gt;TransferQueue-&gt;BlockingQueue</span><br></pre></td></tr></table></figure>
+<p>具体定义(jdk1.8):</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">LinkedTransferQueue</span>&lt;<span class="title">E</span>&gt; <span class="keyword">extends</span> <span class="title">AbstractQueue</span>&lt;<span class="title">E</span>&gt;</span></span><br><span class="line"><span class="class">    <span class="keyword">implements</span> <span class="title">TransferQueue</span>&lt;<span class="title">E</span>&gt;, <span class="title">java</span>.<span class="title">io</span>.<span class="title">Serializable</span> </span>&#123;</span><br></pre></td></tr></table></figure>
+
+<h2 id="SynchronousQueue"><a href="#SynchronousQueue" class="headerlink" title="SynchronousQueue"></a>SynchronousQueue</h2><p>它本身不存在容量,只能进行线程之间的元素传送。由于对于传递性场景进行了某种充分的优化，其中最重要的是不需要锁，因此在只需要同步，不需要大量存储元素的场景下吞吐量很高。</p>
+<blockquote>
+<p>优势: 无锁,吞吐量大；<br>缺点: 无容量,只能用于传递性场景。</p>
+</blockquote>
+<p><em>todo: 具体是什么样神奇的优化。</em></p>
+<h2 id="ConcurrentLinkedQueue"><a href="#ConcurrentLinkedQueue" class="headerlink" title="ConcurrentLinkedQueue"></a>ConcurrentLinkedQueue</h2><p>详见之前的博客:<br><a href="http://xiaoyue26.github.io/2018/05/19/2018-05/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC%E5%85%AD%E7%AB%A02LinkedQueue/">java并发编程的艺术-第六章2LinkedQueue</a></p>
+<h2 id="LinkedTransferQueue"><a href="#LinkedTransferQueue" class="headerlink" title="LinkedTransferQueue"></a>LinkedTransferQueue</h2><p>本质上是多了<code>TransferQueue</code>接口的实现:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">transfer</span><span class="params">(E e)</span> <span class="keyword">throws</span> InterruptedException</span>;<span class="comment">// 阻塞</span></span><br><span class="line"><span class="function"><span class="keyword">boolean</span> <span class="title">tryTransfer</span><span class="params">(E e)</span></span>;</span><br><span class="line"><span class="function"><span class="keyword">boolean</span> <span class="title">tryTransfer</span><span class="params">(E e, <span class="keyword">long</span> timeout, TimeUnit unit)</span> <span class="keyword">throws</span> InterruptedException</span>;<span class="comment">// 一段时间阻塞</span></span><br><span class="line"><span class="function"><span class="keyword">boolean</span> <span class="title">hasWaitingConsumer</span><span class="params">()</span></span>;</span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">getWaitingConsumerCount</span><span class="params">()</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">/**一般来说，不抛`InterruptedException`异常的是不阻塞的方法;</span></span><br><span class="line"><span class="comment">抛`InterruptedException`异常的是阻塞,或者定时阻塞的方法.</span></span><br><span class="line"><span class="comment">*/</span></span><br></pre></td></tr></table></figure>
+<p>综合了<code>ConcurrentLinkedQueue</code>和<code>SynchronousQueue</code>的高吞吐量优点和<code>LinkedTransferQueue</code>的能存储大量元素的优点。</p>
+<ol>
+<li><code>transfer(E e)</code>：若当前存在一个正在等待获取的消费者线程，即立刻移交之；否则，会插入当前元素e到队列尾部，并且等待进入阻塞状态，到有消费者线程取走该元素。</li>
+<li><code>tryTransfer(E e)</code>：若当前存在一个正在等待获取的消费者线程（使用take()或者poll()函数），使用该方法会即刻转移/传输对象元素e；若不存在，则返回false，并且不进入队列。这是一个不阻塞的操作。</li>
+<li><code>tryTransfer(E e, long timeout, TimeUnit unit)</code>：若当前存在一个正在等待获取的消费者线程，会立即传输给它;否则将插入元素e到队列尾部，并且等待被消费者线程获取消费掉；若在指定的时间内元素e无法被消费者线程获取，则返回false，同时该元素被移除。</li>
+<li><code>hasWaitingConsumer()</code>：判断是否存在消费者线程。</li>
+<li><code>getWaitingConsumerCount()</code>：获取所有等待获取元素的消费线程数量。</li>
+</ol>
+<p>需要看看xfer的4个参数:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> NOW   = <span class="number">0</span>; <span class="comment">// 即使没有可以用的空间或者可用的数据,也立即返回。</span></span><br><span class="line"><span class="comment">// for 不计时的poll和tryTransfer</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> ASYNC = <span class="number">1</span>; <span class="comment">// 异步/非阻塞/立即返回. </span></span><br><span class="line"><span class="comment">// for offer, put, add</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> SYNC  = <span class="number">2</span>; <span class="comment">// 同步/阻塞/无限制等待.</span></span><br><span class="line"><span class="comment">// for transfer, take</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> TIMED = <span class="number">3</span>; <span class="comment">// 可以等待一定时间.</span></span><br><span class="line"><span class="comment">// for 计时的poll和 tryTransfer</span></span><br></pre></td></tr></table></figure>
+<p>这里要注意<code>take</code>和<code>poll</code>的区别,<code>take</code>阻塞到有元素,<code>poll</code>没元素的话,直接返回<code>null</code>即可,不会死等。</p>
+<p>参考资料:<br><a href="http://www.cnblogs.com/rockman12352/p/3790245.html" target="_blank" rel="noopener">http://www.cnblogs.com/rockman12352/p/3790245.html</a><br><a href="http://cmsblogs.com/?p=2433" target="_blank" rel="noopener">http://cmsblogs.com/?p=2433</a></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/07/14/2018-07/LinkedTransferQueue%E7%AC%94%E8%AE%B0/" data-id="ck96cxpo700c7maam75y71rs8" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%B9%B6%E5%8F%91/" rel="tag">并发</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-07/java中的代理" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/07/08/2018-07/java%E4%B8%AD%E7%9A%84%E4%BB%A3%E7%90%86/" class="article-date">
@@ -985,439 +1166,6 @@
 
 
   
-    <article id="post-2018-03/java并发编程的艺术-第五章" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/03/21/2018-03/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC%E4%BA%94%E7%AB%A0/" class="article-date">
-  <time datetime="2018-03-21T13:45:20.000Z" itemprop="datePublished">2018-03-21</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/03/21/2018-03/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC%E4%BA%94%E7%AB%A0/">java并发编程的艺术-第五章(1)</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="第五章-java中的锁"><a href="#第五章-java中的锁" class="headerlink" title="第五章 java中的锁"></a>第五章 java中的锁</h1><p>这章主要写java并发包中与锁相关的<code>api</code>.<br>先是<code>使用</code>，然后是<code>实现</code>。</p>
-<h1 id="5-1-Lock接口"><a href="#5-1-Lock接口" class="headerlink" title="5.1 Lock接口"></a>5.1 Lock接口</h1><p><code>Lock</code>接口由Java SE 5新增，对飙的是旧java中的<code>synchronized</code>内置锁。<br>主要新增了三个api:</p>
-<ol>
-<li>非阻塞获取锁（<code>tryLock</code>）;</li>
-<li>能被中断地获取锁(<code>lockInterruptbly</code>);</li>
-<li>超时获取锁(<code>tryLock(long time,TimeUnit unit)</code>).<br>此外还增加了<code>Condition</code>接口，增加了等待队列的数量及相关特性。<br>（<code>Condition</code>使用<code>await()</code>，对飙的是原来的<code>obj.wait()</code>）</li>
-</ol>
-<p>示例代码：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">Lock lock=<span class="keyword">new</span> ReentrantLock();</span><br><span class="line">lock.lock();<span class="comment">// 没获取到锁的话抛异常</span></span><br><span class="line"><span class="keyword">try</span>&#123;</span><br><span class="line">    <span class="comment">// do something</span></span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">finally</span>&#123;</span><br><span class="line">    lock.unlock();</span><br><span class="line">    <span class="comment">// 如果lock.lock()放try里，这里就可能会出错。</span></span><br><span class="line">    <span class="comment">// 因为没获取到锁时，不能unlock。</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<table>
-<thead>
-<tr>
-<th align="center">主要Api</th>
-<th align="right">备注</th>
-</tr>
-</thead>
-<tbody><tr>
-<td align="center">lock()</td>
-<td align="right">阻塞式地获取锁。只有在获取到锁后才处理interrupt信息。</td>
-</tr>
-<tr>
-<td align="center">lockInterruptibly()</td>
-<td align="right">获取锁。(可中断)</td>
-</tr>
-<tr>
-<td align="center">tryLock()</td>
-<td align="right">非阻塞地获取锁。不论成败立即返回。</td>
-</tr>
-<tr>
-<td align="center">tryLock(long time,TimeUnit unit)</td>
-<td align="right">超时获取锁，接受中断</td>
-</tr>
-<tr>
-<td align="center">unlock()</td>
-<td align="right">释放锁。</td>
-</tr>
-<tr>
-<td align="center">Condition newCondition()</td>
-<td align="right">获取等待通知组件。</td>
-</tr>
-</tbody></table>
-<p>回顾之前的线程状态,lock方法会让线程进入<code>Blocked</code>状态。<br>线程状态与可中断的关系：</p>
-<ol>
-<li>new: ???</li>
-<li>Runnable: 不可中断（除非主动检查）</li>
-<li>Terminated: 不可中断;</li>
-<li>Blocked: 不可中断; (在<code>synchronized</code>时阻塞住不会响应中断)</li>
-<li>Waiting: 可中断；(sleep方法，wait方法都会抛异常)</li>
-<li>Time_waiting： 可中断；</li>
-</ol>
-<p>简单得说，就只有<code>Waiting</code>和<code>Time_waiting</code>状态可以中断，或者自己在代码里手动检查中断状态。</p>
-<p><strong>本章的内容有点乱，不太通顺，下面的内容按照个人理解重排。</strong></p>
-<h1 id="5-6-Condition接口"><a href="#5-6-Condition接口" class="headerlink" title="5.6 Condition接口"></a>5.6 Condition接口</h1><p><code>Condition</code>接口对飙的是原来的<code>wait/notify</code>机制，新推出的是<code>await/signal</code>机制。<br><code>wait/notify</code>依赖<code>synchronized</code>获得锁，而<code>Condition</code>依赖<code>Lock</code>获得锁。<br>原来的<code>wait/notify</code>:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// A:</span></span><br><span class="line">synchronize(obj)&#123;</span><br><span class="line">    obj.wait();</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// B:</span></span><br><span class="line">synchronize(obj)&#123;</span><br><span class="line">    obj.notify();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>使用<code>Condition</code>的<code>await/signal</code>:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">Lock lock=<span class="keyword">new</span> ReentrantLock();</span><br><span class="line">Condition condition=lock.newCondition();</span><br><span class="line"></span><br><span class="line"><span class="comment">// A:</span></span><br><span class="line">lock.lock();</span><br><span class="line"><span class="keyword">try</span>&#123;</span><br><span class="line">    condition.await();</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">finally</span>&#123;</span><br><span class="line">    lock.unlock();</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// B:</span></span><br><span class="line">lock.lock();</span><br><span class="line"><span class="keyword">try</span>&#123;</span><br><span class="line">    condition.signal();</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">finally</span>&#123;</span><br><span class="line">    lock.unlock();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<ul>
-<li>功能上：<br>两种实现都是使用一个对象进行同步操作（加锁解锁）。消费者在获得锁后，在该对象上进行等待（释放锁等待）；生产者获得锁后，通知在该对象上等待的其他线程。<br>区别在于<code>synchronized</code>不需要关心锁的释放，而<code>Lock</code>接口需要在finally中手动确保锁的释放。<br><code>wait</code>只有一个等待队列，而由于一个<code>Lock</code>可以生成多个<code>Condition</code>，因此<code>await</code>可以有多个等待队列。</li>
-</ul>
-<p><strong>案例之有界队列</strong></p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line"><span class="keyword">import</span> java.util.concurrent.locks.Condition;</span><br><span class="line"><span class="keyword">import</span> java.util.concurrent.locks.Lock;</span><br><span class="line"><span class="keyword">import</span> java.util.concurrent.locks.ReentrantLock;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">BoundedQueue</span>&lt;<span class="title">T</span>&gt; </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> Object[] items;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">int</span> addIndex, removeIndex, count;</span><br><span class="line">    <span class="keyword">private</span> Lock lock = <span class="keyword">new</span> ReentrantLock();</span><br><span class="line">    <span class="keyword">private</span> Condition notEmpty = lock.newCondition();</span><br><span class="line">    <span class="keyword">private</span> Condition notFull = lock.newCondition();</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">BoundedQueue</span><span class="params">(<span class="keyword">int</span> size)</span> </span>&#123;</span><br><span class="line">        items = <span class="keyword">new</span> Object[size];</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">add</span><span class="params">(T t)</span> <span class="keyword">throws</span> InterruptedException </span>&#123;</span><br><span class="line">        lock.lock();</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            <span class="keyword">while</span> (count == items.length) &#123;</span><br><span class="line">                notFull.await();</span><br><span class="line">            &#125;</span><br><span class="line">            items[addIndex] = t;</span><br><span class="line">            <span class="keyword">if</span> (++addIndex == items.length) &#123; <span class="comment">// 循环数组</span></span><br><span class="line">                addIndex = <span class="number">0</span>;</span><br><span class="line">            &#125;</span><br><span class="line">            ++count;</span><br><span class="line">            notEmpty.signal();</span><br><span class="line">        &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">            lock.unlock();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> T <span class="title">remove</span><span class="params">()</span> <span class="keyword">throws</span> InterruptedException </span>&#123;</span><br><span class="line">        lock.lock();</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            <span class="keyword">while</span> (count == <span class="number">0</span>) &#123;</span><br><span class="line">                notEmpty.await();</span><br><span class="line">            &#125;</span><br><span class="line">            Object x = items[removeIndex];</span><br><span class="line">            <span class="keyword">if</span> (++removeIndex == items.length) &#123;<span class="comment">// 循环数组</span></span><br><span class="line">                removeIndex = <span class="number">0</span>;</span><br><span class="line">            &#125;</span><br><span class="line">            --count;</span><br><span class="line">            notFull.signal();</span><br><span class="line">            <span class="keyword">return</span> (T) x;</span><br><span class="line">        &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">            lock.unlock();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>上述案例中使用一个锁（<code>Lock</code>对象），而有两个等待队列，分别等待<code>notEmpty</code>和<code>notFull</code>条件。</p>
-<ul>
-<li>实现逻辑上：（逻辑上的工作流程）</li>
-</ul>
-<ol>
-<li>线程尝试获取锁，如果成功则占据锁，失败则进入同步队列；</li>
-<li>如果成功获取锁，且进行等待（<code>wait</code>或<code>await</code>），则进入等待队列，释放锁，通知同步队列中的后继节点；</li>
-<li>如果成功获取锁，且进行通知（<code>notify</code>或<code>signal</code>），则等待队列的首节点挪入同步队列，释放同步锁，通知同步队列中的后继节点。</li>
-</ol>
-<p>两个后面会反复用到的概念：</p>
-<ul>
-<li><code>同步队列</code>： 获取同步锁失败后的线程进入同步队列；</li>
-<li><code>等待队列</code>： 获取同步锁成功后，主动等待的线程进入等待队列。</li>
-</ul>
-<h1 id="5-2-队列同步器"><a href="#5-2-队列同步器" class="headerlink" title="5.2 队列同步器"></a>5.2 队列同步器</h1><p>前文中锁的实现中，一个很重要的组件是：<br><code>队列同步器：AQS(AbstractQueuedSynchronizer)</code>。<br>此外，其他同步组件的基础框架也是使用AQS。（如<code>ReentrantLock</code>,<code>CountDownLatch</code>）<br>回顾55页3.5.4节中的架构层次：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;&#x2F; 自顶向下：</span><br><span class="line">1.  Lock,同步器,阻塞队列,Executor,并发容器</span><br><span class="line">2.  AQS,非阻塞数据结构,原子变量类</span><br><span class="line">3.  volatile读写,CAS操作</span><br></pre></td></tr></table></figure>
-
-
-<p>AQS是一个抽象类。<br>AQS中自底向上的3类方法：</p>
-<ol>
-<li>基础方法。(固定)</li>
-<li>可重写的方法（调用1的方法）；</li>
-<li>模版方法；（固定，调用1，2的方法）</li>
-</ol>
-<p>AQS在设计上是基于模版方法模式的抽象类。也就是说，我们需要新增一个子类继承AQS，然后重写上述第2类方法。而第1类和第3类方法，要么是private的无法继承，要么是final的无法重写。而第二类方法，如果没有重写，默认实现只有一行<code>throw new UnsupportedOperationException();</code>,调用的时候就会直接抛异常了。</p>
-<p><strong>基础方法</strong></p>
-<ol>
-<li><code>getState()</code>: 获取当前同步状态；</li>
-<li><code>setState()</code>: 设置当前同步状态；</li>
-<li><code>compareAndSetState(int expect,int update)</code>: 使用CAS设置当前状态,该方法保证设置的原子性。</li>
-</ol>
-<p><strong>可重写的方法</strong></p>
-<table>
-<thead>
-<tr>
-<th align="center">可重写的方法</th>
-<th align="right">描述</th>
-</tr>
-</thead>
-<tbody><tr>
-<td align="center">boolean tryAcquire(int arg)</td>
-<td align="right">独占式获取同步状态。（调CAS）</td>
-</tr>
-<tr>
-<td align="center">boolean tryRelease(int arg)</td>
-<td align="right">独占式释放同步状态。</td>
-</tr>
-<tr>
-<td align="center">int tryAcquireShared(int arg)</td>
-<td align="right">共享式获取同步状态。返回值&gt;=0则成功。</td>
-</tr>
-<tr>
-<td align="center">boolean tryReleaseShared(int arg)</td>
-<td align="right">共享式释放同步状态。</td>
-</tr>
-<tr>
-<td align="center">boolean isHeldExclusively(int arg)</td>
-<td align="right">判断是否被当前线程独占。</td>
-</tr>
-</tbody></table>
-<p><strong>模版方法</strong></p>
-<table>
-<thead>
-<tr>
-<th align="center">模版方法</th>
-<th align="right">描述</th>
-</tr>
-</thead>
-<tbody><tr>
-<td align="center">void acquire(int arg)</td>
-<td align="right">独占式获取同步状态（调用上面的<code>tryAcquire</code>），失败则进入同步队列。</td>
-</tr>
-<tr>
-<td align="center">void acquireShared(int arg)</td>
-<td align="right">共享式获取同步状态，失败则进入同步队列。</td>
-</tr>
-<tr>
-<td align="center">boolean release(int arg)</td>
-<td align="right">独占式释放同步状态</td>
-</tr>
-<tr>
-<td align="center">boolean releaseShared(int arg)</td>
-<td align="right">共享式释放同步状态</td>
-</tr>
-<tr>
-<td align="center">Condition&lt; Thread&gt;getQueuedThreads()</td>
-<td align="right">获取同步队列线程集合</td>
-</tr>
-<tr>
-<td align="center">其他</td>
-<td align="right">其他响应中断/超时返回的版本的方法</td>
-</tr>
-</tbody></table>
-<p><strong>案例之-独占锁</strong><br><code>Mutex</code>的实现：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line"><span class="keyword">import</span> java.util.concurrent.TimeUnit;</span><br><span class="line"><span class="keyword">import</span> java.util.concurrent.locks.AbstractQueuedSynchronizer;</span><br><span class="line"><span class="keyword">import</span> java.util.concurrent.locks.Condition;</span><br><span class="line"><span class="keyword">import</span> java.util.concurrent.locks.Lock;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">Mutex</span> <span class="keyword">implements</span> <span class="title">Lock</span> </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">Sync</span> <span class="keyword">extends</span> <span class="title">AbstractQueuedSynchronizer</span> </span>&#123;</span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">protected</span> <span class="keyword">boolean</span> <span class="title">isHeldExclusively</span><span class="params">()</span> </span>&#123;</span><br><span class="line">            <span class="keyword">return</span> getState() == <span class="number">1</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">tryAcquire</span><span class="params">(<span class="keyword">int</span> acquireds)</span> </span>&#123;</span><br><span class="line">            <span class="keyword">if</span> (compareAndSetState(<span class="number">0</span>, <span class="number">1</span>)) &#123;</span><br><span class="line">                setExclusiveOwnerThread(Thread.currentThread());</span><br><span class="line">                <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">return</span> <span class="keyword">false</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">protected</span> <span class="keyword">boolean</span> <span class="title">tryRelease</span><span class="params">(<span class="keyword">int</span> releases)</span> </span>&#123;</span><br><span class="line">            <span class="keyword">if</span> (getState() == <span class="number">0</span>) &#123;</span><br><span class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> IllegalMonitorStateException();</span><br><span class="line">            &#125;</span><br><span class="line">            setExclusiveOwnerThread(<span class="keyword">null</span>);</span><br><span class="line">            setState(<span class="number">0</span>);</span><br><span class="line">            <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="function">Condition <span class="title">newCondition</span><span class="params">()</span> </span>&#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="keyword">new</span> ConditionObject();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 将操作委托给sync实现即可。</span></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> Sync sync = <span class="keyword">new</span> Sync(); <span class="comment">// (代理)</span></span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">lock</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        sync.acquire(<span class="number">1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">lockInterruptibly</span><span class="params">()</span> <span class="keyword">throws</span> InterruptedException </span>&#123;</span><br><span class="line">        sync.acquireInterruptibly(<span class="number">1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">tryLock</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> sync.tryAcquire(<span class="number">1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">tryLock</span><span class="params">(<span class="keyword">long</span> time, TimeUnit unit)</span> <span class="keyword">throws</span> InterruptedException </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> sync.tryAcquireNanos(<span class="number">1</span>, unit.toNanos(time));</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">unlock</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        sync.release(<span class="number">1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> Condition <span class="title">newCondition</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> sync.newCondition();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 不在Lock接口中，但是有用的方法：</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">isLocked</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> sync.isHeldExclusively();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">hasQueuedThread</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> sync.hasQueuedThreads();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>上述<code>sync</code>只实现了独占操作，因此调用共享操作会抛异常。<br>因此<code>mutex</code>中只调用了<code>sync</code>的独占模版方法。<br>因此<code>mutex</code>最多是一个独占锁。</p>
-<p><strong>案例之-TwinsLock</strong><br>用AQS实现一个最多能被两个线程同时占据的锁。<br><code>TwinsLock</code>实现：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">TwinsLock</span> <span class="keyword">implements</span> <span class="title">Lock</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="class"><span class="keyword">class</span> <span class="title">Sync</span> <span class="keyword">extends</span> <span class="title">AbstractQueuedSynchronizer</span> </span>&#123;</span><br><span class="line">        Sync(<span class="keyword">int</span> count) &#123;</span><br><span class="line">            <span class="keyword">if</span> (count &lt;= <span class="number">0</span>) &#123;</span><br><span class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> IllegalArgumentException(<span class="string">"count must larger than 0"</span>);</span><br><span class="line">            &#125;</span><br><span class="line">            setState(count);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">int</span> <span class="title">tryAcquireShared</span><span class="params">(<span class="keyword">int</span> reduceCount)</span> </span>&#123;</span><br><span class="line">            <span class="keyword">for</span> (; ; ) &#123;</span><br><span class="line">                <span class="keyword">int</span> current = getState();</span><br><span class="line">                <span class="keyword">int</span> newCount = current - reduceCount;</span><br><span class="line">                <span class="keyword">if</span> (newCount &lt; <span class="number">0</span> || compareAndSetState(current, newCount)) &#123;</span><br><span class="line">                    <span class="keyword">return</span> newCount;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">tryReleaseShared</span><span class="params">(<span class="keyword">int</span> returnCount)</span> </span>&#123;</span><br><span class="line">            <span class="keyword">for</span> (; ; ) &#123;</span><br><span class="line">                <span class="keyword">int</span> current = getState();</span><br><span class="line">                <span class="keyword">int</span> newCount = current + returnCount;</span><br><span class="line">                <span class="keyword">if</span> (compareAndSetState(current, newCount)) &#123;</span><br><span class="line">                    <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 额外的:</span></span><br><span class="line">        <span class="function">Condition <span class="title">newCondition</span><span class="params">()</span> </span>&#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="keyword">new</span> ConditionObject();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> Sync sync = <span class="keyword">new</span> Sync(<span class="number">2</span>);<span class="comment">// 最多俩人共享</span></span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">lock</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        sync.acquireShared(<span class="number">1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">unlock</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        sync.releaseShared(<span class="number">1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">lockInterruptibly</span><span class="params">()</span> <span class="keyword">throws</span> InterruptedException </span>&#123;</span><br><span class="line">        sync.acquireSharedInterruptibly(<span class="number">1</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">tryLock</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> sync.tryAcquireShared(<span class="number">1</span>) &gt;= <span class="number">0</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">tryLock</span><span class="params">(<span class="keyword">long</span> time, TimeUnit unit)</span> <span class="keyword">throws</span> InterruptedException </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> sync.tryAcquireSharedNanos(<span class="number">1</span>, unit.toNanos(time));</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> Condition <span class="title">newCondition</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> sync.newCondition();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>与<code>Mutex</code>不同的是，<code>TwinsLock</code>中的同步器主要重写了AQS的共享方法，<code>Lock</code>接口中也调用的是共享方法。也就是按照共享式访问编写，然后用<code>count</code>控制同步资源数。</p>
-<h3 id="5-2-2-AQS的实现分析"><a href="#5-2-2-AQS的实现分析" class="headerlink" title="5.2.2 AQS的实现分析"></a>5.2.2 AQS的实现分析</h3><p>上面讲了<code>Lock</code>,<code>Condition</code>的使用，<code>AQS</code>的使用（用来自定义<code>Lock</code>），下面讲<code>AQS</code>的实现。</p>
-<p><strong>同步队列</strong></p>
-<ul>
-<li>同步队列与等待队列<br>AQS即队列同步器，很重要的一个概念就是同步，要控制多个线程对于一个锁的访问获取释放。<br>获取锁失败的线程都会进入同步队列，而一个lock上可以有多个condition,获取锁成功后还需要等待某个condition的线程进入等待队列，然后释放锁。</li>
-</ul>
-<p>同步队列是一个FIFO队列，实现上使用一个双向链表。<br>等待队列也是一个FIFO队列，实现上使用一个单向链表。</p>
-<p>同步队列的基本结构：</p>
-<img src="/images/syncqueue.png" class="" width="400" height="600" title="SyncQueue">
-
-<p>加上等待队列后的结构：</p>
-<img src="/images/waitingqueue.png" class="" width="400" height="600" title="WaitingQueue">
-
-<p>因为节点可以在同步队列和等待队列之间转化。（同步队列中节点获得锁后，可能发现需要等待condition，进入等待队列尾部；等待队列中节点唤醒后进入同步队列尾部）<br>JDK中将两个链表的节点的数据结构杂糅在了一起，大致如下：</p>
-<table>
-<thead>
-<tr>
-<th align="center">属性</th>
-<th align="right">描述</th>
-</tr>
-</thead>
-<tbody><tr>
-<td align="center">Thread thread</td>
-<td align="right">线程引用。</td>
-</tr>
-<tr>
-<td align="center">Node prev</td>
-<td align="right">同步队列使用。前驱同步节点。</td>
-</tr>
-<tr>
-<td align="center">Node next</td>
-<td align="right">同步队列使用。后继同步节点。</td>
-</tr>
-<tr>
-<td align="center">Node nextWaiter</td>
-<td align="right">等待队列使用。后继等待节点。</td>
-</tr>
-<tr>
-<td align="center">int waitStatus</td>
-<td align="right">等待状态。</td>
-</tr>
-</tbody></table>
-<p>其中的waitStatus取值包括：<br><code>Cancelled</code>：1. 同步队列中等待超时或被中断;<br><code>Signal</code>：-1. 当前节点释放了同步状态或者被取消。<br><code>Condition</code>: -2. 当前节点等待某个Condition，进入等待队列。<br><code>Propagate</code>: -3. 下一次共享式同步状态获取将会无条件地被传播下去。(没看懂.TODO)<br><code>Initial</code>: 0. 初始状态。</p>
-<p>同步队列遵循FIFO，AQS中保存了head和tail。<br>每次唤醒时，唤醒head；（由于每次由已经获取锁的线程完成，只有一个线程，没有并发，因此不需要CAS）<br>每次新增线程时，用CAS新增更改tail。(各种链表指针操作)</p>
-<ul>
-<li><code>自旋</code>：<br>同步队列中的线程被唤醒的两种可能：</li>
-</ul>
-<ol>
-<li>被中断；</li>
-<li>被离开队列的首节点唤醒。<br>每次被唤醒都会进行一次自旋。<br>自旋说白了就是一个死循环，首先检查前驱是否是首节点（判断是否是第二种情况），如果是就试图获取锁，获取失败就接着睡等待下次唤醒（等待下次自旋）。<br>因此并不是只有第二个节点会自旋， 同步队列的所有节点都会自旋，毕竟存在被中断唤醒的可能。</li>
-</ol>
-<img src="/images/spin.png" class="" width="400" height="600" title="spin">
-
-<p><strong>同步状态的获取与释放</strong><br>同步状态获取释放相关的方法主要有两类：独占式和共享式。</p>
-<ul>
-<li>独占式:</li>
-</ul>
-<ol>
-<li>模版方法：(AQS中写好的,可以翻看源码研读)<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">final</span> <span class="keyword">void</span> acquire</span><br><span class="line"><span class="keyword">public</span> <span class="keyword">final</span> <span class="keyword">boolean</span> release</span><br><span class="line"><span class="keyword">private</span> Node addWaiter</span><br><span class="line"><span class="keyword">private</span> Node enq</span><br><span class="line"><span class="keyword">final</span> <span class="keyword">boolean</span> acquiredQueued`</span><br></pre></td></tr></table></figure></li>
-<li>需要自己重写的：<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">protected</span> <span class="keyword">boolean</span> tryAcquire</span><br><span class="line"><span class="keyword">protected</span> <span class="keyword">boolean</span> tryRelease</span><br></pre></td></tr></table></figure>
-
-
-</li>
-</ol>
-<p>独占式的特点就是：<br><code>tyrAcquire</code>,<code>tryRelease</code>的返回值是<code>boolean</code>。<br>因为同一时刻只能有一个线程占据，因此用<code>boolean</code>就能表达了。<br>相当于资源数只有1，状态只有0,1两种。</p>
-<ul>
-<li>共享式<img src="/images/shareandmutex.png" class="" width="400" height="600" title="shareandmutex">
-
-</li>
-</ul>
-<p>共享式的代码逻辑会复杂一些，如上图所示：</p>
-<ol>
-<li>临界区里有共享锁时，只有共享请求能进入；</li>
-<li>临界区里有独占锁时，谁都不能进。</li>
-</ol>
-<p>共享式的方法：</p>
-<ol>
-<li><p>模版方法：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">final</span> <span class="keyword">void</span> acquiredShared</span><br><span class="line"><span class="keyword">private</span> <span class="keyword">void</span> doAcquiredShared</span><br><span class="line"><span class="keyword">public</span> <span class="keyword">final</span> <span class="keyword">boolean</span> releaseShared</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>自己重写的方法：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">protected</span> <span class="keyword">int</span> tryAcquireShared</span><br><span class="line"><span class="keyword">protected</span> <span class="keyword">int</span> tryReleaseShared</span><br></pre></td></tr></table></figure>
-
-
-</li>
-</ol>
-<p>共享式的特点就是:<br><code>tryAcquireShared</code>,<code>tryReleaseShared</code>返回值是<code>int</code>。<br>因为共享式的资源数可能不为1，状态较多。<br><code>doAcquireShared</code>方法中判断是否还有资源，用<code>tryAcquireShared(arg)&gt;=0</code>来判断，可知自己实现的时候，要注意让<code>tryAcquireShared</code>方法返回剩下的资源数。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/03/21/2018-03/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC%E4%BA%94%E7%AB%A0/" data-id="ck96cxpnz00b5maamexh58de2" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%B9%B6%E5%8F%91/" rel="tag">并发</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-2018-03/Mysql调优手段总结-持续更新" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/03/17/2018-03/Mysql%E8%B0%83%E4%BC%98%E6%89%8B%E6%AE%B5%E6%80%BB%E7%BB%93-%E6%8C%81%E7%BB%AD%E6%9B%B4%E6%96%B0/" class="article-date">
-  <time datetime="2018-03-16T20:38:02.000Z" itemprop="datePublished">2018-03-17</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/mysql/">mysql</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/03/17/2018-03/Mysql%E8%B0%83%E4%BC%98%E6%89%8B%E6%AE%B5%E6%80%BB%E7%BB%93-%E6%8C%81%E7%BB%AD%E6%9B%B4%E6%96%B0/">Mysql调优手段总结(持续更新)</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="考虑优化的层面"><a href="#考虑优化的层面" class="headerlink" title="考虑优化的层面"></a>考虑优化的层面</h1><ol>
-<li>服务器层(优化器,缓存)</li>
-<li>存储引擎</li>
-<li>schema设计(索引/表)</li>
-<li>查询优化</li>
-</ol>
-<h2 id="服务器层"><a href="#服务器层" class="headerlink" title="服务器层"></a>服务器层</h2><ol>
-<li>待续…</li>
-</ol>
-<h2 id="存储引擎-（详见第二章笔记）"><a href="#存储引擎-（详见第二章笔记）" class="headerlink" title="存储引擎 （详见第二章笔记）"></a>存储引擎 （详见第二章笔记）</h2><ol>
-<li>尽量使用innodb，以便使用它的行级锁；Myisam是表级锁，锁竞争更频繁。</li>
-<li>根据场景选择：<br>场景:<br>全文索引: InnoDB + Sphinx<br>在线热备份: InnoDB<br>记录日志: MyISAM,Archive<br>10TB以下: InnoDB<br>10TB以上: InfoBright.<br>大部分情况优先考虑: Innodb</li>
-<li>待续…</li>
-</ol>
-<h2 id="schema设计"><a href="#schema设计" class="headerlink" title="schema设计"></a>schema设计</h2><h3 id="表设计-详见第四章笔记"><a href="#表设计-详见第四章笔记" class="headerlink" title="表设计(详见第四章笔记)"></a>表设计(详见第四章笔记)</h3><ol>
-<li>数据类型：<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">(1) 更小的通常更好,</span><br><span class="line">int 好于 char (如可以用int存储ip);</span><br><span class="line">date&#x2F;time&#x2F;datetime 好于 char.</span><br><span class="line">(2) 尽量Not Null; &#x2F;&#x2F; 因为NULL导致索引需要额外字节.&#x2F;&#x2F; 不过这个影响不大</span><br></pre></td></tr></table></figure></li>
-<li>考虑使用缓存表，汇总表，计数器表；</li>
-<li>表设计原则:<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">1. 避免太多的列; 服务器层需要缓冲存储引擎层的行,变长的行会引入转换开销.</span><br><span class="line">2. 避免太多关联;</span><br><span class="line">3. 恰当使用NULL. 大多数时候避免NULL列,有时候可以使用.(当异常值不好定义时)</span><br></pre></td></tr></table></figure></li>
-<li>适当程度使用范式,不迷信三范式.<br>特定需求可以单独定制相应的缓存表和汇总表,而不改变原有的设计结构.</li>
-<li>待续…</li>
-</ol>
-<h3 id="索引设计（详见第五章笔记）"><a href="#索引设计（详见第五章笔记）" class="headerlink" title="索引设计（详见第五章笔记）"></a>索引设计（详见第五章笔记）</h3><ol>
-<li>不同类型索引适用场景：<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. 哈希索引：（全键值查询，Memory引擎）</span><br><span class="line">数据仓库的查找表。（精确匹配O(1)复杂度，星形,多表连接）</span><br><span class="line">2. B-Tree索引：</span><br><span class="line">大部分场景。</span><br></pre></td></tr></table></figure>
-
-</li>
-</ol>
-<p><strong>三星系统</strong><br>索引与查询匹配程度的评价：三星系统：</p>
-<ol>
-<li>一星： 将查询相关记录放在了一起；（顺序IO,范围查询能利用到索引） </li>
-<li>二星： 数据顺序与查找顺序一致；（避免排序,让排序也能利用到索引）</li>
-<li>三星： 索引列包含查询的所有列。(避免二次访问磁盘)</li>
-</ol>
-<p>上述评价的对象是(索引,某种查询). 因此并没有一个索引能够完美适应所有查询.只能说尽量适应当前场景下的高频查询.</p>
-<p>索引适用场景：</p>
-<ol>
-<li>小表： 直接扫全表即可；</li>
-<li>中表： 索引；</li>
-<li>大表： 分区。索引开销太大。</li>
-</ol>
-<p>作为过滤条件的列需要考察的3个属性，按重要性如下：</p>
-<ol>
-<li>查询频率；</li>
-<li>相关查询是否是范围查询，或者列的取值是否可枚举。</li>
-<li>选择性。</li>
-</ol>
-<p><strong>设计索引的原则：</strong></p>
-<ol>
-<li>查询频率高，则应该加入索引；</li>
-<li>如果是范围查询，则如果作为联合索引的一列，应该放在后面；（因为最左前缀无法利用范围查询后的列）<br>如果是可枚举列，则查询语句中可以使用In (‘male’,’female’)绕过列顺序限制，让Mysql始终能够应用相关索引；</li>
-<li>满足前两个条件后，应该把选择性高的列放在联合索引的前面。</li>
-</ol>
-<h2 id="查询优化-详见第六章"><a href="#查询优化-详见第六章" class="headerlink" title="查询优化(详见第六章)"></a>查询优化(详见第六章)</h2><h3 id="优化思路"><a href="#优化思路" class="headerlink" title="优化思路"></a>优化思路</h3><ol>
-<li>尽量减少数据量(提前使用limit);</li>
-<li>检查响应时间组成;</li>
-<li>索引相关优化; </li>
-<li>重写分解复杂查询;</li>
-<li>如果是日志系统，开启异步写入数据的参数；</li>
-<li>检查关联表的顺序;</li>
-</ol>
-<ul>
-<li>相关命令<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">explain</span> <span class="keyword">extended</span> &lt;<span class="keyword">sql</span>&gt;;</span><br><span class="line"><span class="keyword">show</span> <span class="keyword">warnings</span>;</span><br><span class="line"><span class="comment">-- 可以得到重构出的查询。</span></span><br></pre></td></tr></table></figure></li>
-</ul>
-<ol start="7">
-<li><p>检查是内排还是外排(<code>max_length_for_sort_data</code>控制);</p>
-</li>
-<li><p>排序优化:<br>关联查询排序时候，尽量把Order by的列提到第一张表中。<br>( 如果Order by的所有列都来自关联的第1个表，Mysql在关联处理第一个表的时候就会进行排序。)</p>
-</li>
-<li><p>网络传输;<br>（1）缓冲区大小(<code>SQL_BUFFER_RESULT</code>);<br>（2）先释放表锁，再发送结果：<code>SQL_BUFFER_RESULT</code>。</p>
-</li>
-<li><p>待续…</p>
-</li>
-</ol>
-<h3 id="索引相关"><a href="#索引相关" class="headerlink" title="索引相关"></a>索引相关</h3><ol>
-<li><p>范围查询转化成枚举，充分利用索引；<br>如索引为(dt,city)，查询为：</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> dt,city <span class="keyword">from</span> t</span><br><span class="line"><span class="keyword">where</span> dt&gt;=<span class="string">'2018-01-01'</span> <span class="keyword">and</span> dt&lt;=<span class="string">'2018-01-02'</span></span><br><span class="line"><span class="keyword">and</span> city=<span class="string">'beijing'</span></span><br><span class="line"><span class="comment">-- 转化为=&gt;</span></span><br><span class="line"><span class="keyword">select</span> dt,city <span class="keyword">from</span> t</span><br><span class="line"><span class="keyword">where</span> dt <span class="keyword">in</span> (<span class="string">'2018-01-01'</span>,<span class="string">'2018-01-02'</span>）</span><br><span class="line"><span class="keyword">and</span> city=<span class="string">'beijing'</span></span><br></pre></td></tr></table></figure>
-</li>
-<li><p>延迟关联+覆盖索引；</p>
-</li>
-<li><p>检查explain的type:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">const(system): 根据PRI或Unique key,只取出确定的(一行)数据,常量优化. </span><br><span class="line"></span><br><span class="line">eq_ref: JOIN条件包括了所有索引,并且索引是Unique key. </span><br><span class="line">ref: JOIN条件包括部分索引或不是Unique key.</span><br><span class="line">ref_or_null: WHERE col&#x3D;exp or col is null</span><br><span class="line"></span><br><span class="line">index_merge: Where id&#x3D;xx or userid&#x3D;xxx. 索引合并优化.</span><br><span class="line"></span><br><span class="line">unique_subquery: where col in( select id from xxx). 这里id唯一.</span><br><span class="line">index_subquery: 同上,只是id不唯一.</span><br><span class="line"></span><br><span class="line">range: 索引在某个范围内.</span><br><span class="line">all: 扫全表</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>检查索引字段是否正确转换了类型:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">dt = date_format(date_sub(current_date, interval 1 day), '%Y-%m-%d')</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>待续…</p>
-</li>
-</ol>
-<h3 id="查询中锁的使用"><a href="#查询中锁的使用" class="headerlink" title="查询中锁的使用"></a>查询中锁的使用</h3><ol>
-<li>尽量使用读锁，避免使用写锁；</li>
-<li>降低写锁使用时间（先抢注后处理+定时清理占用标志），消除<code>select ... for update</code>的使用；(避免显式加锁,优先考虑隐式加锁)</li>
-<li>Innodb不同索引对应的锁：<br>(1) 主键索引： 排他锁（写锁）；<br>(2) 二级索引： 共享锁（读锁）。</li>
-<li>待续…</li>
-</ol>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/03/17/2018-03/Mysql%E8%B0%83%E4%BC%98%E6%89%8B%E6%AE%B5%E6%80%BB%E7%BB%93-%E6%8C%81%E7%BB%AD%E6%9B%B4%E6%96%B0/" data-id="ck96cxpny00aymaama4x72yuu" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1444,6 +1192,14 @@
       <ul>
         
           <li>
+            <a href="/2022/03/13/2022-03/ss%E5%91%BD%E4%BB%A4/">ss命令</a>
+          </li>
+        
+          <li>
+            <a href="/2022/03/13/2022-03/UDP%E6%89%B9%E5%A4%84%E7%90%86%E4%BC%98%E5%8C%96-GSO-GRO/">UDP批处理优化-GSO/GRO</a>
+          </li>
+        
+          <li>
             <a href="/2022/02/24/2022-02/%E4%B8%BA%E4%BB%80%E4%B9%88%E5%85%88hash%E5%90%8E%E5%8A%A0%E5%AF%86%E7%9A%84%E6%96%B9%E6%B3%95%E5%AE%B9%E6%98%93%E9%81%AD%E9%81%87padding%E6%94%BB%E5%87%BB/">为什么先hash后加密的方法容易遭遇padding攻击</a>
           </li>
         
@@ -1453,14 +1209,6 @@
         
           <li>
             <a href="/2022/02/18/2022-02/%E6%8B%A5%E5%A1%9E%E7%AE%97%E6%B3%95bbr/">quic中的拥塞算法bbr</a>
-          </li>
-        
-          <li>
-            <a href="/2022/02/17/2022-02/http3-quic%E4%BC%98%E7%BC%BA%E7%82%B9%E5%8F%8A%E5%8E%9F%E5%9B%A0/">http3_quic优缺点及原因</a>
-          </li>
-        
-          <li>
-            <a href="/2022/02/16/2022-02/http-range/">http_range</a>
           </li>
         
       </ul>

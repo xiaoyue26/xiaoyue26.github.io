@@ -72,6 +72,172 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-04/spark中RDD，Dataframe，DataSet区别对比" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/04/29/2019-04/spark%E4%B8%ADRDD%EF%BC%8CDataframe%EF%BC%8CDataSet%E5%8C%BA%E5%88%AB%E5%AF%B9%E6%AF%94/" class="article-date">
+  <time datetime="2019-04-29T02:16:54.000Z" itemprop="datePublished">2019-04-29</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/spark/">spark</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/04/29/2019-04/spark%E4%B8%ADRDD%EF%BC%8CDataframe%EF%BC%8CDataSet%E5%8C%BA%E5%88%AB%E5%AF%B9%E6%AF%94/">spark中RDD，Dataframe，DataSet区别对比</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="RDD，Dataframe，DataSet的定义"><a href="#RDD，Dataframe，DataSet的定义" class="headerlink" title="RDD，Dataframe，DataSet的定义"></a>RDD，Dataframe，DataSet的定义</h1><p><code>RDD</code>: immutable、spark的基础数据集。底层api； 1.0+, 存放java/scala对象;<br><code>Dataframe</code>: immutable、多了列名、Catalyst优化。高级api;  1.3+, 存放row对象;(有列名)<br><code>Dataset</code>: 比Dataframe多类型安全。高级api。 1.6+, 存放java/scala对象(暴露更多信息给编译期)<br>可以理解成DataSet每行存一个大对象。（比如样例中的<code>DataSet[Person]</code>）</p>
+<p>DataSet一般比DataFrame慢一点点，多了类型安全的开销（<code>Row</code>=&gt;<code>Java类型</code>）</p>
+<h2 id="这里说的类型安全是什么？"><a href="#这里说的类型安全是什么？" class="headerlink" title="这里说的类型安全是什么？"></a>这里说的类型安全是什么？</h2><blockquote>
+<p>是编译期类型安全</p>
+</blockquote>
+<p>Dataframe: 访问不存在的列名=&gt;运行时报错; （非类型安全）<br>DataSet:   访问不存在的列名=&gt;编译时报错。 （类型安全）</p>
+<p>DataSet的中每个元素都是case class之类的,完全定义类型的,因此编译时就能确定schema合法性。</p>
+<p><code>Dataset[Row]</code> = <code>DataFrame</code><br>因此Row可以看做非编译期类型安全的对象。</p>
+<h2 id="java-scala对象-lt-gt-DataFrame的row对象-DataSet的元素"><a href="#java-scala对象-lt-gt-DataFrame的row对象-DataSet的元素" class="headerlink" title="java/scala对象 &lt;=&gt; DataFrame的row对象/DataSet的元素:"></a>java/scala对象 &lt;=&gt; DataFrame的row对象/DataSet的元素:</h2><ol>
+<li>对于dataframe: 传入StructType;</li>
+<li>对于dataSet:  使用Encoder。 </li>
+</ol>
+<p>类似于hive的反序列化:</p>
+<h3 id="hive反序列化原理"><a href="#hive反序列化原理" class="headerlink" title="hive反序列化原理:"></a>hive反序列化原理:</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">HDFS files –&gt; InputFileFormat –&gt; &lt;key, value&gt; –&gt; Deserializer –&gt; Row object</span><br></pre></td></tr></table></figure>
+<h3 id="hive序列化原理-Serialize"><a href="#hive序列化原理-Serialize" class="headerlink" title="hive序列化原理(Serialize):"></a>hive序列化原理(<code>Serialize</code>):</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Row object –&gt; Serializer –&gt; &lt;key, value&gt; –&gt; OutputFileFormat –&gt; HDFS files</span><br></pre></td></tr></table></figure>
+
+<p><code>Encoder</code>: <code>Dataset[Row]</code> -&gt; <code>Dataset[T]</code><br>JVM对象和非堆自定义内存二进制数据<br>Encoders生成二进制代码来跟非堆数据交互，并且提供有需访问给独立的参数而不是对整个对象反序列化。</p>
+<h1 id="优化"><a href="#优化" class="headerlink" title="优化"></a>优化</h1><p>RDD: 没有优化, 程序员自己保证RDD运算是最优的;<br>DataFrame: 走catalyst编译优化,类似于Sql的优化。根据成本模型，逻辑执行计划优化成物理执行计划。<br>DataSet: 同DataFrame. </p>
+<p>强调一点,DataFrame底层也是用的RDD实现，因此如果程序员足够牛逼，理论上执行计划能写得比DataFrame的计划好。</p>
+<h1 id="序列化"><a href="#序列化" class="headerlink" title="序列化"></a>序列化</h1><p>shuffle的时候、或者cache写内存、磁盘的时候，需要序列化。</p>
+<p><code>RDD</code>: 使用java序列化(或者kryo)成二进制; (成本高)<br><code>DataFrame</code>: Tungsten计划优化。序列化到堆外内存，然后无须反序列化，直接根据schema操作二进制运算。(因为DataFrame比RDD多一个schema信息)<br><a href="https://github.com/hustnn/TungstenSecret" target="_blank" rel="noopener">https://github.com/hustnn/TungstenSecret</a><br><code>DataSet</code>: 基本同DataFrame，多了Encoder的概念。访问某列的时候，可以只反序列化那个局部的二进制。</p>
+<h2 id="Tungsten-binary-format"><a href="#Tungsten-binary-format" class="headerlink" title="Tungsten binary format"></a>Tungsten binary format</h2><p>钨丝计划使用的二进制格式</p>
+<h1 id="垃圾收集"><a href="#垃圾收集" class="headerlink" title="垃圾收集"></a>垃圾收集</h1><p>RDD: 由于上一节中的序列化，gc压力较大；<br>DataFrame: 放堆外内存，无需jvm对象头开销，无gc；<br>DataSet: 同df.</p>
+<h1 id="钨丝计划的秘密："><a href="#钨丝计划的秘密：" class="headerlink" title="钨丝计划的秘密："></a>钨丝计划的秘密：</h1><p><a href="https://github.com/hustnn/TungstenSecret" target="_blank" rel="noopener">https://github.com/hustnn/TungstenSecret</a></p>
+<p>总结一下钨丝计划的3大优化：</p>
+<ol>
+<li>内存管理、直接操作二进制数据：放堆外内存(避免gc开销)，不用jvm对象(减少对象头开销)。</li>
+<li>缓存友好的计算: 考虑存储体系;(flink也有) 对指针排序，根据schema访问key的二进制。(估计key只能是原生类型，其他类就得反序列化了)</li>
+<li>code generation：充分利用最新的编译期和cpu性能：把jvm对象转到堆外unsafeRow，以便利用第一点。</li>
+</ol>
+<p>比如8B的String的对象头有40B开销。<br>UnsafeShuffleManager： 直接在serialized binary data上sort而不是java objects</p>
+<h2 id="wholeStageCodeGen"><a href="#wholeStageCodeGen" class="headerlink" title="wholeStageCodeGen"></a>wholeStageCodeGen</h2><p>把transform的很多步骤，合并成一个步骤，使用字符串插值生成一份重写后的代码(逼近于手写最优解)，然后用Janino(微型运行时嵌入式java编译器)编译成字节码。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/04/29/2019-04/spark%E4%B8%ADRDD%EF%BC%8CDataframe%EF%BC%8CDataSet%E5%8C%BA%E5%88%AB%E5%AF%B9%E6%AF%94/" data-id="ck96cxppo00i6maam8bk2eis5" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spark/" rel="tag">spark</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-04/spark中的encoder" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/04/27/2019-04/spark%E4%B8%AD%E7%9A%84encoder/" class="article-date">
+  <time datetime="2019-04-27T03:23:26.000Z" itemprop="datePublished">2019-04-27</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/spark/">spark</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/04/27/2019-04/spark%E4%B8%AD%E7%9A%84encoder/">spark中的encoder</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>参考资料:<br><a href="https://stackoverflow.com/questions/53949497/why-a-encoder-is-needed-for-creating-dataset-in-spark" target="_blank" rel="noopener">https://stackoverflow.com/questions/53949497/why-a-encoder-is-needed-for-creating-dataset-in-spark</a><br><code>It also uses less memory than Kryo/Java serialization.</code></p>
+<h1 id="What-Encoder是啥"><a href="#What-Encoder是啥" class="headerlink" title="What: Encoder是啥?"></a>What: Encoder是啥?</h1><p>所有<code>DataSet</code>都需要<code>Encoder</code>。</p>
+<p><code>Encoder</code>是spark-sql用来序列化/反序列化的一个类。主要用于<code>DataSet</code>。<br>本质上每次调用<code>toDS()</code>函数的时候都调用了<code>Encoder</code>，不过有时候我们察觉不到，因为用了隐式调用(<code>import spark.implicits._</code>)。<br>可以直接看<code>Encoder</code>源码注释中的样例:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">import spark.implicits._</span><br><span class="line">val ds &#x3D; Seq(1, 2, 3).toDS() &#x2F;&#x2F; implicitly provided (spark.implicits.newIntEncoder)</span><br><span class="line">&#x2F;&#x2F; 将数字(JVM对象)转换为DataSet中的元素</span><br><span class="line">&#x2F;&#x2F; 这里由于是常见的原始类型，所以spark提供了隐式encoder的调用，隐藏了这些细节。</span><br></pre></td></tr></table></figure>
+<p>Encoder将jvm转换为堆外内存二进制，使用成员位置信息，降低反序列化的范围（反序列化需要的列即可）。<br>// (类似于Hive中的反序列化,把kv转换为row)</p>
+<p>Encoder不要求线程安全。</p>
+<h1 id="Why-为啥用Encoder"><a href="#Why-为啥用Encoder" class="headerlink" title="Why: 为啥用Encoder?"></a>Why: 为啥用Encoder?</h1><p>stackoverflow上说encoder消耗更少的内存。因为kryo把<code>dataSet</code>中的所有行都变成了一个打平的二进制对象。<br><code>10x faster than Kryo serialization (Java serialization orders of magnitude slower)</code><br>DataFrame本质上是DataSet[Row]，用的固定是RowEncoder，所以不需要传Encoder。<br>Encoder底层是钨丝计划的堆外内存优化，节省了jvm对象头、反序列化、gc的开销。</p>
+<h1 id="When-啥时候使用Encoder"><a href="#When-啥时候使用Encoder" class="headerlink" title="When: 啥时候使用Encoder"></a>When: 啥时候使用Encoder</h1><p><code>Encoder</code>适用于原始类型、case class对象(因为有默认的apply/unapply方法)、spark-sql类型。</p>
+<p>Encoder支持的类型非常多，不支持的情况：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. 如果类型是javabean，类的成员如果是容器，只能是List，不能是其他容器（还没有实现）;</span><br><span class="line">2. 不支持大于5的Tuple；</span><br><span class="line">3. 不支持&#96;Option&#96;；</span><br><span class="line">4. 不支持&#96;null&#96;值的&#96;case class&#96;。</span><br></pre></td></tr></table></figure>
+<p>不支持的时候，可以把不支持的部分用kyro-Encoder，相当于不支持的部分直接当做一个二进制，不享受优化，但其他不支持部分可以享受优化。</p>
+<h1 id="How-怎么使用Encoder"><a href="#How-怎么使用Encoder" class="headerlink" title="How: 怎么使用Encoder:"></a>How: 怎么使用Encoder:</h1><p>显式： 使用<code>Encoders</code>类(类似于utils)的静态工厂方法;<br>隐式：<code>import spark.implicits._</code>: 原始类型和<code>Product</code>类型(也就是<code>case class</code>)可以直接隐式支持。</p>
+<h2 id="1-创建DataSet时显式使用"><a href="#1-创建DataSet时显式使用" class="headerlink" title="1. 创建DataSet时显式使用:"></a>1. 创建DataSet时显式使用:</h2><p>源码注释中的样例:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// eg1: String:</span></span><br><span class="line">List&lt;String&gt; data = Arrays.asList(<span class="string">"abc"</span>, <span class="string">"abc"</span>, <span class="string">"xyz"</span>);</span><br><span class="line">Dataset&lt;String&gt; ds = context.createDataset(data, Encoders.STRING());</span><br><span class="line"><span class="comment">// eg2: 复合Tuple:</span></span><br><span class="line">Encoder&lt;Tuple2&lt;Integer, String&gt;&gt; encoder2 = Encoders.tuple(Encoders.INT(), Encoders.STRING());</span><br><span class="line">List&lt;Tuple2&lt;Integer, String&gt;&gt; data2 = Arrays.asList(<span class="keyword">new</span> scala.Tuple2(<span class="number">1</span>, <span class="string">"a"</span>);</span><br><span class="line">Dataset&lt;Tuple2&lt;Integer, String&gt;&gt; ds2 = context.createDataset(data2, encoder2);</span><br></pre></td></tr></table></figure>
+<h2 id="2-创建DataSet时隐式使用"><a href="#2-创建DataSet时隐式使用" class="headerlink" title="2. 创建DataSet时隐式使用:"></a>2. 创建DataSet时隐式使用:</h2><p>看createDataset的签名:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">def createDataset[T](data: RDD[T])(implicit arg0: Encoder[T]): Dataset[T]</span><br><span class="line">&#x2F;&#x2F; Creates a Dataset from an RDD of a given type.</span><br></pre></td></tr></table></figure>
+<p>所以Encoder其实可以隐式传:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">import spark.implicits._</span><br><span class="line">val ds &#x3D; Seq(1, 2, 3).toDS() &#x2F;&#x2F; implicitly provided</span><br></pre></td></tr></table></figure>
+<h2 id="3-UDAF中使用"><a href="#3-UDAF中使用" class="headerlink" title="3. UDAF中使用:"></a>3. UDAF中使用:</h2><p><a href="https://github.com/apache/spark/blob/master/examples/src/main/scala/org/apache/spark/examples/sql/UserDefinedTypedAggregation.scala" target="_blank" rel="noopener">https://github.com/apache/spark/blob/master/examples/src/main/scala/org/apache/spark/examples/sql/UserDefinedTypedAggregation.scala</a></p>
+<p>当我们为<code>DataSet</code>定义<code>UDAF</code>的使用。<br>语义上: 因为涉及到数据转换，不可避免地会需要使用<code>Encoder</code>，这个时候是显式使用。<br>语法上: 由于继承了<code>Aggregator</code>也必须使用<code>Encoder</code>。</p>
+<h2 id="源码阅读"><a href="#源码阅读" class="headerlink" title="源码阅读"></a>源码阅读</h2><h3 id="Encoder"><a href="#Encoder" class="headerlink" title="Encoder"></a>Encoder</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">trait Encoder[T] extends Serializable &#123;</span><br><span class="line">  &#x2F;** Returns the schema of encoding this type of object as a Row. *&#x2F;</span><br><span class="line">  def schema: StructType</span><br><span class="line">  &#x2F;**</span><br><span class="line">   * A ClassTag that can be used to construct and Array to contain a collection of &#96;T&#96;.*&#x2F;</span><br><span class="line">  def clsTag: ClassTag[T]</span><br><span class="line">  &#x2F;&#x2F; 存了ClassTag的话，就能在运行时构建泛型的数组了。</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>TypeTag</code>: 相当于scala以前的<code>Manifest</code>,用于存储泛型参数的实际类型。(泛型参数的实际类型运行时会被JVM擦除，有了<code>TypeTag</code>就能在运行时获得实际类型了)<br><code>ClassTag</code>: 相当于scala以前的<code>ClassManifest</code>,功能大致同上，但存得少些，比如如果是泛型的泛型，参数是泛型数组<code>List[T]</code>,<code>TypeTag</code>能全部存下，<code>ClassTag</code>就存一个<code>List</code>。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">classTag[List[Int]]</span><br><span class="line">&#x2F;&#x2F;scala.reflect.ClassTag[List[Int]] &#x3D;↩</span><br><span class="line">&#x2F;&#x2F;        ClassTag[class scala.collection.immutable.List]</span><br><span class="line">typeTag[List[Int]]</span><br><span class="line">&#x2F;&#x2F;</span><br><span class="line">&#x2F;&#x2F; reflect.runtime.universe.TypeTag[List[Int]] &#x3D; TypeTag[scala.List[Int]]</span><br></pre></td></tr></table></figure>
+
+
+<h2 id="ExpressionEncoder"><a href="#ExpressionEncoder" class="headerlink" title="ExpressionEncoder"></a>ExpressionEncoder</h2><p>Encoder的内置唯一实现类。<br><code>jvm对象&lt;=&gt;内部行格式</code>: 钨丝计划unsafeRow、expressions提取case class的变量名。<br>可以支持Tupple但不支持<code>Option</code>和<code>和null</code>值的<code>case class</code>。</p>
+<p>它会生成变量名name和位置的绑定，以便钨丝计划的<code>code gen</code>使用<code>unsafe row</code>.<br>Tupple最多到5.</p>
+<p><code>Serializer</code>: raw object=&gt;InternalRow, 用expression解析提取对象值；<br><code>Deserializer</code>: InternalRow=&gt;raw object,用expression构造对象。<br>因为unsafeRow是二进制存放在堆外，所以转换成row看做序列化。</p>
+<h3 id="Encoders"><a href="#Encoders" class="headerlink" title="Encoders"></a>Encoders</h3><p>(注意比Encoder多一个s)<br>提供了很多静态工厂方法获得Encoder(实际上目前获得的都是<code>ExpressionEncoder</code>)<br>大致可以分为几类:</p>
+<ol>
+<li>java原始类型:  <code>Encoders.BOOLEAN</code>等</li>
+<li>scala原始类型: <code>Encoders.scalaBoolean</code>等.(多一个scala前缀)</li>
+<li>javaBean类型: <code>bean[T](beanClass: Class[T])</code>。但目前成员只支持List容器，不支持其他的容器。支持原始类型或嵌套javaBean。</li>
+<li>kryo序列化类型: <code>kryo[T: ClassTag]</code>；</li>
+<li>java序列化类型: <code>javaSerialization[T: ClassTag]</code>；</li>
+<li>Tuple类型: 从Tuple2到Tuple5.</li>
+<li>Product类型: 也就是<code>case class</code>.</li>
+</ol>
+<p>其中前三种是直接调用<code>ExpressionEncoder</code>，第四第五种本质上是间接调用了<code>ExpressionEncoder</code>:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">ExpressionEncoder[T](</span><br><span class="line">      schema &#x3D; new StructType().add(&quot;value&quot;, BinaryType),</span><br><span class="line">      flat &#x3D; true,</span><br><span class="line">      serializer &#x3D; Seq(</span><br><span class="line">        EncodeUsingSerializer(</span><br><span class="line">          BoundReference(0, ObjectType(classOf[AnyRef]), nullable &#x3D; true), kryo &#x3D; useKryo)),</span><br><span class="line">      deserializer &#x3D;</span><br><span class="line">        DecodeUsingSerializer[T](</span><br><span class="line">          Cast(GetColumnByOrdinal(0, BinaryType), BinaryType),</span><br><span class="line">          classTag[T],</span><br><span class="line">          kryo &#x3D; useKryo),</span><br><span class="line">      clsTag &#x3D; classTag[T]</span><br><span class="line">    )</span><br></pre></td></tr></table></figure>
+<p>因此第四第五后两种序列化本质上是把整个对象看做一个二进制类型，不利于后续优化和减少反序列化。</p>
+<p>原始类型还包括:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">java的:</span><br><span class="line">byte,short,int,long,float,double,java.math.BigDecimal,java.sql.Date,java.sql.Timestamp</span><br><span class="line">scala的:</span><br><span class="line">Array[Byte],byte,short,int,long,float,double</span><br></pre></td></tr></table></figure>
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/04/27/2019-04/spark%E4%B8%AD%E7%9A%84encoder/" data-id="ck96cxppp00i9maam5qixbnbe" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spark/" rel="tag">spark</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2019-04/2019年的人们如何生成HTTPS证书" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/04/14/2019-04/2019%E5%B9%B4%E7%9A%84%E4%BA%BA%E4%BB%AC%E5%A6%82%E4%BD%95%E7%94%9F%E6%88%90HTTPS%E8%AF%81%E4%B9%A6/" class="article-date">
@@ -815,180 +981,6 @@
 
 
   
-    <article id="post-2019-02/nginx笔记-编译安装" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E7%BC%96%E8%AF%91%E5%AE%89%E8%A3%85/" class="article-date">
-  <time datetime="2019-02-28T07:08:23.000Z" itemprop="datePublished">2019-02-28</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/nginx/">nginx</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E7%BC%96%E8%AF%91%E5%AE%89%E8%A3%85/">nginx笔记-编译安装</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>参考资料：<br><a href="https://www.jianshu.com/p/5eab0f83e3b4" target="_blank" rel="noopener">https://www.jianshu.com/p/5eab0f83e3b4</a></p>
-<h1 id="架构"><a href="#架构" class="headerlink" title="架构"></a>架构</h1><img src="/images/2019-02/master-worker.png" class="" width="800" height="1200" title="master-worker">
-<p>master+worker架构。</p>
-<p>master: 管理<code>nginx.conf</code>,同步到worker;<br>worker: 单线程绑定cpu，实际处理/转发请求;</p>
-<p>master咋同步配置到worker呢？<br>直接用新conf起新worker,旧worker处理完手头的活就kill掉。</p>
-<h1 id="常用命令"><a href="#常用命令" class="headerlink" title="常用命令"></a>常用命令</h1><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 启动:</span></span><br><span class="line">nginx -c nginx配置文件地址   </span><br><span class="line"><span class="meta">#</span><span class="bash"> 重新载入配置:</span></span><br><span class="line">nginx -s reload</span><br><span class="line"><span class="meta">#</span><span class="bash"> 检查配置（或查看配置地址）：</span></span><br><span class="line">nginx -t</span><br><span class="line"><span class="meta">#</span><span class="bash"> 停止：</span></span><br><span class="line">nginx -s stop</span><br></pre></td></tr></table></figure>
-<p>比如如果想知道当前nginx的配置文件在哪里，可以运行<code>nginx -t</code>,就能看到了。</p>
-<h1 id="编译安装"><a href="#编译安装" class="headerlink" title="编译安装"></a>编译安装</h1><p>下载解压缩:<br><a href="http://nginx.org/en/download.html" target="_blank" rel="noopener">http://nginx.org/en/download.html</a><br><strong>配置</strong></p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> KERNEL_BITS=64</span><br><span class="line">./configure --user=mengqifeng \</span><br><span class="line">--group=staff \</span><br><span class="line">--prefix=/usr/<span class="built_in">local</span>/nginx \</span><br><span class="line">--pid-path=/var/run/nginx.pid \</span><br><span class="line">--lock-path=/var/lock/nginx.lock \</span><br><span class="line">--with-http_ssl_module \</span><br><span class="line">--with-http_dav_module \</span><br><span class="line">--with-http_flv_module \</span><br><span class="line">--with-http_realip_module \</span><br><span class="line">--with-http_gzip_static_module \</span><br><span class="line">--with-http_stub_status_module \</span><br><span class="line">--with-mail --with-mail_ssl_module \</span><br><span class="line">--with-debug \</span><br><span class="line">--with-http_auth_request_module \</span><br><span class="line">--http-client-body-temp-path=/var/tmp/nginx/client \</span><br><span class="line">--http-proxy-temp-path=/var/tmp/nginx/proxy \</span><br><span class="line">--http-fastcgi-temp-path=/var/tmp/nginx/fastcgi \</span><br><span class="line">--http-uwsgi-temp-path=/var/tmp/nginx/uwsgi \</span><br><span class="line">--http-scgi-temp-path=/var/tmp/nginx/scgi \</span><br><span class="line">--with-pcre=/Users/mengqifeng/Public/build_home/pcre-8.42 \</span><br><span class="line">--with-openssl=/Users/mengqifeng/Public/build_home/openssl \</span><br><span class="line">--with-zlib=/Users/mengqifeng/Public/build_home/zlib-1.2.11</span><br></pre></td></tr></table></figure>
-<p>其中最后3行要看情况,先不加。<br>报错以后下载pcre和openssl,加上参数提供给nginx.<br><strong>编译</strong></p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">make</span><br></pre></td></tr></table></figure>
-<p><strong>安装</strong></p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo make install</span><br></pre></td></tr></table></figure>
-
-<p>最后设置一下环境变量: (<code>/etc/profile.d/nginx.sh</code>)</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> NGINX_HOME=/usr/<span class="built_in">local</span>/nginx</span><br><span class="line"><span class="built_in">export</span> PATH=<span class="variable">$PATH</span>:<span class="variable">$NGINX_HOME</span>/sbin</span><br></pre></td></tr></table></figure>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E7%BC%96%E8%AF%91%E5%AE%89%E8%A3%85/" data-id="ck96cxpp400ftmaamg67s4hg3" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/nginx/" rel="tag">nginx</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-2019-02/redis设计与实现笔记8-sentinel哨兵模式" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/02/24/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B08-sentinel%E5%93%A8%E5%85%B5%E6%A8%A1%E5%BC%8F/" class="article-date">
-  <time datetime="2019-02-24T12:46:55.000Z" itemprop="datePublished">2019-02-24</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/redis/">redis</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/02/24/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B08-sentinel%E5%93%A8%E5%85%B5%E6%A8%A1%E5%BC%8F/">redis设计与实现笔记8-sentinel哨兵模式</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h2 id="使用场景"><a href="#使用场景" class="headerlink" title="使用场景:"></a>使用场景:</h2><p>用几个节点开启sentinel组成一个哨兵集群，负责监控另外一些redis的master/slave集群的健康状态，协助进行故障恢复(master挂了的时候，升级某个slave为新master)。</p>
-<h2 id="思考"><a href="#思考" class="headerlink" title="思考:"></a>思考:</h2><p>如果有1个master,10个slave，数据均已经完全同步。<br>这个时候，连续挂两次master，是不是所有数据就都没了？<br>第1次: 除新master以外的节点，执行新slaveof命令，清空数据准备同步新master;<br>第2次: 新master挂了，其他节点是空的。</p>
-<h2 id="答案："><a href="#答案：" class="headerlink" title="答案："></a>答案：</h2><p>不会这么脆弱。<br>两个机制提升了这个过程的可靠性：<br>(1)确认接受到完整rdb后，从库才清空旧数据库;<br>(2)确认所有从库完成同步后，才更新master的地址和端口，完成故障恢复流程。（master/slave换代操作会在故障恢复完全完成后进行。）</p>
-<p>第1次： 除候选master以外的节点，执行slaveof命令，但清空数据会在确认接收到完整rdb文件后进行。（详见代码<a href="https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/replication.c的1036行。）" target="_blank" rel="noopener">https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/replication.c的1036行。）</a><br>第2次：候选master挂了，重新推举候选master，换代没有完全完成，则不会更新master字段，因此其他slave都还在候选集中。</p>
-<p>相关参数: </p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 执行故障转移操作时，可以同时对新master进行同步的从库数量:</span></span><br><span class="line">SENTINEL parallel-syncs &lt;master-name&gt; &lt;number&gt;</span><br></pre></td></tr></table></figure>
-
-<h1 id="哨兵模式-Sentinel"><a href="#哨兵模式-Sentinel" class="headerlink" title="哨兵模式:Sentinel"></a>哨兵模式:Sentinel</h1><img src="/images/2019-02/sentinel.png" class="" width="800" height="1200" title="sentinel">
-<p>redis的高可用模式，一主多从+sentinel集群进行监控和故障恢复，主挂的时间达到设置，则选取一个从库升级为主库。</p>
-<h2 id="sentinel启动命令"><a href="#sentinel启动命令" class="headerlink" title="sentinel启动命令"></a>sentinel启动命令</h2><p>一个节点用redis代码可以用3种身份(模式)启动：</p>
-<ol>
-<li>master: 负责写命令；</li>
-<li>slave: 负责同步、从库，可以执行读命令；</li>
-<li>sentinel：负责监控上述两者，进行故障恢复。<br>使用哨兵模式：<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">redis-sentinel sentinel.conf</span><br><span class="line"><span class="comment"># 或:</span></span><br><span class="line">redis-server sentinel.conf --sentinel</span><br></pre></td></tr></table></figure>
-之后发生的事情:</li>
-<li>初始化服务器：不载入rdb,aof;（因为不需要负责实际数据）</li>
-<li>redis服务器切换成Sentinel专用代码;（默认端口26379，只载入部分命令表,客户端只能执行7个命令: <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">PING</span><br><span class="line">SENTINEL</span><br><span class="line">INFO</span><br><span class="line">Subscribe</span><br><span class="line">unSubscribe</span><br><span class="line">PSubscribe</span><br><span class="line">PUnSubscribe</span><br></pre></td></tr></table></figure></li>
-<li>初始化sentinel状态；</li>
-<li>根据配置文件，初始化Sentinel的主库列表；</li>
-<li>创建与主库的网络连接。</li>
-</ol>
-<h2 id="sentinel相关的网络连接图"><a href="#sentinel相关的网络连接图" class="headerlink" title="sentinel相关的网络连接图"></a>sentinel相关的网络连接图</h2><p>引入sentinel后的redis主从架构网络连接较多：</p>
-<ol>
-<li>sentinel节点与master: 命令连接+订阅连接;</li>
-<li>sentinel节点与slave:  命令连接+订阅连接;</li>
-<li>sentinel节点与sentinel: 命令连接。<br>相关的连接图如下:<img src="/images/2019-02/sentinel-master.png" class="" width="800" height="1200" title="sentinel-master"></li>
-</ol>
-<p><strong>master地址与端口</strong>：<code>需要配置</code><br>sentinel需要订阅master的心跳，同时在需要的时候向master发送命令，因此需要两种连接：订阅连接+命令连接。</p>
-<img src="/images/2019-02/sentinel-slave.png" class="" width="800" height="1200" title="sentinel-slave">
-<p><strong>slave地址与端口</strong>：<code>不需要配置</code><br>sentinel通过master获取到slave的地址与端口，因此不需要给sentinel配置slavel信息了。<br>sentinel需要订阅slave的心跳，同时在需要的时候向slave发送命令，因此需要两种连接：订阅连接+命令连接。（同master类似）</p>
-<img src="/images/2019-02/sentinel-sentinel.png" class="" width="800" height="1200" title="sentinel-sentinel">
-<p><strong>其他sentinel的地址与端口</strong>: <code>不需要配置</code><br>sentinel通过master获取到其他sentinel的地址与端口，因此不需要给sentinel配置信息了。sentinel订阅频道的信息里有连接到同一个master的sentinel信息。</p>
-<p>由于心跳消息由master帮sentinel完成了，不需要再订阅其他sentinel的心跳了。<br>每两个sentinel之间都有双向的命令连接（完全图），方便互相发送命令。（客观下线、主观下线、选举leader等命令）</p>
-<h2 id="一份可能的sentinel配置文件"><a href="#一份可能的sentinel配置文件" class="headerlink" title="一份可能的sentinel配置文件"></a>一份可能的sentinel配置文件</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">## master1 conf:</span><br><span class="line">sentinel monitor master1 127.0.0.1 6379 2 # 需要2票(quorum)才能客观下线</span><br><span class="line">sentinel down-after-milliseconds master1 30000 # 30秒才算主观下线(包括master&#x2F;slave和其他sentinel)</span><br><span class="line">sentinel parallel-syncs master1 1  # 同时可以有1个从库进行同步</span><br><span class="line">sentinel failover-timeout master1 90000 # 刷新故障迁移状态的最大时限</span><br><span class="line">## master2 conf:</span><br><span class="line">sentinel monitor master2 127.0.0.1 12345 5 # 需要5票才能客观下线</span><br><span class="line">sentinel down-after-milliseconds master2 50000</span><br><span class="line">sentinel parallel-syncs master2 5 </span><br><span class="line">sentinel failover-timeout master2 450000</span><br></pre></td></tr></table></figure>
-
-<h3 id="初始化sentinel状态"><a href="#初始化sentinel状态" class="headerlink" title="初始化sentinel状态"></a>初始化sentinel状态</h3><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">sentinelState</span>&#123;</span></span><br><span class="line">    <span class="comment">// 当前纪元</span></span><br><span class="line">    <span class="keyword">uint64_t</span> current_epoch;</span><br><span class="line">    <span class="comment">// 保存所有被这个sentinel监视的master:</span></span><br><span class="line">    dict *master;<span class="comment">// &lt;master_name,sentinelRedisInstance&gt;</span></span><br><span class="line">&#125;sentinel;</span><br></pre></td></tr></table></figure>
-<p>其中master值<code>sentinelRedisInstance</code>的结构如下:</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">sentinelRedisInstance</span>&#123;</span></span><br><span class="line">    <span class="comment">// 实例类型、状态:</span></span><br><span class="line">    <span class="keyword">int</span> flags;</span><br><span class="line">    <span class="keyword">char</span> * name; <span class="comment">// "127.0.0.1:26379"</span></span><br><span class="line">    <span class="keyword">char</span> * runid; </span><br><span class="line">    <span class="keyword">uint64_t</span> config_epoch;</span><br><span class="line">    <span class="comment">// 实例的地址:</span></span><br><span class="line">    sentinelAddr *addr;<span class="comment">// ip,port</span></span><br><span class="line">    <span class="comment">// 无响应多少毫秒后判断为主观下线:</span></span><br><span class="line">    <span class="keyword">mstime_t</span> down_after_period;</span><br><span class="line">    <span class="comment">// 判断客观下线所需的支持票数:</span></span><br><span class="line">    <span class="keyword">int</span> quorum;</span><br><span class="line">    <span class="comment">// 故障转移时,可以同时对新主服务器进行同步的从服务器数量:</span></span><br><span class="line">    <span class="keyword">int</span> parallel_syncs;</span><br><span class="line">    <span class="comment">// 刷新故障迁移状态的最大时限:</span></span><br><span class="line">    <span class="keyword">mstime_t</span> failover_timeout;</span><br><span class="line">&#125;sentinelRedisInstance;</span><br></pre></td></tr></table></figure>
-
-<h3 id="创建网络连接"><a href="#创建网络连接" class="headerlink" title="创建网络连接"></a>创建网络连接</h3><p>sentinel向<strong>每个</strong>监视的master创建两个连接:</p>
-<ol>
-<li>命令连接: 用于向master发送、接受命令;</li>
-<li>订阅连接: 订阅master的<strong>sentinel</strong>:hello消息。</li>
-</ol>
-<h2 id="命令连接与订阅连接"><a href="#命令连接与订阅连接" class="headerlink" title="命令连接与订阅连接"></a>命令连接与订阅连接</h2><h3 id="连向master-slave的命令连接：-4种命令："><a href="#连向master-slave的命令连接：-4种命令：" class="headerlink" title="连向master/slave的命令连接： 4种命令："></a>连向master/slave的命令连接： 4种命令：</h3><ol>
-<li>每10秒一次的INFO命令：获取master和slave的最新配置信息；</li>
-<li>每2秒一次的订阅命令: 获取<strong>sentinel</strong>:hello频道信息，得到其他sentinel的信息。</li>
-<li>每1秒一次的PING命令:<br>获取master/slave/sentinel的心跳信息。</li>
-<li>故障恢复的时候的slaveof命令。</li>
-</ol>
-<h3 id="订阅连接"><a href="#订阅连接" class="headerlink" title="订阅连接:"></a>订阅连接:</h3><p>master/slave向所有sentinel发送它们订阅的<strong>sentinel</strong>:hello频道信息。</p>
-<h3 id="sentinel之间的命令连接"><a href="#sentinel之间的命令连接" class="headerlink" title="sentinel之间的命令连接"></a>sentinel之间的命令连接</h3><p>用于检查客观下线、选举leader、故障恢复。<br>故障恢复流程：</p>
-<ol>
-<li><code>主观下线</code>: 某个sentinel用ping命令检查master: 超过<code>down-after-milliseconds</code>配置没有回复，该sentinel主观地认为：这个master挂了——它把这个master标记为主观下线状态；</li>
-<li><code>客观下线</code>: 这个sentinel通过<code>is-master-down-by-addr</code>命令询问其他sentinel的意见。超过<code>quorum</code>数量sentinel同意，则进入客观下线状态；</li>
-<li><code>选举leader</code>: leader负责接下来的故障恢复。每次选举结束后(无论成败)，<code>epoch</code>纪元都会+1。进入客观下线分支的sentinel会要求其他人选自己，同时它会投第一个向自己要求选票的sentinel一票。所有sentinel会回复其他sentinel自己的选择，因此大家都能确定有谁的票数过半，或者都没有过半，也就是leader选举的成败是确定可知的。（奇数个sentinel的raft算法）</li>
-<li><code>leader</code>选取新候选master:<br>（1）下线原master；（但master结构中依然记录旧地址、端口，不急着更新）<br>（2）断开候选者slaveof;<br>（3）其他slave执行slaveof候选者；（同步并行度由参数决定）<br>（4）当其他slave完成同步，正式任命候选者为master，更新信息到内存。见代码<a href="https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/sentinel.c中`sentinelHandleDictOfRedisInstances`函数和`sentinelFailoverSwitchToPromotedSlave`函数。" target="_blank" rel="noopener">https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/sentinel.c中`sentinelHandleDictOfRedisInstances`函数和`sentinelFailoverSwitchToPromotedSlave`函数。</a><br>这个过程中如果候选者挂了，会重新选一个候选者。</li>
-</ol>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">sentinelHandleDictOfRedisInstances</span><span class="params">(dict *instances)</span> </span>&#123;</span><br><span class="line">    dictIterator *di;</span><br><span class="line">    dictEntry *de;</span><br><span class="line">    sentinelRedisInstance *switch_to_promoted = <span class="literal">NULL</span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* There are a number of things we need to perform against every master. */</span></span><br><span class="line">    <span class="comment">// 遍历多个实例，这些实例可以是多个主服务器、多个从服务器或者多个 sentinel</span></span><br><span class="line">    di = dictGetIterator(instances);</span><br><span class="line">    <span class="keyword">while</span>((de = dictNext(di)) != <span class="literal">NULL</span>) &#123;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 取出实例对应的实例结构</span></span><br><span class="line">        sentinelRedisInstance *ri = dictGetVal(de);</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 执行调度操作</span></span><br><span class="line">        sentinelHandleRedisInstance(ri);</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 如果被遍历的是主服务器，那么递归地遍历该主服务器的所有从服务器</span></span><br><span class="line">        <span class="comment">// 以及所有 sentinel</span></span><br><span class="line">        <span class="keyword">if</span> (ri-&gt;flags &amp; SRI_MASTER) &#123;</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 所有从服务器</span></span><br><span class="line">            sentinelHandleDictOfRedisInstances(ri-&gt;slaves);</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 所有 sentinel</span></span><br><span class="line">            sentinelHandleDictOfRedisInstances(ri-&gt;sentinels);</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 对已下线主服务器（ri）的故障迁移已经完成</span></span><br><span class="line">            <span class="comment">// ri 的所有从服务器都已经同步到新主服务器</span></span><br><span class="line">            <span class="keyword">if</span> (ri-&gt;failover_state == SENTINEL_FAILOVER_STATE_UPDATE_CONFIG) &#123;</span><br><span class="line">                <span class="comment">// 已选出新的主服务器</span></span><br><span class="line">                switch_to_promoted = ri;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 将原主服务器（已下线）从主服务器表格中移除，并使用新主服务器代替它</span></span><br><span class="line">    <span class="keyword">if</span> (switch_to_promoted)</span><br><span class="line">        sentinelFailoverSwitchToPromotedSlave(switch_to_promoted);</span><br><span class="line"></span><br><span class="line">    dictReleaseIterator(di);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-<p>选取候选者的大致逻辑：</p>
-<ol>
-<li>删除网络条件差的；</li>
-<li>考虑因素的顺序：优先级、复制偏移量、运行ID小的。<br>详见<a href="https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/sentinel.c代码中的`sentinelSelectSlave`函数。" target="_blank" rel="noopener">https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/sentinel.c代码中的`sentinelSelectSlave`函数。</a></li>
-</ol>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/02/24/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B08-sentinel%E5%93%A8%E5%85%B5%E6%A8%A1%E5%BC%8F/" data-id="ck96cxppc00gsmaam508b80xs" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1015,6 +1007,14 @@
       <ul>
         
           <li>
+            <a href="/2022/03/13/2022-03/ss%E5%91%BD%E4%BB%A4/">ss命令</a>
+          </li>
+        
+          <li>
+            <a href="/2022/03/13/2022-03/UDP%E6%89%B9%E5%A4%84%E7%90%86%E4%BC%98%E5%8C%96-GSO-GRO/">UDP批处理优化-GSO/GRO</a>
+          </li>
+        
+          <li>
             <a href="/2022/02/24/2022-02/%E4%B8%BA%E4%BB%80%E4%B9%88%E5%85%88hash%E5%90%8E%E5%8A%A0%E5%AF%86%E7%9A%84%E6%96%B9%E6%B3%95%E5%AE%B9%E6%98%93%E9%81%AD%E9%81%87padding%E6%94%BB%E5%87%BB/">为什么先hash后加密的方法容易遭遇padding攻击</a>
           </li>
         
@@ -1024,14 +1024,6 @@
         
           <li>
             <a href="/2022/02/18/2022-02/%E6%8B%A5%E5%A1%9E%E7%AE%97%E6%B3%95bbr/">quic中的拥塞算法bbr</a>
-          </li>
-        
-          <li>
-            <a href="/2022/02/17/2022-02/http3-quic%E4%BC%98%E7%BC%BA%E7%82%B9%E5%8F%8A%E5%8E%9F%E5%9B%A0/">http3_quic优缺点及原因</a>
-          </li>
-        
-          <li>
-            <a href="/2022/02/16/2022-02/http-range/">http_range</a>
           </li>
         
       </ul>

@@ -72,6 +72,269 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2017-11/grep笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2017/11/28/2017-11/grep%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2017-11-28T12:24:57.000Z" itemprop="datePublished">2017-11-28</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/shell/">shell</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2017/11/28/2017-11/grep%E7%AC%94%E8%AE%B0/">grep笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>grep语法:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">grep [OPTION]... PATTEN [FILE]...</span><br></pre></td></tr></table></figure>
+
+<p>OPTION参数:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">-i: 忽略大小写</span><br><span class="line">-v: 反转查找</span><br><span class="line">-w: 只显示全字符合的列</span><br><span class="line">-c或--count: 计算符合范本样式的列数.</span><br></pre></td></tr></table></figure>
+
+<p>示例1:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 计算处于init状态的mysql线程有多少个.</span></span><br><span class="line">pipe -e 'show processlist \G' | grep -c 'State: init'</span><br></pre></td></tr></table></figure>
+
+<p>示例2:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 查找目录/etc/acpi及其目录下所有文件中包含<span class="string">"update"</span>的文件:</span></span><br><span class="line">grep -r update /etc/acpi</span><br></pre></td></tr></table></figure>
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2017/11/28/2017-11/grep%E7%AC%94%E8%AE%B0/" data-id="ck96cxpng008lmaamg8jw5h33" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/shell/" rel="tag">shell</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2017-11/epoll相关基础知识" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2017/11/06/2017-11/epoll%E7%9B%B8%E5%85%B3%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86/" class="article-date">
+  <time datetime="2017-11-06T11:52:23.000Z" itemprop="datePublished">2017-11-06</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2017/11/06/2017-11/epoll%E7%9B%B8%E5%85%B3%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86/">epoll相关基础知识</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="背景"><a href="#背景" class="headerlink" title="背景:"></a>背景:</h1><p>C10K问题. 并发访问量&gt;=10K =&gt; 维持TCP连接的进程数超过上限.</p>
+<ul>
+<li>远古解决方案:</li>
+</ul>
+<ol>
+<li>用<code>UDP</code>. (腾讯QQ)</li>
+<li><code>select</code>模式. 每个TCP连接占用一个文件描述符, 所以进程能处理的连接最大不能超过1024. </li>
+<li><code>poll</code>模式. 每次收到数据需要遍历每一个连接查看哪个连接有数据请求。</li>
+</ol>
+<p>2002年左右开始的解决方案:</p>
+<blockquote>
+<p><code>kqueue</code>: FreeBSD<br><code>epoll</code>:  Linux (2.5.44内核)<br><code>IOCP</code>: Windows</p>
+</blockquote>
+<ul>
+<li><p>epoll的编程模型:<br>异步非阻塞回调. <code>Reactor</code>,事件驱动,事件轮询(<code>EventLoop</code>).</p>
+</li>
+<li><p>新的问题<br><code>epoll</code>编程太繁琐,层层回调/嵌套.</p>
+</li>
+<li><p>解决方案:</p>
+</li>
+</ul>
+<ol>
+<li>默默忍受: 性能最优.</li>
+<li>协程,<code>coroutine</code>: 需要解决某个协程密集计算带来的问题.</li>
+</ol>
+<ul>
+<li>协程<br>封装了事件回调,底层库通过保存状态(代码行数,局部变量的值),替程序猿进行回调. 程序猿可以就像一切刚开始的时候那样只写仿佛同步阻塞的代码.</li>
+</ul>
+<p><code>go</code>语言中具体代码:</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">go</span> doSomething();</span><br><span class="line"><span class="comment">// 类似于 threadPool.submit(new Thread(new Runnable()&#123;run()&#123;doSomething();&#125;&#125;))的效果</span></span><br></pre></td></tr></table></figure>
+<p>会提交一个协程到go语言自带的协程池子里。由于go语言每个函数可以作为一个协程，所以语法显得非常简练方便，而且无需操心线程池。<br>此外<code>go</code>中<code>main</code>函数也是一个协程，而且不是守护的。（java中main函数是守护的,会等待所有其他线程运行结束）<br>协程的同步依然需要自己管理，一般是用channel(管道)进行。<br>语法上,协程提供了一个写非阻塞操作的非常简洁的关键字(<code>go</code>)。<br>实现上,协程提供了非常方便的协程池,而且由于是用户态线程,因此每个协程的开销足够小,小到可以将每个函数这么小的粒度作为协程。 </p>
+<p>缺陷:<br>由于实现上是使用用户态线程/进程,当某一个协程中有密集计算时,其他协程就不运行了. 每个线程上装配的协程的切换是需要在每次协程中发生中断时进行判断的。</p>
+<p>解决方案:</p>
+<ul>
+<li><code>GoLang</code>: 用户在密集计算的代码中自己<code>yield</code>. </li>
+<li><code>ErLang</code>: 无需关心. 由于底层有<code>ErLang</code>自己开发的VM,会自动检测并进行切换.(<code>rabbitmq</code>)</li>
+</ul>
+<h1 id="具体实现"><a href="#具体实现" class="headerlink" title="具体实现"></a>具体实现</h1><ul>
+<li>问题的本质:<br>一个进程处理一个连接, 导致进程开销太大.<br>因此解决思路就是一个进程处理多个连接.也就是:<br><code>IO多路复用</code>. </li>
+</ul>
+<p>实现1:</p>
+<blockquote>
+<p>每个进程循环处理多个连接.<br>缺点: 其中一个连接处理卡住会阻塞整个应用. </p>
+</blockquote>
+<h2 id="select模式"><a href="#select模式" class="headerlink" title="select模式"></a>select模式</h2><p>实现2: (<code>select</code>模式)</p>
+<blockquote>
+<p>维护一个fd_set状态结构体.<br>阻塞的原因是IO资源的争用,如某个文件句柄是否可读,可写.(锁)<br>告诉内核该进程关心的文件句柄, 让内核检查多个文件句柄.</p>
+</blockquote>
+<p>进程发送句柄列表=&gt;内核逐个检查状态是否可用. </p>
+<p>缺陷:</p>
+<blockquote>
+<ol>
+<li>每个进程有关注的文件句柄上限;</li>
+<li>需要重复初始化关心的文件句柄结构体;</li>
+<li>逐个排查连接效率低.</li>
+</ol>
+</blockquote>
+<h2 id="poll模式"><a href="#poll模式" class="headerlink" title="poll模式"></a>poll模式</h2><p>实现3:(<code>poll模式</code>)</p>
+<blockquote>
+<p>设计新的数据结构.<br>通过pollfd数组向内核传递需要关注的事件: 消除文件句柄上限;<br>不同字段区分关注事件和发生事件: 避免重复初始化.</p>
+</blockquote>
+<p>缺陷:</p>
+<blockquote>
+<ol>
+<li>逐个排查连接效率低.</li>
+</ol>
+</blockquote>
+<h2 id="epoll模式"><a href="#epoll模式" class="headerlink" title="epoll模式"></a>epoll模式</h2><p>实现4: (<code>epoll</code>模式)<br>内核升级到能对每个FD注册回调,进程能够直接知道是哪个句柄状态变化,而不用轮询,监听回调就行了.<br>(linux 2.5.44新增<code>api</code>)<br>事件模型.</p>
+<h2 id="epoll具体实现细节"><a href="#epoll具体实现细节" class="headerlink" title="epoll具体实现细节"></a>epoll具体实现细节</h2><p><strong>架构:</strong></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;&#x2F; 一堆事情(IO访问),需要切换到内核态访问相应地址空间.例如把数据从内核地址空间拷贝到用户地址空间. 拷贝完以后触发一个读可用事件.</span><br><span class="line">用户进程-&gt;内核(</span><br><span class="line">    readyList</span><br><span class="line">   ,红黑树&lt;文件描述符(如Socket)&gt;</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+<p><strong>工作流程:</strong></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">1. 用户进程调用epoll_create;</span><br><span class="line">2. 内核创建readyList,红黑树;</span><br><span class="line">3. 用户进程调用epoll_ctrl,传递监控的句柄(如Socket),以及在上面关注的事件;</span><br><span class="line">4. 内核将句柄插入红黑树;</span><br><span class="line">5. 内核的中断处理程序注册一个回调,如果红黑树中某个句柄的中断到了,</span><br><span class="line">把它对应的事件放到ReadyList. </span><br><span class="line"></span><br><span class="line">--- 另一个流程 --- </span><br><span class="line">1. 用户进程调用epoll_wait</span><br><span class="line">2. 内核从ReadyList返回可回调的事件.</span><br></pre></td></tr></table></figure>
+
+<p><strong>LT模式与ET模式</strong><br>LT模式: 水平触发(JAVA NIO默认),一个句柄上的事件一次没处理完,会再下次调用epoll_wait的时候依然返回它;<br>ET模式: 边缘触发,仅在第一次返回.</p>
+<p>LT模式:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. 用户进程调用epoll_wait;</span><br><span class="line">2. 内核从ReadyList返回数据;&#x2F;&#x2F; 就绪的Socket拷贝到用户态内存</span><br><span class="line">3. 清空ReadyList;</span><br><span class="line">4. 检查Socket句柄,如果有未处理完的事件(数据没读完),将句柄加入ReadyList.</span><br></pre></td></tr></table></figure>
+<p>ET模式没有上述的第四步.</p>
+<p><strong>LT模式注意事项</strong></p>
+<blockquote>
+<p>不需要写的话,不要关注写事件.<br>长期关注写事件会导致CPU100%问题. </p>
+</blockquote>
+<p><strong>ET模式注意事项</strong></p>
+<blockquote>
+<p>每次都要读到返回EWOULDBLOCK为止. (要读干净)</p>
+</blockquote>
+<p><strong>epoll为什么使用红黑树</strong><br>因为epoll要求快速找到某个句柄,因此首先是一个Map接口,候选实现:</p>
+<ol>
+<li>哈希表 O(1)</li>
+<li>红黑树 O(lgn)</li>
+<li>跳表 近似O(lgn)<br>据说老版本的内核和FreeBSD的Kqueue使用的是哈希表. </li>
+</ol>
+<p>个人理解现在内核使用红黑树的原因:</p>
+<ol>
+<li>哈希表. 空间因素,可伸缩性.<br>(1)频繁增删. 哈希表需要预估空间大小, 这个场景下无法做到.<br>间接影响响应时间,假如要resize,原来的数据还得移动.即使用了一致性哈希算法,<br>也难以满足非阻塞的timeout时间限制.(时间不稳定)<br>(2) 百万级连接,哈希表有镂空的空间,太浪费内存.</li>
+<li>跳表. 慢于红黑树. 空间也高. </li>
+<li>红黑树. 经验判断,内核的其他地方如防火墙也使用红黑树,实践上看性能最优.</li>
+</ol>
+<p><strong>数据结构:</strong></p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="keyword">union</span> epoll_data &#123;</span><br><span class="line">     <span class="keyword">void</span> *ptr;</span><br><span class="line">     <span class="keyword">int</span> fd; </span><br><span class="line">     <span class="keyword">__uint32_t</span> u32;</span><br><span class="line">     <span class="keyword">__uint64_t</span> u64; </span><br><span class="line">&#125;<span class="keyword">epoll_data_t</span>;  <span class="comment">// &lt;=</span></span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">epoll_event</span> &#123;</span> </span><br><span class="line">    <span class="keyword">__uint32_t</span> events; <span class="comment">/* Epoll events */</span> </span><br><span class="line">    <span class="keyword">epoll_data_t</span> data;<span class="comment">/* User data variable */</span></span><br><span class="line"> &#125;;</span><br></pre></td></tr></table></figure>
+<p>C库的API:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">epoll_create</span><span class="params">(<span class="keyword">int</span> <span class="built_in">size</span>)</span></span>; <span class="comment">// size: 最大句柄数</span></span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">epoll_ctl</span><span class="params">(<span class="keyword">int</span> epfd, <span class="keyword">int</span> op, <span class="keyword">int</span> fd, struct epoll_event *event)</span></span>;  </span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">epoll_wait</span><span class="params">(<span class="keyword">int</span> epfd, struct epoll_event *events,<span class="keyword">int</span> maxevents, <span class="keyword">int</span> timeout)</span></span>;</span><br></pre></td></tr></table></figure>
+<p>具体语义:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">epoll_create: 让内核创建一个epoll item;</span><br><span class="line">epoll_ctl: 修改epoll item: 增加socket句柄,或删除socket句柄,注册回调事件;</span><br><span class="line">epoll_wait: 等待注册的事件发生. </span><br><span class="line">传入的参数epoll_event会从内核那捞回结果.(被回调的事件)</span><br></pre></td></tr></table></figure>
+
+
+<h2 id="实现5-libevent库"><a href="#实现5-libevent库" class="headerlink" title="实现5: libevent库"></a>实现5: libevent库</h2><p>封装<code>epoll</code>. 统一不同平台api.<br>使用方式:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">1. 初始化事件event,定义回调函数f;</span><br><span class="line">2. 将事件加入系统监控事件列表;</span><br><span class="line">3. 监听事件及分发.</span><br></pre></td></tr></table></figure>
+
+<p><strong>NIO的epoll bug</strong><br>部分Linux的2.6的kernel中，poll和epoll对于突然中断的连接socket会对返回的eventSet事件集合置为POLLHUP，也可能是POLLERR，eventSet事件集合发生了变化，这就可能导致Selector会被唤醒。<br>进一步导致jdk中NIO实现中某段代码的死循环.</p>
+<p>Netty的解决方案:</p>
+<ol>
+<li>将select返回值为0进行计数,直到大于阈值<code>EPOLL_BUG_WORKAROUND</code>;</li>
+<li>重建Selector. </li>
+</ol>
+<h1 id="C10M问题"><a href="#C10M问题" class="headerlink" title="C10M问题"></a>C10M问题</h1><ol>
+<li><p>数据包经过linux内核协议栈导致性能巨大下降.<br>解决方案:<br>(1)intel的DPDK框架. 直接接管网卡收到的数据包传递到业务代码中进行处理.</p>
+</li>
+<li><p>存储访问时间消耗. 切换消耗:<br>解决方案:<br>(1) 重新设计操作系统, 包括内存池,cache,内存分页,cpu管理等等.</p>
+</li>
+</ol>
+<h1 id="术语-概念"><a href="#术语-概念" class="headerlink" title="术语/概念"></a>术语/概念</h1><h2 id="缓存IO"><a href="#缓存IO" class="headerlink" title="缓存IO"></a>缓存IO</h2><p>标准IO. 操作系统先将IO数据缓存到文件系统的页缓存(page cache)中,然后再从操作系统内核的缓冲区拷贝到应用程序的地址空间.<br>缺点:<br>重复拷贝带来很大的CPU/内存开销. </p>
+<ul>
+<li><p>阻塞/非阻塞: </p>
+<blockquote>
+<p>内核会不会立即回答;</p>
+</blockquote>
+</li>
+<li><p>同步/异步: </p>
+<blockquote>
+<p>进程会不会等内核回答. </p>
+</blockquote>
+</li>
+</ul>
+<h2 id="IO模式"><a href="#IO模式" class="headerlink" title="IO模式"></a>IO模式</h2><ol>
+<li>阻塞IO</li>
+<li>非阻塞IO</li>
+<li>IO多路复用</li>
+<li>信号驱动IO</li>
+<li>异步IO</li>
+</ol>
+<h2 id="阻塞IO"><a href="#阻塞IO" class="headerlink" title="阻塞IO"></a>阻塞IO</h2><ol>
+<li>进程请求IO数据;</li>
+<li>进程阻塞;</li>
+<li>内核准备数据,拷贝到内核空间;</li>
+<li>拷贝到进程地址;</li>
+<li>解除阻塞.</li>
+</ol>
+<h2 id="非阻塞IO"><a href="#非阻塞IO" class="headerlink" title="非阻塞IO"></a>非阻塞IO</h2><ul>
+<li>轮询</li>
+</ul>
+<ol>
+<li>进程请求IO数据;</li>
+<li>内核回答不OK;</li>
+<li>进程不断轮询;</li>
+<li>内核终于准备好了数据,回答OK. </li>
+</ol>
+<h2 id="IO多路复用"><a href="#IO多路复用" class="headerlink" title="IO多路复用"></a>IO多路复用</h2><p>包括: select,poll,epoll</p>
+<blockquote>
+<p>一次轮询多个socket,任何一个socket数据搞定的话,内核都会回复一次. </p>
+</blockquote>
+<h2 id="异步非阻塞IO"><a href="#异步非阻塞IO" class="headerlink" title="异步非阻塞IO"></a>异步非阻塞IO</h2><p>类似于非阻塞, 取消了轮询.<br>进程不等待内核的回复.<br>内核完成准备数据后会通知进程.</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2017/11/06/2017-11/epoll%E7%9B%B8%E5%85%B3%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86/" data-id="ck96cxpnf008kmaam77ut6s95" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%B9%B6%E5%8F%91/" rel="tag">并发</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2017-11/库带来的智子攻击" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2017/11/01/2017-11/%E5%BA%93%E5%B8%A6%E6%9D%A5%E7%9A%84%E6%99%BA%E5%AD%90%E6%94%BB%E5%87%BB/" class="article-date">
@@ -1437,377 +1700,6 @@ case class的companion object是隐式自动生成的<figure class="highlight pl
 
 
   
-    <article id="post-pig笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2017/03/21/pig%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2017-03-21T11:59:06.000Z" itemprop="datePublished">2017-03-21</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/hadoop/">hadoop</a>►<a class="article-category-link" href="/categories/hadoop/pig/">pig</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2017/03/21/pig%E7%AC%94%E8%AE%B0/">pig笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p><code>pig</code>描述的是一个有向无环图(DAG).<br>节点代表处理数据的操作符，节点间的向量代表数据流。</p>
-<blockquote>
-<p>数据流语言，所以无if和for等控制流语言的元素<br>(有foreach)<br>(有别的方法加入控制流)<br>无关系数据库的事务和索引。</p>
-</blockquote>
-<p>Pig的大小写敏感没有一致的规定。操作和命令是不区分大小写的，比如load，group。而函数是区分大小写的，比如MAX。关系名(类似于变量)也是大小写敏感的。(如<code>A=load &#39;table1&#39;;a=LOAD &#39;table2&#39;</code>)。</p>
-<p>pig语句的完全执行是在遇到输出语句的时候(如<code>dump</code>和<code>store</code>)。<br>之前即使试图装载一个不存在的文件也不会报错。<br>在输出语句前，可以重赋值变量，以最后一次赋值为准。</p>
-<ul>
-<li><p>run和exec</p>
-<blockquote>
-<p>这两个命令都可以执行Pig脚本。区别是exec以批处理方式运行，这意味着所有该脚本文件中定义的标示符，当脚本执行完后在脚本调用窗口将不可访问。而以run运行时，相当于将脚本文件中的内容手工在调用窗口输入并执行，这就意味着脚本文件中所有的标示符，比如定义的关系在脚本执行完后仍然可访问，同时在shell的命令历史记录中可以找到脚本中的语句。</p>
-</blockquote>
-</li>
-<li><p>运行时参数设定</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">-- 运行.pig脚本</span><br><span class="line">pig -p date&#x3D;$&#123;DATE&#125; -p store_path&#x3D;$&#123;STORE_PATH&#125; getLiveInfoFromLog.pig</span><br><span class="line">-- -p参数指定键值对</span><br><span class="line">-- -f参数指定运行的脚本，可省略。</span><br><span class="line"></span><br><span class="line">-- 指定参数文件:</span><br><span class="line">pig -m daily.params daily.pig</span><br><span class="line"></span><br><span class="line"># -p指定的参数设置值 会覆盖 参数文件中的设置。</span><br><span class="line"># -r或-dryrun参数可以查看参数替换后的pig脚本，而不会真正执行这个脚本。</span><br><span class="line">-- 脚本内部定义参数:</span><br><span class="line">%declare paralle_factor 10;</span><br><span class="line">-- 通常的默认值，可通过传入参数覆盖</span><br><span class="line">%default paralle_factor 10;</span><br><span class="line"></span><br><span class="line">使用参数:</span><br><span class="line">yesterday &#x3D;fileter daily by data &#x3D;&#x3D; &#39;$DATE&#39;;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>set设置:<br><code>pig</code>脚本中设置是全局可见的，后面的设置会覆盖前面的值，即使在最后面进行的设置也会对前面的执行语句生效。</p>
-</li>
-</ul>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">-- 引入其他脚本</span><br><span class="line">set pig.import.search.path &#39;usr&#x2F;local&#x2F;pig,&#x2F;grid&#x2F;pig&#39;;</span><br><span class="line">import &#39;acme&#x2F;macros.pig&#39;;</span><br></pre></td></tr></table></figure>
-
-<ul>
-<li>宏命令<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">-- 简单地内联，不可递归调用</span><br><span class="line">-- 给定每天的输入和指定的年，分析在支持的股息的那些天里股票价格是如何变化的</span><br><span class="line">define dividend_analysis(daily,year,daily_symbol,daily_open,daily_close) </span><br><span class="line">return analyzed</span><br><span class="line">&#123;</span><br><span class="line">divs&#x3D;load &#39;NYSE_dividends&#39; as </span><br><span class="line">(exchange:chararray,</span><br><span class="line">symbol:chararray,</span><br><span class="line">date:chararray,</span><br><span class="line">dividends:float</span><br><span class="line">);</span><br><span class="line">divsthisyear&#x3D;filter divs by date matches &#39;$year-.*&#39;;</span><br><span class="line">dailythisyear&#x3D;filter $daily by date matches &#39;$year-.*&#39;;</span><br><span class="line">jnd&#x3D;join divsthisyear by symbol,dailythisyear by $daily_symbol;</span><br><span class="line">$analyzed&#x3D;foreach jnd generate dailythisyear::$daily_symbol,$daily_close-$daily_open;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
-
-
-
-</li>
-</ul>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;*多行注释*&#x2F;</span><br><span class="line">-- 单行注释</span><br><span class="line">ls &#x2F; ; --列出目录</span><br><span class="line">fs -l ; --hdfs命令</span><br><span class="line">rmr filename ; --递归删除</span><br><span class="line">pig命令后可以看到版本:</span><br><span class="line">&#x2F;*Apache Pig version 0.14.0 (r1640057) compiled Nov 16 2014, 18:02:05*&#x2F;</span><br><span class="line">-- 结束任务:</span><br><span class="line">kill jobid;</span><br></pre></td></tr></table></figure>
-
-<ul>
-<li>先进行分组后进行连接：<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">-- 加载交易表，(select customer,purchase from transactions)</span><br><span class="line">txns &#x3D; load &#39;transactions&#39; as (customer,purchase);</span><br><span class="line">-- 分组</span><br><span class="line">grouped&#x3D; group txns by customer;</span><br><span class="line">-- 聚合函数sum, total表含group和tp两个字段</span><br><span class="line">total &#x3D; foreach grouped generate group, sum (txns.purchase)as tp;</span><br><span class="line">-- 加载customer_profile表</span><br><span class="line">profile&#x3D; load &#39;customer_profile&#39; as (customer,zipcode);</span><br><span class="line">-- 表连接</span><br><span class="line">answer&#x3D; join total by group, profile by customer;</span><br><span class="line">-- 输出结果</span><br><span class="line">dump answer;</span><br></pre></td></tr></table></figure>
-
-</li>
-</ul>
-<p><code>filter</code>是什么操作?<br>好像是限制、过滤操作，类似<code>sql</code>中的<code>where</code>。</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">startswithcm&#x3D; filter divs by symbol matches &#39;CM.*&#39;;</span><br><span class="line">nostartswith&#x3D; filter divs by no symbol matches &#39;CM.*&#39;;</span><br><span class="line">-- 布尔操作符的优先级是: not、and、or</span><br></pre></td></tr></table></figure>
-
-<p><code>x==null</code>返回<code>null</code>，filter只允许判断条件返回true的记录通过，所以<code>2,null,4</code>中，对于条件<code>x==2</code>,只有2通过。(不报错)<br><code>null</code>既不会匹配也不会失败，因为<code>null</code>表示未知。</p>
-<p><code>explain</code>语法?</p>
-<hr>
-<p><code>group</code>是关键字吗? 是的。<br><code>for each grouped generate group</code>是固定用法，因为:<br><code>group</code>关键字有重载，两个含义(两个场景):</p>
-<ol>
-<li><code>grpd= group daily by stock;</code>中,作为<code>group by</code>语句中关键字元素；</li>
-<li><code>group by</code>语句的输出中,第一列字段名也为<code>group</code>, 所以在紧接着的语句中作为字段名:<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">cnt&#x3D; foreach grpd generate group, COUNT(daily);</span><br><span class="line">-- 可以通过describe语句查看grpd的具体模式（结构）:</span><br><span class="line">describe grpd;</span><br><span class="line">-- 对多个字段进行分组:(多个字段会组合成tuple放入&#39;group&#39;列中)</span><br><span class="line">daily &#x3D; load &#39;NYSE_daily&#39; as (exchange,stock,date,dividends);</span><br><span class="line">grpd&#x3D; group daily by (exchange,stock);</span><br><span class="line">avg&#x3D; foreach grpd generate group, AVG(daily.dividends);</span><br><span class="line">-- 也可以对所有字段进行分组 &#39;all&#39;为关键字</span><br><span class="line">grpd&#x3D; group daily all;</span><br><span class="line">cnt &#x3D; foreach grpd generate COUNT(daily);</span><br><span class="line">-- 此时group的输出字段为all而不是group.</span><br></pre></td></tr></table></figure>
-</li>
-</ol>
-<ul>
-<li><p>查找访问次数最多的前5个URL</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">Users &#x3D; load &#39;users&#39; as (name,age);--as声明具体模式,列名</span><br><span class="line">-- 多的列舍弃不要，缺的列填充为null (null表示未知)</span><br><span class="line">Fltrd &#x3D; filter Users by age &gt;&#x3D;18 and age&lt;&#x3D;25;</span><br><span class="line">Pages &#x3D; load &#39;pages&#39; as (user,url);</span><br><span class="line">-- 连接获取每个用户访问过的URL</span><br><span class="line">Jnd &#x3D; join Fltrd by name, Pages by user;</span><br><span class="line">Grpd &#x3D; group Jnd by url;</span><br><span class="line">-- 每个url，被年龄[18,25]的用户访问了多少次</span><br><span class="line">Smmd &#x3D; foreach Grpd generate group , COUNT(Jnd) as clicks;</span><br><span class="line">Srtd &#x3D; order Smmd by clicks desc;</span><br><span class="line">Top5 &#x3D; limit Srtd 5;</span><br><span class="line">Store Top5 into &#39;top5sites&#39;;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>加载文件:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">LOG &#x3D; LOAD &#39;&#x2F;user&#x2F;hive&#x2F;warehouse&#x2F;temp.db&#x2F;tmp_solar_user_stat&#x2F;dt&#x3D;2015-10-01&#x2F;*&#39; USING PigStorage(&#39;\t&#39;) AS (userid:int, timestamp:chararray, log_time:chararray, url:chararray, method:chararray, sc:chararray, fplatform:chararray, vendor:chararray, version:chararray, create_date:chararray, total_query:int, failed_query:int, total_favorate:int, today_favorate:int);</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>特殊数据类型(pig为强类型语言)</p>
-</li>
-</ul>
-<ol>
-<li><code>chararray</code>: <code>java.lang.String</code>.单引号使用：’fred’.</li>
-<li><code>map</code>: [‘name’#’bob’,’age’#55] 键值间使用’#’号,键值对间使用逗号’,’。  <code>map</code>的<code>key</code>一定为<code>chararray</code>类型,<code>value</code>可以为任意类型而且可以不同。(也可以设定为都一样。)</li>
-<li><code>tuple</code>: (‘bob’,55)</li>
-<li><code>bag</code>: {(‘bob’,55),(‘john’,25)} 无序的<code>tuple</code>集合。</li>
-</ol>
-<ul>
-<li><p>声明模式:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">-- 限定类型或不限定统一类型:</span><br><span class="line">as (aaa:map[],bbb:map[int])</span><br><span class="line">as (aaa:tuple(),bbb:tuple(x:int,y:int))</span><br><span class="line">as (aaa:bag&#123;&#125;,bbb:bag&#123;t:(x:int,y:int)&#125;)</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>未声明时根据下标(从0开始)引用,类型推测:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">daily&#x3D; load &#39;NYSE_daily&#39;</span><br><span class="line">calcs &#x3D;foreach daily generate $7&#x2F;1000;</span><br></pre></td></tr></table></figure>
-<p>猜测不出时，会推断为<code>chararray</code>.</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">-- 使用范围表示位置(闭区间)</span><br><span class="line">prices &#x3D; load &#39;NYSE_daily&#39; as (exchange,symbol,date,open,high,low,close,volume,adj_close);</span><br><span class="line">beginning&#x3D; foreach prices generate ..open;</span><br><span class="line">-- [exchange,open]</span><br><span class="line">middle&#x3D; foreach prices generate open..close;</span><br><span class="line">end &#x3D; foreach prices generate volume..;</span><br><span class="line">-- 也可以使用&#39;*&#39;表示所有字段。</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>三元条件操作符<br>判断条件为<code>null</code>时整个表达式返回<code>null</code>.<br>如<code>null==2 ? 1:4</code>返回<code>null</code>.<br>此外冒号两边应该是同一数据类型。</p>
-</li>
-<li><p>访问<code>map</code>、<code>tuple</code>和<code>bag</code>:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">-- map:</span><br><span class="line">avg &#x3D; foreach bball generate bat#&#39;batting_average&#39;;</span><br><span class="line">-- tuple:</span><br><span class="line">B &#x3D; foreach A generate t.x, t.$1;</span><br><span class="line">-- bag:</span><br><span class="line">A &#x3D; load &#39;input&#39; as (b:bag &#123;t:(x:int,y:int)&#125;);</span><br><span class="line">B &#x3D; foreach A generate b.x;</span><br></pre></td></tr></table></figure>
-
-</li>
-</ul>
-<p><code>P39</code>为什么<code>A.y</code>是<code>bag</code>?</p>
-<ul>
-<li><p><code>order by</code></p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">bydate&#x3D; order daily by date desc,symbol;</span><br><span class="line">-- desc 仅对紧靠着的date生效.</span><br></pre></td></tr></table></figure>
-<p><code>null</code>一般是最小的.（升序时排最前.）<br>复合类型不可排序。<br><code>pig</code>的<code>order</code>语句在<code>shuffle</code>阶段分发任务时,同一个键对应的任务可能分发到不同的<code>reducer</code>上.</p>
-</li>
-<li><p><code>distinct</code></p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">uniq&#x3D; distinct daily;</span><br></pre></td></tr></table></figure>
-
-</li>
-</ul>
-<table>
-<tr>
-<td>参与作用阶段
-</td>
-<td>map
-</td>
-<td>shuffle
-</td>
-<td>reduce
-</td>
-</tr>
-<tr>
-<td>
-</td>
-<td>?
-</td>
-<td>order by
-  <br>group by
-  <br>limit
-  <br>
-</td>
-<td>
- order by
- <br>group* by 
- <br>聚合函数
- <br>limit
- <br>distinct
- <br>join*
- <br>cogroup*
- <br>cross
-</td>
-</table>
-影响`reduce`的操作符可以使用`parallel`以进行并行化优化:
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">bysymbol&#x3D; group daily by symbol parallel 10;</span><br><span class="line">-- 使任务具有10个reducer.</span><br><span class="line">set default_parallel 10;</span><br><span class="line">-- 使整个脚本范围内的reducer数量为10.</span><br></pre></td></tr></table></figure>
-
-
-
-<ul>
-<li><code>Join</code>连接后通过<code>::</code>访问同名列：<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">daily::exchange : bytearray</span><br></pre></td></tr></table></figure></li>
-<li>外连接<br>左外连接要求右边表模式已知。以此类推。<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">-- 左外连接 &#96;left outer&#96;</span><br><span class="line">jnd &#x3D; join daily by(simbol,date) left,</span><br><span class="line">    divs by (simbol,date);</span><br><span class="line">-- 右外连接 &#96;right outer&#96;</span><br><span class="line">-- 全外连接 &#96;full outer&#96;.</span><br><span class="line">-- 设定连接具体算法:</span><br><span class="line">jnd &#x3D; join daily by (exchange,symbol),</span><br><span class="line">    divs by (exchange,symbol)</span><br><span class="line">    using &#39;replicated&#39;</span><br><span class="line">;</span><br><span class="line">--内连接和左外连接可以使用分片-复制算法,从小到大排列表，最左边的表读入内存。</span><br><span class="line">-- 数据倾斜时，可对两个表使用skewed join(抽样):</span><br><span class="line">jnd &#x3D; join cinfo by city, users by city using &#39;skewed&#39;;</span><br><span class="line"></span><br><span class="line">-- 按连接键排好序的表: </span><br><span class="line">using &#39;merge&#39;;</span><br></pre></td></tr></table></figure>
-
-
-
-
-</li>
-</ul>
-<ul>
-<li><p>抽样(<code>sample</code>)</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">divs &#x3D; load &#39;NYSE_dividends&#39;;</span><br><span class="line">some&#x3D; sample divs 0.1;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>注册<code>python</code>的<code>UDF</code></p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">register &#39;production.py&#39; using jython as bballudfs;</span><br><span class="line">-- bballudfs表示命名空间</span><br><span class="line">-- jython表示编译器(脚本是python便携)</span><br><span class="line">-- 调用时使用bballudfs.production(参数)</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>宏定义<code>define</code></p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">define convert com.acme.financial.Convert(&#39;dollar&#39;,&#39;euro&#39;);</span><br><span class="line">-- 可调用java函数:（有性能代价）</span><br><span class="line">define hex InvokeForString(&#39;java.lang.Integer.toHexString&#39;,&#39;int&#39;);</span><br><span class="line">-- 参数列表以空格作为分隔符 如&#39;int int[] long&#39;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p><code>flatten</code><br><code>foreach</code>中的<code>flatten</code>修饰符，<code>bag</code>中每条记录会和<code>generate</code>中其他所有表达式进行交叉乘积。</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">players&#x3D; load &#39;baseball&#39; as  </span><br><span class="line">(</span><br><span class="line">name : chararray,</span><br><span class="line">position: bag &#123;t: (p:chararray)&#125;,</span><br><span class="line">bat: map[]</span><br><span class="line">);</span><br><span class="line">pos&#x3D;foreach players generate name,flatten(position)as position;</span><br><span class="line">bypos&#x3D; group pos by position;</span><br></pre></td></tr></table></figure>
-<p>如记录为:<br><code>Jorge,{(Catcher),(Designated_hitter)}</code><br>则生成两条:<br><code>Jorge,Catcher</code><br><code>Jorge,Designated_hitter</code><br><code>flatten</code>对于<code>tuple</code>不会进行交叉乘积，只会把<code>tuple</code>展开为顶层字段。</p>
-</li>
-<li><p>内嵌<code>foreach</code>语句<br>(支持<code>distinct</code>,<code>filter</code>,<code>limit</code>,<code>order</code>)</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">-- 每笔交易对应的不同股票交易号的个数。</span><br><span class="line">daily&#x3D; load &#39;NYSE_daily&#39; as (exchange,symbol);</span><br><span class="line">grpd &#x3D; group daily by exchange;</span><br><span class="line">uniqcnt &#x3D; foreach grpd &#123;</span><br><span class="line">    sym &#x3D; daily.symbol;</span><br><span class="line">    uniq_sym&#x3D; distinct sym;</span><br><span class="line">    generate group, COUNT(uniq_sym);</span><br><span class="line">&#125;;</span><br><span class="line">--查找每只股票支付的前三个股息值:</span><br><span class="line">divs&#x3D; load &#39;NYSE_dividends&#39; as (exchange,symbol,date,dividends);</span><br><span class="line">grpd &#x3D; group divs by symbol;</span><br><span class="line">tops&#x3D; foreach grpd &#123;</span><br><span class="line">    sorted &#x3D; order divs by dividends desc;</span><br><span class="line">    top &#x3D;limit sorted 3;</span><br><span class="line">    generate group, flatten(top);</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
-
-</li>
-</ul>
-<hr>
-<p>复习一下semi-join?</p>
-<ul>
-<li><p><code>union</code></p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">A&#x3D; load &#39;input1&#39; as (x:int,y:float);</span><br><span class="line">B&#x3D; load &#39;input2&#39; as (x:int,y:double);</span><br><span class="line">C&#x3D; union A , B;</span><br><span class="line">describe C;</span><br><span class="line">&#x2F;* * 类型自动转换</span><br><span class="line">C:&#123;x:int , y: double&#125;</span><br><span class="line">*&#x2F;</span><br><span class="line">-- union onschema A,B;</span><br><span class="line">-- 强制新增列:</span><br><span class="line">A &#x3D; load &#39;input1&#39; as (w:chararray,x:int,y:float);</span><br><span class="line">B &#x3D; load &#39;input2&#39; as (x:int,y:double,z:chararray);</span><br><span class="line">C &#x3D; union onschema A,B;</span><br><span class="line">describe C;</span><br><span class="line">&#x2F;*</span><br><span class="line">C: &#123;w:chararray,x:int,y:double,z:chararray&#125;</span><br><span class="line">*&#x2F;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p><code>cross</code>?<br>先<code>cross</code>后<code>filter</code>以实现非等值<code>join</code>。<br>(<code>pig</code>不直接支持非等值<code>join</code>)</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">crossed &#x3D; cross table1,table2;</span><br><span class="line">output&#x3D; filter crossed by table1::date&lt; table2::date;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p><code>cogroup</code>:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">A&#x3D; load &#39;input1&#39; as (id:int,val1:float);</span><br><span class="line">B&#x3D; load &#39;input2&#39; as (id:int,val2:int);</span><br><span class="line">C&#x3D; cogroup A by id, B by id;</span><br><span class="line">describe C;</span><br><span class="line">&#x2F;**注意到第一个字段名依然是group。</span><br><span class="line">C:&#123;</span><br><span class="line">group:int,</span><br><span class="line"> A:&#123;id:int,val1:float&#125;&#125;,</span><br><span class="line"> B:&#123;id:int,val2:int&#125;</span><br><span class="line">&#125; </span><br><span class="line">*&#x2F;</span><br></pre></td></tr></table></figure>
-
-
-</li>
-</ul>
-<ul>
-<li><p><code>stream</code>:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">-- 把py脚本加载到集群,</span><br><span class="line">-- getLiveInfoFromLog表示加载后的别名，</span><br><span class="line">-- &#96;getLiveInfoFromLog.py&#96;表示加载的脚本，</span><br><span class="line">-- SHIP (&#39;getLiveInfoFromLog.py&#39;);表示依赖的文件。</span><br><span class="line">-- 可以依赖多个文件,</span><br><span class="line">-- 例如可以SHIP (&#39;getLiveInfoFromLog.py&#39;,&#39;rule.conf&#39;)。</span><br><span class="line"></span><br><span class="line">define getLiveInfoFromLog &#96;getLiveInfoFromLog.py&#96; SHIP (&#39;getLiveInfoFromLog.py&#39;);</span><br><span class="line"></span><br><span class="line">-- 使用stream xxx through语句，调用脚本生成新表。</span><br><span class="line">new_table &#x3D; STREAM table1 THROUGH getLiveInfoFromLog AS (date:chararray,roomId:chararray,userId:chararray);</span><br><span class="line"># 加载目录必须是工作目录的相对路径，不能是绝对路径。</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>分布式缓存</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">crawl &#x3D; load &#39;webcrawl as (url,pageid)&#39;;</span><br><span class="line">normalized &#x3D;foreach crawl generate normalized (url);</span><br><span class="line">define blc &#39;blacklistchecker.py&#39; cache(&#39;&#x2F;data&#x2F;share&#x2F;badurls#badurls&#39;);</span><br><span class="line">goodurls&#x3D;stream normalized through blc as (url,pageid);</span><br><span class="line">-- &#39;#&#39;号前是hdfs上的路径，后面是读取的文件名。</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>非标准输入输出的脚本</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">define blc &#39;blacklistchecker.py -i urls -o good&#39; input(&#39;urls&#39;) output(&#39;good&#39;);</span><br><span class="line">-- input和output中指定的都是工作目录的相对路径下文件。</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>mapreduce任务</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">goodurls&#x3D;mapreaduce &#39;blacklistchecker.jar&#39;</span><br><span class="line">store table1 into &#39;input&#39;</span><br><span class="line">load &#39;output&#39; as (url,pageid)</span><br><span class="line">&#39;com.acmeweb.security.BlackLiskChecker -i input -o output&#39;;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p><code>split</code></p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">split wlogs into </span><br><span class="line">apr03 if timestamp &lt; &#39;20110404&#39;,</span><br><span class="line">apr02 if timestamp &lt; &#39;20110403&#39; and timestamp&gt;&#39;20110401&#39;,</span><br><span class="line">apr01 if timestamp &lt; &#39;20110402&#39; and timestamp&gt;&#39;20110331&#39;</span><br><span class="line">;</span><br><span class="line"></span><br><span class="line">store apr03 into &#39;20110403&#39;;</span><br><span class="line">store apr02 into &#39;20110402&#39;;</span><br><span class="line">store apr01 into &#39;20110401&#39;;</span><br><span class="line">-- 可由fliter by等效改写</span><br></pre></td></tr></table></figure>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-</li>
-</ul>
-<ul>
-<li>数据仓库:<blockquote>
-<p>ODS（Operational Data Store，操作型存储）、EDW（Enterprise Data Warehouse，企业数据仓库）、DM（DataMart，数据集市）区别开来，共分三层。</p>
-</blockquote>
-</li>
-</ul>
-<p>如何查看环境变量如<code>$date</code>?</p>
-<ul>
-<li>正则:<br><code>{ab,cd}</code>匹配字符串集合中任一字符串。</li>
-</ul>
-<ul>
-<li>完整示例脚本<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line">set mapred.output.compress false;</span><br><span class="line">set pig.exec.reducers.bytes.per.reducer 500000000;</span><br><span class="line">set mapreduce.reduce.memory.mb 10240;</span><br><span class="line">DEFINE dwSolarUserStat &#96;dwSolarUserStat.py&#96; SHIP(&#39;dwSolarUserStat.py&#39;);</span><br><span class="line">DEFINE solarFrog &#96;solarFrog.py&#96; SHIP(&#39;solarFrog.py&#39;,&#39;rule.conf&#39;);</span><br><span class="line">DEFINE solarSpam &#96;solarSpam.py&#96; SHIP(&#39;solarSpam.py&#39;);</span><br><span class="line">LOG &#x3D; LOAD &#39;&#x2F;user&#x2F;hive&#x2F;warehouse&#x2F;temp.db&#x2F;tmp_solar_user_stat&#x2F;dt&#x3D;$date&#x2F;*&#39; USING PigStorage(&#39;\t&#39;) AS (userid:int, timestamp:chararray, log_time:chararray, url:chararray, method:chararray, sc:chararray, fplatform:chararray, vendor:chararray, version:chararray, create_date:chararray, total_query:int, failed_query:int, total_favorate:int, today_favorate:int);</span><br><span class="line"></span><br><span class="line">LOG_FROG &#x3D; LOAD &#39;&#x2F;user&#x2F;hive&#x2F;warehouse&#x2F;temp.db&#x2F;tmp_solar_frog&#x2F;dt&#x3D;$date&#x2F;*&#39; USING PigStorage(&#39;\t&#39;) AS (userid:chararray, url:chararray, duration:chararray, imagesize:chararray, net:chararray, timestamp:chararray, log_dt:chararray, competitors:chararray);</span><br><span class="line"></span><br><span class="line">LOG_FROG_ORDER &#x3D; ORDER LOG_FROG BY userid,timestamp;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">SESSION_TASKINFO_GRP &#x3D; GROUP LOG BY userid;</span><br><span class="line">SESSION_TASKINFO_GRP_SORTED &#x3D; FOREACH SESSION_TASKINFO_GRP &#123;</span><br><span class="line">ORDERED &#x3D; ORDER LOG BY log_time;</span><br><span class="line">GENERATE FLATTEN(ORDERED);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">SESSION_TASKINFO_GRP_FROG &#x3D; GROUP LOG_FROG_ORDER BY userid;</span><br><span class="line">SESSION_TASKINFO_GRP_SORTED_FROG &#x3D; FOREACH SESSION_TASKINFO_GRP_FROG &#123;</span><br><span class="line">ORDERED_FROG &#x3D; ORDER LOG_FROG_ORDER BY timestamp;</span><br><span class="line">GENERATE FLATTEN(ORDERED_FROG);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">DATA &#x3D; STREAM SESSION_TASKINFO_GRP_SORTED THROUGH dwSolarUserStat AS (userid:int,create_date:chararray,total_query:int,failed_query:int,total_favorate:int,today_favorate:int,session_num:int,session_time:int,vendor:chararray,platform:chararray,version:chararray);</span><br><span class="line"></span><br><span class="line">SPAM_FROG &#x3D; STREAM SESSION_TASKINFO_GRP_SORTED_FROG THROUGH solarSpam AS (userid:int);</span><br><span class="line"></span><br><span class="line">DATA_FROG &#x3D; STREAM SESSION_TASKINFO_GRP_SORTED_FROG THROUGH solarFrog AS (userid:int,favorite_action:int,load_image_action:int,load_image_lasttime:int,load_image_failed_action:int,search_lasttime:int,load_image_imagesize:int,net_action:chararray,net_lasttime:chararray,mark_compeitorst:chararray);</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">STORE DATA INTO &#39;$store_path&#x2F;$date&#x2F;stat&#39;;</span><br><span class="line">STORE SPAM_FROG INTO &#39;$store_path&#x2F;$date&#x2F;spam&#39;;</span><br><span class="line">STORE DATA_FROG INTO &#39;$store_path&#x2F;$date&#x2F;frog&#39;;</span><br></pre></td></tr></table></figure>
-
-</li>
-</ul>
-<p>究竟谁是zhengguanyu?</p>
-<hr>
-<p>##调试：</p>
-<ul>
-<li><p>describe</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">describe grpd;</span><br><span class="line">&#x2F;*</span><br><span class="line">输出:</span><br><span class="line">grpd:&#123;group:chararray,trimmed:&#123;(symbol:chararray,dividends:float)&#125;&#125;</span><br><span class="line">*&#x2F;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>explain</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">pig -x local -e &#39;explain -script explain.pig</span><br><span class="line">-- -x local 指定运行模式为本地模式</span><br><span class="line">-- -e excute后的命令</span><br></pre></td></tr></table></figure>
-
-</li>
-</ul>
-<p>– pigUnit测试脚本</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2017/03/21/pig%E7%AC%94%E8%AE%B0/" data-id="ck96cxplq0049maamc8tu66c3" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/hadoop/" rel="tag">hadoop</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/pig/" rel="tag">pig</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-kylin笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2017/03/15/kylin%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2017-03-15T11:54:15.000Z" itemprop="datePublished">2017-03-15</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/hadoop/">hadoop</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2017/03/15/kylin%E7%AC%94%E8%AE%B0/">kylin笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>星型模型:</p>
-<blockquote>
-<p>有冗余,快 所有维度表直接连接到事实表;(间接,eg. 地域id-&gt;(国家,省份))<br>维度表之间没有关联.</p>
-</blockquote>
-<p>雪花模型:</p>
-<blockquote>
-<p>无冗余,慢 不是所有维度表直接连接到事实表.(间接,eg. 地域id-&gt;(国家id,省份id)-&gt;国家维度表,省份维度表)<br>维度表之间存在关联.</p>
-</blockquote>
-<p>kylin只支持星型模型,所以不能太复杂.</p>
-<p>聚合组:</p>
-<blockquote>
-<p>通过聚合组分隔维度,使cube数量降低;</p>
-</blockquote>
-<p>Mandatory:(必选列)</p>
-<blockquote>
-<p>将总是出现在where或group by 里的列设置为Mandatory,减少预计算开销;<br>A为必选:<br>(AB,C,AC)=&gt;(AB,AC)</p>
-</blockquote>
-<p>Hierarchy:(WITH ROLLUP)</p>
-<blockquote>
-<p>将国家\省\市,设置为层级关系Hierarchy,减少预计算开销.</p>
-</blockquote>
-<p>Derived:(推断):</p>
-<blockquote>
-<p>LOOKUP表(维度表),若DimA的值唯一确定DimB的值,则DimB能从DimA获得(Derived),则标记DimB为Derived可以将group by 简化.<br>(ABC,AB,AC =&gt; AC,A)</p>
-</blockquote>
-<p>job状态:</p>
-<blockquote>
-<p>PENDING<br>RUNNING<br>ERROR<br>DISCARD<br>FINISH</p>
-</blockquote>
-<p>api:</p>
-<blockquote>
-<p>get xxx/kylin/api/jobs/{job_uuid}/steps/{step_id}/output</p>
-</blockquote>
-<blockquote>
-<p>PUT xxx/kylin/api/jobs/{job_uuid}/resume<br>(ERROR可以resume,DISCARD无法resume)</p>
-</blockquote>
-<blockquote>
-<p>PUT xxx/kylin/api/jobs/Cubes/{cube_name}/rebuild<br>cubename<br>startTime<br>endTime<br>buildType: BUILD,MERGE,REFRESH</p>
-</blockquote>
-<blockquote>
-<p>POST xxx/kylin/api/query<br>sql:”select 1”<br>offset:0<br>limit:2<br>acceptPartial:false<br>project:”learn_kylin”</p>
-</blockquote>
-<p>可以用视图解决字段数据类型的约束.</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2017/03/15/kylin%E7%AC%94%E8%AE%B0/" data-id="ck96cxplj003imaamereqds06" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/kylin/" rel="tag">kylin</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1834,6 +1726,14 @@ case class的companion object是隐式自动生成的<figure class="highlight pl
       <ul>
         
           <li>
+            <a href="/2022/03/13/2022-03/ss%E5%91%BD%E4%BB%A4/">ss命令</a>
+          </li>
+        
+          <li>
+            <a href="/2022/03/13/2022-03/UDP%E6%89%B9%E5%A4%84%E7%90%86%E4%BC%98%E5%8C%96-GSO-GRO/">UDP批处理优化-GSO/GRO</a>
+          </li>
+        
+          <li>
             <a href="/2022/02/24/2022-02/%E4%B8%BA%E4%BB%80%E4%B9%88%E5%85%88hash%E5%90%8E%E5%8A%A0%E5%AF%86%E7%9A%84%E6%96%B9%E6%B3%95%E5%AE%B9%E6%98%93%E9%81%AD%E9%81%87padding%E6%94%BB%E5%87%BB/">为什么先hash后加密的方法容易遭遇padding攻击</a>
           </li>
         
@@ -1843,14 +1743,6 @@ case class的companion object是隐式自动生成的<figure class="highlight pl
         
           <li>
             <a href="/2022/02/18/2022-02/%E6%8B%A5%E5%A1%9E%E7%AE%97%E6%B3%95bbr/">quic中的拥塞算法bbr</a>
-          </li>
-        
-          <li>
-            <a href="/2022/02/17/2022-02/http3-quic%E4%BC%98%E7%BC%BA%E7%82%B9%E5%8F%8A%E5%8E%9F%E5%9B%A0/">http3_quic优缺点及原因</a>
-          </li>
-        
-          <li>
-            <a href="/2022/02/16/2022-02/http-range/">http_range</a>
           </li>
         
       </ul>

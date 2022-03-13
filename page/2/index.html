@@ -72,6 +72,138 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2021-02/多项目共享代码之——git-subtree" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2021/02/22/2021-02/%E5%A4%9A%E9%A1%B9%E7%9B%AE%E5%85%B1%E4%BA%AB%E4%BB%A3%E7%A0%81%E4%B9%8B%E2%80%94%E2%80%94git-subtree/" class="article-date">
+  <time datetime="2021-02-22T14:32:12.000Z" itemprop="datePublished">2021-02-22</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E9%A1%B9%E7%9B%AE%E7%AE%A1%E7%90%86/">项目管理</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2021/02/22/2021-02/%E5%A4%9A%E9%A1%B9%E7%9B%AE%E5%85%B1%E4%BA%AB%E4%BB%A3%E7%A0%81%E4%B9%8B%E2%80%94%E2%80%94git-subtree/">多项目共享代码之——git subtree</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="需求"><a href="#需求" class="headerlink" title="需求"></a>需求</h1><p>多个项目之间共享代码。<br>背景是前后端之间有一些protoc代码需要共享，避免互相发送文件（像某广东大厂这么山寨）。<br>由于protoc文件一般很小，因此首先考虑使用git subtree来建立子项目。</p>
+<blockquote>
+<p>如果需要共享的部分占的存储空间很大（比如是一个超大的分词字典，则应该考虑git submodule）。</p>
+</blockquote>
+<h1 id="WHY-为什么选择git-substree"><a href="#WHY-为什么选择git-substree" class="headerlink" title="WHY: 为什么选择git substree"></a>WHY: 为什么选择git substree</h1><h2 id="优点"><a href="#优点" class="headerlink" title="优点"></a>优点</h2><p><strong>简单、不容易出错</strong><br>只有用到了这个子目录、子仓库的人才会需要使用git subtree相关命令去更新代码；也就是对于其他模块的开发人员，这就是一个普通目录，完全无感知，对无关人员完全透明。</p>
+<h2 id="劣势"><a href="#劣势" class="headerlink" title="劣势"></a>劣势</h2><p><strong>性能</strong><br>由于git substree本质上是跟踪了子仓库的所有文件来实现的，因此如果子仓库的存储空间占用很大，父仓库的git性能就会受到影响。（这个时候就需要考虑用别的办法了，比如从外部存储读取、或者用git submodule。）</p>
+<h2 id="原理"><a href="#原理" class="headerlink" title="原理"></a>原理</h2><h3 id="git-subtree"><a href="#git-subtree" class="headerlink" title="git subtree:"></a>git subtree:</h3><p>本质上是通过分支合并的方法模拟了一个子仓库，对于父仓库来说其实相当于从头到尾只有一个git。<br>首先git fetch就可以拉取任意git地址的代码，所以先用git fetch拉到某个目录，然后通过分支合并的方式把它们合并到当前分支。<br>因此本质上会跟踪子仓库所有文件。存储开销比较大。适用于子仓库全是纯代码的情况。</p>
+<p>git subtree是由第三方开发者贡献的脚本，用git底层命令封装出来的。<br>从v1.5.2开始,git新增并推荐使用这个功能来管理子项目。</p>
+<h3 id="git-submodule"><a href="#git-submodule" class="headerlink" title="git submodule:"></a>git submodule:</h3><p>本质上父仓库只记录子仓库的commit-id，因此存储开销很小。但是缺点就是直接git clone的时候只会拉父仓库的代码，子仓库是空的，需要每个开发人员都主动拉子仓库代码，或者用递归的参数去拉。开发过程中出错的概率很高、比较繁琐，除非万不得已最好别用。</p>
+<h1 id="HOW-git-subtree使用"><a href="#HOW-git-subtree使用" class="headerlink" title="HOW: git subtree使用"></a>HOW: git subtree使用</h1><p>首先新建一个git项目，补充.gitignore文件。<br>然后在原有的项目中通过以下命令来引入该项目到某个子目录(不需要预先创建子目录):</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 首次下载</span></span><br><span class="line">git remote add -f &lt;子仓库名&gt; &lt;子仓库地址&gt;</span><br><span class="line">git subtree add --prefix=&lt;子目录名&gt; &lt;子仓库名&gt; &lt;分支&gt; --squash</span><br><span class="line">git fetch &lt;远程仓库名&gt; &lt;分支&gt;</span><br><span class="line">git subtree pull --prefix=&lt;子目录名&gt; &lt;远程仓库名&gt; &lt;分支&gt; --squash</span><br><span class="line"><span class="meta">#</span><span class="bash"> git push review</span></span><br></pre></td></tr></table></figure>
+<p>其中的&lt;分支&gt;指的是子项目的分支。<br>以上前4个命令对应的操作就是：<br>1.给远程的某个xxx.git地址取个别名记录下来；<br>2.创建一个子目录专门跟踪子仓库；<br>3.拉取子仓库的某分支的代码；<br>4.把拉取的代码放到子目录。<br>建立关联以后，以后如果想要pull子项目代码，就只需要执行以下几步:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 非首次下载</span></span><br><span class="line">git fetch &lt;远程仓库名&gt; &lt;分支&gt;</span><br><span class="line">git subtree pull --prefix=&lt;子目录名&gt; &lt;远程仓库名&gt; &lt;分支&gt; --squash</span><br><span class="line"><span class="meta">#</span><span class="bash"> git push review</span></span><br></pre></td></tr></table></figure>
+<p>以上就是一般情况下使用git subtree所需的所有命令了，非常得简单，新命令其实也只有两个git subtree命令。</p>
+<blockquote>
+<p>这里大家可能会疑惑为什么没有提到给子仓库提交\push的命令，<br>其实命令是有的，但是没有必要在父仓库里提交子仓库的代码；<br>如果想更新子仓库的代码，直接随便找个目录git clone，git add，git commit, git push就行了，没有必要多记1个非必要的命令。<br>不过如果只是出于收藏爱好，可以收藏一下这个非必要的命令：</p>
+</blockquote>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">git subtree push --prefix=&lt;子目录名&gt; &lt;远程仓库名&gt; 分支</span><br></pre></td></tr></table></figure>
+
+
+
+
+<h1 id="参考资料"><a href="#参考资料" class="headerlink" title="参考资料"></a>参考资料</h1><p><a href="https://my.oschina.net/jellypie/blog/487619" target="_blank" rel="noopener">https://my.oschina.net/jellypie/blog/487619</a><br><a href="https://zhuanlan.zhihu.com/p/100214931" target="_blank" rel="noopener">https://zhuanlan.zhihu.com/p/100214931</a></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2021/02/22/2021-02/%E5%A4%9A%E9%A1%B9%E7%9B%AE%E5%85%B1%E4%BA%AB%E4%BB%A3%E7%A0%81%E4%B9%8B%E2%80%94%E2%80%94git-subtree/" data-id="cklkmfo9y000hpdambromg3wk" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/git/" rel="tag">git</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E9%A1%B9%E7%9B%AE%E7%AE%A1%E7%90%86/" rel="tag">项目管理</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2020-12/跨域相关" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/12/27/2020-12/%E8%B7%A8%E5%9F%9F%E7%9B%B8%E5%85%B3/" class="article-date">
+  <time datetime="2020-12-27T12:46:01.000Z" itemprop="datePublished">2020-12-27</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/http/">http</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2020/12/27/2020-12/%E8%B7%A8%E5%9F%9F%E7%9B%B8%E5%85%B3/">跨域相关</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="目标"><a href="#目标" class="headerlink" title="目标"></a>目标</h1><p>部分url:<br>1.接受公司旗下域名跨域请求;<br>2.post请求+json返回值;</p>
+<h1 id="设计"><a href="#设计" class="headerlink" title="设计"></a>设计</h1><h2 id="可选方案"><a href="#可选方案" class="headerlink" title="可选方案"></a>可选方案</h2><p>1.jsonp: 只支持GET, 否决；</p>
+<p>2.nginx配置: 需要改配置上线，备选；</p>
+<p>3.java配置注解<code>@CrossOrigin</code>: 经测试可行，新域名或新<code>url</code>需要重新打包上线，备选;</p>
+<p>4.使用<code>filter</code>/<code>interceptor</code>统一配置，可方便得使用配置中心上线新域名、<code>url</code>，备选；</p>
+<p>对于目标1，理想情况是使用配置中心来快速增加支持的域名，因此优先考虑方案4；</p>
+<p>由于目标2，我们基本上用的都是post+json的接口，因此浏览器跨域前会用Options命令询问服务器的跨域权限配置。</p>
+<p>这里需要注意的问题：</p>
+<p>Options命令不带cookie，因此过不了鉴权，需要考虑放行或者不加鉴权;<br>1.多一次网络请求，考虑转化为简单请求避免Options命令。（如<code>text/plain</code>）<br>2.<code>Options</code>命令通过的结果缓存在浏览器的时间由<code>Access-Control-Max-Age</code>控制（秒）。</p>
+<img src="/images/2020-12/cors.png" class="" width="800" height="1200" title="cors">
+
+
+<h1 id="日志相关"><a href="#日志相关" class="headerlink" title="日志相关"></a>日志相关</h1><p>如果设置 <code>Access-Control-Allow-Credentials</code>：<code>true</code>;<br>则可以在日志打印cookie信息。（除options请求外的）</p>
+<p>但如果没有鉴权需求这里应该不允许携带cookie，避免提权攻击。<br>比如后端有执行代码的漏洞，又允许别人带着cookie过来，就造成CSRF攻击。<br>参考: <a href="https://zhuanlan.zhihu.com/p/86626693" target="_blank" rel="noopener">https://zhuanlan.zhihu.com/p/86626693</a><br>所以将allowCredentials设置成false。</p>
+<h1 id="可能的坑"><a href="#可能的坑" class="headerlink" title="可能的坑"></a>可能的坑</h1><p>本质上是浏览器进行的同源控制提高安全性，需要服务器告诉浏览器哪些跨域是安全的，<br>因此最重要的是与浏览器相连的第一跳返回的header情况。<br>如果前面几跳(如SSR,nginx)都是直接透传Header的话，才能确保我们的后端配置生效。</p>
+<p>chrome浏览器查看options请求可能需要修改配置，不属于XHR请求；<br>wireshard可以抓到不加密(vpn往往加密了)的options请求。</p>
+<h1 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h1><p><a href="http://www.ruanyifeng.com/blog/2016/04/cors.html" target="_blank" rel="noopener">http://www.ruanyifeng.com/blog/2016/04/cors.html</a></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2020/12/27/2020-12/%E8%B7%A8%E5%9F%9F%E7%9B%B8%E5%85%B3/" data-id="cklkmfo8t0000pdamd7knbv1s" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/http/" rel="tag">http</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/nginx/" rel="tag">nginx</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2020-12/线上性能优化-查看方法级耗时" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2020/12/20/2020-12/%E7%BA%BF%E4%B8%8A%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-%E6%9F%A5%E7%9C%8B%E6%96%B9%E6%B3%95%E7%BA%A7%E8%80%97%E6%97%B6/" class="article-date">
@@ -1121,140 +1253,6 @@
 
 
   
-    <article id="post-2020-03/利用UTF-8编码的特性进行优化" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2020/03/26/2020-03/%E5%88%A9%E7%94%A8UTF-8%E7%BC%96%E7%A0%81%E7%9A%84%E7%89%B9%E6%80%A7%E8%BF%9B%E8%A1%8C%E4%BC%98%E5%8C%96/" class="article-date">
-  <time datetime="2020-03-26T08:29:11.000Z" itemprop="datePublished">2020-03-26</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2020/03/26/2020-03/%E5%88%A9%E7%94%A8UTF-8%E7%BC%96%E7%A0%81%E7%9A%84%E7%89%B9%E6%80%A7%E8%BF%9B%E8%A1%8C%E4%BC%98%E5%8C%96/">利用UTF-8编码的特性进行优化</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="引子"><a href="#引子" class="headerlink" title="引子"></a>引子</h1><p>做性能优化的时候，画出火焰图（<code>async-profiler</code>）来看，发现耗时很多花在了<code>utf-8</code>的编码解码上了,所以需要思考一下如何优化这部分。<br>(采样30秒:<code>./profiler.sh -d 30 -f profile.svg [pid]</code>)</p>
-<img src="/images/2020-03/fire1.png" class="" width="800" height="1200" title="fire1">
-<img src="/images/2020-03/fire2.png" class="" width="800" height="1200" title="fire2">
-
-<h1 id="What-什么是UTF-8编码"><a href="#What-什么是UTF-8编码" class="headerlink" title="What: 什么是UTF-8编码"></a>What: 什么是UTF-8编码</h1><p>UTF-8编码就是对于字节流(一串二进制)的解释，解释成字符串。<br>类似的还有: ASCII编码，就是把1B字节解释成128种字符。(范围是0-127,包括英文字母、数字)</p>
-<p>UTF-8编码下，一个字符可以由1B~4B二进制组成。</p>
-<h2 id="UTF-8格式"><a href="#UTF-8格式" class="headerlink" title="UTF-8格式"></a>UTF-8格式</h2><p>合法的格式包括4种:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">0xxxxxxx 				                0-127 (ASCII)</span><br><span class="line">110xxxxx 10xxxxxx 			            128-2047</span><br><span class="line">1110xxxx 10xxxxxx 10xxxxxx              2048-65535</span><br><span class="line">11110xxx 10xxxxxx 10xxxxxx 10xxxxxx 	65536-0x10ffff</span><br></pre></td></tr></table></figure>
-<p>它的首字节的前缀码会指出这个字符会占用多少字节。<br>合法的前缀码有4种:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">0X:    占1B;</span><br><span class="line">110X:  占2B;</span><br><span class="line">1110:  占3B;</span><br><span class="line">11110: 占4B;</span><br></pre></td></tr></table></figure>
-<p>显然还有一种<code>10X</code>不在其中。这是因为<code>10X</code>不属于合法的首字节的前缀码，只能在第2、3、4个字节中出现。如果我们随机选择<code>utf-8</code>二进制流中的一个字节来看的话，可能的情况有5种:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">0X:     首字节,这个字符总长1B</span><br><span class="line">10X:    非首字节.</span><br><span class="line">110X:   首字节,这个字符总长2B</span><br><span class="line">1110X:  首字节,这个字符总长3B</span><br><span class="line">11110X: 首字节,这个字符总长4B</span><br></pre></td></tr></table></figure>
-
-<h3 id="utf-8特性"><a href="#utf-8特性" class="headerlink" title="utf-8特性"></a>utf-8特性</h3><ol>
-<li>兼容性:  0-127和<code>ascii</code>码是一样的,而且在其他字节不可能出现,因此和<code>ascii</code>完全兼容;</li>
-<li>自同步性: 基于上面讨论的前缀码特性,从任意位置开始读,可以定位到合法位置开始解码。</li>
-</ol>
-<h3 id="优化方案"><a href="#优化方案" class="headerlink" title="优化方案"></a>优化方案</h3><p>基于上述两点洞察，再考虑到我此次工作只需要解析字母数字部分，再直接分发二进制流即可。因此可以做两点优化:</p>
-<ol>
-<li>读取时: 不解码,直接理解二进制的每个字节;</li>
-<li>利用自同步性: 并发解析; 原先只能顺序解码,并发解析可以从任意位置开始;</li>
-<li>输出时: 不编码,直接输出二进制;</li>
-</ol>
-<h3 id="结果"><a href="#结果" class="headerlink" title="结果"></a>结果</h3><p>取消编码、解码后这部分耗时下降了12%;<br>并发处理则大幅提速,提速了一倍以上。</p>
-<img src="/images/2020-03/res.png" class="" width="800" height="1200" title="res">
-
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2020/03/26/2020-03/%E5%88%A9%E7%94%A8UTF-8%E7%BC%96%E7%A0%81%E7%9A%84%E7%89%B9%E6%80%A7%E8%BF%9B%E8%A1%8C%E4%BC%98%E5%8C%96/" data-id="ck96cxpqm00lgmaam9g05a433" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/utf8/" rel="tag">utf8</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E7%BC%96%E7%A0%81/" rel="tag">编码</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-2020-03/linux自连接" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2020/03/24/2020-03/linux%E8%87%AA%E8%BF%9E%E6%8E%A5/" class="article-date">
-  <time datetime="2020-03-24T02:02:26.000Z" itemprop="datePublished">2020-03-24</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/%E7%BD%91%E7%BB%9C/">网络</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2020/03/24/2020-03/linux%E8%87%AA%E8%BF%9E%E6%8E%A5/">linux自连接</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>linux支持自连接，也就是同一个ip，同一个机器，自己起一个server、client互相连接。<br>例如使用命令:</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">nc localhost $port -p $port</span><br></pre></td></tr></table></figure>
-<p>对应TCP协议中的合法设定，同时打开:</p>
-<img src="/images/2020-03/open_now.png" class="" width="800" height="1200" title="open_now">
-
-<h2 id="误触可能"><a href="#误触可能" class="headerlink" title="误触可能"></a>误触可能</h2><p>虽然这是linux的一个feature，但是我们平时遇到这种情况一般是因为bug，也就是误触。</p>
-<p>一种可能：<br>进程1: listen端口A，然后挂掉，释放端口A；<br>进程2: 源端口A, 连接端口A。</p>
-<h2 id="触发bug条件"><a href="#触发bug条件" class="headerlink" title="触发bug条件"></a>触发bug条件</h2><p>listen端口选择了<code>net.ipv4.ip_local_port_range</code>范围；</p>
-<p><code>net.ipv4.ip_local_port_range</code>范围里的端口是linux连接目标端口时，选择源端口的范围。可以通过修改<code>/etc/sysctl.conf</code>调整。（如果要调大connect并发度）</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">// 查看:</span><br><span class="line">cat /proc/sys/net/ipv4/ip_local_port_range</span><br><span class="line">// 生效:</span><br><span class="line">sysctl -p /etc/sysctl.conf</span><br></pre></td></tr></table></figure>
-<p>因为connect使用的端口会从这个范围取，所以如果listen也用了这个范围，就很可能冲突，形成自连接。</p>
-<h3 id="并发度"><a href="#并发度" class="headerlink" title="并发度"></a>并发度</h3><p>内核3.2以前:  需保证<code>源ip,源端口</code>2元组不同,并发度更低; (随机选择端口)<br>内核3.2以后:  需保证<code>源ip,源端口,目标ip,目标端口</code>4元组不同即可,并发度更大； (顺序选择端口)</p>
-<h3 id="恶化bug条件"><a href="#恶化bug条件" class="headerlink" title="恶化bug条件"></a>恶化bug条件</h3><ol>
-<li>使用连接池，自连接无法释放；</li>
-<li>Linux内核&gt;=3.10: 2.6是随机选择端口,3.10是顺序递增选择；</li>
-</ol>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2020/03/24/2020-03/linux%E8%87%AA%E8%BF%9E%E6%8E%A5/" data-id="ck96cxpqj00l4maamg8c9cfx2" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/tcp/" rel="tag">tcp</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1281,6 +1279,14 @@
       <ul>
         
           <li>
+            <a href="/2022/03/13/2022-03/ss%E5%91%BD%E4%BB%A4/">ss命令</a>
+          </li>
+        
+          <li>
+            <a href="/2022/03/13/2022-03/UDP%E6%89%B9%E5%A4%84%E7%90%86%E4%BC%98%E5%8C%96-GSO-GRO/">UDP批处理优化-GSO/GRO</a>
+          </li>
+        
+          <li>
             <a href="/2022/02/24/2022-02/%E4%B8%BA%E4%BB%80%E4%B9%88%E5%85%88hash%E5%90%8E%E5%8A%A0%E5%AF%86%E7%9A%84%E6%96%B9%E6%B3%95%E5%AE%B9%E6%98%93%E9%81%AD%E9%81%87padding%E6%94%BB%E5%87%BB/">为什么先hash后加密的方法容易遭遇padding攻击</a>
           </li>
         
@@ -1290,14 +1296,6 @@
         
           <li>
             <a href="/2022/02/18/2022-02/%E6%8B%A5%E5%A1%9E%E7%AE%97%E6%B3%95bbr/">quic中的拥塞算法bbr</a>
-          </li>
-        
-          <li>
-            <a href="/2022/02/17/2022-02/http3-quic%E4%BC%98%E7%BC%BA%E7%82%B9%E5%8F%8A%E5%8E%9F%E5%9B%A0/">http3_quic优缺点及原因</a>
-          </li>
-        
-          <li>
-            <a href="/2022/02/16/2022-02/http-range/">http_range</a>
           </li>
         
       </ul>
