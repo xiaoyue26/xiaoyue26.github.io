@@ -72,6 +72,189 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-03/redis设计与实现笔记9-cluster模式" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/03/03/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B09-cluster%E6%A8%A1%E5%BC%8F/" class="article-date">
+  <time datetime="2019-03-03T13:05:48.000Z" itemprop="datePublished">2019-03-03</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/03/03/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B09-cluster%E6%A8%A1%E5%BC%8F/">redis设计与实现笔记9-cluster模式</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>cluster功能是3.0及以后才有的。需要开启cluster模式才能让redis-server以cluster模式启动，这种模式下只有一个数据库（0号数据库）。</p>
+<p>启动集群模式的redis客户端:</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 加上-c参数: </span></span><br><span class="line">redis-cli -c</span><br></pre></td></tr></table></figure>
+
+<h2 id="集群纳入新成员过程"><a href="#集群纳入新成员过程" class="headerlink" title="集群纳入新成员过程"></a>集群纳入新成员过程</h2><ol>
+<li>节点A接到Cluster meet B命令，节点A和B进行握手；</li>
+<li>节点A会将节点B的信息通过<code>Gossip</code>协议传播给集群中的其他节点；</li>
+<li>最终节点B被集群完全认识、接受。</li>
+</ol>
+<h2 id="Gossip协议消息类型"><a href="#Gossip协议消息类型" class="headerlink" title="Gossip协议消息类型"></a>Gossip协议消息类型</h2><ol>
+<li>Meet;</li>
+<li>Ping;</li>
+<li>Pong。</li>
+</ol>
+<h2 id="slot-槽指派"><a href="#slot-槽指派" class="headerlink" title="slot: 槽指派"></a>slot: 槽指派</h2><p>某个节点负责哪些slot:</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">127.0.0.1&gt; cluster ADDslots &lt;slot&gt; [slot ...]</span><br></pre></td></tr></table></figure>
+
+<h2 id="Cluster-Nodes命令"><a href="#Cluster-Nodes命令" class="headerlink" title="Cluster Nodes命令"></a>Cluster Nodes命令</h2><p>用redis-cli客户端可以查看当前集群的节点情况、id，以及slot的分派情况：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Cluster Nodes</span><br></pre></td></tr></table></figure>
+
+<h2 id="clusterState信息"><a href="#clusterState信息" class="headerlink" title="clusterState信息"></a>clusterState信息</h2><p>clusterState信息中有一项是<code>slots_to_keys</code>跳表(类似一个有序hashmap)，保存slot和key之间的关联。<br>key=&gt;跳表中的key;<br>slot号码=&gt;跳表中的score。</p>
+<p>key查节点、节点查key都可以快速完成:</p>
+<ol>
+<li>每个节点可以根据key，查到对应的slot(crc算法)，然后可以查到对应存在哪个节点（存在跳表）；</li>
+<li>可以查自己节点负责的slot:<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">clusterNode</span>&#123;</span></span><br><span class="line">    <span class="comment">// 总共16384(也就是2^14)位，每一位的1,0代表是否负责</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> slots[<span class="number">16384</span>/<span class="number">8</span>];</span><br><span class="line">    <span class="keyword">int</span> numslots;<span class="comment">// 该节点总共负责多少个slot(1的数量)</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+</li>
+</ol>
+<p><code>clusterState</code>中存储了所有slots的指派情况:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">clusterState</span>&#123;</span></span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">    clusterNode* slots[<span class="number">16384</span>];</span><br><span class="line">&#125;clusterState;</span><br></pre></td></tr></table></figure>
+
+<p>如果集群中所有的slot都有人负责，cluster进入上线状态。</p>
+<h2 id="Moved错误"><a href="#Moved错误" class="headerlink" title="Moved错误"></a>Moved错误</h2><p>客户端访问了错误的节点，需要的key在别的节点负责的slot里头：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">MOVED &lt;slot&gt; &lt;ip&gt;:&lt;port&gt;</span><br></pre></td></tr></table></figure>
+<p>cluster模式的redis客户端能自动处理<code>MOVED</code>错误。</p>
+<h2 id="ASK错误"><a href="#ASK错误" class="headerlink" title="ASK错误"></a>ASK错误</h2><h3 id="重新指派"><a href="#重新指派" class="headerlink" title="重新指派"></a>重新指派</h3><img src="/images/2019-03/cluster_migrate.png" class="" width="800" height="1200" title="cluster_migrate">
+<p>集群可以将slot重新分派给另一个节点。<br>也就是: 源节点=迁移到=&gt;目标节点。<br>其中节点id可以通过<code>cluster nodes</code>获得。<br>通过redis-trib工具：<br>1.在target_id节点上发送: (准备好导入)</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Cluster setslot &lt;slot&gt; Importing &lt;source_id&gt;</span><br></pre></td></tr></table></figure>
+<p>2.向source_id发送:（准备好导出）</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Cluster SetSlot &lt;slot&gt; Migrating &lt;target_id&gt;</span><br></pre></td></tr></table></figure>
+<p>3.向source_id发送:</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Cluster GETkeysInSlot &lt;slot&gt; &lt;count&gt;</span><br></pre></td></tr></table></figure>
+<p>获得最多count个属于slot的key；<br>4.对于第3步中的每个key，redis-trib向source_id发送一个命令:</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Migrate &lt;target_ip&gt; &lt;target_port&gt; &lt;key_name&gt; 0 &lt;timeout&gt;</span><br></pre></td></tr></table></figure>
+<p>实际进行迁移每一个key。<br>5.完成迁移，发布:</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Cluster SetSlot &lt;slot&gt; Node &lt;target_id&gt;</span><br></pre></td></tr></table></figure>
+<p>任意节点收到后传播给整个集群。</p>
+<h3 id="ASK错误-1"><a href="#ASK错误-1" class="headerlink" title="ASK错误"></a>ASK错误</h3><img src="/images/2019-03/ask_error.png" class="" width="800" height="1200" title="ask_error">
+<p>迁移过程中，源节点遇到缺少的key会向客户端返回ASK错误:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ASK 16198 127.0.0.1:7003</span><br></pre></td></tr></table></figure>
+<p>表示这个key正在将16198号slot迁移到<code>127.0.0.1:7003</code>。</p>
+<img src="/images/2019-03/ask_query.png" class="" width="800" height="1200" title="ask_query">
+<p>cluster模式的客户端获得ASK错误后，带着ASK标记去访问目标节点，才能获得数据。</p>
+<h3 id="故障恢复"><a href="#故障恢复" class="headerlink" title="故障恢复"></a>故障恢复</h3><p>节点状态：<br><code>在线</code>==&gt;<code>疑似下线</code>==&gt;<code>下线</code><br>(类似于之前<code>sentinel</code>模式中的<code>主观下线</code>和<code>客观下线</code>)。</p>
+<p>cluster模式的各个主节点之间都有连接，相当于一张完全图了。<br>这个网络内，它们每隔一段时间就互相ping，看看对方是否活着（返回pong）。</p>
+<p><code>疑似下线</code>： 不返回pong，标记为<code>疑似下线</code>；<br><code>下线</code>    ： 节点之间交流看法(集群状态)，超过半数认为<code>疑似下线</code>则认为确实是<code>下线</code>，开始故障恢复。</p>
+<p>如果离线的节点有从节点，则可以开始选举了。<br>从节点们发现主节点下线了，就开始向集群存活的主节点们请求投票，获得超过半数的票则当选。</p>
+<h2 id="Publish命令实现"><a href="#Publish命令实现" class="headerlink" title="Publish命令实现"></a>Publish命令实现</h2><p>订阅频道：      subscribe<br>发布消息到频道：publish</p>
+<p>客户端发布消息的流程：</p>
+<ol>
+<li>客户端=&gt;某个节点: publish命令: 发布xx消息到xxx频道;</li>
+<li>该节点=&gt;其他节点: publish的具体消息。</li>
+</ol>
+<p>第2步中为什么不是直接转发命令到其他节点，而是转发消息呢？<br>这个主要是设计理念上，希望节点之间不是命令交互，而是消息交互。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/03/03/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B09-cluster%E6%A8%A1%E5%BC%8F/" data-id="ck96cxppl00hvmaamgc5j37vc" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-02/nginx笔记-鉴权及转发配置" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E9%89%B4%E6%9D%83%E5%8F%8A%E8%BD%AC%E5%8F%91%E9%85%8D%E7%BD%AE/" class="article-date">
+  <time datetime="2019-02-28T07:10:31.000Z" itemprop="datePublished">2019-02-28</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/nginx/">nginx</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E9%89%B4%E6%9D%83%E5%8F%8A%E8%BD%AC%E5%8F%91%E9%85%8D%E7%BD%AE/">nginx笔记-鉴权及转发配置</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>学习资料:<br><a href="http://blog.jobbole.com/tag/nginx/" target="_blank" rel="noopener">http://blog.jobbole.com/tag/nginx/</a><br><a href="https://segmentfault.com/a/1190000013267839#articleHeader0" target="_blank" rel="noopener">https://segmentfault.com/a/1190000013267839#articleHeader0</a></p>
+<p>鉴权模块的官方文档:<br><a href="http://nginx.org/en/docs/http/ngx_http_auth_request_module.html" target="_blank" rel="noopener">http://nginx.org/en/docs/http/ngx_http_auth_request_module.html</a></p>
+<h2 id="易混淆点"><a href="#易混淆点" class="headerlink" title="易混淆点"></a>易混淆点</h2><p><strong>URL尾部的<code>/</code>区别</strong><br>url分为<code>location</code>配置中的<code>url</code>和实际用户访问的<code>url</code>：</p>
+<h3 id="1-location中的url"><a href="#1-location中的url" class="headerlink" title="1. location中的url"></a>1. location中的url</h3><p>无区别。末尾是否有<code>/</code>,含义一样。</p>
+<h3 id="2-实际用户访问的url"><a href="#2-实际用户访问的url" class="headerlink" title="2. 实际用户访问的url"></a>2. 实际用户访问的url</h3><p>也就是浏览器地址栏中的。</p>
+<p>首先实际访问url的话：<br>(1)末尾有<code>/</code>: 表示目录，如<code>localhost/dir/</code>，服务器就会匹配目录下的默认文件（比如<code>index.html</code>）;<br>(2)末尾无<code>/</code>: 表示文件，如<code>localhost/file</code>.</p>
+<p><strong>特殊情况:</strong><br>根目录。<br>直接访问域名，如访问<a href="http://www.xxx.com" target="_blank" rel="noopener">http://www.xxx.com</a><br>，这个时候浏览器知道用户访问的肯定不是文件，而且服务器一般会配置<code>location /</code>这个配置项，所以访问根目录有没有<code>/</code>都一样。<br><strong>也就是以下两种访问url等效:</strong> </p>
+<ol>
+<li>访问<a href="http://www.xxx.com" target="_blank" rel="noopener">http://www.xxx.com</a></li>
+<li>访问<a href="http://www.xxx.com/" target="_blank" rel="noopener">http://www.xxx.com/</a><br>浏览器请求的时候自动给第1种加上<code>/</code>变成第2种。</li>
+</ol>
+<h2 id="nginx配置的逻辑"><a href="#nginx配置的逻辑" class="headerlink" title="nginx配置的逻辑"></a>nginx配置的逻辑</h2><ul>
+<li>特点:</li>
+</ul>
+<ol>
+<li><p>声明式<br>nginx的配置文件是声明式的,因此不能用过程式语言来理解它。<br>换句话说:<br>并不是写在前面的就先执行.</p>
+</li>
+<li><p>第三方模块<br>nginx有核心模块和第三方模块（插件）。<br>不同模块的配置可能写在一块儿,但执行顺序可能无关联,甚至互相影响。</p>
+</li>
+</ol>
+<p>举例一些模块的功能：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">--with-http_dav_module: http文件管理;</span><br><span class="line">--with-http_flv_module: flv流媒体支持;</span><br><span class="line">--with-mail: 邮件支持;</span><br><span class="line">--with-mail_ssl_module: 邮件加密;</span><br><span class="line">--with-debug: debug日志支持;</span><br><span class="line">--with-http_auth_request_module: 鉴权转发支持。</span><br></pre></td></tr></table></figure>
+
+<h2 id="一种可能的鉴权转发配置："><a href="#一种可能的鉴权转发配置：" class="headerlink" title="一种可能的鉴权转发配置："></a>一种可能的鉴权转发配置：</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br></pre></td><td class="code"><pre><span class="line">#user  nobody;</span><br><span class="line">worker_processes  3;</span><br><span class="line"></span><br><span class="line">error_log  logs&#x2F;error.log;</span><br><span class="line">#error_log  logs&#x2F;error.log  notice;</span><br><span class="line">#error_log  logs&#x2F;error.log  info;</span><br><span class="line"></span><br><span class="line"># pid        logs&#x2F;nginx.pid; # 这个必须停服改</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">events &#123;</span><br><span class="line">    worker_connections  2048;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">http &#123;</span><br><span class="line">    include       mime.types;</span><br><span class="line">    default_type  application&#x2F;octet-stream;</span><br><span class="line"></span><br><span class="line">    log_format  main  &#39;$remote_addr - $remote_user [$time_local] &quot;$request&quot; &#39;</span><br><span class="line">                      &#39;$status $body_bytes_sent &quot;$http_referer&quot; &#39;</span><br><span class="line">                      &#39;&quot;$http_user_agent&quot; &quot;$http_x_forwarded_for&quot;&#39;;</span><br><span class="line"></span><br><span class="line">    access_log  logs&#x2F;access.log  main;</span><br><span class="line"></span><br><span class="line">    sendfile        on;</span><br><span class="line">    #tcp_nopush     on;</span><br><span class="line"></span><br><span class="line">    #keepalive_timeout  0;</span><br><span class="line">    keepalive_timeout  65;</span><br><span class="line"></span><br><span class="line">    #gzip  on;</span><br><span class="line">    gzip  on;</span><br><span class="line">    gzip_min_length 1k;</span><br><span class="line">    gzip_buffers    4 16k;</span><br><span class="line">    gzip_http_version 1.0;</span><br><span class="line">    gzip_comp_level 6;</span><br><span class="line">    gzip_types text&#x2F;plain text&#x2F;css text&#x2F;javascript application&#x2F;json application&#x2F;javascript application&#x2F;x-javascript application&#x2F;xml;</span><br><span class="line">    gzip_vary on;</span><br><span class="line"></span><br><span class="line">    # http_proxy 设置</span><br><span class="line">    client_max_body_size   10m;</span><br><span class="line">    client_body_buffer_size   128k;</span><br><span class="line">    proxy_connect_timeout   75;</span><br><span class="line">    proxy_send_timeout   75;</span><br><span class="line">    proxy_read_timeout   75;</span><br><span class="line">    proxy_buffer_size   4k;</span><br><span class="line">    proxy_buffers   4 32k;</span><br><span class="line">    proxy_busy_buffers_size   64k;</span><br><span class="line">    proxy_temp_file_write_size  64k;</span><br><span class="line">    proxy_temp_path   &#x2F;usr&#x2F;local&#x2F;nginx&#x2F;proxy_temp 1 2;</span><br><span class="line"></span><br><span class="line">    upstream backend_hexo &#123;</span><br><span class="line">	    server localhost:8081 max_fails&#x3D;2 fail_timeout&#x3D;30s ;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    server &#123;</span><br><span class="line">        listen       80;</span><br><span class="line">        server_name  localhost;</span><br><span class="line"></span><br><span class="line">        #charset koi8-r;</span><br><span class="line"></span><br><span class="line">        access_log  logs&#x2F;host.access.log  main;</span><br><span class="line"></span><br><span class="line">        location &#x2F; &#123;</span><br><span class="line">            auth_request &#x2F;auth;</span><br><span class="line">            add_header Cache-Control no-store;</span><br><span class="line">            proxy_set_header Host $host;</span><br><span class="line"></span><br><span class="line">            proxy_pass        http:&#x2F;&#x2F;backend_hexo;</span><br><span class="line">            proxy_redirect off;</span><br><span class="line">            # 后端的Web服务器可以通过X-Forwarded-For获取用户真实IP</span><br><span class="line">            proxy_set_header  Host  $host;</span><br><span class="line">            proxy_set_header  X-Real-IP  $remote_addr;</span><br><span class="line">            proxy_set_header  X-Forwarded-For  $proxy_add_x_forwarded_for;</span><br><span class="line">            proxy_next_upstream error timeout invalid_header http_500 http_502 http_503 http_504;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        location &#x3D; &#x2F;auth &#123;</span><br><span class="line">            proxy_pass http:&#x2F;&#x2F;auth_server:8080&#x2F;api&#x2F;hexo_permission;</span><br><span class="line">            proxy_pass_request_body off;</span><br><span class="line">            proxy_set_header Content-Length &quot;&quot;;</span><br><span class="line">            proxy_set_header X-Original-URI $request_uri;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">        #error_page  404              &#x2F;404.html;</span><br><span class="line"></span><br><span class="line">        # redirect server error pages to the static page &#x2F;50x.html</span><br><span class="line">        #</span><br><span class="line">        error_page   500 502 503 504  &#x2F;50x.html;</span><br><span class="line">        location &#x3D; &#x2F;50x.html &#123;</span><br><span class="line">            root   html;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E9%89%B4%E6%9D%83%E5%8F%8A%E8%BD%AC%E5%8F%91%E9%85%8D%E7%BD%AE/" data-id="ck96cxpp500fxmaamdk5a4jns" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/nginx/" rel="tag">nginx</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2019-02/nginx笔记-编译安装" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E7%BC%96%E8%AF%91%E5%AE%89%E8%A3%85/" class="article-date">
@@ -924,258 +1107,10 @@
 
 
   
-    <article id="post-2019-02/高性能mysql第12-16章-笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/02/13/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC12-16%E7%AB%A0-%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2019-02-13T01:34:54.000Z" itemprop="datePublished">2019-02-13</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/mysql/">mysql</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/02/13/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC12-16%E7%AB%A0-%E7%AC%94%E8%AE%B0/">高性能mysql第12-16章-笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>这一章主要讲了一些概念和一些Mysql Cluster变种，略。</p>
-<h2 id="高可用概念"><a href="#高可用概念" class="headerlink" title="高可用概念"></a>高可用概念</h2><p>5个9: 99.999%，每年允许5分钟宕机时间。</p>
-<h2 id="宕机原因"><a href="#宕机原因" class="headerlink" title="宕机原因"></a>宕机原因</h2><ol>
-<li>运行环境: 磁盘耗尽；</li>
-<li>性能问题：糟糕sql，schema索引设计;</li>
-<li>复制问题：主备不一致；</li>
-<li>数据丢失：如误操作。</li>
-</ol>
-<h3 id="tips"><a href="#tips" class="headerlink" title="tips"></a>tips</h3><ol>
-<li>禁用查询缓存</li>
-<li>禁用复制过滤器、触发器。</li>
-</ol>
-<h1 id="高性能mysql第13章-笔记-云端mysql"><a href="#高性能mysql第13章-笔记-云端mysql" class="headerlink" title="高性能mysql第13章-笔记-云端mysql"></a>高性能mysql第13章-笔记-云端mysql</h1><p>IaaS:基础设施虚拟化；<br>DaaS:数据库虚拟化。</p>
-<h2 id="Iaas"><a href="#Iaas" class="headerlink" title="Iaas:"></a>Iaas:</h2><p>mysql需要的4种资源:</p>
-<ol>
-<li>cpu: 云cpu一般较慢；</li>
-<li>内存: 最好能到512GB~1TB；</li>
-<li>IO： ms级，虚拟化后一般慢100倍； </li>
-<li>网络： 一般不成为瓶颈。</li>
-</ol>
-<h2 id="Daas："><a href="#Daas：" class="headerlink" title="Daas："></a>Daas：</h2><p>稍微讲了一下亚马逊RDS，略过。</p>
-<h1 id="高性能mysql第14章-笔记-应用层优化"><a href="#高性能mysql第14章-笔记-应用层优化" class="headerlink" title="高性能mysql第14章-笔记-应用层优化"></a>高性能mysql第14章-笔记-应用层优化</h1><h2 id="思考的角度"><a href="#思考的角度" class="headerlink" title="思考的角度"></a>思考的角度</h2><ol>
-<li>应用和数据库正确分工；</li>
-<li>ORM的循环SQL和嵌套查询的性能优劣；</li>
-<li>缓存(redis)；</li>
-<li>连接池。</li>
-</ol>
-<h2 id="web服务器问题"><a href="#web服务器问题" class="headerlink" title="web服务器问题"></a>web服务器问题</h2><p>静态资源： 用nginx代替apache<br>移除无用的apache模块</p>
-<h2 id="缓存问题"><a href="#缓存问题" class="headerlink" title="缓存问题"></a>缓存问题</h2><p>不同等级层次的缓存:</p>
-<ol>
-<li>进程缓存;</li>
-<li>本地共享内存缓存;</li>
-<li>分布式内存缓存;(memcached)</li>
-<li>磁盘缓存。</li>
-</ol>
-<h3 id="缓存失效策略"><a href="#缓存失效策略" class="headerlink" title="缓存失效策略"></a>缓存失效策略</h3><ol>
-<li>TTL;</li>
-<li>显式失效:更新数据时候更新缓存或者标记缓存为脏数据;</li>
-<li>读时失效:读的时候再判断缓存是否已经过期； （加快写，减慢了读）</li>
-</ol>
-<h1 id="高性能mysql第15章-笔记-备份与恢复"><a href="#高性能mysql第15章-笔记-备份与恢复" class="headerlink" title="高性能mysql第15章-笔记-备份与恢复"></a>高性能mysql第15章-笔记-备份与恢复</h1><p>备份建议：</p>
-<ol>
-<li>使用Percona XtraBackup、Mysql Enterprise Backup；</li>
-<li>生产服务器和备份服务器分开，以免同时挂掉。</li>
-<li>定期进行恢复测试。</li>
-</ol>
-<h2 id="逻辑备份"><a href="#逻辑备份" class="headerlink" title="逻辑备份"></a>逻辑备份</h2><p>(SQL,mysqldump)<br>缺点: </p>
-<ol>
-<li>恢复起来慢</li>
-</ol>
-<h2 id="物理备份"><a href="#物理备份" class="headerlink" title="物理备份"></a>物理备份</h2><p>(文件)<br>缺点：</p>
-<ol>
-<li>受版本、兼容性影响，bug概率高。</li>
-<li>文件很大。</li>
-</ol>
-<p>建议：<br>0. 全局使用<code>utf-8</code>;</p>
-<ol>
-<li>逻辑：使用<code>mysqldump</code>备份结构；</li>
-<li>物理: 使用<code>select into outfile</code>导出数据为分隔符文件。</li>
-<li>恢复结构：执行1中的sql;</li>
-<li>恢复数据：<code>load data infile</code>。<br>其中2，4两步对字符集有要求。（不能单独设置某列字符集）</li>
-</ol>
-<h2 id="增量备份和全量备份"><a href="#增量备份和全量备份" class="headerlink" title="增量备份和全量备份"></a>增量备份和全量备份</h2><p>尽量做全备，增量bug多；</p>
-<h2 id="数据一致性"><a href="#数据一致性" class="headerlink" title="数据一致性"></a>数据一致性</h2><p><code>mysqldump --single-transaction</code><br>可能会导致非常长的事务，从而失败。</p>
-<h2 id="binlog清理"><a href="#binlog清理" class="headerlink" title="binlog清理"></a>binlog清理</h2><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">purge</span> <span class="keyword">master</span> <span class="keyword">logs</span> <span class="keyword">before</span> <span class="keyword">current_date</span> - <span class="built_in">Interval</span> N <span class="keyword">day</span></span><br></pre></td></tr></table></figure>
-<p>或者设置<code>expire_logs_days</code>。</p>
-<h2 id="innodb损坏恢复"><a href="#innodb损坏恢复" class="headerlink" title="innodb损坏恢复"></a>innodb损坏恢复</h2><h3 id="1-二级索引损坏"><a href="#1-二级索引损坏" class="headerlink" title="1. 二级索引损坏"></a>1. 二级索引损坏</h3><p>3种办法：</p>
-<ol>
-<li><code>optimize table</code>语句;</li>
-<li>删除重建表;</li>
-<li>表引擎改为<code>myisam</code>，再改回来。</li>
-</ol>
-<h3 id="2-聚簇索引损坏"><a href="#2-聚簇索引损坏" class="headerlink" title="2. 聚簇索引损坏"></a>2. 聚簇索引损坏</h3><p><strong>优先使用备份还原</strong><br>否则：<br>(大概率只能修复未受损坏影响的行。)<br>通过<code>innodb_force_recover</code>选项导出表，如果导出过程崩溃，需要跳过受损行。</p>
-<h3 id="3-损坏系统结构"><a href="#3-损坏系统结构" class="headerlink" title="3. 损坏系统结构"></a>3. 损坏系统结构</h3><p>损坏： innodb事务日志(redo log),表空间撤销日志(undo log),数据字典。</p>
-<p><strong>优先使用备份还原</strong><br>否则：<br>可能需要做整个数据库的导出和还原。<br>innodb内部绝大部分工作可能受影响。</p>
-<p>上述2，3两种损坏最好从备份还原数据。</p>
-<h1 id="高性能mysql第16章-笔记-用户工具"><a href="#高性能mysql第16章-笔记-用户工具" class="headerlink" title="高性能mysql第16章-笔记-用户工具"></a>高性能mysql第16章-笔记-用户工具</h1><p>这章主要介绍一些工具：</p>
-<h3 id="UI工具"><a href="#UI工具" class="headerlink" title="UI工具:"></a>UI工具:</h3><ol>
-<li>MysqlWorkbench;</li>
-<li>SQLyog: 同workbench,windows专用；</li>
-</ol>
-<h3 id="命令行工具"><a href="#命令行工具" class="headerlink" title="命令行工具:"></a>命令行工具:</h3><ol>
-<li>Percona Toolkit: 管理员必备；</li>
-<li>The openark kit：一些管理任务的python脚本。</li>
-</ol>
-<h3 id="监控工具"><a href="#监控工具" class="headerlink" title="监控工具"></a>监控工具</h3><ol>
-<li>Nagios;<br>2-6等其余很多略过。</li>
-</ol>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/02/13/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC12-16%E7%AB%A0-%E7%AC%94%E8%AE%B0/" data-id="ck96cxppe00gzmaam67zeat24" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-2019-02/高性能mysql-第十一章-笔记-可扩展" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/02/12/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql-%E7%AC%AC%E5%8D%81%E4%B8%80%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E5%8F%AF%E6%89%A9%E5%B1%95/" class="article-date">
-  <time datetime="2019-02-12T03:03:52.000Z" itemprop="datePublished">2019-02-12</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/mysql/">mysql</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/02/12/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql-%E7%AC%AC%E5%8D%81%E4%B8%80%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E5%8F%AF%E6%89%A9%E5%B1%95/">高性能mysql-第十一章-笔记-可扩展</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h2 id="可扩展"><a href="#可扩展" class="headerlink" title="可扩展"></a>可扩展</h2><ol>
-<li>数据量；</li>
-<li>用户量: 并发量。</li>
-<li>负载。</li>
-</ol>
-<h2 id="可扩展性的描述"><a href="#可扩展性的描述" class="headerlink" title="可扩展性的描述"></a>可扩展性的描述</h2><img src="/images/2019-02/usl_ext.png" class="" width="400" height="600" title="usl_ext">
-<ul>
-<li><p>线性扩展: 加1倍资源=&gt;加1倍性能。(理想最优情况，一般达不到)</p>
-</li>
-<li><p>Amdahl定律: </p>
-</li>
-</ul>
-<ol>
-<li>存在无法并发的工作;</li>
-<li>存在需要交互的工作;<br>因此吞吐量达不到线性增长，会趋于平缓。</li>
-</ol>
-<ul>
-<li>USL扩展:(通用可扩展定律)</li>
-</ul>
-<ol>
-<li>存在无法并发的工作;</li>
-<li>存在需要交互的工作;</li>
-<li>存在内部系统通信开销。</li>
-</ol>
-<p>从3种扩展性的描述看，我们的目标是趋近于线性扩展，因此应该尽量削减USL扩展中的三个方面: 减少串行、减少交互、减少内部通信。</p>
-<h2 id="垂直扩展-纵向扩展、向上扩展"><a href="#垂直扩展-纵向扩展、向上扩展" class="headerlink" title="垂直扩展(纵向扩展、向上扩展)"></a>垂直扩展(纵向扩展、向上扩展)</h2><p>升级硬件。价格更高，性能比低。<br>mysql利用极限:<br>CPU: 24<br>内存: 128<br>更多的时候提升趋于平缓。</p>
-<h2 id="向内扩展"><a href="#向内扩展" class="headerlink" title="向内扩展"></a>向内扩展</h2><p>优化查询、索引，压缩数据。</p>
-<h2 id="水平扩展-横向扩展，向外扩展"><a href="#水平扩展-横向扩展，向外扩展" class="headerlink" title="水平扩展(横向扩展，向外扩展)"></a>水平扩展(横向扩展，向外扩展)</h2><ol>
-<li>复制</li>
-<li>拆分</li>
-<li>分片(sharding)</li>
-</ol>
-<p>拆分: 按功能拆分（微服务），划分的表之间不会进行关联操作</p>
-<h3 id="数据分片-sharding"><a href="#数据分片-sharding" class="headerlink" title="数据分片(sharding)"></a>数据分片(sharding)</h3><p>用userid分片。<br>id+hash。</p>
-<img src="/images/2019-02/star_model.png" class="" width="400" height="600" title="star_model">
-<p>星形/雪花模型: 容易分片。<br>网状模型:      难以分片。 </p>
-<p>因此早期设计应该避免网状模型。</p>
-<p>分片方式:</p>
-<ol>
-<li>固定分配，硬编码; 缺点: 无法处理热点。优点: 简单。</li>
-<li>动态分配：缺点：实现复杂。</li>
-</ol>
-<p>热点解决方案：随机数+哈希；<br>扩展性： 预分配32个分片，用DNS单点，把4个库放在一个实例(IP)上。</p>
-<p>小猿(CP): 库名_32.表名; DNS作为单点。<br>网易(CP): 类似codis，引入中间件单点。</p>
-<h3 id="全局唯一ID"><a href="#全局唯一ID" class="headerlink" title="全局唯一ID"></a>全局唯一ID</h3><ol>
-<li>autoinc: 利用自增幅度和初始偏移;</li>
-<li>创建一个全局表，进行autoinc id分配;</li>
-<li>使用memcached/redis，生成全局自增id;(没有持久性)</li>
-</ol>
-<p>其中2，3可以批量生成一批，减少调用次数。</p>
-<h3 id="冷热数据分表"><a href="#冷热数据分表" class="headerlink" title="冷热数据分表"></a>冷热数据分表</h3><p>归档、冷数据分离到另一张表、或者将冷数据分离到较差的节点。</p>
-<h3 id="负载均衡的目的"><a href="#负载均衡的目的" class="headerlink" title="负载均衡的目的"></a>负载均衡的目的</h3><img src="/images/2019-02/balance.png" class="" width="400" height="600" title="balance">
-<ol>
-<li>可扩展性；（读写分离）</li>
-<li>高效性；</li>
-<li>可用性；</li>
-<li>透明性；</li>
-<li>一致性。</li>
-</ol>
-<h3 id="负载均衡算法"><a href="#负载均衡算法" class="headerlink" title="负载均衡算法"></a>负载均衡算法</h3><ol>
-<li>随机</li>
-<li>轮询</li>
-<li>最少连接数: 有缺点，新加入的机器还没有预热缓存，却立即分配了最多的连接；</li>
-<li>最快响应；</li>
-<li>哈希：通过源IP进行哈希（会话局部性）；</li>
-<li>权重：结合上述算法，根据底层机器的性能差异进行权重。</li>
-</ol>
-<p>具体采用哪个算法，取决于工作负载类型。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/02/12/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql-%E7%AC%AC%E5%8D%81%E4%B8%80%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E5%8F%AF%E6%89%A9%E5%B1%95/" data-id="ck96cxppd00gvmaamfl3ydges" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
-    <a class="extend prev" rel="prev" href="/page/6/">&amp;laquo; 上一页</a><a class="page-number" href="/">1</a><span class="space">&hellip;</span><a class="page-number" href="/page/5/">5</a><a class="page-number" href="/page/6/">6</a><span class="page-number current">7</span><a class="page-number" href="/page/8/">8</a><a class="page-number" href="/page/9/">9</a><span class="space">&hellip;</span><a class="page-number" href="/page/22/">22</a><a class="extend next" rel="next" href="/page/8/">下一页&amp;raquo;</a>
+    <a class="extend prev" rel="prev" href="/page/6/">&amp;laquo; 上一页</a><a class="page-number" href="/">1</a><span class="space">&hellip;</span><a class="page-number" href="/page/5/">5</a><a class="page-number" href="/page/6/">6</a><span class="page-number current">7</span><a class="page-number" href="/page/8/">8</a><a class="page-number" href="/page/9/">9</a><span class="space">&hellip;</span><a class="page-number" href="/page/23/">23</a><a class="extend next" rel="next" href="/page/8/">下一页&amp;raquo;</a>
   </nav>
 </section>
            
@@ -1198,6 +1133,14 @@
       <ul>
         
           <li>
+            <a href="/2022/03/14/2022-03/%E4%B8%AD%E6%96%AD%E6%A2%B3%E7%90%86/">java方法是否可中断梳理</a>
+          </li>
+        
+          <li>
+            <a href="/2022/03/13/2022-03/mp4%E6%A0%BC%E5%BC%8F/">mp4格式</a>
+          </li>
+        
+          <li>
             <a href="/2022/03/13/2022-03/ss%E5%91%BD%E4%BB%A4/">ss命令</a>
           </li>
         
@@ -1207,14 +1150,6 @@
         
           <li>
             <a href="/2022/02/24/2022-02/%E4%B8%BA%E4%BB%80%E4%B9%88%E5%85%88hash%E5%90%8E%E5%8A%A0%E5%AF%86%E7%9A%84%E6%96%B9%E6%B3%95%E5%AE%B9%E6%98%93%E9%81%AD%E9%81%87padding%E6%94%BB%E5%87%BB/">为什么先hash后加密的方法容易遭遇padding攻击</a>
-          </li>
-        
-          <li>
-            <a href="/2022/02/24/2022-02/keepalive/">http和tcp层面的keepAlive机制</a>
-          </li>
-        
-          <li>
-            <a href="/2022/02/18/2022-02/%E6%8B%A5%E5%A1%9E%E7%AE%97%E6%B3%95bbr/">quic中的拥塞算法bbr</a>
           </li>
         
       </ul>

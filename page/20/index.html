@@ -72,6 +72,146 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-apt-get本地源" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2016/01/03/apt-get%E6%9C%AC%E5%9C%B0%E6%BA%90/" class="article-date">
+  <time datetime="2016-01-03T02:59:01.000Z" itemprop="datePublished">2016-01-03</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E9%85%8D%E7%BD%AE/">配置</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2016/01/03/apt-get%E6%9C%AC%E5%9C%B0%E6%BA%90/">apt-get本地源</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <blockquote>
+<p>上次安装ambari，由于网速问题下载包下载了好久。如果反复这样的话太浪费时间了，又找不到能用的国内镜像源，决定自己建一个本地源。</p>
+</blockquote>
+<p>首先有一台服务器用官方的<code>ambari.list</code>源</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">sudo apt-get install ambari-server</span><br><span class="line">sudo apt-get install ambari-agent</span><br></pre></td></tr></table></figure>
+<p>下载好了相关的<code>deb</code>包。<br>接下来要做的工作就是想要复用这些文件。</p>
+<p>1.<code>apt-get</code>安装的软件都保存在<code>/var/cache/apt/archives/</code>目录下，所以先把它们拷贝到别的目录下：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">sudo mkdir ~/data/soft -p </span><br><span class="line">sudo cp -p /var/cache/apt/archives/*.deb  ~/data/soft/</span><br><span class="line">cd ~/data/soft/</span><br><span class="line"><span class="meta">#</span><span class="bash">修改一下拥有者和组，方便之后缩小权限:</span></span><br><span class="line">chown -R am-server ~/data/</span><br><span class="line">chgrp -R am-server ~/data/</span><br></pre></td></tr></table></figure>
+<p>2.安装一下依赖扫描工具：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo apt-get install  dpkg-dev -y</span><br></pre></td></tr></table></figure>
+<p>3.生成<code>Packages.gz</code></p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">dpkg-scanpackages soft/ |gzip &gt; soft/Packages.gz</span><br></pre></td></tr></table></figure>
+<p>4.nginx对于静态资源并发比较好：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 安装nginx:</span></span><br><span class="line">sudo apt-get install nginx</span><br><span class="line"><span class="meta">#</span><span class="bash"> 配置一下nginx的启动用户：</span></span><br><span class="line">vi /etc/nginx/nginx.conf</span><br><span class="line"><span class="meta">#</span><span class="bash"> 把user从www-data改为自己的用户am-server</span></span><br><span class="line">user am-server;</span><br><span class="line">:wq </span><br><span class="line">vi /etc/nginx/sites-available/default</span><br><span class="line"><span class="meta">#</span><span class="bash"> 更改根目录和location:</span></span><br><span class="line">server &#123;</span><br><span class="line">	listen   80; ## listen for ipv4; this line is default and implied</span><br><span class="line"><span class="meta">	#</span><span class="bash">listen   [::]:80 default ipv6only=on; <span class="comment">## listen for ipv6</span></span></span><br><span class="line"></span><br><span class="line">	root /home/am-server/data;</span><br><span class="line">	index index.html index.htm;</span><br><span class="line"></span><br><span class="line"><span class="meta">	#</span><span class="bash"> Make site accessible from http://localhost/</span></span><br><span class="line">	server_name localhost;</span><br><span class="line"></span><br><span class="line">	location / &#123;</span><br><span class="line"><span class="meta">		#</span><span class="bash"> First attempt to serve request as file, <span class="keyword">then</span></span></span><br><span class="line"><span class="meta">		#</span><span class="bash"> as directory, <span class="keyword">then</span> fall back to index.html</span></span><br><span class="line">		try_files $uri $uri/ /index.html;</span><br><span class="line">		</span><br><span class="line"><span class="meta">		#</span><span class="bash"> Uncomment to <span class="built_in">enable</span> naxsi on this location</span></span><br><span class="line"><span class="meta">		#</span><span class="bash"> include /etc/nginx/naxsi.rules</span></span><br><span class="line">	&#125;</span><br><span class="line">	location /soft&#123;</span><br><span class="line">		autoindex on;</span><br><span class="line">		allow all;</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br><span class="line">这里我顺手把index文件也拷进了data/</span><br><span class="line">cp /usr/share/nginx/www/index.html /data</span><br><span class="line"><span class="meta">#</span><span class="bash">保存之后重启nginx即可：</span></span><br><span class="line">service nginx restart</span><br></pre></td></tr></table></figure>
+<p>在浏览器上检查是否可以访问：<br><a href="http://10.2.14.120/" target="_blank" rel="noopener">http://10.2.14.120/</a><br><a href="http://10.2.14.120/soft" target="_blank" rel="noopener">http://10.2.14.120/soft</a></p>
+<p>如果出现问题的话，可以通过检查两个log文件寻找原因：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 访问日志：</span></span><br><span class="line">cat /var/log/nginx/access.log;</span><br><span class="line"><span class="meta">#</span><span class="bash"> 错误日志：</span></span><br><span class="line">cat /var/log/nginx/error.log;</span><br></pre></td></tr></table></figure>
+<p>有可能是权限等问题。</p>
+<p>5.配置后本地源的服务器后，可以在其他机器上测试一下apt-get能否正常识别：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">sudo vi &#x2F;etc&#x2F;apt&#x2F;source.list.d</span><br><span class="line">#添加以下内容：</span><br><span class="line">deb http:&#x2F;&#x2F;10.2.14.120 soft&#x2F;</span><br><span class="line"># 保存退出后执行</span><br><span class="line">sudo apt-get update</span><br><span class="line">sudo apt-get install ambari-server</span><br></pre></td></tr></table></figure>
+<p>这个时候应该可以看到飞驰的下载速度了。</p>
+<p>感动吧.XD</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2016/01/03/apt-get%E6%9C%AC%E5%9C%B0%E6%BA%90/" data-id="ck96cxpkn000nmaam94rx40fc" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E9%85%8D%E7%BD%AE/" rel="tag">配置</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-ambari安装笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2016/01/03/ambari%E5%AE%89%E8%A3%85%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2016-01-03T02:58:14.000Z" itemprop="datePublished">2016-01-03</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E9%85%8D%E7%BD%AE/">配置</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2016/01/03/ambari%E5%AE%89%E8%A3%85%E7%AC%94%E8%AE%B0/">ambari安装笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <blockquote>
+<p>终于闲下来可以学点新东西。学习一下<a href="http://www.cnblogs.com/ivan0626/p/4143963.html" target="_blank" rel="noopener">ambari</a>。<br><a href="http://www.linuxidc.com/Linux/2014-05/101531p2.htm" target="_blank" rel="noopener">http://www.linuxidc.com/Linux/2014-05/101531p2.htm</a></p>
+</blockquote>
+<ul>
+<li><p>首先弄四个干净ubuntu系统,安装ssh和jdk：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">sudo passwd</span><br><span class="line">root</span><br><span class="line">sudo apt-get -y install openssh-server</span><br><span class="line"><span class="meta">#</span><span class="bash"> 这里掉坑里了,HDP2.2用的是jdk1.7,所以如果这里用了jdk1.8后面就只能安装HDP2.3了。以后试下jdk1.7。</span></span><br><span class="line">tar zxvf jdk-8u60-linux-x64.tar.gz</span><br><span class="line">sudo mkdir /usr/lib/jdk/</span><br><span class="line">sudo mv jdk1.8.0_60/ /usr/lib/jdk/jdk1.8.0_60</span><br><span class="line">cd /usr/lib/jdk/</span><br><span class="line">sudo ln -s jdk1.8.0_60/ jdk_current </span><br><span class="line">cd /etc/profile.d</span><br><span class="line">sudo vi java.sh</span><br><span class="line">i</span><br><span class="line"><span class="meta">#</span><span class="bash"> ESC :wq</span></span><br><span class="line">export JAVA_HOME=/usr/lib/jdk/jdk_current</span><br><span class="line">export CLASSPATH=.:%JAVA_HOME%/lib/dt.jar:%JAVA_HOME%/lib/tools.jar</span><br><span class="line">export PATH=$PATH:$JAVA_HOME/bin</span><br><span class="line">source java.sh</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>挑一台安装<code>ambari-server</code>:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">cd &#x2F;etc&#x2F;apt&#x2F;sources.list.d</span><br><span class="line">wget http:&#x2F;&#x2F;public-repo-1.hortonworks.com&#x2F;ambari&#x2F;ubuntu12&#x2F;2.x&#x2F;updates&#x2F;2.1.2&#x2F;ambari.list</span><br><span class="line">apt-key adv --recv-keys --keyserver keyserver.ubuntu.com B9733A7A07513CAD</span><br><span class="line">apt-get update</span><br><span class="line">apt-get install ambari-server</span><br><span class="line">#　这里下载起来很慢，可配置一个本地源，节省下次的时间。</span><br><span class="line">ambari-server setup</span><br><span class="line">ambari-server start</span><br></pre></td></tr></table></figure>
+
+
+</li>
+</ul>
+<p>1.配置完成启动服务后，在同网段内一台机器的浏览器上访问：<br><code>10.2.2.184:8080</code><br>默认帐号密码都是<code>admin</code>，可以登录进去以后改密码。</p>
+<p>2.创建集群前，需要配置主节点到所有节点免密码登录：下次可以试试<code>ssh-agent</code>，听说比手动配方便。</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 所有机器上运行: 配置自身无密码登录</span></span><br><span class="line">ssh-keygen -t rsa </span><br><span class="line">cat ~/.ssh/id_rsa.pub &gt;&gt; ~/.ssh/authorized_keys</span><br><span class="line"> </span><br><span class="line"><span class="meta">#</span><span class="bash"> 集群之间共享公钥：</span></span><br><span class="line"><span class="meta">#</span><span class="bash"> 从第一台机器到最后一台机器执行一圈,最后把authorized_keys传回第一台机器</span></span><br><span class="line"><span class="meta">#</span><span class="bash"> 从第一台机器传到所有其他机器上。</span></span><br><span class="line"><span class="meta">#</span><span class="bash"> 第一台开始：</span></span><br><span class="line">scp ~/.ssh/authorized_keys 10.2.2.185:~/.ssh/authorized_keys1</span><br><span class="line"><span class="meta">#</span><span class="bash"> 此后依次到最后一台(n-1次),一直到传回第一台：</span></span><br><span class="line">cat ~/.ssh/authorized_keys1 &gt;&gt;~/.ssh/authorized_keys</span><br><span class="line">scp ~/.ssh/authorized_keys 10.2.2.184:~/.ssh/authorized_keys</span><br><span class="line"><span class="meta">#</span><span class="bash">第一台传到所有机器上：</span></span><br><span class="line">scp ~/.ssh/authorized_keys 10.2.2.185:~/.ssh/authorized_keys</span><br><span class="line">scp ~/.ssh/authorized_keys 10.2.2.188:~/.ssh/authorized_keys</span><br><span class="line">scp ~/.ssh/authorized_keys 10.2.2.189:~/.ssh/authorized_keys</span><br><span class="line"></span><br><span class="line"><span class="meta">#</span><span class="bash"> master: try to login every slaver</span></span><br><span class="line">ssh slave1</span><br><span class="line">ssh 10.2.2.185</span><br></pre></td></tr></table></figure>
+<p>最后把<code>ambari-server</code>那台机器的ssh私钥粘贴到网页端。</p>
+<p>3.首次尝试，所以配置的都是root用户。如果在slaver上创建了hadoop用户，安装的时候还是会提示让我们删掉，所以干脆还是用root先。<br>4.<code>ubuntu12.04.4</code>下自动安装失败，改为手动安装<code>ambari-agent</code>：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 在每个slaver上：</span></span><br><span class="line">sudo apt-get install ambari-agent</span><br><span class="line"><span class="meta">#</span><span class="bash"> 安装后以后</span></span><br><span class="line">sudo ambari-agent start</span><br><span class="line"><span class="meta">#</span><span class="bash"> 然后回到网页端继续配置。</span></span><br></pre></td></tr></table></figure>
+<p>5.<code>host</code>需要配置完全。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">vi &#x2F;etc&#x2F;hosts</span><br><span class="line"># ... 略</span><br><span class="line">sudo &#x2F;etc&#x2F;init.d&#x2F;networking restart</span><br></pre></td></tr></table></figure>
+<p>6.<code>ntp</code>时间服务需要配置：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">sudo apt-get install ntp</span><br><span class="line">service --status-all | grep ntp #查看是否启动([+])</span><br></pre></td></tr></table></figure>
+<p>7.居然还要自己配置jdk…:(可能是因为master上自己配置了jdk,下次还是用它的。)<br>8.配置失败后重新配置的命令：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"># master:</span><br><span class="line">ambari-server stop</span><br><span class="line">ambari-server reset</span><br><span class="line"># slaver:</span><br><span class="line">python &#x2F;usr&#x2F;lib&#x2F;python2.6&#x2F;site-packages&#x2F;ambari_agent&#x2F;HostCleanup.py --silent --skip&#x3D;users</span><br></pre></td></tr></table></figure>
+<p>9.注册完成后,选择要安装的服务就可以慢慢等着安装好了，这一步也是在线安装所以很慢的。第一次可以少选一点服务，以后再慢慢添加服务，集群的节点也是可以动态扩展的。<br>10.默认配置：<br>ambari-server的pid放在：<br>/var/run/ambari-server/ambari-server.pid<br>日志输出在：<br>/var/log/ambari-server/ambari-server.out<br>错误日志：<br>/var/log/ambari-server/ambari-server.log<br>资源组织文件：<br>/var/lib/ambari-server/resources<br>数据库名：ambari<br>schema名：ambari<br>用户名：  ambari<br>密码：    bigdata<br>网页端的话用户名密码默认都是admin.<br>可以通过查看日志信息，寻找出错原因。<br>祝好XD~</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2016/01/03/ambari%E5%AE%89%E8%A3%85%E7%AC%94%E8%AE%B0/" data-id="ck96cxpkk000hmaam3ug89uiv" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E9%85%8D%E7%BD%AE/" rel="tag">配置</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-java里的一些技巧" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2015/10/30/java%E9%87%8C%E7%9A%84%E4%B8%80%E4%BA%9B%E6%8A%80%E5%B7%A7/" class="article-date">
@@ -601,163 +741,10 @@
 
 
   
-    <article id="post-mybatis处理mysql自增主键的三种写法" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2015/10/04/mybatis%E5%A4%84%E7%90%86mysql%E8%87%AA%E5%A2%9E%E4%B8%BB%E9%94%AE%E7%9A%84%E4%B8%89%E7%A7%8D%E5%86%99%E6%B3%95/" class="article-date">
-  <time datetime="2015-10-04T00:18:16.000Z" itemprop="datePublished">2015-10-04</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/orm/">orm</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2015/10/04/mybatis%E5%A4%84%E7%90%86mysql%E8%87%AA%E5%A2%9E%E4%B8%BB%E9%94%AE%E7%9A%84%E4%B8%89%E7%A7%8D%E5%86%99%E6%B3%95/">mybatis处理mysql自增主键的三种写法</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <ol>
-<li><p>数据库的自增主键id(int(11)),查看<code>auto_increment</code>,记录的是下一次插入时的主键值。(=最大的id+1)</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SHOW</span> <span class="keyword">TABLE</span> <span class="keyword">STATUS</span>;</span><br><span class="line"><span class="comment">#或:</span></span><br><span class="line"><span class="keyword">SELECT</span> AUTO_INCREMENT <span class="keyword">FROM</span>  information_schema.tables <span class="keyword">WHERE</span> table_name=<span class="string">'t_account_0'</span></span><br></pre></td></tr></table></figure></li>
-<li><p>测试<code>select @@identity</code>命令：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">INSERT into user_info  (uname, unumber) VALUES (&#39;test&#39;,&#39;test&#39;);</span><br><span class="line">select @@identity  as &#39;curMaxId&#39;;</span><br></pre></td></tr></table></figure>
-<p>注意到第一条命令并没有插入<code>id</code>值，以便让数据库插入自增<code>id</code>值。<br>两条命令同一线程中顺序执行后，第二条命令获取到第一条命令插入的<code>id</code>值。<br>例如，若<code>select @@identity</code>结果为<code>106</code>，则<code>auto_increment</code>此时为<code>107</code>，而<code>INSERT</code>的记录<code>id</code>值为<code>106</code>.</p>
-</li>
-<li><p>第一种mybatis支持自增主键的写法，使用<code>useGeneratedKeys</code>和<code>keyProperty</code>属性设置：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">&lt;sql id&#x3D;&quot;UserInfoSet&quot;&gt;</span><br><span class="line">		&lt;set&gt;</span><br><span class="line">			&lt;if test&#x3D;&quot;id !&#x3D; null&quot;&gt;id&#x3D;#&#123;id&#125;,&lt;&#x2F;if&gt;</span><br><span class="line">			&lt;if test&#x3D;&quot;uname!&#x3D; null&quot;&gt;uname&#x3D;#&#123;uname&#125;,&lt;&#x2F;if&gt;</span><br><span class="line">			&lt;if test&#x3D;&quot;unumber !&#x3D; null&quot;&gt;unumber&#x3D;#&#123;unumber&#125;,&lt;&#x2F;if&gt;</span><br><span class="line">		&lt;&#x2F;set&gt;</span><br><span class="line">	&lt;&#x2F;sql&gt;</span><br><span class="line">&lt;insert id&#x3D;&quot;insert&quot; parameterType&#x3D;&quot;UserInfo&quot;</span><br><span class="line">		 useGeneratedKeys&#x3D;&quot;true&quot; keyProperty&#x3D;&quot;id&quot;&gt;</span><br><span class="line">		insert user_info</span><br><span class="line">		&lt;include refid&#x3D;&quot;UserInfoSet&quot; &#x2F;&gt;</span><br><span class="line">&lt;&#x2F;insert&gt;</span><br></pre></td></tr></table></figure>
-<p>如果表中主键已经设定为<code>auto_increment</code>，则插入后会自动把生成的<code>id</code>值返回给插入的对象。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">UserInfo userInfo = <span class="keyword">new</span> UserInfo();</span><br><span class="line">userInfo.setUname(<span class="string">"xiaoming"</span>); </span><br><span class="line">userInfo.setUnumber(<span class="string">"x07"</span>);</span><br><span class="line"><span class="comment">//a.插入前userinfo的id为null</span></span><br><span class="line">result = userService.insert(userInfo);		</span><br><span class="line"><span class="comment">//b.插入后userinfo的id为数据库生成的id值(例如123).</span></span><br></pre></td></tr></table></figure>
-</li>
-<li><p>第二种使用<code>selectKey</code>，限定于<code>mysql</code>数据库的写法,其他数据库如<code>oracle</code>为<code>before</code>,各有不同:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">&lt;insert id&#x3D;&quot;insert&quot; parameterType&#x3D;&quot;UserInfo&quot;&gt;</span><br><span class="line">	&lt;selectKey resultType&#x3D;&quot;java.lang.Integer&quot; keyProperty&#x3D;&quot;id&quot; order&#x3D;&quot;AFTER&quot;&gt;</span><br><span class="line">	SELECT @@IDENTITY</span><br><span class="line">    &lt;&#x2F;selectKey&gt;</span><br><span class="line">insert user_info &lt;include refid&#x3D;&quot;UserInfoSet&quot; &#x2F;&gt;</span><br><span class="line">&lt;&#x2F;insert&gt;</span><br></pre></td></tr></table></figure>
-<p>此时表现和上一种一样;<br>若把<code>SELECT @@IDENTITY</code>改为 <code>select 20 from dual</code> , 则数据库中虽依然插入了正常递增的id值(如<code>123</code>),<br>但<code>b</code>处插入后的对象中id值为<code>20</code>. 可见<code>selectKey</code>标签实际执行是在<code>insert</code>执行后，返回<code>obj</code>对象前,将其中的<code>id</code>值改为<code>20</code>.并不影响<code>insert</code>执行过程。<br>综上所示，这两种方法其实都不影响<code>insert</code>,只是执行后获取一次<code>id</code>值。<code>insert</code>过程中生成<code>id</code>值是由数据库支持的。<br>所以如果数据库中没有设定主键的自增属性，这两种都是无能为力的,此时就要更改SelectKey的用法:</p>
-</li>
-<li><p>第三种，使用<code>select max(id)+1</code>：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">&lt;insert id&#x3D;&quot;insert&quot; parameterType&#x3D;&quot;test.model.UserInfo&quot; &gt;</span><br><span class="line">	&lt;selectKey resultType&#x3D;&quot;java.lang.Integer&quot; keyProperty&#x3D;&quot;id&quot; order&#x3D;&quot;BEFORE&quot;&gt;</span><br><span class="line">	select max(id)+1 from user_info</span><br><span class="line">	&lt;&#x2F;selectKey&gt;</span><br><span class="line">	insert user_info &lt;include refid&#x3D;&quot;UserInfoSet&quot; &#x2F;&gt;</span><br><span class="line">&lt;&#x2F;insert&gt;</span><br></pre></td></tr></table></figure>
-<p>其中<code>select max(id)+1 from user_info</code>语句是选出表中最大id值+1,并赋予传入的参数<code>userInfo</code>对象,然后再执行<code>insert</code>.<br>注意到<code>order</code>此时等于<code>before</code>. 应当警惕的是多用户交替插入时,这种方法的安全性,涉及到事务比较麻烦,所以最好还是直接设计数据库时直接设定主键的递增属性。</p>
-</li>
-</ol>
-<p>其他感想:<br>    <code>mybatis</code>的<code>choose when</code>好比<code>switch case</code>;<br><code>otherwise</code>就是<code>default</code>。<code>foreach</code>就是传入一个<code>list</code>或<code>array</code>给<code>mybatis</code>，然后生成很长的<code>sql</code>。<br>    学到这里大概觉得<code>mybatis</code>生成<code>sql</code>，就跟<code>jsp</code>生成<code>html</code>一样，就是输出，就是翻译，编译原理无处不在，重复造轮子无处不在。<br>暂时不适用<code>trim</code>标签了，太geek了，而且居然只有replace功能，可读性差。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2015/10/04/mybatis%E5%A4%84%E7%90%86mysql%E8%87%AA%E5%A2%9E%E4%B8%BB%E9%94%AE%E7%9A%84%E4%B8%89%E7%A7%8D%E5%86%99%E6%B3%95/" data-id="ck96cxpln003ymaam5rr70nbn" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mybatis/" rel="tag">mybatis</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-ubuntu松耦合配置jdk和终端快捷键" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2015/10/03/ubuntu%E6%9D%BE%E8%80%A6%E5%90%88%E9%85%8D%E7%BD%AEjdk%E5%92%8C%E7%BB%88%E7%AB%AF%E5%BF%AB%E6%8D%B7%E9%94%AE/" class="article-date">
-  <time datetime="2015-10-03T13:46:15.000Z" itemprop="datePublished">2015-10-03</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/%E9%85%8D%E7%BD%AE/">配置</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2015/10/03/ubuntu%E6%9D%BE%E8%80%A6%E5%90%88%E9%85%8D%E7%BD%AEjdk%E5%92%8C%E7%BB%88%E7%AB%AF%E5%BF%AB%E6%8D%B7%E9%94%AE/">ubuntu松耦合配置jdk和终端快捷键</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <ul>
-<li><p><strong>终端快捷键：</strong><br>新做系统后，为了提高工作效率，安装右键打开终端快捷键：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">sudo apt-get install nautilus-open-terminal</span><br><span class="line">nautilus -q</span><br></pre></td></tr></table></figure>
-<p>注销后登录，可以右键+e,在当前路径打开终端，比<code>ctrl+alt+T</code>顺手一点。而且<code>ctrl+alt+T</code>只能在<code>~</code>路径下打开终端，不够灵活。</p>
-</li>
-<li><p><strong>jdk:</strong><br>首先搜索jdk后进入官网下载最新版64位jdk。(多用tab快捷键补全。)</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">tar zxvf jdk(alt+/)</span><br><span class="line">sudo mkdir /usr/lib/jdk/</span><br><span class="line">sudo  mv jdk1.8.0_45/ /usr/lib/jdk/jdk1.8.0_45</span><br><span class="line">cd /usr/lib/jdk/</span><br><span class="line">sudo ln -s jdk(tab) jdk_current </span><br><span class="line">cd /etc/profile.d</span><br><span class="line">sudo vi java.sh</span><br><span class="line">export JAVA_HOME=/usr/lib/jdk/jdk_current</span><br><span class="line">export CLASSPATH=.:%JAVA_HOME%/lib/dt.jar:%JAVA_HOME%/lib/tools.jar</span><br><span class="line">export PATH=$PATH:$JAVA_HOME/bin</span><br><span class="line">source java.sh</span><br></pre></td></tr></table></figure>
-<p>注销后登录, <code>java</code>和<code>javac</code>命令可以使用。这样做有几个好处:</p>
-</li>
-</ul>
-<ul>
-<li><p>更换jdk时,只需将jdk_current软链接指向新的jdk路径即可。</p>
-</li>
-<li><p>与别的环境变量耦合度较低，以此类推每个新的环境变量可以下<code>/etc/profile.d</code>路径下建立新的<code>hadoop.sh</code>，linux系统启动时会自动加载此目录下的<code>*.sh</code>文件。</p>
-</li>
-<li><p>可以把<code>java.sh</code>文件和jdk文件夹拷贝到别的电脑的<code>/etc/profile.d</code>路径下以添加jdk的环境变量。</p>
-</li>
-<li><p><strong>配置root用户图形界面登录</strong></p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">vi &#x2F;etc&#x2F;lightdm&#x2F;lightdm.conf</span><br><span class="line"># 添加：</span><br><span class="line">greeter-show-manual-login&#x3D;true</span><br><span class="line">allow-guest&#x3D;false</span><br></pre></td></tr></table></figure>
-</li>
-<li><p><strong>自动挂载新增的磁盘</strong></p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"># 安装gparted</span><br><span class="line">sudo apt-get install gparted</span><br><span class="line"># 以root用户进入图形界面</span><br><span class="line"># gparted配置分区, 查看ssd磁盘的uuid，然后修改文件以自动挂载新增的盘：</span><br><span class="line">vi &#x2F;etc&#x2F;fstab </span><br><span class="line"># 末尾添加一行：</span><br><span class="line">UUID&#x3D;8436117e-d922-452d-8d86-56edb76b46f6 &#x2F;home&#x2F;xiaoyue26&#x2F;ssd            ext4    defaults              0       2</span><br><span class="line"># 上述格式为: UUID  挂载点 文件系统 策略 &lt;dump&gt; &lt;pass&gt;</span><br></pre></td></tr></table></figure>
-
-</li>
-</ul>
-<p>default参数说明按照默认格式挂载.<br>其他参数：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">auto: 开机自动挂载 </span><br><span class="line">noauto: 开机不自动挂载 </span><br><span class="line">defaults: 按照大多数永久文件系统的缺省值设置挂载定义 </span><br><span class="line">ro: 按只读权限挂载 </span><br><span class="line">rw: 按可读可写权限挂载 </span><br><span class="line">user: 任何用户都可以挂载 </span><br><span class="line">user: 同步磁盘与内存中的数据，async 则是异步</span><br></pre></td></tr></table></figure>
-<blockquote>
-<p>dump处为1的话，表示要将整个文件系统里的内容备份；<br>现在很少用到dump这个工具，在这里一般选0。0表示不做dump备份，1表示要进行dump备份，2也表示要做dump备份，不过，该分区的重要行比1小。</p>
-</blockquote>
-<blockquote>
-<p>pass用来指定如何使用fsck来检查硬盘。如果这里填 0，则不检查；挂载点为 / 的（即根分区），必须在这里填写 1，其它的都不能填写 1。<br>如果有分区填写大于 1的话，则在检查完根分区后，接着按填写的数字从小到大依次检查下去。同数字的同时检查。</p>
-</blockquote>
-<ul>
-<li><strong>退出保存,检查语法是否正确并且自动挂载盘：</strong><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">mount -a </span><br><span class="line"># 挂好以后, 递归更改一下权限：</span><br><span class="line">chmod -R 775 &#x2F;home&#x2F;xiaoyue26&#x2F;ssd #更改读写权限</span><br><span class="line">chown -R xiaoyue26  &#x2F;home&#x2F;xiaoyue26&#x2F;ssd #更改拥有者</span><br><span class="line">chgrp -R xiaoyue26  &#x2F;home&#x2F;xiaoyue26&#x2F;ssd #更高所属组</span><br></pre></td></tr></table></figure>
-
-
-</li>
-</ul>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2015/10/03/ubuntu%E6%9D%BE%E8%80%A6%E5%90%88%E9%85%8D%E7%BD%AEjdk%E5%92%8C%E7%BB%88%E7%AB%AF%E5%BF%AB%E6%8D%B7%E9%94%AE/" data-id="ck96cxpm7005wmaam8avl5q46" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E9%85%8D%E7%BD%AE/" rel="tag">配置</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
-    <a class="extend prev" rel="prev" href="/page/19/">&amp;laquo; 上一页</a><a class="page-number" href="/">1</a><span class="space">&hellip;</span><a class="page-number" href="/page/18/">18</a><a class="page-number" href="/page/19/">19</a><span class="page-number current">20</span><a class="page-number" href="/page/21/">21</a><a class="page-number" href="/page/22/">22</a><a class="extend next" rel="next" href="/page/21/">下一页&amp;raquo;</a>
+    <a class="extend prev" rel="prev" href="/page/19/">&amp;laquo; 上一页</a><a class="page-number" href="/">1</a><span class="space">&hellip;</span><a class="page-number" href="/page/18/">18</a><a class="page-number" href="/page/19/">19</a><span class="page-number current">20</span><a class="page-number" href="/page/21/">21</a><a class="page-number" href="/page/22/">22</a><a class="page-number" href="/page/23/">23</a><a class="extend next" rel="next" href="/page/21/">下一页&amp;raquo;</a>
   </nav>
 </section>
            
@@ -780,6 +767,14 @@
       <ul>
         
           <li>
+            <a href="/2022/03/14/2022-03/%E4%B8%AD%E6%96%AD%E6%A2%B3%E7%90%86/">java方法是否可中断梳理</a>
+          </li>
+        
+          <li>
+            <a href="/2022/03/13/2022-03/mp4%E6%A0%BC%E5%BC%8F/">mp4格式</a>
+          </li>
+        
+          <li>
             <a href="/2022/03/13/2022-03/ss%E5%91%BD%E4%BB%A4/">ss命令</a>
           </li>
         
@@ -789,14 +784,6 @@
         
           <li>
             <a href="/2022/02/24/2022-02/%E4%B8%BA%E4%BB%80%E4%B9%88%E5%85%88hash%E5%90%8E%E5%8A%A0%E5%AF%86%E7%9A%84%E6%96%B9%E6%B3%95%E5%AE%B9%E6%98%93%E9%81%AD%E9%81%87padding%E6%94%BB%E5%87%BB/">为什么先hash后加密的方法容易遭遇padding攻击</a>
-          </li>
-        
-          <li>
-            <a href="/2022/02/24/2022-02/keepalive/">http和tcp层面的keepAlive机制</a>
-          </li>
-        
-          <li>
-            <a href="/2022/02/18/2022-02/%E6%8B%A5%E5%A1%9E%E7%AE%97%E6%B3%95bbr/">quic中的拥塞算法bbr</a>
           </li>
         
       </ul>

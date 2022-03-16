@@ -72,6 +72,169 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-05/spark中编写UDAF的4种姿势" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/05/11/2019-05/spark%E4%B8%AD%E7%BC%96%E5%86%99UDAF%E7%9A%844%E7%A7%8D%E5%A7%BF%E5%8A%BF/" class="article-date">
+  <time datetime="2019-05-11T12:15:05.000Z" itemprop="datePublished">2019-05-11</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/spark/">spark</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/05/11/2019-05/spark%E4%B8%AD%E7%BC%96%E5%86%99UDAF%E7%9A%844%E7%A7%8D%E5%A7%BF%E5%8A%BF/">spark中编写UDAF的4种姿势</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>摘要: </p>
+<blockquote>
+<p>(探索解决sql的多行处理能力盲区)</p>
+</blockquote>
+<ol>
+<li><p>搭配collect_set+UDF;</p>
+</li>
+<li><p>RDD: combineByKey;</p>
+</li>
+<li><p>Dataframe: 继承UserDefinedAggregateFunction;</p>
+</li>
+<li><p>Dataset: 继承Aggregator。</p>
+<p>前文探索了解决sql对于单行处理的能力盲区(<a href="http://xiaoyue26.github.io/2019/05/08/2019-05/%E5%B0%86pyspark%E4%B8%AD%E7%9A%84UDF%E5%8A%A0%E9%80%9F50/">http://xiaoyue26.github.io/2019/05/08/2019-05/%E5%B0%86pyspark%E4%B8%AD%E7%9A%84UDF%E5%8A%A0%E9%80%9F50/</a> )，本文接着探索解决sql对于多行处理(UDAF/用户自定义聚合函数)的能力盲区。</p>
+</li>
+</ol>
+<h1 id="姿势1：搭配collect-set-UDF"><a href="#姿势1：搭配collect-set-UDF" class="headerlink" title="姿势1：搭配collect_set+UDF"></a>姿势1：搭配collect_set+UDF</h1><p>基本思想是强行把一个group行拼成一个数组，然后编写一个能处理数组的UDF即可。如果是多行变多行，则UDF的输出也构造成数组，然后用explode打开。如果想要把多行聚合成一行（类似于sum），则直接输出结果即可。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">str_list2idfa</span><span class="params">(txt_list)</span>:</span></span><br><span class="line">    <span class="keyword">try</span>:</span><br><span class="line">        res = list()</span><br><span class="line">        <span class="keyword">for</span> txt <span class="keyword">in</span> txt_list:</span><br><span class="line">            res.append(str2idfa(txt))</span><br><span class="line">        <span class="keyword">return</span> res</span><br><span class="line">    <span class="keyword">except</span>:</span><br><span class="line">        <span class="keyword">return</span> []</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">'__main__'</span>:</span><br><span class="line">    spark = SparkSession.builder.appName(app_name).getOrCreate()</span><br><span class="line">    provider = TDWSQLProvider(spark, user=user, passwd=passwd, db=db_name)</span><br><span class="line"></span><br><span class="line">    in_df = provider.table(in_table_name, [<span class="string">'p_2019042100'</span>])  <span class="comment"># 分区数组</span></span><br><span class="line">    print(in_df.columns)</span><br><span class="line">    <span class="comment"># 1. 创建udaf:</span></span><br><span class="line">    str_list2idfa_udaf = udf(str_list2idfa  <span class="comment"># 实际运行的函数</span></span><br><span class="line">                            , ArrayType(ArrayType(StringType()))  <span class="comment"># 函数返回值类型</span></span><br><span class="line">                            )</span><br><span class="line">    <span class="comment"># 2. 在df中使用,将数组转成二维数组:</span></span><br><span class="line">    out_t1 = in_df.groupBy(<span class="string">'uin'</span>).agg(</span><br><span class="line">        str_list2idfa_udaf(</span><br><span class="line">            collect_set(<span class="string">'value'</span>)</span><br><span class="line">        ).alias(<span class="string">'value_list'</span>)</span><br><span class="line">    )</span><br><span class="line">    print(out_t1.columns)</span><br><span class="line">    out_t1.printSchema()</span><br><span class="line">    out_t1.createOrReplaceTempView(<span class="string">"t1"</span>)</span><br><span class="line">    <span class="comment"># 3. 将二维数组打开,一行变多行,一列变两列:</span></span><br><span class="line">    out_t2 = spark.sql(<span class="string">'''</span></span><br><span class="line"><span class="string">    select uin</span></span><br><span class="line"><span class="string">          ,idfa_idfv[0] as idfa</span></span><br><span class="line"><span class="string">          ,idfa_idfv[1] as idfv</span></span><br><span class="line"><span class="string">    from t1</span></span><br><span class="line"><span class="string">    lateral view explode(value_list) tt as idfa_idfv</span></span><br><span class="line"><span class="string">    '''</span>)</span><br><span class="line">    out_t2.printSchema()</span><br><span class="line">    print(out_t2.take(<span class="number">10</span>))</span><br></pre></td></tr></table></figure>
+<ul>
+<li>优点： 开发成本低，不用编译。</li>
+<li>缺点： 性能一般，增加了转换数组、explode的成本，可能导致聚合过程完全在单点进行，对于数据倾斜的承受能力较低。</li>
+</ul>
+<h1 id="姿势2：-使用RDD的combineByKey算子"><a href="#姿势2：-使用RDD的combineByKey算子" class="headerlink" title="姿势2： 使用RDD的combineByKey算子"></a>姿势2： 使用RDD的combineByKey算子</h1><p>  上述方法本质上是用UDF强行模拟了UDAF的功能，性能上有所损失。第二种方法是使用RDD的<code>combineByKey</code>算子: </p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> spark = <span class="type">SparkSession</span>.builder.appName(<span class="string">"UdafDemo"</span>).getOrCreate()</span><br><span class="line"><span class="keyword">val</span> rddProvider = <span class="keyword">new</span> <span class="type">TDWProvider</span>(spark.sparkContext, user, pass, db) <span class="comment">// 这个返回rdd</span></span><br><span class="line"><span class="keyword">val</span> inRdd = rddProvider.table(<span class="string">"t_dw_dc0xxxx"</span>, <span class="type">Array</span>(<span class="string">"p_2019042100"</span>))</span><br><span class="line">println(<span class="string">"getNumPartitions:"</span>)</span><br><span class="line">println(inRdd.getNumPartitions)</span><br><span class="line"><span class="keyword">val</span> kvRdd: <span class="type">RDD</span>[(<span class="type">Long</span>, <span class="type">String</span>)] = inRdd</span><br><span class="line">  .map(row =&gt; (row(<span class="number">3</span>).toLong, <span class="type">UdfUtils</span>.str2idfa(row(<span class="number">9</span>))))</span><br><span class="line">  .filter(x =&gt; x._2.isDefined)</span><br><span class="line">  .map(x =&gt; (x._1, x._2.get))</span><br><span class="line"></span><br><span class="line"><span class="keyword">val</span> combineRdd: <span class="type">RDD</span>[(<span class="type">Long</span>, mutable.<span class="type">Set</span>[<span class="type">String</span>])] = kvRdd</span><br><span class="line">  .combineByKey(</span><br><span class="line">    (v: <span class="type">String</span>) =&gt; mutable.<span class="type">Set</span>(v),</span><br><span class="line">    (set: mutable.<span class="type">Set</span>[<span class="type">String</span>], v: <span class="type">String</span>) =&gt; set += v,</span><br><span class="line">    (set1: mutable.<span class="type">Set</span>[<span class="type">String</span>], set2: mutable.<span class="type">Set</span>[<span class="type">String</span>]) =&gt; set1 ++= set2)</span><br><span class="line"></span><br><span class="line"><span class="keyword">val</span> outRdd: <span class="type">RDD</span>[(<span class="type">Long</span>, <span class="type">String</span>)] = combineRdd.flatMap(kv =&gt; &#123;</span><br><span class="line">  <span class="keyword">val</span> uin = kv._1</span><br><span class="line">  <span class="keyword">val</span> set = kv._2</span><br><span class="line">  <span class="keyword">val</span> res = mutable.<span class="type">MutableList</span>.empty[(<span class="type">Long</span>, <span class="type">String</span>)]</span><br><span class="line">  set.foreach(x =&gt; res += ((uin, x)))</span><br><span class="line">  res.iterator</span><br><span class="line">&#125;)</span><br><span class="line">outRdd.take(<span class="number">10</span>).foreach(println)</span><br><span class="line"><span class="comment">// println(outRdd.count())</span></span><br></pre></td></tr></table></figure>
+<ul>
+<li>优点： 代码简洁，容易理解，性能高; </li>
+<li>缺点： 需要学习RDD相关知识。</li>
+</ul>
+<h1 id="姿势3-使用Dataframe-继承UserDefinedAggregateFunction"><a href="#姿势3-使用Dataframe-继承UserDefinedAggregateFunction" class="headerlink" title="姿势3: 使用Dataframe(继承UserDefinedAggregateFunction)"></a>姿势3: 使用Dataframe(继承UserDefinedAggregateFunction)</h1><p>假设用户比较熟悉Dataframe操作，还可以通过继承<code>UserDefinedAggregateFunction</code>类编写一个完整的UDAF：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// part1: UDAF:</span></span><br><span class="line"><span class="keyword">import</span> org.apache.spark.sql.<span class="type">Row</span></span><br><span class="line"><span class="keyword">import</span> org.apache.spark.sql.expressions.&#123;<span class="type">MutableAggregationBuffer</span>, <span class="type">UserDefinedAggregateFunction</span>&#125;</span><br><span class="line"><span class="keyword">import</span> org.apache.spark.sql.types._</span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">object</span> <span class="title">DfUdaf</span> <span class="keyword">extends</span> <span class="title">UserDefinedAggregateFunction</span> </span>&#123;</span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">inputSchema</span></span>: <span class="type">StructType</span> = <span class="type">StructType</span>(<span class="type">StructField</span>(<span class="string">"value"</span>, <span class="type">StringType</span>) :: <span class="type">Nil</span>)</span><br><span class="line"></span><br><span class="line">  <span class="comment">// Map[String,Null] 当Set用了</span></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">bufferSchema</span></span>: <span class="type">StructType</span> = <span class="keyword">new</span> <span class="type">StructType</span>().add(<span class="string">"idfa_idfv"</span>, <span class="type">MapType</span>(<span class="type">StringType</span>, <span class="type">NullType</span>))</span><br><span class="line"></span><br><span class="line">  <span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">dataType</span></span>: <span class="type">DataType</span> = <span class="type">MapType</span>(<span class="type">StringType</span>, <span class="type">NullType</span>)</span><br><span class="line"></span><br><span class="line">  <span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">deterministic</span></span>: <span class="type">Boolean</span> = <span class="literal">true</span></span><br><span class="line"></span><br><span class="line">  <span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">initialize</span></span>(buffer: <span class="type">MutableAggregationBuffer</span>): <span class="type">Unit</span> = &#123;</span><br><span class="line">    buffer.update(<span class="number">0</span>, <span class="type">Map</span>[<span class="type">String</span>, <span class="type">Null</span>]())</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">update</span></span>(buffer: <span class="type">MutableAggregationBuffer</span>, input: <span class="type">Row</span>): <span class="type">Unit</span> = &#123;</span><br><span class="line">    <span class="keyword">val</span> map = buffer.getAs[<span class="type">Map</span>[<span class="type">String</span>, <span class="type">Null</span>]](<span class="number">0</span>)</span><br><span class="line">    <span class="keyword">val</span> value = input.getAs[<span class="type">String</span>](<span class="number">0</span>)</span><br><span class="line">    <span class="keyword">val</span> idfa_idfv = <span class="type">UdfUtils</span>.str2idfa(value)</span><br><span class="line">    <span class="keyword">if</span> (idfa_idfv.isDefined) &#123;</span><br><span class="line">      buffer.update(<span class="number">0</span>, map ++ <span class="type">Map</span>(idfa_idfv.get -&gt; <span class="literal">null</span>))</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">merge</span></span>(buffer1: <span class="type">MutableAggregationBuffer</span>, buffer2: <span class="type">Row</span>): <span class="type">Unit</span> = &#123;</span><br><span class="line">    <span class="keyword">val</span> map1 = buffer1.getAs[<span class="type">Map</span>[<span class="type">String</span>, <span class="type">Null</span>]](<span class="number">0</span>)</span><br><span class="line">    <span class="keyword">val</span> map2 = buffer2.getAs[<span class="type">Map</span>[<span class="type">String</span>, <span class="type">Null</span>]](<span class="number">0</span>)</span><br><span class="line">    buffer1.update(<span class="number">0</span>, map1 ++ map2)</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">evaluate</span></span>(buffer: <span class="type">Row</span>): <span class="type">Any</span> = buffer.getAs[<span class="type">Map</span>[<span class="type">String</span>, <span class="type">Null</span>]](<span class="number">0</span>)</span><br><span class="line">&#125;</span><br><span class="line"> </span><br><span class="line"><span class="comment">// part2: main函数:</span></span><br><span class="line">    <span class="keyword">val</span> spark = <span class="type">SparkSession</span>.builder.appName(<span class="string">"UdafDemo"</span>).getOrCreate()</span><br><span class="line">    <span class="keyword">val</span> sqlProvider = <span class="keyword">new</span> <span class="type">TDWSQLProvider</span>(spark, user, pass, db)</span><br><span class="line"></span><br><span class="line">    <span class="comment">// val rddProvider = TDWProvider(spark.sparkContext, user, pass, db) // 这个返回rdd</span></span><br><span class="line">    <span class="keyword">val</span> inDf = sqlProvider.table(<span class="string">"t_dw_dc0xxxx"</span>, <span class="type">Array</span>(<span class="string">"p_2019042100"</span>))</span><br><span class="line">    println(<span class="string">"getNumPartitions:"</span>)</span><br><span class="line">    println(inDf.rdd.getNumPartitions)</span><br><span class="line"></span><br><span class="line">    spark.udf.register(<span class="string">"collect_idfa"</span>, <span class="type">DfUdaf</span>)</span><br><span class="line">    inDf.createOrReplaceTempView(<span class="string">"t1"</span>)</span><br><span class="line">    <span class="keyword">val</span> outDf = spark.sql(<span class="string">""</span> +</span><br><span class="line">      <span class="string">"select uin,idfa_idfv "</span> +</span><br><span class="line">      <span class="string">"from "</span> +</span><br><span class="line">      <span class="string">"(select uin,collect_idfa(value) as vmap from t1 group by uin) a "</span> +</span><br><span class="line">      <span class="string">"lateral view explode(vmap) tt as idfa_idfv,n"</span> +</span><br><span class="line">      <span class="string">""</span>)</span><br><span class="line">    outDf.take(<span class="number">10</span>).foreach(println)</span><br></pre></td></tr></table></figure>
+<p>优点: 可以直接在sql中引用，重用性高，性能高;<br>缺点: 开发成本高，只支持scala，需要编译。</p>
+<h1 id="姿势4：-使用Dataset（继承Aggregator）"><a href="#姿势4：-使用Dataset（继承Aggregator）" class="headerlink" title="姿势4： 使用Dataset（继承Aggregator）"></a>姿势4： 使用Dataset（继承Aggregator）</h1><p>如果用户对于Dataset的api比较熟悉，可以继承Aggregator开发UDAF:</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// part1: UDAF:</span></span><br><span class="line"><span class="keyword">import</span> org.apache.spark.sql.&#123;<span class="type">Encoder</span>, <span class="type">Encoders</span>&#125;</span><br><span class="line"><span class="keyword">import</span> org.apache.spark.sql.expressions.<span class="type">Aggregator</span></span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">DsUdaf</span>[<span class="type">IN</span>](<span class="params">val f: <span class="type">IN</span> =&gt; <span class="type">String</span></span>) <span class="keyword">extends</span> <span class="title">Aggregator</span>[<span class="type">IN</span>, <span class="type">Set</span>[<span class="type">String</span>], <span class="title">Set</span>[<span class="type">String</span>]] </span>&#123;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">zero</span></span>: <span class="type">Set</span>[<span class="type">String</span>] = <span class="type">Set</span>[<span class="type">String</span>]()</span><br><span class="line"></span><br><span class="line">  <span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">reduce</span></span>(buf: <span class="type">Set</span>[<span class="type">String</span>], a: <span class="type">IN</span>): <span class="type">Set</span>[<span class="type">String</span>] = &#123;</span><br><span class="line">    <span class="keyword">val</span> idfa_idfv = <span class="type">UdfUtils</span>.str2idfa(f(a))</span><br><span class="line">    buf ++ idfa_idfv</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">merge</span></span>(b1: <span class="type">Set</span>[<span class="type">String</span>], b2: <span class="type">Set</span>[<span class="type">String</span>]): <span class="type">Set</span>[<span class="type">String</span>] = b1 ++ b2</span><br><span class="line"></span><br><span class="line">  <span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">finish</span></span>(reduction: <span class="type">Set</span>[<span class="type">String</span>]): <span class="type">Set</span>[<span class="type">String</span>] = reduction</span><br><span class="line"></span><br><span class="line">  <span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">bufferEncoder</span></span>: <span class="type">Encoder</span>[<span class="type">Set</span>[<span class="type">String</span>]] = <span class="type">Encoders</span>.kryo[<span class="type">Set</span>[<span class="type">String</span>]]</span><br><span class="line"></span><br><span class="line">  <span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">outputEncoder</span></span>: <span class="type">Encoder</span>[<span class="type">Set</span>[<span class="type">String</span>]] = <span class="type">Encoders</span>.kryo[<span class="type">Set</span>[<span class="type">String</span>]]</span><br><span class="line"></span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// part2: main函数:</span></span><br><span class="line"><span class="keyword">val</span> spark = <span class="type">SparkSession</span>.builder.appName(<span class="string">"UdfDemo"</span>).getOrCreate()</span><br><span class="line">    <span class="keyword">val</span> sqlProvider = <span class="keyword">new</span> <span class="type">TDWSQLProvider</span>(spark, user, pass, db)</span><br><span class="line"></span><br><span class="line">    <span class="comment">// val rddProvider = TDWProvider(spark.sparkContext, user, pass, db) // 这个返回rdd</span></span><br><span class="line">    <span class="keyword">val</span> inDf = sqlProvider.table(<span class="string">"t_dw_dc0xxxx"</span>, <span class="type">Array</span>(<span class="string">"p_2019042100"</span>))</span><br><span class="line">    println(<span class="string">"getNumPartitions:"</span>)</span><br><span class="line">    println(inDf.rdd.getNumPartitions)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">import</span> spark.implicits._</span><br><span class="line">    inDf.createOrReplaceTempView(<span class="string">"t1"</span>)</span><br><span class="line">    <span class="keyword">val</span> df2 = spark.sql(<span class="string">"select uin,value from t1"</span>)</span><br><span class="line">    df2.printSchema()</span><br><span class="line"></span><br><span class="line">    <span class="keyword">val</span> inDS = df2.as[<span class="type">UinValue</span>]</span><br><span class="line">    <span class="comment">// inDS.take(10).foreach(println)</span></span><br><span class="line">    <span class="keyword">val</span> outDs: <span class="type">Dataset</span>[(<span class="type">Long</span>, <span class="type">Set</span>[<span class="type">String</span>])] = inDS.groupByKey(_.uin).agg(<span class="keyword">new</span> <span class="type">DsUdaf</span>[<span class="type">UinValue</span>](_.value).toColumn)</span><br><span class="line">    <span class="comment">// outDs.take(10).foreach(println)</span></span><br><span class="line">    <span class="keyword">val</span> ds2 = outDs.flatMap(pair =&gt; &#123;</span><br><span class="line">      <span class="keyword">val</span> uin = pair._1</span><br><span class="line">      <span class="keyword">val</span> idfa_set = pair._2</span><br><span class="line">      idfa_set.map(idfa =&gt; (uin, idfa))</span><br><span class="line">    &#125;)</span><br><span class="line">    ds2.printSchema()</span><br><span class="line">    ds2.take(<span class="number">10</span>).foreach(println)</span><br></pre></td></tr></table></figure>
+<p>其中<code>Encoder</code>部分由于还不支持Set集合类型，可以使用kryo序列化成二进制。（更多Encoder相关参见:<a href="http://xiaoyue26.github.io/2019/04/27/2019-04/spark%E4%B8%AD%E7%9A%84encoder/">http://xiaoyue26.github.io/2019/04/27/2019-04/spark%E4%B8%AD%E7%9A%84encoder/</a> ）</p>
+<p>优点: 类型安全，继承Aggregator开发的成本略小于继承UserDefinedAggregateFunction;<br>缺点: 只支持scala，需要编译。</p>
+<h1 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h1><p>本文总结了在Rdd,Dataframe,Dataset三种api下编写UDAF的方法（三种api的对比参见<a href="http://xiaoyue26.github.io/2019/04/29/2019-04/spark%E4%B8%ADRDD%EF%BC%8CDataframe%EF%BC%8CDataSet%E5%8C%BA%E5%88%AB%E5%AF%B9%E6%AF%94/">http://xiaoyue26.github.io/2019/04/29/2019-04/spark%E4%B8%ADRDD%EF%BC%8CDataframe%EF%BC%8CDataSet%E5%8C%BA%E5%88%AB%E5%AF%B9%E6%AF%94/</a> ），以及使用UDF模拟UDAF功能的方法。大家可以根据自己熟悉的api和需求选择。</p>
+<ul>
+<li>如果不在意性能：用<code>collect_set</code>+<code>UDF</code>模拟一个；(姿势1)</li>
+<li>如果在意性能，但是只用一次: 可以直接用RDD的<code>combineByKey</code>，代码较短；（姿势2） </li>
+<li>如果在意性能，而且会反复复用: 建议使用Dataframe，继承<code>UserDefinedAggregateFunction</code>编写一个UDAF。（姿势3）</li>
+</ul>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/05/11/2019-05/spark%E4%B8%AD%E7%BC%96%E5%86%99UDAF%E7%9A%844%E7%A7%8D%E5%A7%BF%E5%8A%BF/" data-id="ck96cxpps00igmaamhxv76yy4" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spark/" rel="tag">spark</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
+    <article id="post-2019-05/将pyspark中的UDF加速50" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/05/08/2019-05/%E5%B0%86pyspark%E4%B8%AD%E7%9A%84UDF%E5%8A%A0%E9%80%9F50/" class="article-date">
+  <time datetime="2019-05-08T14:39:03.000Z" itemprop="datePublished">2019-05-08</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/spark/">spark</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/05/08/2019-05/%E5%B0%86pyspark%E4%B8%AD%E7%9A%84UDF%E5%8A%A0%E9%80%9F50/">将pyspark中的UDF加速50%</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="摘要"><a href="#摘要" class="headerlink" title="摘要"></a>摘要</h1><blockquote>
+<p>调用jar中的UDF，减少python与JVM的交互，简单banchmark下对于50G数据集纯map处理可以减少一半处理时间。<br>牺牲UDF部分的开发时间，尽量提高性能。<br>以接近纯python的开发成本，获得逼近纯scala的性能。兼顾性能和开发效率。</p>
+</blockquote>
+<h1 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h1><p>  当遇到sql无法直接处理的数据时(比如加密解密、thrift解析操作二进制)，我们需要自定义函数(UDF)来进行处理。出于开发效率的考虑，我们一般会选择tesla平台，使用pyspark脚本。</p>
+<h1 id="Before-最简单的UDF"><a href="#Before-最简单的UDF" class="headerlink" title="Before: 最简单的UDF"></a>Before: 最简单的UDF</h1><p>一个最简单的UDF处理大致如下:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">str2idfa</span><span class="params">(txt)</span>:</span></span><br><span class="line">    <span class="keyword">try</span>:</span><br><span class="line">        txtDecoded = base64.b64decode(txt)</span><br><span class="line">        bytesWithSalt = bytes(txtDecoded)</span><br><span class="line">        <span class="comment"># 省略实际处理代码</span></span><br><span class="line">        <span class="keyword">return</span> <span class="string">'dump_data'</span></span><br><span class="line">    <span class="keyword">except</span>:</span><br><span class="line">        print(<span class="string">'error here'</span>)</span><br><span class="line">        <span class="keyword">return</span> <span class="string">'-1#-1'</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">'__main__'</span>:</span><br><span class="line">    spark = SparkSession.builder.appName(app_name).getOrCreate()</span><br><span class="line">    in_provider = TDWSQLProvider(spark, user=user, passwd=passwd, db=db_name)</span><br><span class="line"></span><br><span class="line">    in_df = in_provider.table(<span class="string">'t_dw_dc0xxxx'</span>, [<span class="string">'p_2019042100'</span>])  <span class="comment"># 分区数组</span></span><br><span class="line">    print(in_df.columns)</span><br><span class="line">    in_df.createOrReplaceTempView(<span class="string">"t1"</span>)</span><br><span class="line">    <span class="comment"># 1. 注册udf:</span></span><br><span class="line">    spark.udf.register(<span class="string">"str2idfa"</span>, str2idfa, StringType())</span><br><span class="line">    <span class="comment"># 2. 在sql中使用:</span></span><br><span class="line">    out_t1 = spark.sql(<span class="string">'''select uin</span></span><br><span class="line"><span class="string">        ,str2idfa(value) as idfa_idfv</span></span><br><span class="line"><span class="string">        from t1</span></span><br><span class="line"><span class="string">        '''</span>)</span><br><span class="line">    print(out_t1.columns)</span><br><span class="line">    print(out_t1.take(<span class="number">10</span>))</span><br></pre></td></tr></table></figure>
+
+<h2 id="底层实现原理"><a href="#底层实现原理" class="headerlink" title="底层实现原理"></a>底层实现原理</h2><img src="/images/2019-05/pyspark_call.png" class="" width="800" height="1200" title="pyspark_call">
+<p>  如上图所示，pyspark并没有像dpark一样用python重新实现一个计算引擎，依旧是复用了scala的jvm计算底层，只是用py4j架设了一条python进程和jvm互相调用的桥梁。<br>  <code>driver</code>:  pyspark脚本和sparkContext的jvm使用py4j相互调用;<br>  <code>executor</code>: 由于driver帮忙把spark算子封装好了，执行计划也生成了字节码，一般情况下不需要python进程参与，仅当需要运行UDF(含lambda表达式形式)时，将它委托给python进程处理(DAG图中的<code>BatchEvalPython</code>步骤)，此时JVM和python进程使用socket通信。</p>
+<p>   上述使用简单UDF时的pyspark由于需要使用UDF，因此DAG图中有<code>BatchEvalPython</code>步骤:<br>   <img src="/images/2019-05/py_udf.png" class="" width="400" height="400" title="py_udf"></p>
+<h2 id="BatchEvalPython过程"><a href="#BatchEvalPython过程" class="headerlink" title="BatchEvalPython过程"></a>BatchEvalPython过程</h2><p>参考源码：<a href="https://github.com/apache/spark/blob/master/sql/core/src/main/scala/org/apache/spark/sql/execution/python/BatchEvalPythonExec.scala" target="_blank" rel="noopener">https://github.com/apache/spark/blob/master/sql/core/src/main/scala/org/apache/spark/sql/execution/python/BatchEvalPythonExec.scala</a><br>可以看到和这个名字一样直白，它就是每次取100条数据让python进程帮忙处理一下:</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 第58行:</span></span><br><span class="line"><span class="comment">// Input iterator to Python: input rows are grouped so we send them in batches to Python.</span></span><br><span class="line">    <span class="comment">// For each row, add it to the queue.</span></span><br><span class="line">    <span class="keyword">val</span> inputIterator = iter.map &#123; row =&gt;</span><br><span class="line">      <span class="keyword">if</span> (needConversion) &#123;</span><br><span class="line">        <span class="type">EvaluatePython</span>.toJava(row, schema)</span><br><span class="line">      &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="comment">// fast path for these types that does not need conversion in Python</span></span><br><span class="line">        <span class="keyword">val</span> fields = <span class="keyword">new</span> <span class="type">Array</span>[<span class="type">Any</span>](row.numFields)</span><br><span class="line">        <span class="keyword">var</span> i = <span class="number">0</span></span><br><span class="line">        <span class="keyword">while</span> (i &lt; row.numFields) &#123;</span><br><span class="line">          <span class="keyword">val</span> dt = dataTypes(i)</span><br><span class="line">          fields(i) = <span class="type">EvaluatePython</span>.toJava(row.get(i, dt), dt)</span><br><span class="line">          i += <span class="number">1</span></span><br><span class="line">        &#125;</span><br><span class="line">        fields</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;.grouped(<span class="number">100</span>).map(x =&gt; pickle.dumps(x.toArray))</span><br></pre></td></tr></table></figure>
+
+
+<p>   由于我们的计算任务一般耗时瓶颈在于executor端的计算而不是driver，因此应该考虑尽量减少executor端调用python代码的次数从而优化性能。</p>
+<p>参考源码：<a href="https://github.com/apache/spark/blob/master/python/pyspark/java_gateway.py" target="_blank" rel="noopener">https://github.com/apache/spark/blob/master/python/pyspark/java_gateway.py</a></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">// 大概<span class="number">135</span>行的地方:</span><br><span class="line"><span class="comment"># Import the classes used by PySpark</span></span><br><span class="line">java_import(gateway.jvm, <span class="string">"org.apache.spark.SparkConf"</span>)</span><br><span class="line">java_import(gateway.jvm, <span class="string">"org.apache.spark.api.java.*"</span>)</span><br><span class="line">java_import(gateway.jvm, <span class="string">"org.apache.spark.api.python.*"</span>)</span><br><span class="line">java_import(gateway.jvm, <span class="string">"org.apache.spark.ml.python.*"</span>)</span><br><span class="line">java_import(gateway.jvm, <span class="string">"org.apache.spark.mllib.api.python.*"</span>)</span><br><span class="line"><span class="comment"># TODO(davies): move into sql</span></span><br><span class="line">java_import(gateway.jvm, <span class="string">"org.apache.spark.sql.*"</span>)</span><br><span class="line">java_import(gateway.jvm, <span class="string">"org.apache.spark.sql.api.python.*"</span>)</span><br><span class="line">java_import(gateway.jvm, <span class="string">"org.apache.spark.sql.hive.*"</span>)</span><br><span class="line">java_import(gateway.jvm, <span class="string">"scala.Tuple2"</span>)</span><br></pre></td></tr></table></figure>
+<p>pyspark可以把很多常见的运算封装到JVM中,但是显然不包括我们的UDF。<br>所以一个很自然的思路就是把我们的UDF也封到JVM中。</p>
+<h1 id="After-调用JAR包中UDF"><a href="#After-调用JAR包中UDF" class="headerlink" title="After: 调用JAR包中UDF"></a>After: 调用JAR包中UDF</h1><p>首先我们需要用scala重写一下UDF:</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">object</span> <span class="title">UdfUtils</span> <span class="keyword">extends</span> <span class="title">java</span>.<span class="title">io</span>.<span class="title">Serializable</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">case</span> <span class="class"><span class="keyword">class</span> <span class="title">Idfa</span>(<span class="params">idfa: <span class="type">String</span>, idfv: <span class="type">String</span></span>) </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">coalesce</span></span>(<span class="type">V</span>: <span class="type">String</span>, defV: <span class="type">String</span>) =</span><br><span class="line">      <span class="keyword">if</span> (<span class="type">V</span> == <span class="literal">null</span>) defV <span class="keyword">else</span> <span class="type">V</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">override</span> <span class="function"><span class="keyword">def</span> <span class="title">toString</span></span>: <span class="type">String</span> = coalesce(idfa, <span class="string">"-1"</span>) + <span class="string">"#"</span> + coalesce(idfv, <span class="string">"-1"</span>)</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">str2idfa</span></span>(txt: <span class="type">String</span>): <span class="type">Option</span>[<span class="type">String</span>] = &#123;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">      <span class="keyword">val</span> decodeTxt: <span class="type">Array</span>[<span class="type">Byte</span>] = <span class="type">Base64</span>.getDecoder.decode(txt)</span><br><span class="line">      <span class="comment">// TODO 省略一些处理逻辑</span></span><br><span class="line">      <span class="keyword">val</span> str = <span class="string">"after_some_time"</span></span><br><span class="line">      <span class="keyword">val</span> gson = <span class="keyword">new</span> <span class="type">Gson</span>()</span><br><span class="line">      <span class="keyword">val</span> reader = <span class="keyword">new</span> <span class="type">JsonReader</span>(<span class="keyword">new</span> <span class="type">StringReader</span>(str))</span><br><span class="line">      reader.setLenient(<span class="literal">true</span>)</span><br><span class="line">      <span class="keyword">val</span> idfaType: <span class="type">Type</span> = <span class="keyword">new</span> <span class="type">TypeToken</span>[<span class="type">Idfa</span>]() &#123;&#125;.getType</span><br><span class="line">      <span class="type">Some</span>(gson.fromJson(reader, idfaType).toString)</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">catch</span> &#123;</span><br><span class="line">      <span class="keyword">case</span> e: <span class="type">Throwable</span> =&gt;</span><br><span class="line">        println(txt)</span><br><span class="line">        e.printStackTrace()</span><br><span class="line">        <span class="type">None</span></span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">// 关键是这里把普通函数转成UDF:</span></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">str2idfaUDF</span></span>: <span class="type">UserDefinedFunction</span> = udf(str2idfa _)</span><br></pre></td></tr></table></figure>
+
+<p>然后在pyspark脚本里调用jar包中的UDF:</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">#!/usr/bin/env python</span></span><br><span class="line"><span class="comment"># -*- coding: utf-8 -*-</span></span><br><span class="line"><span class="keyword">import</span> sys</span><br><span class="line"><span class="keyword">from</span> pytoolkit <span class="keyword">import</span> TDWSQLProvider, TDWUtil, TDWProvider</span><br><span class="line"><span class="keyword">from</span> pyspark <span class="keyword">import</span> SparkContext, SQLContext</span><br><span class="line"><span class="keyword">from</span> pyspark.sql <span class="keyword">import</span> SparkSession, Row</span><br><span class="line"><span class="keyword">from</span> pyspark.sql.types <span class="keyword">import</span> StructType, LongType, StringType, StructField, IntegerType</span><br><span class="line"><span class="keyword">from</span> pyspark.sql.functions <span class="keyword">import</span> udf, struct, array</span><br><span class="line"><span class="keyword">from</span> pyspark.sql.column <span class="keyword">import</span> Column</span><br><span class="line"><span class="keyword">from</span> pyspark.sql.column <span class="keyword">import</span> _to_java_column</span><br><span class="line"><span class="keyword">from</span> pyspark.sql.column <span class="keyword">import</span> _to_seq</span><br><span class="line"><span class="keyword">from</span> pyspark.sql.functions <span class="keyword">import</span> col</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">str2idfa</span><span class="params">(col)</span>:</span></span><br><span class="line">    _str2idfa = sc._jvm.com.tencent.kandian.utils.UdfUtils.str2idfaUDF()</span><br><span class="line">    <span class="keyword">return</span> Column(_str2idfa.apply(_to_seq(sc, [col], _to_java_column)))</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">spark = SparkSession.builder.appName(app_name).getOrCreate()</span><br><span class="line">sc = spark.sparkContext</span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">'__main__'</span>:</span><br><span class="line">    in_provider = TDWSQLProvider(spark, user=user, passwd=passwd, db=db_name)</span><br><span class="line">    in_df = in_provider.table(<span class="string">'t_dw_dcxxxx'</span>, [<span class="string">'p_2019042100'</span>])  <span class="comment"># 分区数组</span></span><br><span class="line">    print(in_df.columns)</span><br><span class="line">    in_df.createOrReplaceTempView(<span class="string">"t1"</span>)</span><br><span class="line">    out_t1 = in_df.select(col(<span class="string">'uin'</span>)</span><br><span class="line">                          , str2idfa(col(<span class="string">"value"</span>))) <span class="comment"># 直接使用scala的udf,节省43%时间,减少两个transform</span></span><br><span class="line">    print(out_t1.columns)</span><br><span class="line">    print(out_t1.take(<span class="number">10</span>))</span><br></pre></td></tr></table></figure>
+<p>其中<code>_jvm</code>变量是<code>sparkContext</code>中<code>JVMView</code>对象的名字,此外sc中还有<code>_gateway</code>变量以连接JVM中的<code>GatawayServer</code>。<br>提交时，在tesla上的配置<code>spark-conf</code>jar包路径:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">spark.driver.extraClassPath&#x3D;pipe-udf-1.0-SNAPSHOT-jar-with-dependencies.jar</span><br><span class="line">spark.executor.extraClassPath&#x3D;pipe-udf-1.0-SNAPSHOT-jar-with-dependencies.jar</span><br></pre></td></tr></table></figure>
+<p>同时在依赖包文件中上传jar包。</p>
+<p>这样一通操作之后，DAG图变成了这样:</p>
+<img src="/images/2019-05/py_jar.png" class="" width="400" height="400" title="py_jar">
+
+<p>可以看到比之前少了两个transform,没有了<code>BatchEvalPython</code>，也少了一个<code>WholeStageCodeGen</code>。<br>经过简单banchmark，对于50G数据集纯map处理。<br>第一种方案：大约13分钟；<br>第二种方案：大约7分钟。<br>第二种方案大约能节省一半的时间，并且进一步测试使用scala完全重写整个计算，运行时间和第二种方案接近，也大约需要7分钟。</p>
+<h1 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h1><p>   在pyspark中尽量使用spark算子和spark-sql，同时尽量将UDF(含lambda表达式形式)封装到一个地方减少JVM和python脚本的交互。<br>   由于<code>BatchEvalPython</code>过程每次处理100行，也可以把多行聚合成一行减少交互次数。<br>   最后还可以把UDF部分用scala重写打包成jar包，其他部分则保持python脚本以获得不用编译随时修改的灵活性，以兼顾性能和开发效率。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/05/08/2019-05/%E5%B0%86pyspark%E4%B8%AD%E7%9A%84UDF%E5%8A%A0%E9%80%9F50/" data-id="ck96cxpps00ijmaam3j3lf6mt" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spark/" rel="tag">spark</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2019-04/spark中RDD，Dataframe，DataSet区别对比" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/04/29/2019-04/spark%E4%B8%ADRDD%EF%BC%8CDataframe%EF%BC%8CDataSet%E5%8C%BA%E5%88%AB%E5%AF%B9%E6%AF%94/" class="article-date">
@@ -798,193 +961,10 @@
 
 
   
-    <article id="post-2019-03/redis设计与实现笔记9-cluster模式" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/03/03/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B09-cluster%E6%A8%A1%E5%BC%8F/" class="article-date">
-  <time datetime="2019-03-03T13:05:48.000Z" itemprop="datePublished">2019-03-03</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/redis/">redis</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/03/03/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B09-cluster%E6%A8%A1%E5%BC%8F/">redis设计与实现笔记9-cluster模式</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>cluster功能是3.0及以后才有的。需要开启cluster模式才能让redis-server以cluster模式启动，这种模式下只有一个数据库（0号数据库）。</p>
-<p>启动集群模式的redis客户端:</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 加上-c参数: </span></span><br><span class="line">redis-cli -c</span><br></pre></td></tr></table></figure>
-
-<h2 id="集群纳入新成员过程"><a href="#集群纳入新成员过程" class="headerlink" title="集群纳入新成员过程"></a>集群纳入新成员过程</h2><ol>
-<li>节点A接到Cluster meet B命令，节点A和B进行握手；</li>
-<li>节点A会将节点B的信息通过<code>Gossip</code>协议传播给集群中的其他节点；</li>
-<li>最终节点B被集群完全认识、接受。</li>
-</ol>
-<h2 id="Gossip协议消息类型"><a href="#Gossip协议消息类型" class="headerlink" title="Gossip协议消息类型"></a>Gossip协议消息类型</h2><ol>
-<li>Meet;</li>
-<li>Ping;</li>
-<li>Pong。</li>
-</ol>
-<h2 id="slot-槽指派"><a href="#slot-槽指派" class="headerlink" title="slot: 槽指派"></a>slot: 槽指派</h2><p>某个节点负责哪些slot:</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">127.0.0.1&gt; cluster ADDslots &lt;slot&gt; [slot ...]</span><br></pre></td></tr></table></figure>
-
-<h2 id="Cluster-Nodes命令"><a href="#Cluster-Nodes命令" class="headerlink" title="Cluster Nodes命令"></a>Cluster Nodes命令</h2><p>用redis-cli客户端可以查看当前集群的节点情况、id，以及slot的分派情况：</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Cluster Nodes</span><br></pre></td></tr></table></figure>
-
-<h2 id="clusterState信息"><a href="#clusterState信息" class="headerlink" title="clusterState信息"></a>clusterState信息</h2><p>clusterState信息中有一项是<code>slots_to_keys</code>跳表(类似一个有序hashmap)，保存slot和key之间的关联。<br>key=&gt;跳表中的key;<br>slot号码=&gt;跳表中的score。</p>
-<p>key查节点、节点查key都可以快速完成:</p>
-<ol>
-<li>每个节点可以根据key，查到对应的slot(crc算法)，然后可以查到对应存在哪个节点（存在跳表）；</li>
-<li>可以查自己节点负责的slot:<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">clusterNode</span>&#123;</span></span><br><span class="line">    <span class="comment">// 总共16384(也就是2^14)位，每一位的1,0代表是否负责</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> slots[<span class="number">16384</span>/<span class="number">8</span>];</span><br><span class="line">    <span class="keyword">int</span> numslots;<span class="comment">// 该节点总共负责多少个slot(1的数量)</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-</li>
-</ol>
-<p><code>clusterState</code>中存储了所有slots的指派情况:</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">clusterState</span>&#123;</span></span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">    clusterNode* slots[<span class="number">16384</span>];</span><br><span class="line">&#125;clusterState;</span><br></pre></td></tr></table></figure>
-
-<p>如果集群中所有的slot都有人负责，cluster进入上线状态。</p>
-<h2 id="Moved错误"><a href="#Moved错误" class="headerlink" title="Moved错误"></a>Moved错误</h2><p>客户端访问了错误的节点，需要的key在别的节点负责的slot里头：</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">MOVED &lt;slot&gt; &lt;ip&gt;:&lt;port&gt;</span><br></pre></td></tr></table></figure>
-<p>cluster模式的redis客户端能自动处理<code>MOVED</code>错误。</p>
-<h2 id="ASK错误"><a href="#ASK错误" class="headerlink" title="ASK错误"></a>ASK错误</h2><h3 id="重新指派"><a href="#重新指派" class="headerlink" title="重新指派"></a>重新指派</h3><img src="/images/2019-03/cluster_migrate.png" class="" width="800" height="1200" title="cluster_migrate">
-<p>集群可以将slot重新分派给另一个节点。<br>也就是: 源节点=迁移到=&gt;目标节点。<br>其中节点id可以通过<code>cluster nodes</code>获得。<br>通过redis-trib工具：<br>1.在target_id节点上发送: (准备好导入)</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Cluster setslot &lt;slot&gt; Importing &lt;source_id&gt;</span><br></pre></td></tr></table></figure>
-<p>2.向source_id发送:（准备好导出）</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Cluster SetSlot &lt;slot&gt; Migrating &lt;target_id&gt;</span><br></pre></td></tr></table></figure>
-<p>3.向source_id发送:</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Cluster GETkeysInSlot &lt;slot&gt; &lt;count&gt;</span><br></pre></td></tr></table></figure>
-<p>获得最多count个属于slot的key；<br>4.对于第3步中的每个key，redis-trib向source_id发送一个命令:</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Migrate &lt;target_ip&gt; &lt;target_port&gt; &lt;key_name&gt; 0 &lt;timeout&gt;</span><br></pre></td></tr></table></figure>
-<p>实际进行迁移每一个key。<br>5.完成迁移，发布:</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Cluster SetSlot &lt;slot&gt; Node &lt;target_id&gt;</span><br></pre></td></tr></table></figure>
-<p>任意节点收到后传播给整个集群。</p>
-<h3 id="ASK错误-1"><a href="#ASK错误-1" class="headerlink" title="ASK错误"></a>ASK错误</h3><img src="/images/2019-03/ask_error.png" class="" width="800" height="1200" title="ask_error">
-<p>迁移过程中，源节点遇到缺少的key会向客户端返回ASK错误:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ASK 16198 127.0.0.1:7003</span><br></pre></td></tr></table></figure>
-<p>表示这个key正在将16198号slot迁移到<code>127.0.0.1:7003</code>。</p>
-<img src="/images/2019-03/ask_query.png" class="" width="800" height="1200" title="ask_query">
-<p>cluster模式的客户端获得ASK错误后，带着ASK标记去访问目标节点，才能获得数据。</p>
-<h3 id="故障恢复"><a href="#故障恢复" class="headerlink" title="故障恢复"></a>故障恢复</h3><p>节点状态：<br><code>在线</code>==&gt;<code>疑似下线</code>==&gt;<code>下线</code><br>(类似于之前<code>sentinel</code>模式中的<code>主观下线</code>和<code>客观下线</code>)。</p>
-<p>cluster模式的各个主节点之间都有连接，相当于一张完全图了。<br>这个网络内，它们每隔一段时间就互相ping，看看对方是否活着（返回pong）。</p>
-<p><code>疑似下线</code>： 不返回pong，标记为<code>疑似下线</code>；<br><code>下线</code>    ： 节点之间交流看法(集群状态)，超过半数认为<code>疑似下线</code>则认为确实是<code>下线</code>，开始故障恢复。</p>
-<p>如果离线的节点有从节点，则可以开始选举了。<br>从节点们发现主节点下线了，就开始向集群存活的主节点们请求投票，获得超过半数的票则当选。</p>
-<h2 id="Publish命令实现"><a href="#Publish命令实现" class="headerlink" title="Publish命令实现"></a>Publish命令实现</h2><p>订阅频道：      subscribe<br>发布消息到频道：publish</p>
-<p>客户端发布消息的流程：</p>
-<ol>
-<li>客户端=&gt;某个节点: publish命令: 发布xx消息到xxx频道;</li>
-<li>该节点=&gt;其他节点: publish的具体消息。</li>
-</ol>
-<p>第2步中为什么不是直接转发命令到其他节点，而是转发消息呢？<br>这个主要是设计理念上，希望节点之间不是命令交互，而是消息交互。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/03/03/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B09-cluster%E6%A8%A1%E5%BC%8F/" data-id="ck96cxppl00hvmaamgc5j37vc" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
-    <article id="post-2019-02/nginx笔记-鉴权及转发配置" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E9%89%B4%E6%9D%83%E5%8F%8A%E8%BD%AC%E5%8F%91%E9%85%8D%E7%BD%AE/" class="article-date">
-  <time datetime="2019-02-28T07:10:31.000Z" itemprop="datePublished">2019-02-28</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/nginx/">nginx</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E9%89%B4%E6%9D%83%E5%8F%8A%E8%BD%AC%E5%8F%91%E9%85%8D%E7%BD%AE/">nginx笔记-鉴权及转发配置</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>学习资料:<br><a href="http://blog.jobbole.com/tag/nginx/" target="_blank" rel="noopener">http://blog.jobbole.com/tag/nginx/</a><br><a href="https://segmentfault.com/a/1190000013267839#articleHeader0" target="_blank" rel="noopener">https://segmentfault.com/a/1190000013267839#articleHeader0</a></p>
-<p>鉴权模块的官方文档:<br><a href="http://nginx.org/en/docs/http/ngx_http_auth_request_module.html" target="_blank" rel="noopener">http://nginx.org/en/docs/http/ngx_http_auth_request_module.html</a></p>
-<h2 id="易混淆点"><a href="#易混淆点" class="headerlink" title="易混淆点"></a>易混淆点</h2><p><strong>URL尾部的<code>/</code>区别</strong><br>url分为<code>location</code>配置中的<code>url</code>和实际用户访问的<code>url</code>：</p>
-<h3 id="1-location中的url"><a href="#1-location中的url" class="headerlink" title="1. location中的url"></a>1. location中的url</h3><p>无区别。末尾是否有<code>/</code>,含义一样。</p>
-<h3 id="2-实际用户访问的url"><a href="#2-实际用户访问的url" class="headerlink" title="2. 实际用户访问的url"></a>2. 实际用户访问的url</h3><p>也就是浏览器地址栏中的。</p>
-<p>首先实际访问url的话：<br>(1)末尾有<code>/</code>: 表示目录，如<code>localhost/dir/</code>，服务器就会匹配目录下的默认文件（比如<code>index.html</code>）;<br>(2)末尾无<code>/</code>: 表示文件，如<code>localhost/file</code>.</p>
-<p><strong>特殊情况:</strong><br>根目录。<br>直接访问域名，如访问<a href="http://www.xxx.com" target="_blank" rel="noopener">http://www.xxx.com</a><br>，这个时候浏览器知道用户访问的肯定不是文件，而且服务器一般会配置<code>location /</code>这个配置项，所以访问根目录有没有<code>/</code>都一样。<br><strong>也就是以下两种访问url等效:</strong> </p>
-<ol>
-<li>访问<a href="http://www.xxx.com" target="_blank" rel="noopener">http://www.xxx.com</a></li>
-<li>访问<a href="http://www.xxx.com/" target="_blank" rel="noopener">http://www.xxx.com/</a><br>浏览器请求的时候自动给第1种加上<code>/</code>变成第2种。</li>
-</ol>
-<h2 id="nginx配置的逻辑"><a href="#nginx配置的逻辑" class="headerlink" title="nginx配置的逻辑"></a>nginx配置的逻辑</h2><ul>
-<li>特点:</li>
-</ul>
-<ol>
-<li><p>声明式<br>nginx的配置文件是声明式的,因此不能用过程式语言来理解它。<br>换句话说:<br>并不是写在前面的就先执行.</p>
-</li>
-<li><p>第三方模块<br>nginx有核心模块和第三方模块（插件）。<br>不同模块的配置可能写在一块儿,但执行顺序可能无关联,甚至互相影响。</p>
-</li>
-</ol>
-<p>举例一些模块的功能：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">--with-http_dav_module: http文件管理;</span><br><span class="line">--with-http_flv_module: flv流媒体支持;</span><br><span class="line">--with-mail: 邮件支持;</span><br><span class="line">--with-mail_ssl_module: 邮件加密;</span><br><span class="line">--with-debug: debug日志支持;</span><br><span class="line">--with-http_auth_request_module: 鉴权转发支持。</span><br></pre></td></tr></table></figure>
-
-<h2 id="一种可能的鉴权转发配置："><a href="#一种可能的鉴权转发配置：" class="headerlink" title="一种可能的鉴权转发配置："></a>一种可能的鉴权转发配置：</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br></pre></td><td class="code"><pre><span class="line">#user  nobody;</span><br><span class="line">worker_processes  3;</span><br><span class="line"></span><br><span class="line">error_log  logs&#x2F;error.log;</span><br><span class="line">#error_log  logs&#x2F;error.log  notice;</span><br><span class="line">#error_log  logs&#x2F;error.log  info;</span><br><span class="line"></span><br><span class="line"># pid        logs&#x2F;nginx.pid; # 这个必须停服改</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">events &#123;</span><br><span class="line">    worker_connections  2048;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">http &#123;</span><br><span class="line">    include       mime.types;</span><br><span class="line">    default_type  application&#x2F;octet-stream;</span><br><span class="line"></span><br><span class="line">    log_format  main  &#39;$remote_addr - $remote_user [$time_local] &quot;$request&quot; &#39;</span><br><span class="line">                      &#39;$status $body_bytes_sent &quot;$http_referer&quot; &#39;</span><br><span class="line">                      &#39;&quot;$http_user_agent&quot; &quot;$http_x_forwarded_for&quot;&#39;;</span><br><span class="line"></span><br><span class="line">    access_log  logs&#x2F;access.log  main;</span><br><span class="line"></span><br><span class="line">    sendfile        on;</span><br><span class="line">    #tcp_nopush     on;</span><br><span class="line"></span><br><span class="line">    #keepalive_timeout  0;</span><br><span class="line">    keepalive_timeout  65;</span><br><span class="line"></span><br><span class="line">    #gzip  on;</span><br><span class="line">    gzip  on;</span><br><span class="line">    gzip_min_length 1k;</span><br><span class="line">    gzip_buffers    4 16k;</span><br><span class="line">    gzip_http_version 1.0;</span><br><span class="line">    gzip_comp_level 6;</span><br><span class="line">    gzip_types text&#x2F;plain text&#x2F;css text&#x2F;javascript application&#x2F;json application&#x2F;javascript application&#x2F;x-javascript application&#x2F;xml;</span><br><span class="line">    gzip_vary on;</span><br><span class="line"></span><br><span class="line">    # http_proxy 设置</span><br><span class="line">    client_max_body_size   10m;</span><br><span class="line">    client_body_buffer_size   128k;</span><br><span class="line">    proxy_connect_timeout   75;</span><br><span class="line">    proxy_send_timeout   75;</span><br><span class="line">    proxy_read_timeout   75;</span><br><span class="line">    proxy_buffer_size   4k;</span><br><span class="line">    proxy_buffers   4 32k;</span><br><span class="line">    proxy_busy_buffers_size   64k;</span><br><span class="line">    proxy_temp_file_write_size  64k;</span><br><span class="line">    proxy_temp_path   &#x2F;usr&#x2F;local&#x2F;nginx&#x2F;proxy_temp 1 2;</span><br><span class="line"></span><br><span class="line">    upstream backend_hexo &#123;</span><br><span class="line">	    server localhost:8081 max_fails&#x3D;2 fail_timeout&#x3D;30s ;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    server &#123;</span><br><span class="line">        listen       80;</span><br><span class="line">        server_name  localhost;</span><br><span class="line"></span><br><span class="line">        #charset koi8-r;</span><br><span class="line"></span><br><span class="line">        access_log  logs&#x2F;host.access.log  main;</span><br><span class="line"></span><br><span class="line">        location &#x2F; &#123;</span><br><span class="line">            auth_request &#x2F;auth;</span><br><span class="line">            add_header Cache-Control no-store;</span><br><span class="line">            proxy_set_header Host $host;</span><br><span class="line"></span><br><span class="line">            proxy_pass        http:&#x2F;&#x2F;backend_hexo;</span><br><span class="line">            proxy_redirect off;</span><br><span class="line">            # 后端的Web服务器可以通过X-Forwarded-For获取用户真实IP</span><br><span class="line">            proxy_set_header  Host  $host;</span><br><span class="line">            proxy_set_header  X-Real-IP  $remote_addr;</span><br><span class="line">            proxy_set_header  X-Forwarded-For  $proxy_add_x_forwarded_for;</span><br><span class="line">            proxy_next_upstream error timeout invalid_header http_500 http_502 http_503 http_504;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        location &#x3D; &#x2F;auth &#123;</span><br><span class="line">            proxy_pass http:&#x2F;&#x2F;auth_server:8080&#x2F;api&#x2F;hexo_permission;</span><br><span class="line">            proxy_pass_request_body off;</span><br><span class="line">            proxy_set_header Content-Length &quot;&quot;;</span><br><span class="line">            proxy_set_header X-Original-URI $request_uri;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">        #error_page  404              &#x2F;404.html;</span><br><span class="line"></span><br><span class="line">        # redirect server error pages to the static page &#x2F;50x.html</span><br><span class="line">        #</span><br><span class="line">        error_page   500 502 503 504  &#x2F;50x.html;</span><br><span class="line">        location &#x3D; &#x2F;50x.html &#123;</span><br><span class="line">            root   html;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E9%89%B4%E6%9D%83%E5%8F%8A%E8%BD%AC%E5%8F%91%E9%85%8D%E7%BD%AE/" data-id="ck96cxpp500fxmaamdk5a4jns" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/nginx/" rel="tag">nginx</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
-    <a class="extend prev" rel="prev" href="/page/5/">&amp;laquo; 上一页</a><a class="page-number" href="/">1</a><span class="space">&hellip;</span><a class="page-number" href="/page/4/">4</a><a class="page-number" href="/page/5/">5</a><span class="page-number current">6</span><a class="page-number" href="/page/7/">7</a><a class="page-number" href="/page/8/">8</a><span class="space">&hellip;</span><a class="page-number" href="/page/22/">22</a><a class="extend next" rel="next" href="/page/7/">下一页&amp;raquo;</a>
+    <a class="extend prev" rel="prev" href="/page/5/">&amp;laquo; 上一页</a><a class="page-number" href="/">1</a><span class="space">&hellip;</span><a class="page-number" href="/page/4/">4</a><a class="page-number" href="/page/5/">5</a><span class="page-number current">6</span><a class="page-number" href="/page/7/">7</a><a class="page-number" href="/page/8/">8</a><span class="space">&hellip;</span><a class="page-number" href="/page/23/">23</a><a class="extend next" rel="next" href="/page/7/">下一页&amp;raquo;</a>
   </nav>
 </section>
            
@@ -1007,6 +987,14 @@
       <ul>
         
           <li>
+            <a href="/2022/03/14/2022-03/%E4%B8%AD%E6%96%AD%E6%A2%B3%E7%90%86/">java方法是否可中断梳理</a>
+          </li>
+        
+          <li>
+            <a href="/2022/03/13/2022-03/mp4%E6%A0%BC%E5%BC%8F/">mp4格式</a>
+          </li>
+        
+          <li>
             <a href="/2022/03/13/2022-03/ss%E5%91%BD%E4%BB%A4/">ss命令</a>
           </li>
         
@@ -1016,14 +1004,6 @@
         
           <li>
             <a href="/2022/02/24/2022-02/%E4%B8%BA%E4%BB%80%E4%B9%88%E5%85%88hash%E5%90%8E%E5%8A%A0%E5%AF%86%E7%9A%84%E6%96%B9%E6%B3%95%E5%AE%B9%E6%98%93%E9%81%AD%E9%81%87padding%E6%94%BB%E5%87%BB/">为什么先hash后加密的方法容易遭遇padding攻击</a>
-          </li>
-        
-          <li>
-            <a href="/2022/02/24/2022-02/keepalive/">http和tcp层面的keepAlive机制</a>
-          </li>
-        
-          <li>
-            <a href="/2022/02/18/2022-02/%E6%8B%A5%E5%A1%9E%E7%AE%97%E6%B3%95bbr/">quic中的拥塞算法bbr</a>
           </li>
         
       </ul>
