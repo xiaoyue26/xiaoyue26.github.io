@@ -72,6 +72,91 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-05/spark-sql中的分位数算法" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/05/26/2019-05/spark-sql%E4%B8%AD%E7%9A%84%E5%88%86%E4%BD%8D%E6%95%B0%E7%AE%97%E6%B3%95/" class="article-date">
+  <time datetime="2019-05-26T12:36:51.000Z" itemprop="datePublished">2019-05-26</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/spark/">spark</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/05/26/2019-05/spark-sql%E4%B8%AD%E7%9A%84%E5%88%86%E4%BD%8D%E6%95%B0%E7%AE%97%E6%B3%95/">spark-sql中的分位数算法</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>spark有两个分位数算法:</p>
+<ol>
+<li><code>percentile</code>: 接受Int,Long,精确计算。底层用OpenHashMap,计数，然后排序key;</li>
+<li><code>percentile_approx</code>：接受Int,Long,Double,近似计算。用的GK算法。论文参见《Space-efficient Online Computation of Quantile Summaries》(<a href="http://dx.doi.org/10.1145/375663.375670" target="_blank" rel="noopener">http://dx.doi.org/10.1145/375663.375670</a>)<br>基本思想是以最小空间完成分位数统计，比如把相邻的1w个数压缩成(平均数,个数)元组。如果空间够用，就不进行这种压缩。（所以如果如果统计90分位数，传入的精度参数至少应为10，如果统计999分位数，传入的精度参数至少为1000，默认精度是10000。）</li>
+</ol>
+<p>俩算法和Hive版本的基本是一样的。<br>区别: </p>
+<ol>
+<li>spark的percentile多了一个频次参数,也就是可以接受分阶段聚合；(percentile_approx木有)</li>
+<li>spark底层用的openHashMap,速度快5倍,内存消耗更少。</li>
+</ol>
+<h2 id="为啥OpenHashMap性能优于HashMap"><a href="#为啥OpenHashMap性能优于HashMap" class="headerlink" title="为啥OpenHashMap性能优于HashMap?"></a>为啥OpenHashMap性能优于HashMap?</h2><p><a href="https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/util/collection/OpenHashMap.scala" target="_blank" rel="noopener">https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/util/collection/OpenHashMap.scala</a><br><a href="https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/util/collection/OpenHashSet.scala" target="_blank" rel="noopener">https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/util/collection/OpenHashSet.scala</a><br>OpenHashMap为了加快速度，增加了一个假设: 所有数据只插入Key/更新Key，不删除Key。<br>(这个假设在大数据处理/统计的场景下，大多都是成立的)<br>有了这个假设它可以去掉拉链表，使用线性探测的开放定址法来实现哈希表。</p>
+<p>OpenHashMap底层数据委托给了OpenHashSet，所以本质上是看OpenHashSet为啥快。<br><code>OpenHashSet</code>用BitSet(位图)来存储在不在集合中(位运算，很快)，另开一个数组存储实际数据：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">protected</span> <span class="keyword">var</span> _bitset = <span class="keyword">new</span> <span class="type">BitSet</span>(_capacity)</span><br><span class="line"><span class="keyword">protected</span> <span class="keyword">var</span> _data: <span class="type">Array</span>[<span class="type">T</span>] = _</span><br><span class="line">  _data = <span class="keyword">new</span> <span class="type">Array</span>[<span class="type">T</span>](_capacity)</span><br></pre></td></tr></table></figure>
+<p>这俩成员始终保持等长，_bitset的下标x位置为1时，_data的下标x位置为中就有实际数据。(手动维持联动)<br>插入数据时，hash一下key生成pos，看看_bitset中对应位置有没有被占用，有的话就死循环++pos：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">addWithoutResize</span></span>(k: <span class="type">T</span>): <span class="type">Int</span> = &#123;</span><br><span class="line">    <span class="keyword">var</span> pos = hashcode(hasher.hash(k)) &amp; _mask</span><br><span class="line">    <span class="keyword">var</span> delta = <span class="number">1</span></span><br><span class="line">    <span class="keyword">while</span> (<span class="literal">true</span>) &#123;</span><br><span class="line">      <span class="keyword">if</span> (!_bitset.get(pos)) &#123;</span><br><span class="line">        <span class="comment">// This is a new key.</span></span><br><span class="line">        _data(pos) = k</span><br><span class="line">        _bitset.set(pos)</span><br><span class="line">        _size += <span class="number">1</span></span><br><span class="line">        <span class="keyword">return</span> pos | <span class="type">NONEXISTENCE_MASK</span></span><br><span class="line">      &#125; <span class="keyword">else</span> <span class="keyword">if</span> (_data(pos) == k) &#123;</span><br><span class="line">        <span class="comment">// Found an existing key.</span></span><br><span class="line">        <span class="keyword">return</span> pos</span><br><span class="line">      &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="comment">// quadratic probing with values increase by 1, 2, 3, ...</span></span><br><span class="line">        pos = (pos + delta) &amp; _mask</span><br><span class="line">        delta += <span class="number">1</span></span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">throw</span> <span class="keyword">new</span> <span class="type">RuntimeException</span>(<span class="string">"Should never reach here."</span>)</span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
+<p>逻辑很简单，由于假设了不会删除key,线性探测法变得实用。</p>
+<h3 id="小结一下OpenHashSet快的原因"><a href="#小结一下OpenHashSet快的原因" class="headerlink" title="小结一下OpenHashSet快的原因:"></a>小结一下OpenHashSet快的原因:</h3><ol>
+<li>内存利用率高: 去掉了8B指针结构，能够创建更大的哈希表，冲突减少；</li>
+<li>内存紧凑: 位图操作快，一个内存page就能放下很多位图，8B就能放64个位置，缓存友好(while循环pos++)。</li>
+</ol>
+<h1 id="percentile实现"><a href="#percentile实现" class="headerlink" title="percentile实现:"></a>percentile实现:</h1><p><code>Percentile.scala</code>文件:<br><a href="https://github.com/apache/spark/blob/master/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/aggregate/Percentile.scala" target="_blank" rel="noopener">https://github.com/apache/spark/blob/master/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/aggregate/Percentile.scala</a><br>首先看注释:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;* Because the number of elements and their partial order cannot be determined in advance.</span><br><span class="line"> * Therefore we have to store all the elements in memory, and so notice that too many elements can</span><br><span class="line"> * cause GC paused and eventually OutOfMemory Errors.</span><br><span class="line">&#x2F;</span><br></pre></td></tr></table></figure>
+<p>基本思想是把所有元素保存在内存中。<br>因此它其实支持两阶段聚合:<br><code>_FUNC_(col, percentage [, frequency])</code><br>可以传入一个参数frequency表示频次.<br>// 2017-02-07加上的特性，比我写hive版本的分阶段聚合udaf早了10个月。</p>
+<h1 id="percentile-approx实现"><a href="#percentile-approx实现" class="headerlink" title="percentile_approx实现"></a>percentile_approx实现</h1><p>代码:<br><a href="https://github.com/apache/spark/blob/master/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/aggregate/ApproximatePercentile.scala" target="_blank" rel="noopener">https://github.com/apache/spark/blob/master/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/aggregate/ApproximatePercentile.scala</a><br><a href="https://github.com/apache/spark/blob/master/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/util/QuantileSummaries.scala" target="_blank" rel="noopener">https://github.com/apache/spark/blob/master/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/util/QuantileSummaries.scala</a><br>底层委托给<code>QuantileSummaries</code>实现的。<br>主要有俩个成员变量：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">sample: Array[Stat] : 存放桶，超过1000个桶的时候就压缩（生成新的三元组）；</span><br><span class="line">headSampled: ArrayBuffer[Double]：缓冲区，每次达到5000个，就排序后更新到sample.</span><br></pre></td></tr></table></figure>
+<p>主要思想是减少空间占用，因此很多排序，spark的实现merge sample的时候甚至都没有管俩sample已经有序了，直接sort了：</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// <span class="doctag">TODO:</span> could replace full sort by ordered merge, the two lists are known to be sorted already.</span></span><br><span class="line"> <span class="keyword">val</span> res = (sampled ++ other.sampled).sortBy(_.value)</span><br><span class="line">  <span class="keyword">val</span> comp = compressImmut(res, mergeThreshold = <span class="number">2</span> * relativeError * count)</span><br><span class="line">  <span class="keyword">new</span> <span class="type">QuantileSummaries</span>(</span><br><span class="line">    other.compressThreshold, other.relativeError, comp, other.count + count)</span><br></pre></td></tr></table></figure>
+<p>Stat的定义:</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment">  * Statistics from the Greenwald-Khanna paper.</span></span><br><span class="line"><span class="comment">  * @param value the sampled value</span></span><br><span class="line"><span class="comment">  * @param g the minimum rank jump from the previous value's minimum rank</span></span><br><span class="line"><span class="comment">  * @param delta the maximum span of the rank.</span></span><br><span class="line"><span class="comment">  */</span></span><br><span class="line"> <span class="keyword">case</span> <span class="class"><span class="keyword">class</span> <span class="title">Stats</span>(<span class="params">value: <span class="type">Double</span>, g: <span class="type">Int</span>, delta: <span class="type">Int</span></span>)</span></span><br></pre></td></tr></table></figure>
+<p>插入的函数:(每N个数，排序至少1次(merge还有1次)，因此是O(NlogN))</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">insert</span></span>(x: <span class="type">Double</span>): <span class="type">QuantileSummaries</span> = &#123;</span><br><span class="line">    headSampled += x</span><br><span class="line">    <span class="keyword">if</span> (headSampled.size &gt;= defaultHeadSize) &#123;</span><br><span class="line">      <span class="keyword">val</span> result = <span class="keyword">this</span>.withHeadBufferInserted</span><br><span class="line">      <span class="keyword">if</span> (result.sampled.length &gt;= compressThreshold) &#123;</span><br><span class="line">        result.compress()</span><br><span class="line">      &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        result</span><br><span class="line">      &#125;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">      <span class="keyword">this</span></span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
+
+<p>插入数据的其中一个步骤:</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="function"><span class="keyword">def</span> <span class="title">withHeadBufferInserted</span></span>: <span class="type">QuantileSummaries</span> = &#123;</span><br><span class="line">    <span class="keyword">if</span> (headSampled.isEmpty) &#123;</span><br><span class="line">      <span class="keyword">return</span> <span class="keyword">this</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">var</span> currentCount = count</span><br><span class="line">    <span class="keyword">val</span> sorted = headSampled.toArray.sorted</span><br><span class="line">    <span class="keyword">val</span> newSamples: <span class="type">ArrayBuffer</span>[<span class="type">Stats</span>] = <span class="keyword">new</span> <span class="type">ArrayBuffer</span>[<span class="type">Stats</span>]()</span><br><span class="line">    <span class="comment">// The index of the next element to insert</span></span><br><span class="line">    <span class="keyword">var</span> sampleIdx = <span class="number">0</span></span><br><span class="line">    <span class="comment">// The index of the sample currently being inserted.</span></span><br><span class="line">    <span class="keyword">var</span> opsIdx: <span class="type">Int</span> = <span class="number">0</span></span><br><span class="line">    <span class="keyword">while</span> (opsIdx &lt; sorted.length) &#123;</span><br><span class="line">      <span class="keyword">val</span> currentSample = sorted(opsIdx)</span><br><span class="line">      <span class="comment">// Add all the samples before the next observation.</span></span><br><span class="line">      <span class="keyword">while</span> (sampleIdx &lt; sampled.length &amp;&amp; sampled(sampleIdx).value &lt;= currentSample) &#123;</span><br><span class="line">        newSamples += sampled(sampleIdx)</span><br><span class="line">        sampleIdx += <span class="number">1</span></span><br><span class="line">      &#125;</span><br><span class="line"></span><br><span class="line">      <span class="comment">// If it is the first one to insert, of if it is the last one</span></span><br><span class="line">      currentCount += <span class="number">1</span></span><br><span class="line">      <span class="keyword">val</span> delta =</span><br><span class="line">        <span class="keyword">if</span> (newSamples.isEmpty || (sampleIdx == sampled.length &amp;&amp; opsIdx == sorted.length - <span class="number">1</span>)) &#123;</span><br><span class="line">          <span class="number">0</span></span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">          math.floor(<span class="number">2</span> * relativeError * currentCount).toInt</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">      <span class="keyword">val</span> tuple = <span class="type">Stats</span>(currentSample, <span class="number">1</span>, delta)</span><br><span class="line">      newSamples += tuple</span><br><span class="line">      opsIdx += <span class="number">1</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Add all the remaining existing samples</span></span><br><span class="line">    <span class="keyword">while</span> (sampleIdx &lt; sampled.length) &#123;</span><br><span class="line">      newSamples += sampled(sampleIdx)</span><br><span class="line">      sampleIdx += <span class="number">1</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">new</span> <span class="type">QuantileSummaries</span>(compressThreshold, relativeError, newSamples.toArray, currentCount)</span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
+
+<p>获取结果:O(n)</p>
+<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Target rank</span></span><br><span class="line">    <span class="keyword">val</span> rank = math.ceil(quantile * count).toInt</span><br><span class="line">    <span class="keyword">val</span> targetError = math.ceil(relativeError * count)</span><br><span class="line">    <span class="comment">// Minimum rank at current sample</span></span><br><span class="line">    <span class="keyword">var</span> minRank = <span class="number">0</span></span><br><span class="line">    <span class="keyword">var</span> i = <span class="number">1</span></span><br><span class="line">    <span class="keyword">while</span> (i &lt; sampled.length - <span class="number">1</span>) &#123;</span><br><span class="line">      <span class="keyword">val</span> curSample = sampled(i)</span><br><span class="line">      minRank += curSample.g</span><br><span class="line">      <span class="keyword">val</span> maxRank = minRank + curSample.delta</span><br><span class="line">      <span class="keyword">if</span> (maxRank - targetError &lt;= rank &amp;&amp; rank &lt;= minRank + targetError) &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="type">Some</span>(curSample.value)</span><br><span class="line">      &#125;</span><br><span class="line">      i += <span class="number">1</span></span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+<h1 id="优化思路"><a href="#优化思路" class="headerlink" title="优化思路"></a>优化思路</h1><p>结合yuange在微博/km上分享的思路，用计数器区代替密集数据区的hashmap(其实也是GK算法的精确版)。逼近O(N)复杂度。<br>// TODO benchmark、优化算法</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/05/26/2019-05/spark-sql%E4%B8%AD%E7%9A%84%E5%88%86%E4%BD%8D%E6%95%B0%E7%AE%97%E6%B3%95/" data-id="ck96cxppq00icmaamdg6zaf5x" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spark/" rel="tag">spark</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2019-05/spark中编写UDAF的4种姿势" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/05/11/2019-05/spark%E4%B8%AD%E7%BC%96%E5%86%99UDAF%E7%9A%844%E7%A7%8D%E5%A7%BF%E5%8A%BF/" class="article-date">
@@ -866,101 +951,6 @@
 
 
   
-    <article id="post-2019-03/redis设计与实现笔记10-订阅-事物-lua" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/03/10/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B010-%E8%AE%A2%E9%98%85-%E4%BA%8B%E7%89%A9-lua/" class="article-date">
-  <time datetime="2019-03-10T12:08:34.000Z" itemprop="datePublished">2019-03-10</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/redis/">redis</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/03/10/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B010-%E8%AE%A2%E9%98%85-%E4%BA%8B%E7%89%A9-lua/">redis设计与实现笔记10-订阅,事物,lua</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="发布订阅"><a href="#发布订阅" class="headerlink" title="发布订阅"></a>发布订阅</h1><p>(书上第18章)<br>客户端可以订阅某个频道，或者订阅符合某种模式的频道们。</p>
-<img src="/images/2019-03/publish.png" class="" width="800" height="1200" title="publish">
-
-<h2 id="订阅关系保存"><a href="#订阅关系保存" class="headerlink" title="订阅关系保存"></a>订阅关系保存</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">redisServer</span>&#123;</span></span><br><span class="line">    <span class="comment">// 保存所有频道的订阅关系:</span></span><br><span class="line">    dict* pubsub_channels;</span><br><span class="line">    <span class="comment">// key: 频道名字(string)</span></span><br><span class="line">    <span class="comment">// value: 订阅的客户端们(链表)</span></span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 模式订阅: 订阅符合某种模式的频道</span></span><br><span class="line">    dict* pubsub_patterns;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>（如果有个客户端疯狂乱订阅，服务器是不是内存就爆了？）</p>
-<h1 id="第19章-事务"><a href="#第19章-事务" class="headerlink" title="第19章-事务"></a>第19章-事务</h1><p>相关命令:</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">MULTI: 类似于事务开始start transaction;</span><br><span class="line"><span class="comment"># 中间一堆正常redis set命令。</span></span><br><span class="line">EXEC: 类似于commit.</span><br><span class="line">WATCH: 乐观锁，在<span class="built_in">exec</span>执行前监视一些key是否被修改。</span><br><span class="line">如果被修改，则拒绝执行事务（类似于CAS）</span><br></pre></td></tr></table></figure>
-<p>事务执行阶段不会执行别的客户端的命令。（相当于独占了）</p>
-<h3 id="事务开始"><a href="#事务开始" class="headerlink" title="事务开始"></a>事务开始</h3><p>MULTI: 客户端状态打开<code>REDIS_MULTI</code>标识。</p>
-<h3 id="命令入队"><a href="#命令入队" class="headerlink" title="命令入队"></a>命令入队</h3><p>除了<code>EXEC</code>,<code>DISCARD</code>,<code>WATCH</code>,<code>MULTI</code>之外的命令放入队列中；<br>否则立即执行。</p>
-<h3 id="Watch功能实现"><a href="#Watch功能实现" class="headerlink" title="Watch功能实现"></a>Watch功能实现</h3><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">redisDb</span>&#123;</span></span><br><span class="line">    <span class="comment">// 正在被watch监视的key:</span></span><br><span class="line">    dict *watched_keys;</span><br><span class="line">    <span class="comment">// key: 被监视的key</span></span><br><span class="line">    <span class="comment">// value: 监视的客户端们(list)</span></span><br><span class="line">&#125;redisDb;</span><br></pre></td></tr></table></figure>
-<p>存在redisDb中，可见每个数据库都保存一个这个字典。</p>
-<p>每个修改操作都要检查watched_keys字典，通知对应的客户端。（打脏标记<code>REIDS_DIRTY_CAS</code>）</p>
-<h2 id="事务的ACID"><a href="#事务的ACID" class="headerlink" title="事务的ACID"></a>事务的ACID</h2><p>A: 原子性 Atomicity<br>C: 一致性 Consistency<br>I: 隔离性 Isolation<br>D: 耐久性 Durability</p>
-<h3 id="A：原子性"><a href="#A：原子性" class="headerlink" title="A：原子性"></a>A：原子性</h3><ul>
-<li>mysql：<br>要么一个都不执行成功，要么都全部执行成功。</li>
-</ul>
-<p>redis这里略有修改，它只保证执行，不保证执行成功：<br>要么一个都不执行，要么都全部执行。<br>（redis只检查编译错误，如命令不存在，不检查运行时错误）<br>redis执行事务过程中出错的话，不会回滚已经执行的命令。<br>（开发者表示这算程序员自己的锅）</p>
-<h3 id="C-一致性"><a href="#C-一致性" class="headerlink" title="C: 一致性"></a>C: 一致性</h3><p>单实例：肯定一致。<br>主从： 由raft保证；<br>cluster: 分slot以后，相当于单实例+主从，因此一致。</p>
-<h3 id="I-隔离性"><a href="#I-隔离性" class="headerlink" title="I: 隔离性"></a>I: 隔离性</h3><p>也就是让并发执行达到串行一致性。<br>由于redis本来就是单线程串行执行事务，因此天然不需要做额外的事就能达到隔离性。</p>
-<h3 id="D-耐久性"><a href="#D-耐久性" class="headerlink" title="D: 耐久性"></a>D: 耐久性</h3><p>redis三种模式:<br>无持久化存储: 无耐久<br>RDB: 不能完全保证；<br>AOF: <code>appendfsync</code>为<code>always</code>时，达到事务耐久性。</p>
-<h1 id="第20章-Lua脚本"><a href="#第20章-Lua脚本" class="headerlink" title="第20章-Lua脚本"></a>第20章-Lua脚本</h1><p>主要涉及两个命令<code>EVAL</code>和<code>EVALSHA</code>。<br>redis服务器端2.6开始有lua环境，因此客户端可以：</p>
-<ol>
-<li>执行lua脚本: <figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">redis&gt;</span><span class="bash"> EVAL <span class="string">"return 'hello world'"</span> 0</span></span><br></pre></td></tr></table></figure>
-最后的0表示输入参数的个数是0个。参见：<a href="http://doc.redisfans.com/script/eval.html" target="_blank" rel="noopener">http://doc.redisfans.com/script/eval.html</a></li>
-<li>通过SHA1校验和，执行对应的lua脚本:<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">redis&gt;</span><span class="bash"> EVALSHA <span class="string">"a27e72..........."</span></span></span><br></pre></td></tr></table></figure>
-这个校验和需要服务器认识才行，服务器认识的方法：<br>(1)服务器以前执行过对应的lua脚本；<br>(2)客户端用<code>SCRIPT LOAD</code>命令告诉过服务器：<code>SCRIPT LOAD &quot;return 2*2&quot;</code>。</li>
-</ol>
-<h3 id="如果在cluster模式："><a href="#如果在cluster模式：" class="headerlink" title="如果在cluster模式："></a>如果在cluster模式：</h3><p>lua脚本如果要使用redis数据库中的键，一定要通过参数传递进去，才能被分析出来，方便兼容新版本的集群功能。</p>
-<h3 id="redis的lua环境"><a href="#redis的lua环境" class="headerlink" title="redis的lua环境"></a>redis的lua环境</h3><p>为了保证lua脚本之间不会互相影响，redis服务器需要保证luz脚本无副作用，它做了一下措施：</p>
-<ol>
-<li>修改随机数函数，消除副作用；</li>
-<li>禁止lua脚本创建全局变量；</li>
-</ol>
-<p>但是好像遗漏了lua脚本对于已有全局变量的修改：</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">math.randomseed(10086) --change seed</span><br></pre></td></tr></table></figure>
-<p>应该是把这块儿交给程序员自行保证。</p>
-<h3 id="lua脚本特有的排序辅助"><a href="#lua脚本特有的排序辅助" class="headerlink" title="lua脚本特有的排序辅助"></a>lua脚本特有的排序辅助</h3><p>此外，为了获得确定性一致的结果，redis对集合的输出结果做了排序。<br>例如调用<code>SMEMBERS</code>后的结果，会经过排序辅助函数进行排序。<br>保证同样的数据集的输出结果相同。</p>
-<h2 id="lua-scripts字典"><a href="#lua-scripts字典" class="headerlink" title="lua_scripts字典"></a>lua_scripts字典</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">redisServer</span>&#123;</span></span><br><span class="line">    <span class="comment">// 整个服务器全局的lua校验和</span></span><br><span class="line">    dict *lua_scripts;</span><br><span class="line">    <span class="comment">// key: checksum</span></span><br><span class="line">    <span class="comment">// value: lua脚本代码</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>所有执行过或要求记住的lua校验和都会存下来。</p>
-<h2 id="EVAL命令实现"><a href="#EVAL命令实现" class="headerlink" title="EVAL命令实现"></a>EVAL命令实现</h2><p>3个步骤:</p>
-<ol>
-<li>计算校验和，然后用校验和定义一个函数f_校验和;</li>
-<li>&lt;校验和，脚本&gt;保存到<code>lua_scripts</code>字典；</li>
-<li>执行函数。</li>
-</ol>
-<p>比如校验和是a0e1ffff,函数名就是f_a0e1fffffffff。<br>然后利用函数的局部性，避免全局变量。</p>
-<h2 id="超时检测"><a href="#超时检测" class="headerlink" title="超时检测"></a>超时检测</h2><p>参数<code>lua-time-limit</code>。<br>lua脚本的运行时间是有上限的，避免编程错误的死循环。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/03/10/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B010-%E8%AE%A2%E9%98%85-%E4%BA%8B%E7%89%A9-lua/" data-id="ck96cxppj00hlmaam458w1wmn" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -987,6 +977,10 @@
       <ul>
         
           <li>
+            <a href="/2022/03/16/2022-03/cms%E7%9A%84gc%E8%A7%A6%E5%8F%91%E6%9D%A1%E4%BB%B6/">cms的gc触发条件</a>
+          </li>
+        
+          <li>
             <a href="/2022/03/14/2022-03/%E4%B8%AD%E6%96%AD%E6%A2%B3%E7%90%86/">java方法是否可中断梳理</a>
           </li>
         
@@ -1000,10 +994,6 @@
         
           <li>
             <a href="/2022/03/13/2022-03/UDP%E6%89%B9%E5%A4%84%E7%90%86%E4%BC%98%E5%8C%96-GSO-GRO/">UDP批处理优化-GSO/GRO</a>
-          </li>
-        
-          <li>
-            <a href="/2022/02/24/2022-02/%E4%B8%BA%E4%BB%80%E4%B9%88%E5%85%88hash%E5%90%8E%E5%8A%A0%E5%AF%86%E7%9A%84%E6%96%B9%E6%B3%95%E5%AE%B9%E6%98%93%E9%81%AD%E9%81%87padding%E6%94%BB%E5%87%BB/">为什么先hash后加密的方法容易遭遇padding攻击</a>
           </li>
         
       </ul>

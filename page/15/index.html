@@ -72,6 +72,106 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-01/Netty-in-action笔记-第1-2章" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/01/13/2018-01/Netty-in-action%E7%AC%94%E8%AE%B0-%E7%AC%AC1-2%E7%AB%A0/" class="article-date">
+  <time datetime="2018-01-13T14:16:24.000Z" itemprop="datePublished">2018-01-13</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/Netty/">Netty</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/01/13/2018-01/Netty-in-action%E7%AC%94%E8%AE%B0-%E7%AC%AC1-2%E7%AB%A0/">Netty in action笔记-第1-2章</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>Hadoop中用了Netty3,所以得看看这一块.<br>中文版的代码链接:<br><a href="https://github.com/ReactivePlatform/netty-in-action-cn" target="_blank" rel="noopener">https://github.com/ReactivePlatform/netty-in-action-cn</a></p>
+<h1 id="第一章-Netty介绍"><a href="#第一章-Netty介绍" class="headerlink" title="第一章 Netty介绍"></a>第一章 Netty介绍</h1><p>这一章主要介绍了一下Netty.<br>Netty封装了Java NIO中的一些复杂的细节和坑.</p>
+<h2 id="1-1-为什么使用Netty"><a href="#1-1-为什么使用Netty" class="headerlink" title="1.1 为什么使用Netty"></a>1.1 为什么使用Netty</h2><ol>
+<li>Netty提供了高层次抽象来简化TCP/UDP服务器的编程.<br>用Netty可以实现FTP,SMTP,HTTP,WebSocket,SPDY.</li>
+<li>Netty社区很活跃.</li>
+</ol>
+<h3 id="1-1-2-Netty框架的组成"><a href="#1-1-2-Netty框架的组成" class="headerlink" title="1.1.2 Netty框架的组成"></a>1.1.2 Netty框架的组成</h3><img src="/images/netty-chapter1.png" class="" width="400" height="600" title="Netty框架">
+
+<h2 id="1-2-异步设计"><a href="#1-2-异步设计" class="headerlink" title="1.2 异步设计"></a>1.2 异步设计</h2><p>Netty中主要使用了回调+Future. </p>
+<h3 id="1-2-1-回调"><a href="#1-2-1-回调" class="headerlink" title="1.2.1 回调"></a>1.2.1 回调</h3><p>异步处理的一种技术是回调. 就是在一些关心的事件上注册回调函数.<br>// 个人理解,回调应该是同步非阻塞.<br>// 同步: 客户端等待注册完成;<br>// 非阻塞: 服务端只是注册事件,返回得很快.</p>
+<h3 id="1-2-2-Future"><a href="#1-2-2-Future" class="headerlink" title="1.2.2 Future"></a>1.2.2 Future</h3><p><code>java.util.concurrent</code>包中附带的Future接口.使用<code>Executor</code>异步执行.<br>每传递一个Runnable对象到<code>ExecutorService.submit()</code>方法就会得到一个回调的Future,能使用它检测是否执行完成.<br>// 个人理解,Future其实是异步阻塞.<br>// 异步: 客户端不等待服务端执行结束,拿到Future后,需要自己轮询结果.<br>// 阻塞: 服务端不会主动回调,只是提供一个查询接口.</p>
+<h3 id="1-4-Netty相比NIO优点"><a href="#1-4-Netty相比NIO优点" class="headerlink" title="1.4 Netty相比NIO优点"></a>1.4 Netty相比NIO优点</h3><ol>
+<li>兼容性和跨平台性进一步提高;</li>
+<li>扩展ByteBuffer.<br><code>ByteBuffer</code>允许包装一个<code>byte[]</code>来获得一个实例,可以尽量减少内存拷贝.</li>
+<li>消除NIO的内存泄漏(jdk1.7以上)<br>NIO对于缓存区的聚合和分散操作可能造成内存泄漏.</li>
+</ol>
+<ul>
+<li><p>分散(Scatter)</p>
+<blockquote>
+<p>将<code>ScatteringByteBuffer</code>中的数据分散到多个<code>ByteBuffer</code>中.</p>
+</blockquote>
+</li>
+<li><p>聚合(Gather)</p>
+<blockquote>
+<p>将多个<code>ByteBuffer</code>的数据聚合到<code>GatheringByteChannel</code>中.</p>
+</blockquote>
+</li>
+</ul>
+<ol start="4">
+<li>解决epoll缺陷导致的100%cpu问题.</li>
+</ol>
+<h1 id="第二章-Netty核心概念-简单示例"><a href="#第二章-Netty核心概念-简单示例" class="headerlink" title="第二章 Netty核心概念,简单示例"></a>第二章 Netty核心概念,简单示例</h1><p>这章用的是Netty4.(但愿和Netty3同理)<br>上来先整了几段代码,而没有先说概念.<br>代码如下:<br><a href="https://github.com/xiaoyue26/netty-in-action-cn/blob/ChineseVersion/chapter2/Server/src/main/java/nia/chapter2/echoserver/EchoServer.java" target="_blank" rel="noopener">https://github.com/xiaoyue26/netty-in-action-cn/blob/ChineseVersion/chapter2/Server/src/main/java/nia/chapter2/echoserver/EchoServer.java</a></p>
+<p>可以看出服务端和客户端代码很类似,大致套路是:</p>
+<ol>
+<li>创建一个EventLoopGroup;//类似于召集一群干活的(线程池)</li>
+<li>创建一个Bootstrap(ServerBootstrap);// 类似于管家/控制面板</li>
+<li>Bootstrap配置上eventGroup,channel用的类,端口地址,处理链.</li>
+<li>绑定到端口开始工作. </li>
+</ol>
+<p>值得注意的是,所有涉及到Future的方法都是异步的,可以通过主动调用<code>sync</code>方法来进行同步等待.(当然也可以轮询)</p>
+<ul>
+<li>设计思想</li>
+</ul>
+<ol>
+<li>在Bootstrap上使用Future;</li>
+<li>在处理链上使用回调.</li>
+</ol>
+<ul>
+<li>具体细节</li>
+</ul>
+<ol>
+<li><code>ChannelInboundHandlerAdapter</code>:<br>处理完消息后需要释放资源;(<code>ByteBuf.release()</code>)</li>
+<li><code>SimpleChannelInboundHandler</code>:<br>完成channelRead0后自动释放消息.</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/01/13/2018-01/Netty-in-action%E7%AC%94%E8%AE%B0-%E7%AC%AC1-2%E7%AB%A0/" data-id="ck96cxpnm009cmaamc7dc0r1n" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/NIO/" rel="tag">NIO</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Netty/" rel="tag">Netty</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-01/java并发编程的艺术笔记-第二章" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/01/13/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF%E7%AC%94%E8%AE%B0-%E7%AC%AC%E4%BA%8C%E7%AB%A0/" class="article-date">
@@ -918,68 +1018,6 @@
 
 
   
-    <article id="post-2017-12/sqoop的SQL注入漏洞" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2017/12/01/2017-12/sqoop%E7%9A%84SQL%E6%B3%A8%E5%85%A5%E6%BC%8F%E6%B4%9E/" class="article-date">
-  <time datetime="2017-12-01T13:29:38.000Z" itemprop="datePublished">2017-12-01</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/hadoop/">hadoop</a>►<a class="article-category-link" href="/categories/hadoop/sqoop/">sqoop</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2017/12/01/2017-12/sqoop%E7%9A%84SQL%E6%B3%A8%E5%85%A5%E6%BC%8F%E6%B4%9E/">sqoop的SQL注入漏洞</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>早上起来发现公司有一个sqoop导表任务挂了,查看日志错误提示大致如下:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">INFO [main] org.apache.sqoop.mapreduce.db.DBRecordReader: Executing query: SELECT id,xxx FROM taname where ( udid &gt;&#x3D; &#39;abc&#39; ) AND ( udid &lt; &#39;xx&#39; ;select pg_sleep(3) --)</span><br><span class="line">ERROR 1064 (42000): You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near &#39;)&#39; at line 1</span><br></pre></td></tr></table></figure>
-
-<p>也就是说sqoop生成的查询语句错了,搜了一下源码没有发现哪里会生成</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> pg_sleep(<span class="number">3</span>)</span><br></pre></td></tr></table></figure>
-<p>这种语句,而且我们用的是mysql,按理说不应当生成pgsql.<br>而且这个导表任务也不是第一天上线了,此前一直是好好的.</p>
-<p>首先按照经验,调整了分隔符配置;查看表结构发现有blob字段,去掉了配置中的direct模式,均没有效果.<br>其次查job的其他日志,发现其他几个mapper都成功了,只有1个mapper挂了,于是调整并行度,把并行度调成1,导表任务就成功了.</p>
-<p>回过头来继续研究这个问题.<br>也就是说在分割表数据到几个mapper的时候,划分split的时候,查询语句错了.<br>报错的上一行的日志大致是:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">org.apache.hadoop.mapred.MapTask: Processing split: udid &gt;&#x3D; &#39;xxx&#39; AND udid &lt; &#39;xxx&#39;); select pg_sleep(3) -- &#39;</span><br></pre></td></tr></table></figure>
-
-<p>sqoop划分split的原理:</p>
-<ol>
-<li><code>--table</code> 按表导: 按主键最大最小取值划分范围,然后按中间值划分split.</li>
-<li><code>--query</code> : 按配置中的<code>-- split by</code>参数对应的列取max,min,然后同上.</li>
-</ol>
-<p>因此如果作为划分列的值中如果有脏数据,sqoop就会被sql注入.<br>因此导致了我们遇到的问题.<br>平时脏数据没有落在分割点上, 今天可能是由于脏数据的比例逐渐上升,终于落在了分割点上,因此导致了任务失败.<br>(<code>pg_sleep</code>一般是用于sql注入.)</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2017/12/01/2017-12/sqoop%E7%9A%84SQL%E6%B3%A8%E5%85%A5%E6%BC%8F%E6%B4%9E/" data-id="ck96cxpnm0098maam2w3x536l" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/sql%E6%B3%A8%E5%85%A5/" rel="tag">sql注入</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/sqoop/" rel="tag">sqoop</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1006,6 +1044,10 @@
       <ul>
         
           <li>
+            <a href="/2022/03/16/2022-03/cms%E7%9A%84gc%E8%A7%A6%E5%8F%91%E6%9D%A1%E4%BB%B6/">cms的gc触发条件</a>
+          </li>
+        
+          <li>
             <a href="/2022/03/14/2022-03/%E4%B8%AD%E6%96%AD%E6%A2%B3%E7%90%86/">java方法是否可中断梳理</a>
           </li>
         
@@ -1019,10 +1061,6 @@
         
           <li>
             <a href="/2022/03/13/2022-03/UDP%E6%89%B9%E5%A4%84%E7%90%86%E4%BC%98%E5%8C%96-GSO-GRO/">UDP批处理优化-GSO/GRO</a>
-          </li>
-        
-          <li>
-            <a href="/2022/02/24/2022-02/%E4%B8%BA%E4%BB%80%E4%B9%88%E5%85%88hash%E5%90%8E%E5%8A%A0%E5%AF%86%E7%9A%84%E6%96%B9%E6%B3%95%E5%AE%B9%E6%98%93%E9%81%AD%E9%81%87padding%E6%94%BB%E5%87%BB/">为什么先hash后加密的方法容易遭遇padding攻击</a>
           </li>
         
       </ul>

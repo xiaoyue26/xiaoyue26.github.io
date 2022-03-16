@@ -72,6 +72,84 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-apache配置笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2014/11/11/apache%E9%85%8D%E7%BD%AE%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2014-11-11T03:31:44.000Z" itemprop="datePublished">2014-11-11</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E9%85%8D%E7%BD%AE/">配置</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2014/11/11/apache%E9%85%8D%E7%BD%AE%E7%AC%94%E8%AE%B0/">apache配置笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p><code>cat /etc/httpd/conf/httpd.conf</code></p>
+<p>整个日志分为三部分：<br>(1)全局环境<br>(2)主配置：<br>虚拟主机没有处理的请求该如何处理；同时也是虚拟主机配置的缺省值；<br>(3)虚拟主机的设置，接收发往不同IP或不同域名的请求，用同一个apache2服务器进程进行处理。<br>没有框在<code>&lt;VirtualHost&gt;</code>标签里的设置会覆盖默认设置，所以尽量把自定义设置放在标签里。</p>
+<ol>
+<li><p><code>HostnameLookups Off</code><br>这个选项表示：日志记录来访者时，只记录IP。<br>如果<code>Off</code>改成<code>On</code>，那就每次要先去DNS查该IP对应的域名，太麻烦了。</p>
+</li>
+<li><p><code>DirectoryIndex index.html index.html.var index.php</code><br>当请求的地址对应的是一个目录时，apache就会在改目录下找index.html..等等。</p>
+</li>
+<li><p><code>ServerRoot /etc/httpd</code><br>此时，<code>logs/foo.log</code>(相对路径)被解释为<code>/etc/httpd/logs/foo.log</code><br>绝对路径<code>/logs/foo.log</code>依然还是<code>/logs/foo.log</code>。<br>若NFS下运行apache,则此配置比较复杂，需要参考：(或再百度下研究下)<br><a href="http://httpd.apache.org/docs/2.2/mod/mpm_common.html#lockfile" target="_blank" rel="noopener">http://httpd.apache.org/docs/2.2/mod/mpm_common.html#lockfile</a></p>
+</li>
+<li><p>MPM：多道处理模块，没研究。</p>
+</li>
+<li><p><code>User apache</code><br><code>Group apache</code></p>
+</li>
+</ol>
+<p>设置apache运行的用户。我猜测改成root，访问权限就全开了,但是也危险了。</p>
+<ol start="6">
+<li><code>DocumentRoot &quot;/var/www/html&quot;</code><br>放置服务文档的目录, 默认状态下,所有的请求都以这个目录为基础, 但是直接符号连接和别名可用于指向其他位置.</li>
+</ol>
+<ol start="7">
+<li><p><code>ServerAdmin  xxx@qq.com</code><br>这个指令用来设置服务器返回给客户端的错误信息中包含的管理员邮件地址。便于用户在收到错误信息后能及时与管理员取得联系。</p>
+</li>
+<li><p><code>ServerSignature On</code><br>方便调试，显示服务器信息；<br>安全的话，关掉，改成<code>Off</code>。</p>
+</li>
+<li><p>对于<code>Order deny,allow</code><br><code>Allow from all</code>的解释：<a href="http://zhanshenny.iteye.com/blog/1654332" target="_blank" rel="noopener">http://zhanshenny.iteye.com/blog/1654332</a></p>
+</li>
+<li><p><code>Options</code>这个子句用来说明一些主要的设置，目前可以使用的设置有<code>Indexes</code>，<code>Includes</code>，<code>FollowSymLinks</code>，<code>ExecCGI</code>，<code>MultiView</code>，当然还有两个最简单的选择就是<code>None</code>和<code>All</code>。<br>　　<code>None</code>是禁止所有选择，而<code>All</code> 允许上面的所有<code>Options</code>。一般我们主要关心的是<code>Indexes</code> 和<code>FollowSymLinks</code>。<code>Indexes</code> 是设定是否允许在目录下面没有<code>index.html</code> 的时候显示目录，而<code>FollowSymLinks</code> 决定是否可以通过符号连接跨越<code>DocumentRoot</code>。例如，尽管<code>/ftp</code> 不在<code>/home/httpd/html</code> 下面，但是我们仍然可以使用符号连接建立一个<code>/home/httpd/html/ftp</code>使得可以直接输入<code>http://mydomain.com/ftp</code> 来访问这个目录。<br>　　使用<code>FollowSymLinks</code> 的办法很简单，就是首先在合适的目录段落里面<code>Options Follow SymLinks</code>，（符号连接的上层就可以）然后建立一个别名：<br>　　<code>Alias /ftp/ &quot;home/httpd/html/ftp/&quot;</code><br>　　后面的是你建立的到<code>/ftp</code> 的符号连接。注意这一行应该位于所有目录段落之外。</p>
+</li>
+<li><p>虚拟主机配置：<br><a href="http://man.chinaunix.net/newsoft/ApacheManual/vhosts/name-based.html" target="_blank" rel="noopener">http://man.chinaunix.net/newsoft/ApacheManual/vhosts/name-based.html</a><br><a href="http://man.chinaunix.net/newsoft/ApacheManual/vhosts/examples.html" target="_blank" rel="noopener">http://man.chinaunix.net/newsoft/ApacheManual/vhosts/examples.html</a><br><a href="http://man.chinaunix.net/newsoft/ApacheManual/vhosts/mass.html" target="_blank" rel="noopener">http://man.chinaunix.net/newsoft/ApacheManual/vhosts/mass.html</a><br><a href="http://httpd.apache.org/docs/2.2/" target="_blank" rel="noopener">http://httpd.apache.org/docs/2.2/</a><br><code>Listen</code>指令并不实现虚拟主机，它只是告诉主服务器去监听哪些地址和端口。 如果没有<code>&lt;VirtualHost&gt;</code>指令，服务器对所有请求一视同仁； 但是如果有<code>&lt;VirtualHost&gt;</code>，则服务器会作出不同的响应。 要实现虚拟主机，首先必须告诉服务器需要监听的地址和端口， 然后为特定的地址和端口建立一个<code>&lt;VirtualHost&gt;</code>段。 注意，如果<code>&lt;VirtualHost&gt;</code>段设置为服务器没有监听的地址和端口， 则此段无效。</p>
+</li>
+<li><p>暂无需求，待续.</p>
+</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2014/11/11/apache%E9%85%8D%E7%BD%AE%E7%AC%94%E8%AE%B0/" data-id="ck96cxpkl000jmaam1ysphe2q" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E9%85%8D%E7%BD%AE/" rel="tag">配置</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-centos下nginx配置笔记" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2014/10/29/centos%E4%B8%8Bnginx%E9%85%8D%E7%BD%AE%E7%AC%94%E8%AE%B0/" class="article-date">
@@ -636,65 +714,6 @@
 
 
   
-    <article id="post-hello-world" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2013/08/14/hello-world/" class="article-date">
-  <time datetime="2013-08-14T13:19:22.000Z" itemprop="datePublished">2013-08-14</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/%E6%97%A5%E5%BF%97/">日志</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2013/08/14/hello-world/">Hello World</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>Welcome to <a href="http://hexo.io/" target="_blank" rel="noopener">Hexo</a>! This is your very first post. Check <a href="http://hexo.io/docs/" target="_blank" rel="noopener">documentation</a> for more info. If you get any problems when using Hexo, you can find the answer in <a href="http://hexo.io/docs/troubleshooting.html" target="_blank" rel="noopener">troubleshooting</a> or you can ask me on <a href="https://github.com/hexojs/hexo/issues" target="_blank" rel="noopener">GitHub</a>.</p>
-<h2 id="Quick-Start"><a href="#Quick-Start" class="headerlink" title="Quick Start"></a>Quick Start</h2><h3 id="Create-a-new-post"><a href="#Create-a-new-post" class="headerlink" title="Create a new post"></a>Create a new post</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo new <span class="string">"My New Post"</span></span><br></pre></td></tr></table></figure>
-
-<p>More info: <a href="http://hexo.io/docs/writing.html" target="_blank" rel="noopener">Writing</a></p>
-<h3 id="Run-server"><a href="#Run-server" class="headerlink" title="Run server"></a>Run server</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo server</span><br></pre></td></tr></table></figure>
-
-<p>More info: <a href="http://hexo.io/docs/server.html" target="_blank" rel="noopener">Server</a></p>
-<h3 id="Generate-static-files"><a href="#Generate-static-files" class="headerlink" title="Generate static files"></a>Generate static files</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo generate</span><br></pre></td></tr></table></figure>
-
-<p>More info: <a href="http://hexo.io/docs/generating.html" target="_blank" rel="noopener">Generating</a></p>
-<h3 id="Deploy-to-remote-sites"><a href="#Deploy-to-remote-sites" class="headerlink" title="Deploy to remote sites"></a>Deploy to remote sites</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo deploy</span><br></pre></td></tr></table></figure>
-
-<p>More info: <a href="http://hexo.io/docs/deployment.html" target="_blank" rel="noopener">Deployment</a></p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2013/08/14/hello-world/" data-id="ck96cxpl4001ymaam68ab1knt" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E9%85%8D%E7%BD%AE/" rel="tag">配置</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -721,6 +740,10 @@
       <ul>
         
           <li>
+            <a href="/2022/03/16/2022-03/cms%E7%9A%84gc%E8%A7%A6%E5%8F%91%E6%9D%A1%E4%BB%B6/">cms的gc触发条件</a>
+          </li>
+        
+          <li>
             <a href="/2022/03/14/2022-03/%E4%B8%AD%E6%96%AD%E6%A2%B3%E7%90%86/">java方法是否可中断梳理</a>
           </li>
         
@@ -734,10 +757,6 @@
         
           <li>
             <a href="/2022/03/13/2022-03/UDP%E6%89%B9%E5%A4%84%E7%90%86%E4%BC%98%E5%8C%96-GSO-GRO/">UDP批处理优化-GSO/GRO</a>
-          </li>
-        
-          <li>
-            <a href="/2022/02/24/2022-02/%E4%B8%BA%E4%BB%80%E4%B9%88%E5%85%88hash%E5%90%8E%E5%8A%A0%E5%AF%86%E7%9A%84%E6%96%B9%E6%B3%95%E5%AE%B9%E6%98%93%E9%81%AD%E9%81%87padding%E6%94%BB%E5%87%BB/">为什么先hash后加密的方法容易遭遇padding攻击</a>
           </li>
         
       </ul>
