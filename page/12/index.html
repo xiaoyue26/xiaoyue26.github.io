@@ -72,6 +72,72 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-08/堆外内存DirectByteBuffer" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/08/18/2018-08/%E5%A0%86%E5%A4%96%E5%86%85%E5%AD%98DirectByteBuffer/" class="article-date">
+  <time datetime="2018-08-18T12:52:15.000Z" itemprop="datePublished">2018-08-18</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/08/18/2018-08/%E5%A0%86%E5%A4%96%E5%86%85%E5%AD%98DirectByteBuffer/">堆外内存DirectByteBuffer</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>堆外内存: 不进行GC，防止JNI访问错位。</p>
+<h2 id="使用方式"><a href="#使用方式" class="headerlink" title="使用方式"></a>使用方式</h2><p>使用堆外内存的两种方式：<br>1.隐式：比如读写文件时：</p>
+<blockquote>
+</blockquote>
+<p>读文件: 文件(disk)=&gt;堆外内存=&gt;堆内内存;(过程中JVM保证不GC)<br>写文件: 堆内内存=&gt;堆外内存=&gt;文件(disk)。</p>
+<p>2.显式：使用<code>DirectByteBuffer</code>，直接在堆外分配空间，节省1倍空间，减去一倍拷贝操作。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 底层源码:</span></span><br><span class="line">unsafe.allocateMemory(size)</span><br></pre></td></tr></table></figure>
+
+<h2 id="Unsafe"><a href="#Unsafe" class="headerlink" title="Unsafe"></a>Unsafe</h2><p>java直接管理内存用的类,之所以叫<code>Unsafe</code>,意思是这些原来设计是给sun公司的人专用的，不是开放给外面的人用的，希望普通用户不要依赖它的接口，随时随着jdk版本升级而更改接口。// 如果不升级jdk，就不用care了。<br>并不是说这个类不安全。</p>
+<h2 id="使用场景"><a href="#使用场景" class="headerlink" title="使用场景"></a>使用场景</h2><p>(因为不gc)<br>生命期较长的大对象;<br>创建次数不会太多。<br>// 如直接的文件拷贝操作。</p>
+<h2 id="优点"><a href="#优点" class="headerlink" title="优点"></a>优点</h2><p>1.对于大内存有良好的伸缩性<br>2.对垃圾回收停顿的改善可以明显感觉到<br>3.在进程间可以共享，减少虚拟机间的复制</p>
+<h2 id="配置"><a href="#配置" class="headerlink" title="配置"></a>配置</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">-XX:MaxDirectMemorySize</span><br><span class="line">-Dsun.nio.MaxDirectMemorySize</span><br><span class="line">directMemory = Runtime.getRuntime().maxMemory()</span><br></pre></td></tr></table></figure>
+
+<h2 id="堆外内存回收"><a href="#堆外内存回收" class="headerlink" title="堆外内存回收"></a>堆外内存回收</h2><p>三种方法:<br>1.达到限制触发自动回收;(<code>system.gc()</code>) // 可能被配置<code>-XX:+DisableExplicitGC</code>关闭。</p>
+<p>2.手动调用<code>Unsafe</code>的<code>freeMemory</code>接口。</p>
+<p>3.使用<code>DirectByteBuffer</code>，它在初始化的时候会创建<code>Cleaner</code>这个Cleaner对象会在合适的时候执行<code>unsafe.freeMemory(address)</code>，从而回收这块堆外内存。</p>
+<img src="/images/2018-08/collect.png" class="" width="400" height="600" title="堆外内存回收">
+
+<p>4.手动调用<code>((DirectBuffer)bb).cleaner().clean();</code>.<br>// 内部还是调用<code>System.gc()</code>,所以一定不要<code>-XX:+DisableExplicitGC</code>。</p>
+<p>相关代码:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">Deallocator</span> <span class="keyword">implements</span> <span class="title">Runnable</span>  </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> Unsafe unsafe = Unsafe.getUnsafe();</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">long</span> address;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">long</span> size;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">int</span> capacity;</span><br><span class="line">    <span class="function"><span class="keyword">private</span> <span class="title">Deallocator</span><span class="params">(<span class="keyword">long</span> address, <span class="keyword">long</span> size, <span class="keyword">int</span> capacity)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">assert</span> (address != <span class="number">0</span>);</span><br><span class="line">        <span class="keyword">this</span>.address = address;</span><br><span class="line">        <span class="keyword">this</span>.size = size;</span><br><span class="line">        <span class="keyword">this</span>.capacity = capacity;</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (address == <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="comment">// Paranoia</span></span><br><span class="line">            <span class="keyword">return</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        unsafe.freeMemory(address);</span><br><span class="line">        address = <span class="number">0</span>;</span><br><span class="line">        Bits.unreserveMemory(size, capacity);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/08/18/2018-08/%E5%A0%86%E5%A4%96%E5%86%85%E5%AD%98DirectByteBuffer/" data-id="ck96cxpof00czmaambjgd4s9d" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-08/Forkjoin笔记" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/08/05/2018-08/Forkjoin%E7%AC%94%E8%AE%B0/" class="article-date">
@@ -886,159 +952,6 @@
 
 
   
-    <article id="post-2018-04/2-3树与红黑树" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/04/22/2018-04/2-3%E6%A0%91%E4%B8%8E%E7%BA%A2%E9%BB%91%E6%A0%91/" class="article-date">
-  <time datetime="2018-04-22T12:33:46.000Z" itemprop="datePublished">2018-04-22</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/">数据结构与算法</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/04/22/2018-04/2-3%E6%A0%91%E4%B8%8E%E7%BA%A2%E9%BB%91%E6%A0%91/">2-3树与红黑树</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="2-3树与红黑树"><a href="#2-3树与红黑树" class="headerlink" title="2-3树与红黑树"></a>2-3树与红黑树</h1><blockquote>
-<p>参考资料：<br>2-3树：<br><a href="http://blog.jobbole.com/79307/" target="_blank" rel="noopener">http://blog.jobbole.com/79307/</a><br>红黑树：<br><a href="http://blog.jobbole.com/79309/" target="_blank" rel="noopener">http://blog.jobbole.com/79309/</a></p>
-</blockquote>
-<h1 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h1><p><code>2-3树</code>和<code>红黑树</code>都是一种平衡查找树。其中<code>红黑树</code>是在<code>2-3树</code>的基础上，对于实现进行了简化，代价是逻辑上（表现图）增加了直接理解的难度。换句话说就是:</p>
-<ul>
-<li><code>2-3树</code>理解起来简单，实现起来代码比较麻烦(其实也可以实现);</li>
-<li><code>红黑树</code>理解起来稍微曲折，实现起来代码非常简单/简洁,如果用递归实现还非常优雅。</li>
-</ul>
-<p>因此我们应该先学<code>2-3树</code>，理解以后，带着简单理解去学<code>红黑树</code>的实现。上述参考资料里的两个链接对于两者的介绍非常值得一看。</p>
-<h1 id="2-3树"><a href="#2-3树" class="headerlink" title="2-3树"></a>2-3树</h1><h2 id="定义"><a href="#定义" class="headerlink" title="定义"></a>定义</h2><p>2-3树意思就是树里有两种节点:<br><code>2-node</code>: 保存1个key,左右2个子节点;<br><code>3-node</code>: 保存2个key,左中右3个子节点。</p>
-<p>和二叉查找树类似,如果中序遍历一个<code>2-3树</code>,可以得到一个排好序的序列。<br>在一个完全平衡的2-3树中,根节点到每一个叶节点距离相同.</p>
-<img src="/images/2018-04/a1.jpg" class="" width="400" height="600" title="tree23">
-
-<h2 id="平衡性"><a href="#平衡性" class="headerlink" title="平衡性:"></a>平衡性:</h2><p>直观上理解: 由于2-3树的<code>3-node</code>具有缓冲作用,而且它的分裂逻辑可以将不平衡因子传递到父节点(还可以继续),最终消除;<br>严谨证明: 还没找到相关论文,理论上它与AA树等价,所以可以按left-leaning red-black tree/LLRB的证明来完成。</p>
-<h2 id="查找"><a href="#查找" class="headerlink" title="查找"></a>查找</h2><p>和B树类似,按key跳转子节点查找就好了.</p>
-<h2 id="插入"><a href="#插入" class="headerlink" title="插入"></a>插入</h2><h3 id="往2-node节点插入"><a href="#往2-node节点插入" class="headerlink" title="往2-node节点插入"></a>往2-node节点插入</h3><img src="/images/2018-04/a2.jpg" class="" width="400" height="600" title="tree23insert2">
-<p>插入K,把2-node变成3-node。</p>
-<h3 id="往3-node节点插入"><a href="#往3-node节点插入" class="headerlink" title="往3-node节点插入"></a>往3-node节点插入</h3><p><strong>1. 只有一个3-node节点</strong></p>
-<img src="/images/2018-04/a3.jpg" class="" width="400" height="600" title="tree23insert3">
-<p>插入S,把3-node变成4-node,把4-node分裂成3个2-node,中间key拉升做根节点.（无法向上传导,根分裂,高度+1）</p>
-<p><strong>2. 父节点是2-node,节点是3-node</strong></p>
-<img src="/images/2018-04/a4.jpg" class="" width="400" height="600" title="tree23insert4">
-<p>插入Z:</p>
-<ol>
-<li>把3-node变成4-node;</li>
-<li>把中间key往上扔,传递给父节点;</li>
-<li>父节点从<code>2-node</code>=&gt;<code>3-node</code>。</li>
-</ol>
-<p><strong>3. 父节点是3-node,节点是3-node</strong></p>
-<img src="/images/2018-04/a5.jpg" class="" width="400" height="600" title="tree23insert5">
-<p>思路和之前相似,把中间元素往上传导,直到遇到父节点是2-node的。<br>如果连根节点也是3-node，就进行根节点分裂，高度+1。</p>
-<h2 id="性能"><a href="#性能" class="headerlink" title="性能"></a>性能</h2><p>最坏情况,所有节点都是2-node,因此最坏时间复杂度为O(logN).<br>最好情况,所有节点都是3-node,因此最好时间复杂度为O(log3N)=0.631logN.</p>
-<h1 id="红黑树"><a href="#红黑树" class="headerlink" title="红黑树"></a>红黑树</h1><p>(这里其实是left-leaning red-black tree/LLRB)<br><code>2-3树</code>中有<code>3-node</code>，红黑树则是将其全部转化成二叉树来实现。<br>参考资料2中同时出现红色节点与红色连线,容易引起混淆. 这里统一定义一下, 红色本质上是指节点,红黑信息实现上存放在红子节点中. 之所以有红色连线,主要是为了在图里画,可以更清晰得看出有两个红子节点的父节点. </p>
-<p>下文中:</p>
-<ol>
-<li>图中: 以红色连线表示子节点是红节点;️</li>
-<li>实现中: 红色信息存放在子节点中. （并不会存指向父节点的指针）</li>
-</ol>
-<p>具体实现:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Node</span></span></span><br><span class="line"><span class="class"></span>&#123;</span><br><span class="line">    <span class="keyword">public</span> Node Left &#123; get; set; &#125; <span class="comment">// 左子</span></span><br><span class="line">    <span class="keyword">public</span> Node Right &#123; get; set; &#125; <span class="comment">// 右子</span></span><br><span class="line">    <span class="keyword">public</span> TKey Key &#123; get; set; &#125; <span class="comment">// key</span></span><br><span class="line">    <span class="keyword">public</span> TValue Value &#123; get; set; &#125; <span class="comment">// 数据</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">int</span> Number &#123; get; set; &#125; <span class="comment">// 当前子树的size,总共有多少节点 </span></span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 当前节点是红还是黑</span></span><br><span class="line">    <span class="keyword">public</span> bool Color &#123; get; set; &#125;  </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p><strong>定义:</strong></p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">1. 所有节点分为红节点和黑节点;</span><br><span class="line">2. 表现图中一个红节点的画法: 把它和父节点之间的连线画成红色。</span><br><span class="line">(看图的时候,一条红线:子节点是红节点)</span><br></pre></td></tr></table></figure>
-
-<p><strong>规则:</strong></p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. 所有节点,只有左子节点可以是红节点, 右子节点只能是黑;(通过旋转保证)</span><br><span class="line">2. 红色节点不能相连; &#x2F;&#x2F; 父节点红色,子节点不能也红色</span><br><span class="line">3. 不能左右都是红节点. &#x2F;&#x2F; 左右子节点不能都是红色</span><br><span class="line">(2，3两个规则,图上看就是一个节点不能有两个红色连线)</span><br></pre></td></tr></table></figure>
-
-<img src="/images/2018-04/2.jpg" class="" width="400" height="600" title="red2">
-<p>如上图所示，红黑树其实是2-3树的另一种表现形式。将红黑树的红色连线水平绘制，就可以把水平的两个节点整体看作一个<code>3-node</code>.<br>从实现上看，也就是把节点和它的红子节点看作一个<code>3-node</code>。<br>从这个思路来看,也就能理解上述的3条规则了, 如果违反了任意一条,都会导致节点与其红子节点合并成一个整体来看待的时候, 变成<code>4-node</code>甚至<code>5-node</code>更多.<br>只有满足所有规则, 才能保证合并来看的时候最多是一个<code>3-node</code>。</p>
-<h2 id="查找-1"><a href="#查找-1" class="headerlink" title="查找"></a>查找</h2><p>由于本质上还是二叉查找树,查找的代码与普通二叉查找树一样.<br>只不过由于比较平衡,性能有保障。<br>(如果把红黑树看作<code>2-3树</code>的话,查找过程的差别就在于遇到<code>3-node</code>的时候,先找的是最左的key,然后通过红子节点查找了中间<code>key</code>。)</p>
-<h2 id="平衡化"><a href="#平衡化" class="headerlink" title="平衡化"></a>平衡化</h2><p>为了维持上文中的规则，也为了红黑树保持平衡,保障性能,需要进行一些平衡操作。</p>
-<h2 id="旋转"><a href="#旋转" class="headerlink" title="旋转"></a>旋转</h2><p>左旋: 输入父节点;<br>右旋: 输入父节点.</p>
-<h3 id="左旋"><a href="#左旋" class="headerlink" title="左旋"></a>左旋</h3><img src="/images/2018-04/3.jpg" class="" width="400" height="600" title="red3">
-<img src="/images/2018-04/4.jpg" class="" width="400" height="600" title="red4">
-<img src="/images/2018-04/5.gif" class="" width="400" height="600" title="red5">
-<p>左旋实现:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//左旋转</span></span><br><span class="line"><span class="function"><span class="keyword">private</span> Node <span class="title">RotateLeft</span><span class="params">(Node h)</span><span class="comment">// 输入父节点</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    Node x = h.Right;</span><br><span class="line">    <span class="comment">//将x的左节点复制给h右节点</span></span><br><span class="line">    h.Right = x.Left;</span><br><span class="line">    <span class="comment">//将h复制给x右节点</span></span><br><span class="line">    x.Left = h;</span><br><span class="line">    x.Color = h.Color;</span><br><span class="line">    h.Color = RED;</span><br><span class="line">    <span class="keyword">return</span> x;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>注意: 子节点继承父节点的颜色.<br>父节点变为红色。</p>
-<h3 id="右旋"><a href="#右旋" class="headerlink" title="右旋"></a>右旋</h3><img src="/images/2018-04/6.jpg" class="" width="400" height="600" title="red6">
-<img src="/images/2018-04/7.jpg" class="" width="400" height="600" title="red7">
-<img src="/images/2018-04/8.gif" class="" width="400" height="600" title="red8">
-<p>右旋实现:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//右旋转</span></span><br><span class="line"><span class="function"><span class="keyword">private</span> Node <span class="title">RotateRight</span><span class="params">(Node h)</span><span class="comment">// 输入父节点</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    Node x = h.Left;</span><br><span class="line">    h.Left = x.Right;</span><br><span class="line">    x.Right = h;</span><br><span class="line"></span><br><span class="line">    x.Color = h.Color;</span><br><span class="line">    h.Color = RED;</span><br><span class="line">    <span class="keyword">return</span> x;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>注意: 子节点继承父节点的颜色.<br>父节点变为红色。</p>
-<h2 id="颜色反转"><a href="#颜色反转" class="headerlink" title="颜色反转"></a>颜色反转</h2><p>如果违反规则2，也就是两个子节点都是红色节点,也需要调整/平衡化.如下图所示的话,其实就是把父节点变成红色，两个子节点变成黑色. 很简单。</p>
-<img src="/images/2018-04/9.jpg" class="" width="400" height="600" title="red9">
-<img src="/images/2018-04/10.jpg" class="" width="400" height="600" title="red10">
-
-
-<h2 id="插入-1"><a href="#插入-1" class="headerlink" title="插入"></a>插入</h2><h3 id="往2-node底部插入"><a href="#往2-node底部插入" class="headerlink" title="往2-node底部插入"></a>往2-node底部插入</h3><p>规则:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">新插入的节点标记为红色.</span><br></pre></td></tr></table></figure>
-<img src="/images/2018-04/11.jpg" class="" width="400" height="600" title="red11">
-<p>左图不需要额外操作;<br>右图需要一次左旋.</p>
-<h3 id="往3-node底部插入"><a href="#往3-node底部插入" class="headerlink" title="往3-node底部插入"></a>往3-node底部插入</h3><ol>
-<li>往只有两个节点的树中插入: （注意形状一定是左偏的）<br>规则:<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">新插入的节点标记为红色.</span><br></pre></td></tr></table></figure>
-<img src="/images/2018-04/12.jpg" class="" width="400" height="600" title="red12">
-左图需要1次颜色反转;<br>中图需要1次右旋,1次颜色反转;<br>右图需要1次左旋,1次右旋,1次颜色反转.</li>
-</ol>
-<p>简单总结一下平衡化的技巧如下:(按顺序检查,每次调整后回到1从头重复检查)</p>
-<ol>
-<li>如果左右都是红,用颜色反转;</li>
-<li>如果右子是红,左旋;</li>
-<li>如果连续两个左子是红,(父子都是红节点),右旋,然后颜色反转.</li>
-</ol>
-<p>更多案例:</p>
-<img src="/images/2018-04/13.jpg" class="" width="400" height="600" title="red13">
-<img src="/images/2018-04/14.jpg" class="" width="400" height="600" title="red14">
-<p>注意图14中到红色传递到根节点M后,由于根节点没有父节点,它的红黑属性不再重要,为了维持不打破上述的规则,定义根节点始终为黑. 如果通过颜色反转或者其他平衡化操作,把根节点变红以后,可以视作根节点还是黑.(强制根节点黑)</p>
-<h2 id="Put实现代码"><a href="#Put实现代码" class="headerlink" title="Put实现代码"></a>Put实现代码</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> override <span class="keyword">void</span> <span class="title">Put</span><span class="params">(TKey key, TValue value)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    root = Put(root, key, value);</span><br><span class="line">    root.Color = BLACK; <span class="comment">// 强制根节点黑</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">private</span> Node <span class="title">Put</span><span class="params">(Node h, TKey key, TValue value)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (h == <span class="keyword">null</span>) <span class="keyword">return</span> <span class="keyword">new</span> Node(key, value, <span class="number">1</span>, RED);</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 1. 进行二叉树插入: </span></span><br><span class="line">    <span class="keyword">int</span> cmp = key.CompareTo(h.Key);</span><br><span class="line">    <span class="keyword">if</span> (cmp &lt; <span class="number">0</span>) h.Left = Put(h.Left, key, value);</span><br><span class="line">    <span class="keyword">else</span> <span class="keyword">if</span> (cmp &gt; <span class="number">0</span>) h.Right = Put(h.Right, key, value);</span><br><span class="line">    <span class="keyword">else</span> h.Value = value;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 2. 进行平衡化:</span></span><br><span class="line">    <span class="keyword">if</span> (IsRed(h.Right) &amp;&amp; !IsRed(h.Left)) h = RotateLeft(h); <span class="comment">// 右边红节点</span></span><br><span class="line">    <span class="keyword">if</span> (IsRed(h.left) &amp;&amp; IsRed(h.Left.Left)) h = RotateRight(h); <span class="comment">// 我个人理解的写法,连续红节点</span></span><br><span class="line">    <span class="comment">// if (IsRed(h.Right) &amp;&amp; IsRed(h.Left.Left)) h = RotateRight(h); //  原文写法,我感觉不对	</span></span><br><span class="line">    <span class="keyword">if</span> (IsRed(h.Left) &amp;&amp; IsRed(h.Right)) h = FlipColor(h);<span class="comment">// 颜色反转</span></span><br><span class="line"></span><br><span class="line">    h.Number = Size(h.Left) + Size(h.Right) + <span class="number">1</span>; <span class="comment">// 更新子树size信息</span></span><br><span class="line">    <span class="keyword">return</span> h;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">int</span> <span class="title">Size</span><span class="params">(Node node)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (node == <span class="keyword">null</span>) <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">return</span> node.Number;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>注意到插入操作是自顶向下(<code>dfs</code>递归调用)进行的,由于<code>dfs</code>深度优先,可以先从子节点检查平衡/调整.因此不平衡从子节点传递到父节点,可以逐步调整传递到根节点,平衡操作也贯穿这个层层返回的过程,从平衡树的底层一直进行到根节点为止.</p>
-<h2 id="性能-1"><a href="#性能-1" class="headerlink" title="性能"></a>性能</h2><p>满足上述规则后, 红黑树能保障所有操作最坏复杂度为O(logN)。</p>
-<ul>
-<li>最坏情况:<br>除了最左侧路径,其他全部是<code>3-node</code>组成. 红黑相间的路径长度是全黑路径的两倍.</li>
-</ul>
-<p>特性:<br>红黑树从根节点到叶子节点的路径中,全黑路径是平衡的.</p>
-<h2 id="应用"><a href="#应用" class="headerlink" title="应用"></a>应用</h2><p>主要是各种map/符号表:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Java: TreeMap,TreeSet,HashMap,ConcurrentHashMap</span><br><span class="line">C++: STL: map,multimap,multiset</span><br><span class="line">.Net: SortedDictionary,SortedSet</span><br><span class="line">Linux: epoll,防火墙规则表</span><br></pre></td></tr></table></figure>
-
-<h2 id="核心规则"><a href="#核心规则" class="headerlink" title="核心规则"></a>核心规则</h2><ol>
-<li>不能两个左右子节点都是红节点; (颜色反转)</li>
-<li>父子节点不能都是红节点;(右旋)</li>
-<li>右节点不能是红节点;(左旋)</li>
-<li>新插入的节点是红节点;(新红)</li>
-<li>根节点强制是黑节点.(根黑)</li>
-</ol>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/04/22/2018-04/2-3%E6%A0%91%E4%B8%8E%E7%BA%A2%E9%BB%91%E6%A0%91/" data-id="ck96cxpo300bnmaam6m9gf9f4" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/2-3%E6%A0%91/" rel="tag">2-3树</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/" rel="tag">数据结构与算法</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E7%BA%A2%E9%BB%91%E6%A0%91/" rel="tag">红黑树</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1065,6 +978,10 @@
       <ul>
         
           <li>
+            <a href="/2022/03/25/2022-03/G1%E8%B0%83%E4%BC%98-%E5%A4%8D%E6%9D%82%E4%B8%9A%E5%8A%A1%E6%B2%BB%E7%90%86%E5%B0%8F%E8%AE%B0/">G1调优-复杂业务治理小记</a>
+          </li>
+        
+          <li>
             <a href="/2022/03/16/2022-03/cms%E7%9A%84gc%E8%A7%A6%E5%8F%91%E6%9D%A1%E4%BB%B6/">cms的gc触发条件</a>
           </li>
         
@@ -1078,10 +995,6 @@
         
           <li>
             <a href="/2022/03/13/2022-03/ss%E5%91%BD%E4%BB%A4/">ss命令</a>
-          </li>
-        
-          <li>
-            <a href="/2022/03/13/2022-03/UDP%E6%89%B9%E5%A4%84%E7%90%86%E4%BC%98%E5%8C%96-GSO-GRO/">UDP批处理优化-GSO/GRO</a>
           </li>
         
       </ul>

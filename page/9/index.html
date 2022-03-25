@@ -72,6 +72,79 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-01/redis的embstr为什么是39B" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/01/19/2019-01/redis%E7%9A%84embstr%E4%B8%BA%E4%BB%80%E4%B9%88%E6%98%AF39B/" class="article-date">
+  <time datetime="2019-01-19T02:47:50.000Z" itemprop="datePublished">2019-01-19</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/01/19/2019-01/redis%E7%9A%84embstr%E4%B8%BA%E4%BB%80%E4%B9%88%E6%98%AF39B/">redis的embstr为什么是39B</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>回顾字符串的三种实现:</p>
+<ul>
+<li><code>int</code>: long能存下的数会用数字编码;</li>
+<li><code>embstr</code>: &lt;=39B的字符串，或者浮点数，会用<code>embstr</code>编码;</li>
+<li><code>raw</code>: &gt;39B的字符串，会用<code>raw</code>编码,也就是简单动态字符串(<code>SDS</code>)。<img src="/images/2019-01/raw.png" class="" width="800" height="1200" title="raw">
+<img src="/images/2019-01/embstr.png" class="" width="800" height="1200" title="embstr">
+
+</li>
+</ul>
+<p><code>embstr</code>顾名思义就是嵌入式字符串，把元数据和实际数据存放在一起，好处是这样可以对缓存友好，可以减少一次寻址。坏处是只能支持短字符串。<br>这里为啥是39B作为切换条件呢?(而且没有看到参数进行调节)，这其实是存储结构决定的。</p>
+<blockquote>
+<p>embstr本质上是利用了元数据存储空间里的剩余空间存储字符串。</p>
+</blockquote>
+<p>所以当元数据剩了40B，<code>embstr</code>就最多只能存39B了(还要留1B存<code>\0</code>)。<br>回顾元数据结构：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> LRU_BITS 24</span></span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">redisObject</span> &#123;</span>    <span class="comment">// redis对象</span></span><br><span class="line">    <span class="keyword">unsigned</span> type:<span class="number">4</span>;    <span class="comment">// 类型,4bit</span></span><br><span class="line">    <span class="keyword">unsigned</span> encoding:<span class="number">4</span>;    <span class="comment">// 编码,4bit</span></span><br><span class="line">    <span class="keyword">unsigned</span> lru:LRU_BITS; <span class="comment">/* lru time (relative to server.lruclock) */</span> <span class="comment">// 24bit</span></span><br><span class="line">    <span class="keyword">int</span> refcount;   <span class="comment">// 引用计数</span></span><br><span class="line">    <span class="keyword">void</span> *ptr;  <span class="comment">// 指向各种基础类型的指针</span></span><br><span class="line">&#125; robj;</span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">sdshdr</span> &#123;</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> len;</span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> <span class="built_in">free</span>;</span><br><span class="line">    <span class="keyword">char</span> buf[];</span><br><span class="line">&#125;sds;</span><br></pre></td></tr></table></figure>
+<img src="/images/2019-01/sizeof0.png" class="" width="800" height="1200" title="sizeof0">
+<img src="/images/2019-01/sizeof1.png" class="" width="800" height="1200" title="sizeof0">
+
+<h2 id="redisObject占16B"><a href="#redisObject占16B" class="headerlink" title="redisObject占16B"></a>redisObject占16B</h2><p><code>16B=(4bit+4bit+24bit)+4B+8B= (32/8)B+12B</code></p>
+<h2 id="sdshdr占8B"><a href="#sdshdr占8B" class="headerlink" title="sdshdr占8B"></a>sdshdr占8B</h2><p><code>8=4+4+0</code><br>注意这里的<code>char buf[]</code>不占空间，当里面存放字符串的时候才占空间，而且末尾需要1B存放<code>\0</code>。</p>
+<p>按最小分配64B来算，剩余空间就是64B-16B-8B-1B=39B。</p>
+<p>但是，如果仔细看看这里<code>sdshdr</code>里的，两个4B的长度：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">unsigned</span> <span class="keyword">int</span> len;</span><br><span class="line"><span class="keyword">unsigned</span> <span class="keyword">int</span> <span class="built_in">free</span>;</span><br></pre></td></tr></table></figure>
+<p>想一下，这里最大长度也才39,根本不需要这么大的数据结构来存长度，因此其实还是有压榨空间的。</p>
+<h1 id="从39B到44B"><a href="#从39B到44B" class="headerlink" title="从39B到44B"></a>从39B到44B</h1><p>新版本的<code>embstr</code>已经不是39B了，改成了44B。本质上是元数据的剩余空间再次发生了变化。<br>新版本的元数据(从<code>SDS_TYPE_5</code>到<code>SDS_TYPE_64</code>5个)：<br>(<a href="https://github.com/antirez/redis/blob/unstable/src/sds.h" target="_blank" rel="noopener">https://github.com/antirez/redis/blob/unstable/src/sds.h</a>)</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* Note: sdshdr5 is never used, we just access the flags byte directly.</span></span><br><span class="line"><span class="comment"> * However is here to document the layout of type 5 SDS strings. */</span></span><br><span class="line"><span class="class"><span class="keyword">struct</span> __<span class="title">attribute__</span> ((__<span class="title">packed__</span>)) <span class="title">sdshdr5</span> &#123;</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> flags; <span class="comment">/* 3 lsb of type, and 5 msb of string length */</span></span><br><span class="line">    <span class="keyword">char</span> buf[];</span><br><span class="line">&#125;;</span><br><span class="line"><span class="class"><span class="keyword">struct</span> __<span class="title">attribute__</span> ((__<span class="title">packed__</span>)) <span class="title">sdshdr8</span> &#123;</span></span><br><span class="line">    <span class="keyword">uint8_t</span> len; <span class="comment">/* used */</span></span><br><span class="line">    <span class="keyword">uint8_t</span> alloc; <span class="comment">/* excluding the header and null terminator */</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> flags; <span class="comment">/* 3 lsb of type, 5 unused bits */</span></span><br><span class="line">    <span class="keyword">char</span> buf[];</span><br><span class="line">&#125;;</span><br><span class="line"><span class="class"><span class="keyword">struct</span> __<span class="title">attribute__</span> ((__<span class="title">packed__</span>)) <span class="title">sdshdr16</span> &#123;</span></span><br><span class="line">    <span class="keyword">uint16_t</span> len; <span class="comment">/* used */</span></span><br><span class="line">    <span class="keyword">uint16_t</span> alloc; <span class="comment">/* excluding the header and null terminator */</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> flags; <span class="comment">/* 3 lsb of type, 5 unused bits */</span></span><br><span class="line">    <span class="keyword">char</span> buf[];</span><br><span class="line">&#125;;</span><br><span class="line"><span class="class"><span class="keyword">struct</span> __<span class="title">attribute__</span> ((__<span class="title">packed__</span>)) <span class="title">sdshdr32</span> &#123;</span></span><br><span class="line">    <span class="keyword">uint32_t</span> len; <span class="comment">/* used */</span></span><br><span class="line">    <span class="keyword">uint32_t</span> alloc; <span class="comment">/* excluding the header and null terminator */</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> flags; <span class="comment">/* 3 lsb of type, 5 unused bits */</span></span><br><span class="line">    <span class="keyword">char</span> buf[];</span><br><span class="line">&#125;;</span><br><span class="line"><span class="class"><span class="keyword">struct</span> __<span class="title">attribute__</span> ((__<span class="title">packed__</span>)) <span class="title">sdshdr64</span> &#123;</span></span><br><span class="line">    <span class="keyword">uint64_t</span> len; <span class="comment">/* used */</span></span><br><span class="line">    <span class="keyword">uint64_t</span> alloc; <span class="comment">/* excluding the header and null terminator */</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> flags; <span class="comment">/* 3 lsb of type, 5 unused bits */</span></span><br><span class="line">    <span class="keyword">char</span> buf[];</span><br><span class="line">&#125;;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>其中<code>sdshdr5</code>其实没有用，用的是<code>sdshdr8</code>，因此这里的元数据结构从8B下降到3B，<code>embstr</code>可用空间也就从39B上升到44B了。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/01/19/2019-01/redis%E7%9A%84embstr%E4%B8%BA%E4%BB%80%E4%B9%88%E6%98%AF39B/" data-id="ck96cxpp300fnmaama6uv3u8r" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2019-01/redis4的LFU" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/01/12/2019-01/redis4%E7%9A%84LFU/" class="article-date">
@@ -1165,71 +1238,6 @@
 
 
   
-    <article id="post-2018-11/jvm启动的几个线程作用" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/11/27/2018-11/jvm%E5%90%AF%E5%8A%A8%E7%9A%84%E5%87%A0%E4%B8%AA%E7%BA%BF%E7%A8%8B%E4%BD%9C%E7%94%A8/" class="article-date">
-  <time datetime="2018-11-27T04:01:16.000Z" itemprop="datePublished">2018-11-27</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/jvm/">jvm</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/11/27/2018-11/jvm%E5%90%AF%E5%8A%A8%E7%9A%84%E5%87%A0%E4%B8%AA%E7%BA%BF%E7%A8%8B%E4%BD%9C%E7%94%A8/">jvm启动的几个线程作用</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="jvm启动的几个线程作用"><a href="#jvm启动的几个线程作用" class="headerlink" title="jvm启动的几个线程作用:"></a>jvm启动的几个线程作用:</h1><ol>
-<li><code>Signal Dispatcher</code>: 接受各种信号;</li>
-<li><code>Attach Listener</code>: 监听各种请求的socket连接,把执行的操作扔给<code>VM Thread</code>。<br>这里的请求包括:<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">static</span> AttachOperationFunctionInfo funcs[] = &#123;</span><br><span class="line">  &#123; <span class="string">"agentProperties"</span>,  get_agent_properties &#125;,</span><br><span class="line">  &#123; <span class="string">"datadump"</span>,         data_dump &#125;,</span><br><span class="line">  &#123; <span class="string">"dumpheap"</span>,         dump_heap &#125;,</span><br><span class="line">  &#123; <span class="string">"load"</span>,             JvmtiExport::load_agent_library &#125;,</span><br><span class="line">  &#123; <span class="string">"properties"</span>,       get_system_properties &#125;,</span><br><span class="line">  &#123; <span class="string">"threaddump"</span>,       thread_dump &#125;,</span><br><span class="line">  &#123; <span class="string">"inspectheap"</span>,      heap_inspection &#125;,</span><br><span class="line">  &#123; <span class="string">"setflag"</span>,          set_flag &#125;,</span><br><span class="line">  &#123; <span class="string">"printflag"</span>,        print_flag &#125;,</span><br><span class="line">  &#123; <span class="string">"jcmd"</span>,             jcmd &#125;,</span><br><span class="line">  &#123; NULL,               NULL &#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure></li>
-<li><code>VM Thread</code>: 线程母体,最原始的线程,单例,里面有个队列，存放上面的操作,它负责loop处理队列中的操作.（包括对其他线程的创建，分配和对象的清理，cms-mark等工作）</li>
-<li><code>CompilerThread0</code>: JIT动态编译线程;</li>
-<li><code>ConcurrentMark-SweepGCThread</code>: CMS垃圾收集线程;</li>
-<li><code>DestroyJavaVM</code>: 负责卸载JVM的线程;</li>
-<li><code>ContainerBackground Processor</code>: JBoss守护线程;</li>
-<li><code>Dispatcher-Thread-3</code>: Log4j异步日志守护线程;</li>
-<li><code>Finalizer</code>: 垃圾回收守护线程;</li>
-<li><code>Gang worker#0</code>: 新生代回收线程;</li>
-<li><code>GC Daemon</code>: RMI远程GC线程(调用<code>system.gc()</code>);</li>
-<li><code>Low MemoryDetector</code>: 发现可用内存低，则分配新的内存空间;</li>
-<li><code>process reaper</code>: 执行os命令;</li>
-<li><code>Reference Handler</code>: 处理引用对象本身（软、弱、虚引用）的垃圾回收问题;</li>
-<li><code>SurrogateLockerThread</code>: CMS垃圾回收;</li>
-<li><code>VM Periodic Task Thread</code>: 定期的内存监控、JVM运行状况监控。</li>
-</ol>
-<p>参考: <a href="http://ifeve.com/jvm-thread/" target="_blank" rel="noopener">http://ifeve.com/jvm-thread/</a></p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/11/27/2018-11/jvm%E5%90%AF%E5%8A%A8%E7%9A%84%E5%87%A0%E4%B8%AA%E7%BA%BF%E7%A8%8B%E4%BD%9C%E7%94%A8/" data-id="ck96cxpot00emmaamer9w2zuj" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/jvm/" rel="tag">jvm</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1256,6 +1264,10 @@
       <ul>
         
           <li>
+            <a href="/2022/03/25/2022-03/G1%E8%B0%83%E4%BC%98-%E5%A4%8D%E6%9D%82%E4%B8%9A%E5%8A%A1%E6%B2%BB%E7%90%86%E5%B0%8F%E8%AE%B0/">G1调优-复杂业务治理小记</a>
+          </li>
+        
+          <li>
             <a href="/2022/03/16/2022-03/cms%E7%9A%84gc%E8%A7%A6%E5%8F%91%E6%9D%A1%E4%BB%B6/">cms的gc触发条件</a>
           </li>
         
@@ -1269,10 +1281,6 @@
         
           <li>
             <a href="/2022/03/13/2022-03/ss%E5%91%BD%E4%BB%A4/">ss命令</a>
-          </li>
-        
-          <li>
-            <a href="/2022/03/13/2022-03/UDP%E6%89%B9%E5%A4%84%E7%90%86%E4%BC%98%E5%8C%96-GSO-GRO/">UDP批处理优化-GSO/GRO</a>
           </li>
         
       </ul>
