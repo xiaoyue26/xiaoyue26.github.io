@@ -18,7 +18,7 @@
 <meta property="og:image" content="http://xiaoyue26.github.io/images/2022-05/w_tiny_lfu_2.png">
 <meta property="og:image" content="http://xiaoyue26.github.io/images/2022-05/w_tiny_lfu_3.png">
 <meta property="article:published_time" content="2022-05-31T03:36:23.000Z">
-<meta property="article:modified_time" content="2022-05-31T13:08:53.389Z">
+<meta property="article:modified_time" content="2022-05-31T13:10:34.841Z">
 <meta property="article:author" content="风梦七">
 <meta property="article:tag" content="java">
 <meta property="article:tag" content="lfu">
@@ -142,11 +142,11 @@
 <li>计数器数量为: e/0.002 的上界 = 1360;</li>
 <li>哈希函数的数量为: ln(1/0.01) 的上界 = 5;<br>当计数器占4bit，则整个计数组件占空间 = 1360<em>5</em>4 bit= 约3.5KB。</li>
 </ol>
-<h3 id="动态访问模式（访问key的分布变化）：Freshness-Mechanism-保鲜机制"><a href="#动态访问模式（访问key的分布变化）：Freshness-Mechanism-保鲜机制" class="headerlink" title="动态访问模式（访问key的分布变化）：Freshness Mechanism(保鲜机制)"></a>动态访问模式（访问key的分布变化）：Freshness Mechanism(保鲜机制)</h3><p>统计新增key到CM-Sketch计数器的次数w，一旦w达到阈值W的大小时，进行reset操作。<br>reset操作实际有两方面:<br>(1)将所有计数器的值减半(可以通过简单的<code>&gt;&gt;</code>和<code>&amp;0x77</code>操作来实现);<br>// 副作用：可能除不尽，计数误差+1。<br>(2)将看门人的bloom filter清空。<br>// 副作用: 计数误差+1;</p>
+<h3 id="动态访问模式（访问key的分布变化）：Freshness-Mechanism-保鲜机制"><a href="#动态访问模式（访问key的分布变化）：Freshness-Mechanism-保鲜机制" class="headerlink" title="动态访问模式（访问key的分布变化）：Freshness Mechanism(保鲜机制)"></a>动态访问模式（访问key的分布变化）：Freshness Mechanism(保鲜机制)</h3><p>统计新增key到CM-Sketch计数器的次数w，一旦w达到阈值W的大小时，进行reset操作。<br>reset操作实际有两方面:<br>(1)将所有计数器的值减半(可以通过简单的<code>&gt;&gt;</code>和<code>&amp;0x77</code>操作来实现);<br>// 副作用：可能除不尽，计数误差+1。<br>(2)将看门人的<code>bloom filter</code>清空。<br>// 副作用: 计数误差+1;</p>
 <h3 id="节省内存、长尾分布优化：Doorkeeper-看门人-机制"><a href="#节省内存、长尾分布优化：Doorkeeper-看门人-机制" class="headerlink" title="节省内存、长尾分布优化：Doorkeeper(看门人)机制"></a>节省内存、长尾分布优化：Doorkeeper(看门人)机制</h3><p>解决的问题：长尾分布。现实时间的访问轨迹大多符合长尾效应的偏态分布，也就是大部分访问key只访问很少次数，比如1次。<br>如果这些流量也纳入近似统计用的CM-Sketch，就会极大扩大本来就有概率发生的哈希碰撞，从而影响性能。<br>如果要维持出错概率不上升，只能增大计数器的槽位（哈希表的格数），增加内存消耗。</p>
-<p>因此这里的<code>DoorKeeper</code>机制，就是在近似统计组件前面增加一个防护存储、一个布隆过滤器。<br>在纳入<code>CM-Sketch</code>之前，首先要先检查一下在不在filter里面:<br>(1)如果有: 说明之前可能有访问过，通过，纳入计数器；<br>(1)如果没有: 说明之前没有访问过，拒绝写入计数器；但写入filter记录下来。// 下次如果再访问则能通过。</p>
+<p>因此这里的<code>DoorKeeper</code>机制，就是在近似统计组件前面增加一个防护存储： 一个布隆过滤器。<br>在纳入<code>CM-Sketch</code>之前，首先要先检查一下在不在filter里面:<br>(1)如果有: 说明之前可能有访问过，通过，纳入计数器；<br>(1)如果没有: 说明之前没有访问过，拒绝写入计数器；但写入filter记录下来。// 下次如果再访问则能通过。</p>
 <p>通过这种看门人机制，可以阻拦大部分只访问1次的key，避免将大量资源消耗在这些key上面。</p>
-<h2 id="读写流程"><a href="#读写流程" class="headerlink" title="读写流程"></a>读写流程</h2><h3 id="读"><a href="#读" class="headerlink" title="读"></a>读</h3><p>从<code>lru</code>或者<code>segment lru</code>部分读取，然后增加计数器的值即可。</p>
+<h2 id="读写流程"><a href="#读写流程" class="headerlink" title="读写流程"></a>读写流程</h2><h3 id="读"><a href="#读" class="headerlink" title="读"></a>读</h3><p>从<code>lru</code>或者<code>segment lru</code>部分读取，然后增加计数器的值即可。<br>可能导致<code>probation</code>中的key升级到<code>protected</code>。</p>
 <h3 id="写"><a href="#写" class="headerlink" title="写"></a>写</h3><img src="/images/2022-05/w_tiny_lfu_2.png" class="" width="800" height="1200" title="w_tiny_lfu_2">
 <p>如上图所示，新item插入的时候，首先进入lru；<br>如何如果lru满了，淘汰者和分段lru的淘汰者pk，(根据近似计数器中的频次)。</p>
 <img src="/images/2022-05/w_tiny_lfu_3.png" class="" width="800" height="1200" title="w_tiny_lfu_3">
