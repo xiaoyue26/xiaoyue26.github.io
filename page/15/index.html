@@ -72,6 +72,118 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-01/高性能Mysql笔记-全文索引" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/01/14/2018-01/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E5%85%A8%E6%96%87%E7%B4%A2%E5%BC%95/" class="article-date">
+  <time datetime="2018-01-14T11:33:44.000Z" itemprop="datePublished">2018-01-14</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/01/14/2018-01/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E5%85%A8%E6%96%87%E7%B4%A2%E5%BC%95/">高性能Mysql笔记-全文索引</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="MyISAM的全文索引-第七章"><a href="#MyISAM的全文索引-第七章" class="headerlink" title="MyISAM的全文索引(第七章)"></a>MyISAM的全文索引(第七章)</h1><p>有很多限制,比较弱.</p>
+<ul>
+<li><p>作用对象:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">全文集合: 将需要索引的列全部拼接成一个字符串,然后进行索引.</span><br></pre></td></tr></table></figure>
+<p>由于是对列进行拼接,因此无法设置哪一列更重要.(没有权重)</p>
+</li>
+<li><p>实现:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">B-Tree索引,两层.</span><br><span class="line">第一层: 所有关键字;</span><br><span class="line">第二层: 一组相关的文档指针.</span><br></pre></td></tr></table></figure>
+<p>全文索引不会索引文档对象中的所有词语,过滤规则如下:</p>
+</li>
+</ul>
+<ol>
+<li>停用词. 默认按通用英语的使用,可以通过参数ft_stopword_file指定;</li>
+<li>长度条件. ft_min_word_len &lt;=len &lt;= ft_max_word_len. </li>
+</ol>
+<h2 id="7-10-1-自然语言的全文索引"><a href="#7-10-1-自然语言的全文索引" class="headerlink" title="7.10.1 自然语言的全文索引"></a>7.10.1 自然语言的全文索引</h2><p>文档对象和查询的相关度.<br>相关度= f(匹配的关键词个数,关键词在文档中出现的次数)</p>
+<p>原理:<br>索引中出现次数越少=&gt;相关度越高<br>常见单词=&gt;相关度低.</p>
+<p>创建全文索引语法:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ALTER TABLE film_text ADD FULLTEXT INDEX fulltext_article(title,description);</span><br></pre></td></tr></table></figure>
+
+
+<p>自然语言搜索的查询语法:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">select film_id,title,Right(description,25)</span><br><span class="line">,Match(title,description) against (&#39;factor casualties&#39;) as relevance -- 相关度</span><br><span class="line">FROM film_text</span><br><span class="line">WHERE  Match(title,description) against (&#39;factor casualties&#39;)</span><br></pre></td></tr></table></figure>
+<p>执行计划:<br>Mysql将搜索词语分为两个独立的关键词进行搜索. (<code>factory</code>和<code>casualties</code>)<br>搜索对象: <code>title</code>和<code>description</code>组成的列的全文索引.</p>
+<h2 id="7-10-2-布尔全文索引"><a href="#7-10-2-布尔全文索引" class="headerlink" title="7.10.2 布尔全文索引"></a>7.10.2 布尔全文索引</h2><p>编写布尔搜索查询时,可以通过一些前缀修饰符来定制搜索.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">dino: 包含dino的行rank更高;</span><br><span class="line">~dino: 包含dino的行rank更低;</span><br><span class="line">+dino: 行记录必须包含dino;</span><br><span class="line">-dino: 行记录不能包含dino;</span><br><span class="line">dino*: 以dino开头的行rank更高.</span><br><span class="line">本例中dino作为搜索词可能太短,其实太短的词并不会被全文索引,查询优化器也可能要求搜索词&gt;&#x3D;ft_min_word_len.</span><br></pre></td></tr></table></figure>
+
+<p>查询语法:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">select film_id,title,right(description,25)</span><br><span class="line">FROM film_text</span><br><span class="line">where match(title,description)</span><br><span class="line">Against(&#39;+factory +casualties&#39; In Boolean Mode);</span><br><span class="line">-- title拼接description后必须同时包含factory和casualties</span><br></pre></td></tr></table></figure>
+
+<h2 id="7-10-3-插件和限制"><a href="#7-10-3-插件和限制" class="headerlink" title="7.10.3 插件和限制"></a>7.10.3 插件和限制</h2><p>可以加入插件改变:</p>
+<ol>
+<li>分词方式(如C++);</li>
+<li>预处理(如PDF).</li>
+</ol>
+<p>Mysql全文索引判断相关性的方法: 词频;<br>限制: </p>
+<ol>
+<li>全文索引能全部load到内存时,才能快.</li>
+<li>判断相关性只有词频,没有顺序;</li>
+<li>优化器会优先使用全文索引,而不管是否有其他更优索引, 并且全文索引会在其他索引之前使用. </li>
+<li>碎片多.</li>
+</ol>
+<h1 id="Sphinx-Mysql-SphinxSE-附录F"><a href="#Sphinx-Mysql-SphinxSE-附录F" class="headerlink" title="Sphinx + Mysql + SphinxSE (附录F)"></a>Sphinx + Mysql + SphinxSE (附录F)</h1><p>Sphinx: 开源全文搜索引擎. 可将数据源配置为Mysql查询的结果. 可水平扩展.<br>SphinxSE: Mysql的Sphinx插件,以便支持将Sphinx的搜索结果和Mysql的表进行join. </p>
+<p>Sphinx性能:</p>
+<ol>
+<li>查询1GB时间:  10~100ms;</li>
+<li>单CPU处理能力:10~100GB. </li>
+</ol>
+<p>分布式搜索工作流程:</p>
+<ol>
+<li>向所有服务器发送远程查询;</li>
+<li>执行本地索引搜索;</li>
+<li>从每个服务器读取部分搜索结果;</li>
+<li>合并结果返回客户端.</li>
+</ol>
+<h2 id="架构"><a href="#架构" class="headerlink" title="架构"></a>架构</h2><ul>
+<li>Indexed<br>从不同数据源创建全文索引.作为后台任务,一般定时运行;</li>
+<li>Searchd<br>运行时服务于客户端,查询创建好的索引.</li>
+</ul>
+<h2 id="SphinxSE可插拔存储引擎"><a href="#SphinxSE可插拔存储引擎" class="headerlink" title="SphinxSE可插拔存储引擎"></a>SphinxSE可插拔存储引擎</h2><p>建表语法:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">create table search_table</span><br><span class="line">(id int not null</span><br><span class="line">,weight int not null</span><br><span class="line">,query varchar(3070) not null</span><br><span class="line">,group_id int</span><br><span class="line">,INDEX(query)</span><br><span class="line">) engine&#x3D;Spinx conncet&#x3D;&quot;sphinx:&#x2F;&#x2F;localhost:3312&#x2F;test&quot;</span><br></pre></td></tr></table></figure>
+<p>查询语法:(把查询藏在query里,传递给sphinx)</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">select * from search_table where query&#x3D;&#39;test;mode&#x3D;all&#39;;</span><br></pre></td></tr></table></figure>
+<p><code>Searchd</code>服务返回查询结果,存储引擎把数据转换成mysql表.</p>
+<p>与<code>ElasticSearch</code>比较:<br><a href="https://zhuanlan.zhihu.com/p/21334385" target="_blank" rel="noopener">https://zhuanlan.zhihu.com/p/21334385</a></p>
+<p>决定倒向<code>ElasticSearch</code>社区.XD</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/01/14/2018-01/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E5%85%A8%E6%96%87%E7%B4%A2%E5%BC%95/" data-id="ck96cxpnt00aamaam99xke1w8" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-01/高性能Mysql笔记-第1章" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/01/14/2018-01/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC1%E7%AB%A0/" class="article-date">
@@ -1117,93 +1229,6 @@
 
 
   
-    <article id="post-2017-12/hive之bug汇总" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2017/12/20/2017-12/hive%E4%B9%8Bbug%E6%B1%87%E6%80%BB/" class="article-date">
-  <time datetime="2017-12-20T10:01:19.000Z" itemprop="datePublished">2017-12-20</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/hadoop/">hadoop</a>►<a class="article-category-link" href="/categories/hadoop/hive/">hive</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2017/12/20/2017-12/hive%E4%B9%8Bbug%E6%B1%87%E6%80%BB/">hive之bug汇总</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>这里总结一下hive的bug,或者说表现与spark sql不同的feature(bug?).<br>由于hive的distinct实际实现为group by,因此下述的group by相关bug也适用于distinct.</p>
-<h1 id="1-列重命名BUG"><a href="#1-列重命名BUG" class="headerlink" title="1. 列重命名BUG"></a>1. 列重命名BUG</h1><blockquote>
-<p>导致结果错误.<br>spark-sql能正常处理.</p>
-</blockquote>
-<p>子查询中重命名列时,如果和原有表中某列名相同,并且where条件中有那一列,取原有表的列值.<br>构造测试用例:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> * <span class="keyword">FROM</span></span><br><span class="line">(<span class="keyword">SELECT</span> <span class="number">123</span> <span class="keyword">as</span> paperid</span><br><span class="line"><span class="keyword">FROM</span>  temp.feng_test1</span><br><span class="line"><span class="keyword">where</span> paperid=<span class="number">70455</span></span><br><span class="line">)<span class="keyword">AS</span> a</span><br></pre></td></tr></table></figure>
-<p>上述查询的结果是70455,而不是我们想象中的123.<br>而这个查询:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> * <span class="keyword">FROM</span></span><br><span class="line">(<span class="keyword">SELECT</span> <span class="number">123</span> <span class="keyword">as</span> paperid</span><br><span class="line"><span class="keyword">FROM</span>  temp.feng_test1</span><br><span class="line">)<span class="keyword">AS</span> a</span><br></pre></td></tr></table></figure>
-<p>或这个查询:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> * <span class="keyword">FROM</span></span><br><span class="line">(<span class="keyword">SELECT</span> <span class="number">123</span> <span class="keyword">as</span> paperid</span><br><span class="line"><span class="keyword">FROM</span>  (<span class="keyword">select</span> <span class="number">70455</span> <span class="keyword">as</span> paperid) <span class="keyword">as</span> t </span><br><span class="line"><span class="keyword">where</span> paperid=<span class="number">70455</span></span><br><span class="line">)<span class="keyword">AS</span> a</span><br></pre></td></tr></table></figure>
-<p>都能正确返回123.</p>
-<h1 id="2-GROUP-BY-UDF-Serde复合bug"><a href="#2-GROUP-BY-UDF-Serde复合bug" class="headerlink" title="2. GROUP BY+UDF+Serde复合bug"></a>2. GROUP BY+UDF+Serde复合bug</h1><blockquote>
-<p>导致抛异常退出.<br>spark-sql能正常处理.</p>
-</blockquote>
-<p>GROUP BY,自定义UDF和自定义Serde都能正常独立工作.<br>这是一个多重条件下产生的bug:<br>1.表定义为string,而自定义的serde类放入了long对象;(bug)<br>2.自定义UDF使用简便写法(继承UDF,复杂写法为继承GenericUDF);(正常行为)<br>3.运行如下语句:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> xx</span><br><span class="line"><span class="keyword">from</span> <span class="string">`1中serde的表`</span></span><br><span class="line"><span class="keyword">group</span> <span class="keyword">by</span> <span class="string">`2中udf`</span></span><br></pre></td></tr></table></figure>
-
-<p>这个bug可以说是serde写得有问题导致的,严格来说hive没有太大问题.<br>原因是hive调用简单udf时,是运行时进行反射,填入方法的参数,实参与形参定义不同抛出异常.</p>
-<h1 id="3-GROUP-BY-重复列-BUG"><a href="#3-GROUP-BY-重复列-BUG" class="headerlink" title="3. GROUP BY+重复列 BUG"></a>3. GROUP BY+重复列 BUG</h1><blockquote>
-<p>导致结果错误.<br>spark-sql能正常处理.</p>
-</blockquote>
-<p>GROUP BY 时,如果有涉及引用的重复列, 如构造用例中的alist[0],由于hive在各种方面都会重用引用,会导致bug.<br>用例的输出结果为: <code>1,1,1</code>.<br>而不是我们想象中的: <code>1,1,3333</code>.</p>
-<p>构造用例如下:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> aid,bid,mistake</span><br><span class="line"><span class="keyword">FROM</span></span><br><span class="line">      (<span class="keyword">SELECT</span> <span class="number">1</span> <span class="keyword">as</span> aid</span><br><span class="line">      )<span class="keyword">AS</span> a</span><br><span class="line"><span class="keyword">JOIN</span></span><br><span class="line">      (<span class="keyword">SELECT</span> alist[<span class="number">0</span>] <span class="keyword">as</span> bid</span><br><span class="line">            ,mistake</span><br><span class="line">      <span class="keyword">FROM</span> (<span class="keyword">SELECT</span> <span class="number">2</span> <span class="keyword">as</span> courseid) <span class="keyword">AS</span> a</span><br><span class="line">      <span class="keyword">JOIN</span> (<span class="keyword">SELECT</span> <span class="number">2</span> <span class="keyword">as</span> courseid</span><br><span class="line">                  ,<span class="string">'3333'</span> <span class="keyword">as</span> mistake</span><br><span class="line">                  ,<span class="built_in">array</span>(<span class="number">1</span>) <span class="keyword">as</span> alist</span><br><span class="line">            ) <span class="keyword">AS</span> b</span><br><span class="line">        <span class="keyword">ON</span> a.courseid=b.courseid</span><br><span class="line">      <span class="keyword">GROUP</span> <span class="keyword">BY</span> alist[<span class="number">0</span>]</span><br><span class="line">              ,alist[<span class="number">0</span>]</span><br><span class="line">              ,mistake</span><br><span class="line">      )<span class="keyword">AS</span> b</span><br><span class="line"> <span class="keyword">ON</span> aid=bid</span><br></pre></td></tr></table></figure>
-
-<h1 id="4-row-number-数据类型溢出-bug"><a href="#4-row-number-数据类型溢出-bug" class="headerlink" title="4. row_number + 数据类型溢出 bug"></a>4. row_number + 数据类型溢出 bug</h1><blockquote>
-<p>导致结果错误.<br>spark-sql能正常处理.</p>
-</blockquote>
-<p>假设tp是一个字符串类型,强行转换成int类型时,如果发生数据溢出,比如值是13位时间戳(1514285700375),排序行为将不可预测.既不是降序也不是升序.</p>
-<p>构造错误样例如下:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> userid,phaseid,tp</span><br><span class="line">,row_number()<span class="keyword">over</span>(<span class="keyword">partition</span> <span class="keyword">by</span> userid <span class="keyword">order</span> <span class="keyword">by</span> <span class="built_in">int</span>(tp)) <span class="keyword">as</span> <span class="keyword">rank</span></span><br><span class="line"><span class="keyword">from</span> xxxx</span><br></pre></td></tr></table></figure>
-
-<p>正确样例:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> userid,phaseid,tp</span><br><span class="line">,row_number()<span class="keyword">over</span>(<span class="keyword">partition</span> <span class="keyword">by</span> userid <span class="keyword">order</span> <span class="keyword">by</span> <span class="built_in">bigint</span>(tp)) <span class="keyword">as</span> <span class="keyword">rank</span></span><br><span class="line"><span class="keyword">from</span> xxxx</span><br></pre></td></tr></table></figure>
-
-<h1 id="5-sort-array-BUG-Feature-函数副作用"><a href="#5-sort-array-BUG-Feature-函数副作用" class="headerlink" title="5. sort_array BUG(Feature) 函数副作用"></a>5. sort_array BUG(Feature) 函数副作用</h1><blockquote>
-<p>导致结果错误.<br>spark-sql能正确处理.</p>
-</blockquote>
-<p>hive中对数组进行排序后,会改变原有数组.(会在原有数组基础上排序)<br>spark-sql则会返回一个深拷贝,不改变原有数组.</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> alist</span><br><span class="line">      ,sort_array(alist) <span class="keyword">as</span> alist2</span><br><span class="line"><span class="keyword">FROM</span></span><br><span class="line">(<span class="keyword">select</span> <span class="built_in">array</span>(<span class="number">1</span>,<span class="number">3</span>,<span class="number">2</span>) <span class="keyword">as</span> alist</span><br><span class="line">)<span class="keyword">AS</span> t</span><br></pre></td></tr></table></figure>
-
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2017/12/20/2017-12/hive%E4%B9%8Bbug%E6%B1%87%E6%80%BB/" data-id="ck96cxpnj008xmaamc8xl8r5i" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/hive/" rel="tag">hive</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1230,6 +1255,10 @@
       <ul>
         
           <li>
+            <a href="/2022/05/31/2022-05/w-tinylfu%E7%BC%93%E5%AD%98%E7%AE%97%E6%B3%95/">w-tinylfu缓存算法</a>
+          </li>
+        
+          <li>
             <a href="/2022/03/25/2022-03/G1%E8%B0%83%E4%BC%98-%E5%A4%8D%E6%9D%82%E4%B8%9A%E5%8A%A1%E6%B2%BB%E7%90%86%E5%B0%8F%E8%AE%B0/">G1调优-复杂业务治理小记</a>
           </li>
         
@@ -1243,10 +1272,6 @@
         
           <li>
             <a href="/2022/03/13/2022-03/mp4%E6%A0%BC%E5%BC%8F/">mp4格式</a>
-          </li>
-        
-          <li>
-            <a href="/2022/03/13/2022-03/ss%E5%91%BD%E4%BB%A4/">ss命令</a>
           </li>
         
       </ul>

@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>w-tinylfu缓存算法 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="WHAT: w-tinylfu是什么？w-tinylfu &#x3D; window tiny LFU实际是一种缓存置换算法，直译过来大概是带一个窗口的tiny版本的LFU实现；主要用三段LRU，一个布隆过滤器、一个cm-sketch计数器，兼顾了LFU和LRU的优点。大致思想上类似于别的分段lru算法（例如mysql中buffer pool的lru链表，5&#x2F;8存young page,3&#x2F;8存old pag">
+<meta property="og:type" content="article">
+<meta property="og:title" content="w-tinylfu缓存算法">
+<meta property="og:url" content="http://xiaoyue26.github.io/2022/05/31/2022-05/w-tinylfu%E7%BC%93%E5%AD%98%E7%AE%97%E6%B3%95/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="WHAT: w-tinylfu是什么？w-tinylfu &#x3D; window tiny LFU实际是一种缓存置换算法，直译过来大概是带一个窗口的tiny版本的LFU实现；主要用三段LRU，一个布隆过滤器、一个cm-sketch计数器，兼顾了LFU和LRU的优点。大致思想上类似于别的分段lru算法（例如mysql中buffer pool的lru链表，5&#x2F;8存young page,3&#x2F;8存old pag">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2022-05/caffeine.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2022-05/w_tiny_lfu_1.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2022-05/cm_sketch.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2022-05/w_tiny_lfu_2.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2022-05/w_tiny_lfu_3.png">
+<meta property="article:published_time" content="2022-05-31T03:36:23.000Z">
+<meta property="article:modified_time" content="2022-05-31T13:04:13.138Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="java">
+<meta property="article:tag" content="lfu">
+<meta property="article:tag" content="lru">
+<meta property="article:tag" content="tinylfu">
+<meta property="article:tag" content="caffeine">
+<meta property="article:tag" content="cm-sketch">
+<meta property="article:tag" content="bloomfilter">
+<meta property="article:tag" content="doorkeeper">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://xiaoyue26.github.io/images/2022-05/caffeine.png">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2022-05/w-tinylfu缓存算法" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2022/05/31/2022-05/w-tinylfu%E7%BC%93%E5%AD%98%E7%AE%97%E6%B3%95/" class="article-date">
+  <time datetime="2022-05-31T03:36:23.000Z" itemprop="datePublished">2022-05-31</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E6%80%A7%E8%83%BD/">性能</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      w-tinylfu缓存算法
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="WHAT-w-tinylfu是什么？"><a href="#WHAT-w-tinylfu是什么？" class="headerlink" title="WHAT: w-tinylfu是什么？"></a>WHAT: w-tinylfu是什么？</h1><p><code>w-tinylfu</code> = window tiny LFU<br>实际是一种缓存置换算法，直译过来大概是带一个窗口的tiny版本的LFU实现；<br>主要用三段LRU，一个布隆过滤器、一个<code>cm-sketch</code>计数器，兼顾了LFU和LRU的优点。<br>大致思想上类似于别的分段lru算法（例如mysql中buffer pool的lru链表，5/8存young page,3/8存old page）。</p>
+<h1 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h1><p>学术界：<br>来自论文：<a href="https://arxiv.org/pdf/1512.00727.pdf" target="_blank" rel="noopener">https://arxiv.org/pdf/1512.00727.pdf</a><br>工业界：<br>实现：java中的caffeine缓存就用的是w-tinylfu算法。</p>
+<img src="/images/2022-05/caffeine.png" class="" width="800" height="1200" title="caffeine">
+<p>当然这里caffeine的性能好除了w-tinylfu算法的贡献，还有其他很多优化比如结合了disruptor（RingBuffer）、时间轮；</p>
+<h1 id="WHEN-什么时候使用w-tinylfu算法"><a href="#WHEN-什么时候使用w-tinylfu算法" class="headerlink" title="WHEN: 什么时候使用w-tinylfu算法"></a>WHEN: 什么时候使用w-tinylfu算法</h1><p>缓存置换算法也不是银弹，也需要匹配它适合的某些分布workload。<br>即使是匹配的分布的workload，实际参数也要和workload匹配才能达到最好性能。</p>
+<p>w-tinylfu算法适合的工作负载的大概特征：</p>
+<ol>
+<li>静态的偏态分布;(分布规律不怎么变化)</li>
+<li>有一定动态变化(不能变化得太快太剧烈)的分布、包括有一定突发流量的偏态分布，例如偶有突发流量的zipf分布。</li>
+</ol>
+<h2 id="比较合适的："><a href="#比较合适的：" class="headerlink" title="比较合适的："></a>比较合适的：</h2><p>benchmark中测试的workload比较合适的包括:<br>youtube、维基百科、数据库访问、windows文件系统、搜索引擎；</p>
+<h2 id="不太合适的："><a href="#不太合适的：" class="headerlink" title="不太合适的："></a>不太合适的：</h2><p>OLTP中的磁盘访问: 轨迹实际是顺序访问的升序队列中散布一些随机访问，这对于w-tinylfu来说不太适配。</p>
+<p>具体的调参涉及到算法内部细节，因此最后在调优章节再展开。</p>
+<h1 id="HOW-w-tinylfu具体是怎么做的"><a href="#HOW-w-tinylfu具体是怎么做的" class="headerlink" title="HOW: w-tinylfu具体是怎么做的"></a>HOW: w-tinylfu具体是怎么做的</h1><h2 id="目标、要解决的问题"><a href="#目标、要解决的问题" class="headerlink" title="目标、要解决的问题"></a>目标、要解决的问题</h2><p>1。提高缓存命中率；<br>现有方案的缺点：<br><code>LFU</code>: 数据访问模式有变化时（例如有突发流量），LFU较迟钝，始终缓存早先访问多的数据；<br><code>LRU</code>: 不能记忆历史的访问规律，高频访问key并不一定能缓存到。<br>2。降低内存消耗；<br>现有方案的缺点：<br><code>LFU</code>: 需要给每个key维护频率信息（PLFU记录所有key的频率；WLFU则记录当前缓存中key的频率），需要巨大的内存消耗。</p>
+<p>总之，w-tinylfu需要以较低的内存消耗达到高命中率。</p>
+<h2 id="架构、解决方案"><a href="#架构、解决方案" class="headerlink" title="架构、解决方案"></a>架构、解决方案</h2><img src="/images/2022-05/w_tiny_lfu_1.png" class="" width="800" height="1200" title="w_tiny_lfu_1">
+<p>如上图所示：<br>1。<code>LRU</code>: 最左边是一个普通的LRU窗口，默认占1%的空间，负责处理突发流量的情况；<br>2。<code>filter</code>: 第2个组件是一个布隆过滤器，作为看门人，负责阻挡长尾的低频访问、避免纳入计数器；<br>3。<code>Segmented LRU</code>: 第3个组件是分段LRU，分为两段:<br>(1)<code>protected</code>: 受保护区，占80%，存放访问次数&gt;1的数据;<br>(2)<code>probation</code>: 缓刑区域, 占20%，存放访问次数=1的数据;（淘汰备选）<br>按我理解，其实还应该有一个组件负责统计频次，但论文中没有相应的图。<br>这里按我理解直接补上：<br>4。<code>CM-Sketch</code>: 近似统计频次。这里类似于WLFU，只记录当前缓存中有出现的key的频率，使用<code>count min sketch</code>算法。<br>近似统计频次算法，因此有一定错误率，但也极大节省了内存。</p>
+<h3 id="节省内存：CM-Sketch算法近似统计"><a href="#节省内存：CM-Sketch算法近似统计" class="headerlink" title="节省内存：CM-Sketch算法近似统计"></a>节省内存：CM-Sketch算法近似统计</h3><p><code>count min sketch</code>算法，类似于计数版本的布隆过滤器，把布隆过滤器原来标记是否存在的0\1改成能存更多值的计数器。<br>由于考虑到实际workload中常见的是长尾分布，因此计数器实际位数不多，默认只有4位，也就是默认大部分数据访问频次在15次以内。<br>CM-SKetch使用多个哈希函数(或者1个哈希函数和多个种子)和多个计数器来记录访问的次数。<br>实际读的时候取所有计数器里最小的一个，因此其他计数器的值其实就没什么用了。<br>而且由于哈希碰撞，有一定的概率频次的估计会偏大，（但是不会偏小）<br>因此实际每个key的统计频次增加的时候，可以只增大当前最小的计数器。</p>
+<img src="/images/2022-05/cm_sketch.png" class="" width="400" height="600" title="cm_sketch">
+
+<h4 id="调参"><a href="#调参" class="headerlink" title="调参"></a>调参</h4><p>假如处理的数据规模是n，希望估计值落在<code>[实际值， 实际值+ a*n]</code>范围的概率是<code>1-b</code>;<br>则:<br>1.计数器数量为: <code>e/a</code> 的上界;<br>2.哈希函数的数量为: <code>ln(1/b)</code> 的上界;</p>
+<p>例如当n=10^6时，如果我们希望估计值落在<code>实际值, 实际值+ 2000</code>范围的概率是99%，<br>则:</p>
+<ol>
+<li>计数器数量为: e/0.002 的上界 = 1360;</li>
+<li>哈希函数的数量为: ln(1/0.01) 的上界 = 5;<br>当计数器占4bit，则整个计数组件占空间 = 1360<em>5</em>4 bit= 约3.5KB。</li>
+</ol>
+<h3 id="动态访问模式（访问key的分布变化）：Freshness-Mechanism-保鲜机制"><a href="#动态访问模式（访问key的分布变化）：Freshness-Mechanism-保鲜机制" class="headerlink" title="动态访问模式（访问key的分布变化）：Freshness Mechanism(保鲜机制)"></a>动态访问模式（访问key的分布变化）：Freshness Mechanism(保鲜机制)</h3><p>统计新增key到CM-Sketch计数器的次数w，一旦w达到阈值W的大小时，进行reset操作。<br>reset操作实际有两方面:<br>(1)将所有计数器的值减半(可以通过简单的&gt;&gt;和&amp;0x77操作来实现);<br>// 副作用：可能除不尽，计数误差+1。<br>(2)将看门人的bloom filter清空。<br>// 副作用: 计数误差+1;</p>
+<h3 id="节省内存、长尾分布优化：Doorkeeper-看门人-机制"><a href="#节省内存、长尾分布优化：Doorkeeper-看门人-机制" class="headerlink" title="节省内存、长尾分布优化：Doorkeeper(看门人)机制"></a>节省内存、长尾分布优化：Doorkeeper(看门人)机制</h3><p>解决的问题：长尾分布。现实时间的访问轨迹大多符合长尾效应的偏态分布，也就是大部分访问key只访问很少次数，比如1次。<br>如果这些流量也纳入近似统计用的CM-Sketch，就会极大扩大本来就有概率发生的哈希碰撞，从而影响性能。<br>如果要维持出错概率不上升，只能增大计数器的槽位（哈希表的格数），增加内存消耗。</p>
+<p>因此这里的<code>DoorKeeper</code>机制，就是在近似统计组件前面增加一个防护存储、一个布隆过滤器。<br>在纳入<code>CM-Sketch</code>之前，首先要先检查一下在不在filter里面:<br>(1)如果有: 说明之前可能有访问过，通过，纳入计数器；<br>(1)如果没有: 说明之前没有访问过，拒绝写入计数器；但写入filter记录下来。// 下次如果再访问则能通过。</p>
+<p>通过这种看门人机制，可以阻拦大部分只访问1次的key，避免将大量资源消耗在这些key上面。</p>
+<h2 id="读写流程"><a href="#读写流程" class="headerlink" title="读写流程"></a>读写流程</h2><h3 id="读"><a href="#读" class="headerlink" title="读"></a>读</h3><p>从<code>lru</code>或者<code>segment lru</code>部分读取，然后增加计数器的值即可。</p>
+<h3 id="写"><a href="#写" class="headerlink" title="写"></a>写</h3><img src="/images/2022-05/w_tiny_lfu_2.png" class="" width="800" height="1200" title="w_tiny_lfu_2">
+<p>如上图所示，新item插入的时候，首先进入lru；<br>如何如果lru满了，淘汰者和分段lru的淘汰者pk，(根据近似计数器中的频次)。</p>
+<img src="/images/2022-05/w_tiny_lfu_3.png" class="" width="800" height="1200" title="w_tiny_lfu_3">
+<p>而在分段lru中，probation缓刑区中访问则升到protected区。(反之protected的淘汰者降级到probation)</p>
+<h1 id="调优参数"><a href="#调优参数" class="headerlink" title="调优参数"></a>调优参数</h1><p>回顾各个组件:<br>1。<code>LRU</code>: 默认占1%的空间，负责处理突发流量的情况；<br>因此如果实际突发流量占不止1%的内存空间，可能需要调大这部分；（反之亦然）<br>2。<code>filter</code>: 布隆过滤器; 只拦了访问次数=1的，因此如果长尾是2次，则可能要调整这部分。<br>3。<code>Segmented LRU</code>:<br>(1)<code>protected</code>: 受保护区，占80%，存放访问次数&gt;1的数据;<br>(2)<code>probation</code>: 缓刑区域, 占20%，存放访问次数=1的数据;（淘汰备选）</p>
+<p>4。<code>CM-Sketch</code>: 默认是4位计数器，最大15次。隐含假设是大部分访问&lt;15次，因此如果这个假设不成立，也要调整这部分。</p>
+<h1 id="参考资料"><a href="#参考资料" class="headerlink" title="参考资料"></a>参考资料</h1><p>论文: <a href="https://arxiv.org/pdf/1512.00727.pdf" target="_blank" rel="noopener">https://arxiv.org/pdf/1512.00727.pdf</a><br><a href="https://xuzhijvn.github.io/zh-cn/posts/cs/other/caffeine/" target="_blank" rel="noopener">https://xuzhijvn.github.io/zh-cn/posts/cs/other/caffeine/</a><br><a href="https://jishuin.proginn.com/p/763bfbd34443" target="_blank" rel="noopener">https://jishuin.proginn.com/p/763bfbd34443</a><br>cm-sketch算法: <a href="https://zhuanlan.zhihu.com/p/369981005" target="_blank" rel="noopener">https://zhuanlan.zhihu.com/p/369981005</a></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2022/05/31/2022-05/w-tinylfu%E7%BC%93%E5%AD%98%E7%AE%97%E6%B3%95/" data-id="cl3tudq4k00007damcj6v6fld" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/bloomfilter/" rel="tag">bloomfilter</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/caffeine/" rel="tag">caffeine</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/cm-sketch/" rel="tag">cm-sketch</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/doorkeeper/" rel="tag">doorkeeper</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/lfu/" rel="tag">lfu</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/lru/" rel="tag">lru</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/tinylfu/" rel="tag">tinylfu</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+  
+    <a href="/2022/03/25/2022-03/G1%E8%B0%83%E4%BC%98-%E5%A4%8D%E6%9D%82%E4%B8%9A%E5%8A%A1%E6%B2%BB%E7%90%86%E5%B0%8F%E8%AE%B0/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">G1调优-复杂业务治理小记</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#WHAT-w-tinylfu是什么？"><span class="toc-number">1.</span> <span class="toc-text">WHAT: w-tinylfu是什么？</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#背景"><span class="toc-number">2.</span> <span class="toc-text">背景</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#WHEN-什么时候使用w-tinylfu算法"><span class="toc-number">3.</span> <span class="toc-text">WHEN: 什么时候使用w-tinylfu算法</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#比较合适的："><span class="toc-number">3.1.</span> <span class="toc-text">比较合适的：</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#不太合适的："><span class="toc-number">3.2.</span> <span class="toc-text">不太合适的：</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#HOW-w-tinylfu具体是怎么做的"><span class="toc-number">4.</span> <span class="toc-text">HOW: w-tinylfu具体是怎么做的</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#目标、要解决的问题"><span class="toc-number">4.1.</span> <span class="toc-text">目标、要解决的问题</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#架构、解决方案"><span class="toc-number">4.2.</span> <span class="toc-text">架构、解决方案</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#节省内存：CM-Sketch算法近似统计"><span class="toc-number">4.2.1.</span> <span class="toc-text">节省内存：CM-Sketch算法近似统计</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#调参"><span class="toc-number">4.2.1.1.</span> <span class="toc-text">调参</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#动态访问模式（访问key的分布变化）：Freshness-Mechanism-保鲜机制"><span class="toc-number">4.2.2.</span> <span class="toc-text">动态访问模式（访问key的分布变化）：Freshness Mechanism(保鲜机制)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#节省内存、长尾分布优化：Doorkeeper-看门人-机制"><span class="toc-number">4.2.3.</span> <span class="toc-text">节省内存、长尾分布优化：Doorkeeper(看门人)机制</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#读写流程"><span class="toc-number">4.3.</span> <span class="toc-text">读写流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#读"><span class="toc-number">4.3.1.</span> <span class="toc-text">读</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#写"><span class="toc-number">4.3.2.</span> <span class="toc-text">写</span></a></li></ol></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#调优参数"><span class="toc-number">5.</span> <span class="toc-text">调优参数</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#参考资料"><span class="toc-number">6.</span> <span class="toc-text">参考资料</span></a></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2022 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

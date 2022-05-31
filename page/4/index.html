@@ -72,6 +72,84 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-12/长连接相关" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/12/29/2019-12/%E9%95%BF%E8%BF%9E%E6%8E%A5%E7%9B%B8%E5%85%B3/" class="article-date">
+  <time datetime="2019-12-29T09:22:38.000Z" itemprop="datePublished">2019-12-29</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/tcp/">tcp</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/12/29/2019-12/%E9%95%BF%E8%BF%9E%E6%8E%A5%E7%9B%B8%E5%85%B3/">长连接相关</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="WHAT-什么是长连接"><a href="#WHAT-什么是长连接" class="headerlink" title="WHAT: 什么是长连接"></a>WHAT: 什么是长连接</h1><p>长连接: TCP， 默认不断开，用keep alive心跳包保活;<br>持久连接: HTTP 1.1+ keep alive, 默认断开。<br>短连接: 普通HTTP</p>
+<h1 id="WHY-长连接有什么好处-为什么要使用长连接"><a href="#WHY-长连接有什么好处-为什么要使用长连接" class="headerlink" title="WHY: 长连接有什么好处? 为什么要使用长连接"></a>WHY: 长连接有什么好处? 为什么要使用长连接</h1><ol>
+<li>不同域名可以复用一个长连接; （HTTP不行）</li>
+<li>不依赖DNS，节省DNS开销、避免DNS劫持;（HTTP不行）</li>
+<li>减少握手时间开销；</li>
+<li>可以push消息; </li>
+</ol>
+<h1 id="HOW-如何实现一个好的长连接-难点何在"><a href="#HOW-如何实现一个好的长连接-难点何在" class="headerlink" title="HOW: 如何实现一个好的长连接? (难点何在)"></a>HOW: 如何实现一个好的长连接? (难点何在)</h1><h2 id="难点1-长连接断开"><a href="#难点1-长连接断开" class="headerlink" title="难点1 长连接断开"></a>难点1 长连接断开</h2><p>导致断开的原因:</p>
+<ol>
+<li>各个环节的超时时间不匹配; – 动态探测合适的超时时间；</li>
+<li>后台服务; – 或者服务主备切换</li>
+<li>app后台进程挂了;  – app保活课题</li>
+<li>切换网络;  </li>
+</ol>
+<h2 id="难点2-机器资源"><a href="#难点2-机器资源" class="headerlink" title="难点2 机器资源"></a>难点2 机器资源</h2><p>1亿长连接:<br>10w / 台 =&gt; 1000台机器<br>200w / 台 =&gt; 50台机器</p>
+<p>20%活跃度=&gt; 总共需要2kw连接;<br>2000w =&gt; 10台~200台; </p>
+<h3 id="连接限制"><a href="#连接限制" class="headerlink" title="连接限制:"></a>连接限制:</h3><ol>
+<li>网卡限制: 网卡带宽、每秒通信量; </li>
+<li>内核限制: 每个进程最大打开文件句柄数; (NR_OPEN =100w)</li>
+<li>内存限制: TCP的发送、输出缓冲;</li>
+</ol>
+<p>假设一台机器抗200w个连接，则网卡需要:<br>200w<em>1KB/s = 2000MB/s = 16 Gps<br>假设平均20%活跃，则</em>0.2 = 3.2 Gps<br>依此类推内存。</p>
+<h2 id="难点3-惊群效应"><a href="#难点3-惊群效应" class="headerlink" title="难点3 惊群效应"></a>难点3 惊群效应</h2><p>cpu: 100%<br><code>thundering herd</code>： 唤醒一群进程，只有一个进程工作，其他的又继续睡；反复这个流程。</p>
+<blockquote>
+<p>多进程（多线程）在同时阻塞等待同一个事件的时候（休眠状态），如果等待的这个事件发生，那么他就会唤醒等待的所有进程（或者线程），但是最终却只能有一个进程（线程）获得这个时间的“控制权”，对该事件进行处理，而其他进程（线程）获取“控制权”失败，只能重新进入休眠状态，这种现象和性能浪费就叫做惊群效应。</p>
+</blockquote>
+<h2 id="实现要点"><a href="#实现要点" class="headerlink" title="实现要点"></a>实现要点</h2><ol>
+<li>处理好上述长连接断开的4个原因，保证服务质量；</li>
+<li>进行断开重连： 监控+重连。</li>
+<li>架构容灾：<img src="/images/2019-12/long_tcp.png" class="" width="400" height="600" title="long_tcp">
+(1) 多地部署接入点;<br>(2) 长连接失败则降级到udp\http；</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/12/29/2019-12/%E9%95%BF%E8%BF%9E%E6%8E%A5%E7%9B%B8%E5%85%B3/" data-id="ck96cxpqh00kwmaam43bt582d" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/tcp/" rel="tag">tcp</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E9%95%BF%E8%BF%9E%E6%8E%A5/" rel="tag">长连接</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2019-12/分布式限流-redis-令牌桶" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/12/28/2019-12/%E5%88%86%E5%B8%83%E5%BC%8F%E9%99%90%E6%B5%81-redis-%E4%BB%A4%E7%89%8C%E6%A1%B6/" class="article-date">
@@ -1183,214 +1261,6 @@
 
 
   
-    <article id="post-2019-09/JNI总结" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/09/07/2019-09/JNI%E6%80%BB%E7%BB%93/" class="article-date">
-  <time datetime="2019-09-07T10:20:10.000Z" itemprop="datePublished">2019-09-07</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E6%80%A7%E8%83%BD/">性能</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/09/07/2019-09/JNI%E6%80%BB%E7%BB%93/">JNI总结</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="what-JNI是啥"><a href="#what-JNI是啥" class="headerlink" title="what: JNI是啥"></a>what: JNI是啥</h1><p><code>JNI(Java Native Interface)</code>是java访问<code>native</code>方法的接口规范。<br>所谓<code>native</code>方法一般是c/c++代码。（也可以是汇编）<br>java实现了一个JNI框架来让java和其他语言互调，java方法可以调JNI接口声明了的native方法，native方法也可以创建、使用java对象。<br>JNI接口规范主要按照<code>c</code>语言，不像<code>c++</code>一样改写方法名。<br>因此实际编码中需要用<code>extern c</code>来维持方法名的纯净。</p>
-<p>编译方法:<br>c++: <code>print(int)</code>=&gt;<code>print_int</code>;<br>c: <code>print</code>.<br>所以我们需要c这种风格的。(不支持重载)</p>
-<h1 id="why-为啥要使用JNI"><a href="#why-为啥要使用JNI" class="headerlink" title="why: 为啥要使用JNI"></a>why: 为啥要使用JNI</h1><p>使用的场景包括:</p>
-<ol>
-<li>有些现成的代码是c/c++的，需要在java中调用; （比如一些平台相关的、SIMD操作、或其他java中没有的库）</li>
-<li>c/c++版本的代码也许有巨大的性能优势。</li>
-</ol>
-<h1 id="HOW-JNI如何工作"><a href="#HOW-JNI如何工作" class="headerlink" title="HOW: JNI如何工作"></a>HOW: JNI如何工作</h1><h2 id="如何使用JNI"><a href="#如何使用JNI" class="headerlink" title="如何使用JNI"></a>如何使用JNI</h2><p>两种方法： 静态注册和动态加载。</p>
-<h3 id="静态注册"><a href="#静态注册" class="headerlink" title="静态注册"></a>静态注册</h3><p>假设我们要在java中调用c的方法,大致分为6个步骤:</p>
-<ol>
-<li>在java中声明一个<code>native</code>方法,但是不实现;</li>
-<li>编译java字节码,生成<code>class</code>文件;(<code>javac</code>命令)</li>
-<li>用class文件生成<code>.h</code>的文件头;(<code>javah</code>命令)</li>
-<li>创建<code>.c</code>文件实现<code>.h</code>文件头中声明的方法;</li>
-<li>编译<code>.c</code>，<code>.h</code>文件生成动态链接库<code>.so</code>;</li>
-<li>在<code>java</code>中加载<code>.so</code>文件,使用第一步中声明的方法。</li>
-</ol>
-<p>相关命令:</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:.</span><br><span class="line">javac HelloWorld.java</span><br><span class="line">javah HelloWorld</span><br><span class="line">gcc -fPIC -I /usr/lib/jvm/jdk/include -I /usr/lib/jvm/jdk/include/linux -shared libHelloWorld.c -o libHelloWorld.so</span><br><span class="line">export LD_LIBRARY_PATH=.:$LD_LIBRARY_PATH # 为了找到so文件</span><br><span class="line">java -Djava.library.path=. HelloWorld  # 也是为了找到so文件(二选一即可)</span><br></pre></td></tr></table></figure>
-
-<h3 id="动态加载"><a href="#动态加载" class="headerlink" title="动态加载"></a>动态加载</h3><p>利用<code>RegisterNatives</code>方法来注册Java方法与JNI函数的映射。</p>
-<ol>
-<li>利用结构体<code>JNINativeMethod</code>数组记录 Java 方法与 JNI 函数的对应关系</li>
-<li>实现 <code>JNI_OnLoad</code> 方法，在加载动态库后，执行动态注册</li>
-<li>调用 <code>FindClass</code> 方法，获取Java对象</li>
-<li>调用 <code>RegisterNatives</code>方法，传入 Java 对象、<code>JNINativeMethod</code>;</li>
-<li>数组及注册方法数完成注册；</li>
-</ol>
-<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 以下是c++版本的,c语言版本的话很简单,只要把:</span></span><br><span class="line"><span class="comment">// env-&gt;改成(*env)-&gt;</span></span><br><span class="line"><span class="comment">// 调用的方法参数第一个参数加上env即可。</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> JNI_CLASS_PAPT <span class="meta-string">"com/xxx"</span></span></span><br><span class="line"><span class="function">JNIEXPORT jstring JNICALL <span class="title">native_test</span><span class="params">(JNIEnv *env, jobject instance)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> env-&gt;NewStringUTF(<span class="string">"hello world"</span>);</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">static</span> JNINativeMethod g_methods[] = &#123;</span><br><span class="line">        <span class="comment">// Java层方法、参数类型、native方法</span></span><br><span class="line">        &#123;<span class="string">"get_hello_world"</span>, <span class="string">"()Ljava/lang/String;"</span>, (<span class="keyword">void</span>*)native_test&#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 动态库加载时回调方法</span></span><br><span class="line"><span class="function">jint <span class="title">JNI_OnLoad</span><span class="params">(JavaVM *vm, <span class="keyword">void</span> *reserved)</span> </span>&#123;</span><br><span class="line">    JNIEnv *env = <span class="literal">NULL</span>;</span><br><span class="line">    vm-&gt;GetEnv((<span class="keyword">void</span>**)&amp;env, JNI_VERSION_1_8);</span><br><span class="line">    jclass clazz= env-&gt;FindClass(JNI_CLASS_PAPT);</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 注册Java和natvie方法映射表</span></span><br><span class="line">    env-&gt;RegisterNatives(clazz</span><br><span class="line">    , g_methods</span><br><span class="line">    , <span class="keyword">sizeof</span>(g_methods)/<span class="keyword">sizeof</span>(g_methods[<span class="number">0</span>]));</span><br><span class="line">    <span class="keyword">return</span> JNI_VERSION_1_8;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>参见<code>jni.h</code>中的<code>JNINativeMethod</code>结构体:</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> &#123;</span></span><br><span class="line">    <span class="keyword">const</span> <span class="keyword">char</span>* name; <span class="comment">// java方法名</span></span><br><span class="line">    <span class="keyword">const</span> <span class="keyword">char</span>* signature;<span class="comment">// java方法签名</span></span><br><span class="line">    <span class="keyword">void</span>*       fnPtr; <span class="comment">// c函数指针</span></span><br><span class="line">&#125; JNINativeMethod;</span><br></pre></td></tr></table></figure>
-
-
-<h2 id="JNI原理"><a href="#JNI原理" class="headerlink" title="JNI原理"></a>JNI原理</h2><p>本质其实就是JVM使用了so动态链接库中的函数，所以关键在于函数名的映射。<br>一个典型的<code>native</code>方法的签名如下:</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// native方法的签名由类名(含包名,点换成下划线)和方法名拼接而成:</span></span><br><span class="line">JNIEXPORT <span class="keyword">void</span> JNICALL Java_packname_classname_methodname</span><br><span class="line">  (JNIEnv *env, jobject obj)</span><br><span class="line">&#123;</span><br><span class="line">    <span class="comment">/*Implement Native Method Here*/</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>可见，JVM调用native方法的时候，需要传递一个<code>JNIEnv</code>指针和一个<code>jobject</code>指针。</p>
-<blockquote>
-<p>JNIEnv: 包含访问JVM的接口，可以进行native数组和java数组转换，字符串转换，对象实例化、抛异常等等java能做的事情；</p>
-</blockquote>
-<blockquote>
-<p>jobject: 声明native方法的java对象。</p>
-</blockquote>
-<p>每一个Java线程对应一个<code>JNIEnv</code>。<br><code>JNIEnv</code>指针仅在native方法当前线程中有效；如果手动保存到其他地方，然后在其他线程中想要使用，需要调用<code>AttachCurrentThread</code>来挂靠当前线程到jvm，使用完毕后调用<code>DetachCurrentThread</code>脱离jvm。<br>挂靠样例:</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 1. </span></span><br><span class="line">JNIEnv *env;</span><br><span class="line">(*g_vm)-&gt;AttachCurrentThread (g_vm, (<span class="keyword">void</span> **) &amp;env, <span class="literal">NULL</span>);</span><br><span class="line"><span class="comment">// 2. 脱离:</span></span><br><span class="line">(*g_vm)-&gt;DetachCurrentThread (g_vm);</span><br></pre></td></tr></table></figure>
-
-
-
-<h2 id="类型转换"><a href="#类型转换" class="headerlink" title="类型转换"></a>类型转换</h2><p>native和java的基本类型能自动互转，复杂类型（数组、数组、对象）则要使用<code>JNIEnv</code>显式地进行转换。</p>
-<p>字符串转换(C++版本):</p>
-<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">extern</span> <span class="string">"C"</span></span><br><span class="line">JNIEXPORT <span class="keyword">void</span> JNICALL Java_ClassName_MethodName</span><br><span class="line">  (JNIEnv *env, jobject obj, jstring javaString)</span><br><span class="line">&#123;</span><br><span class="line">    <span class="comment">// java字符串=&gt;c字符串</span></span><br><span class="line">    <span class="keyword">const</span> <span class="keyword">char</span> *nativeString = env-&gt;GetStringUTFChars(javaString, <span class="number">0</span>);</span><br><span class="line">    <span class="comment">// do something with nativeString</span></span><br><span class="line">    <span class="comment">// 释放:</span></span><br><span class="line">    env-&gt;ReleaseStringUTFChars(javaString, nativeString);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>c语言版本就是参数多了<code>env</code>参数:</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">JNIEXPORT <span class="keyword">void</span> JNICALL Java_ClassName_MethodName</span><br><span class="line">  (JNIEnv *env, jobject obj, jstring javaString)</span><br><span class="line">&#123;</span><br><span class="line"><span class="comment">// 转换:</span></span><br><span class="line">    <span class="keyword">const</span> <span class="keyword">char</span> *nativeString = (*env)-&gt;GetStringUTFChars(env, javaString, <span class="number">0</span>);</span><br><span class="line"><span class="comment">// 释放:</span></span><br><span class="line">    (*env)-&gt;ReleaseStringUTFChars(env, javaString, nativeString);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h2 id="基本类型的映射"><a href="#基本类型的映射" class="headerlink" title="基本类型的映射"></a>基本类型的映射</h2><table>
-<thead>
-<tr>
-<th>native类型</th>
-<th>Java类型</th>
-<th>描述</th>
-<th>java类型签名（signature）</th>
-<th></th>
-</tr>
-</thead>
-<tbody><tr>
-<td>unsigned char</td>
-<td>jboolean</td>
-<td>unsigned 8位</td>
-<td>Z</td>
-<td></td>
-</tr>
-<tr>
-<td>signed char</td>
-<td>jbyte</td>
-<td>signed 8位</td>
-<td>B</td>
-<td></td>
-</tr>
-<tr>
-<td>unsigned short</td>
-<td>jchar</td>
-<td>unsigned 16位</td>
-<td>C</td>
-<td></td>
-</tr>
-<tr>
-<td>short</td>
-<td>jshort</td>
-<td>signed 16位</td>
-<td>S</td>
-<td></td>
-</tr>
-<tr>
-<td>long</td>
-<td>jint</td>
-<td>signed 32位</td>
-<td>I</td>
-<td></td>
-</tr>
-<tr>
-<td>long long__int64</td>
-<td>jlong</td>
-<td>signed 64位</td>
-<td>J</td>
-<td></td>
-</tr>
-<tr>
-<td>float</td>
-<td>jfloat</td>
-<td>32位</td>
-<td>F</td>
-<td></td>
-</tr>
-<tr>
-<td>double</td>
-<td>jdouble</td>
-<td>64位</td>
-<td>D</td>
-<td></td>
-</tr>
-<tr>
-<td>void</td>
-<td>void</td>
-<td></td>
-<td>V</td>
-<td></td>
-</tr>
-</tbody></table>
-<p>string类的类型签名: <code>Ljava/lang/String;</code><br>整型数组的类型签名: <code>[I</code><br><code>int[][]</code>的签名: <code>[[I</code></p>
-<h1 id="JNI代码中调用java对象方法"><a href="#JNI代码中调用java对象方法" class="headerlink" title="JNI代码中调用java对象方法"></a>JNI代码中调用java对象方法</h1><h2 id="1-调用实例方法"><a href="#1-调用实例方法" class="headerlink" title="1. 调用实例方法"></a>1. 调用实例方法</h2><p>首先我们有env和obj，步骤是：</p>
-<blockquote>
-<ol>
-<li>用env、obj获取class对象cls;</li>
-<li>用env、cls和方法签名反射获得方法引用mid;</li>
-<li>用env、obj、mid调用方法。</li>
-</ol>
-</blockquote>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">JNIEXPORT <span class="keyword">void</span> JNICALL  <span class="title">Java_InstanceMethodCall_nativeMethod</span><span class="params">(JNIEnv *env, jobject obj)</span> </span>&#123; </span><br><span class="line">     jclass cls = (*env)-&gt;GetObjectClass(env, obj);  </span><br><span class="line">     jmethodID mid =  (*env)-&gt;GetMethodID(env, cls, <span class="string">"callback"</span>, <span class="string">"()V"</span>);  </span><br><span class="line">     <span class="keyword">if</span> (mid == <span class="literal">NULL</span>) &#123; </span><br><span class="line">         <span class="keyword">return</span>; <span class="comment">/* method not found */</span> </span><br><span class="line">     &#125; </span><br><span class="line">     <span class="built_in">printf</span>(<span class="string">"In C\n"</span>); </span><br><span class="line">     (*env)-&gt;CallVoidMethod(env, obj, mid);  </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<h2 id="2-调用静态方法"><a href="#2-调用静态方法" class="headerlink" title="2. 调用静态方法"></a>2. 调用静态方法</h2><p>前两步和刚才一样,第三部把Obj换成cls即可:</p>
-<ol>
-<li>获取cls;</li>
-<li>获取mid;</li>
-<li>用env、cls、mid调用静态方法。</li>
-</ol>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">JNIEXPORT <span class="keyword">void</span> JNICALL  <span class="title">Java_StaticMethodCall_nativeMethod</span><span class="params">(JNIEnv *env, jobject obj)</span> </span>&#123; </span><br><span class="line">     jclass cls = (*env)-&gt;GetObjectClass(env, obj); </span><br><span class="line">     jmethodID mid =  </span><br><span class="line">         (*env)-&gt;GetStaticMethodID(env, cls, <span class="string">"callback"</span>, <span class="string">"()V"</span>); </span><br><span class="line">     <span class="keyword">if</span> (mid == <span class="literal">NULL</span>) &#123; </span><br><span class="line">         <span class="keyword">return</span>;  <span class="comment">/* method not found */</span> </span><br><span class="line">     &#125; </span><br><span class="line">     <span class="built_in">printf</span>(<span class="string">"In C\n"</span>); </span><br><span class="line">     (*env)-&gt;CallStaticVoidMethod(env, cls, mid);  <span class="comment">// 这里是cls</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-<h1 id="JNI需要注意的点"><a href="#JNI需要注意的点" class="headerlink" title="JNI需要注意的点"></a>JNI需要注意的点</h1><ol>
-<li>native方法自己管理内存,jvm不gc这部分;</li>
-<li>JNI调用开销较大，不宜频繁调用;（java数组、字符串都会线性拷贝）</li>
-<li>JNI方法平台有关,移植性差;</li>
-<li>c代码里显式释放内存;</li>
-<li>字符编码问题。</li>
-</ol>
-<p>第四点一般是获取和释放成对使用：(多少get就有多少delete或release)</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">GetObjectField&#x3D;&gt;DeleteLocalRef</span><br><span class="line">GetStringUTFChars&#x3D;&gt;ReleaseStringUTFChars</span><br></pre></td></tr></table></figure>
-
-<p>最后一个字符编码问题:<br>JNI里的这几个函数实际上用的是修改版本的<code>UTF-8</code>，并不完全等效于<code>UTF-8</code>：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">NewStringUTF</span><br><span class="line">GetStringUTFLength</span><br><span class="line">GetStringUTFChars</span><br><span class="line">ReleaseStringUTFChars</span><br><span class="line">GetStringUTFRegion</span><br></pre></td></tr></table></figure>
-<p>用户应当使用这几个函数,先创建UTF-16，然后安全地转换成标准<code>UTF-8</code>。</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">NewString</span><br><span class="line">GetStringLength</span><br><span class="line">GetStringChars</span><br><span class="line">ReleaseStringChars</span><br><span class="line">GetStringRegion</span><br><span class="line">GetStringCritical</span><br><span class="line">ReleaseStringCritical</span><br></pre></td></tr></table></figure>
-
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/09/07/2019-09/JNI%E6%80%BB%E7%BB%93/" data-id="ck96cxpq400jlmaam08ly4o8b" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/JNI/" rel="tag">JNI</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1417,6 +1287,10 @@
       <ul>
         
           <li>
+            <a href="/2022/05/31/2022-05/w-tinylfu%E7%BC%93%E5%AD%98%E7%AE%97%E6%B3%95/">w-tinylfu缓存算法</a>
+          </li>
+        
+          <li>
             <a href="/2022/03/25/2022-03/G1%E8%B0%83%E4%BC%98-%E5%A4%8D%E6%9D%82%E4%B8%9A%E5%8A%A1%E6%B2%BB%E7%90%86%E5%B0%8F%E8%AE%B0/">G1调优-复杂业务治理小记</a>
           </li>
         
@@ -1430,10 +1304,6 @@
         
           <li>
             <a href="/2022/03/13/2022-03/mp4%E6%A0%BC%E5%BC%8F/">mp4格式</a>
-          </li>
-        
-          <li>
-            <a href="/2022/03/13/2022-03/ss%E5%91%BD%E4%BB%A4/">ss命令</a>
           </li>
         
       </ul>
