@@ -72,6 +72,221 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2020-07/ES实战笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/07/22/2020-07/ES%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2020-07-22T10:58:58.000Z" itemprop="datePublished">2020-07-22</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/es/">es</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2020/07/22/2020-07/ES%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0/">ES实战笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="索引结构"><a href="#索引结构" class="headerlink" title="索引结构"></a>索引结构</h1><img src="/images/2020-07/lsm-tree.png" class="" width="800" height="1200" title="lsm-tree">
+<p>ES底层的lucene引擎的分段，比较类似LSM tree的机制。<br>分段不可变，合并生成新的大的分段。<br>ES中的translog对应Hbase中的WAL日志，防止进程崩了丢数据;</p>
+<h1 id="常用api"><a href="#常用api" class="headerlink" title="常用api"></a>常用api</h1><p>查看分析器对某段文本的结果:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">curl -XPOST 'localhost:9200/get-together/_analyze?analyzer=myCustomAnalyzer' -d 'share your experience with NoSqlιbig data technologies'</span><br></pre></td></tr></table></figure>
+
+
+<p>组合内置分词器和过滤器,空格分词、小写+反转:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">curl -XPOST 'localhost:9200/_analyze?tokenizer=whitespace&amp;filters=lowercase,reverse' -d  'share your experience with NoSql big data technolog es'</span><br></pre></td></tr></table></figure>
+
+<p>查看单文档的所有token信息:(get-together索引下、group类型、文档id为1):</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">curl 'localhost:9200/get-together/group/1/_termvector?pretty=true'</span><br></pre></td></tr></table></figure>
+
+<h1 id="分析器"><a href="#分析器" class="headerlink" title="分析器"></a>分析器</h1><p>分析器 = 0到1个字符过滤器 + 1个单个分词器 + 0到n个分词过滤器;</p>
+<h2 id="标准分析器-默认"><a href="#标准分析器-默认" class="headerlink" title="标准分析器(默认)"></a>标准分析器(默认)</h2><p><code>standard analyzer</code> = 标准分词器 + 标准分词过滤器 + 小写转换分词过滤器 + 停用词分词过滤器<br>（0字符过滤+1分词器+3分词过滤器）</p>
+<h2 id="简单分析器"><a href="#简单分析器" class="headerlink" title="简单分析器"></a>简单分析器</h2><p><code>simple analyzer</code>: 在非字母处进行分词 + 转小写</p>
+<h2 id="空白分析器"><a href="#空白分析器" class="headerlink" title="空白分析器"></a>空白分析器</h2><p><code>whitespace analyzer</code>: 根据空白分词 + 0分词过滤器</p>
+<h2 id="停用词过滤器"><a href="#停用词过滤器" class="headerlink" title="停用词过滤器"></a>停用词过滤器</h2><p><code>stop analyzer</code>: 根据停用词分词 + 0分词过滤器；</p>
+<h2 id="模式分析器"><a href="#模式分析器" class="headerlink" title="模式分析器"></a>模式分析器</h2><p><code>pattern analyzer</code>: 允许指定一个分词切分模式;</p>
+<h2 id="语言分析器"><a href="#语言分析器" class="headerlink" title="语言分析器"></a>语言分析器</h2><p>包括汉语;</p>
+<h2 id="雪球分析器"><a href="#雪球分析器" class="headerlink" title="雪球分析器"></a>雪球分析器</h2><p><code>snowball analyzer</code>: 标准分析器 + 雪球词干器; </p>
+<h1 id="分词器"><a href="#分词器" class="headerlink" title="分词器"></a>分词器</h1><h2 id="标准分词器"><a href="#标准分词器" class="headerlink" title="标准分词器"></a>标准分词器</h2><p>主要处理欧洲语言,移除标点;</p>
+<h2 id="关键词分词器"><a href="#关键词分词器" class="headerlink" title="关键词分词器"></a>关键词分词器</h2><p>整个文本提供给过滤器</p>
+<h2 id="字母分词器"><a href="#字母分词器" class="headerlink" title="字母分词器"></a>字母分词器</h2><p>基于非字母分词</p>
+<h2 id="小写分词器"><a href="#小写分词器" class="headerlink" title="小写分词器"></a>小写分词器</h2><p>非字母分词+转换成小写</p>
+<h2 id="空白分词器"><a href="#空白分词器" class="headerlink" title="空白分词器"></a>空白分词器</h2><p>通过空白来分词</p>
+<h2 id="模式分词器"><a href="#模式分词器" class="headerlink" title="模式分词器"></a>模式分词器</h2><p>例如可以在出现文本._.的地方分词:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">curl -XPOST 'localhost:9200/pattern' -d '&#123;</span><br><span class="line">"settngs": &#123;</span><br><span class="line">    ”index” : &#123;</span><br><span class="line">        ”analysis”: &#123;</span><br><span class="line">            ”tokenizer": &#123;</span><br><span class="line">                ”patternl”: &#123;</span><br><span class="line">                    ”type": ”pattern”,</span><br><span class="line">                    ”pattern”:”\\.-\\.”</span><br></pre></td></tr></table></figure>
+
+<h2 id="UAX-URL电子邮件分词器"><a href="#UAX-URL电子邮件分词器" class="headerlink" title="UAX/URL电子邮件分词器"></a>UAX/URL电子邮件分词器</h2><p><a href="mailto:john.smith@example.com">john.smith@example.com</a> =&gt; 标准分词<br>=&gt;<br>john.smith<br>example.com</p>
+<p><a href="http://example.com?q=foo" target="_blank" rel="noopener">http://example.com?q=foo</a> =&gt; 标准分词<br>http、example.com、q、foo</p>
+<p>如果用UAX/URL电子邮件分词器，则可以保留:<br><a href="mailto:john.smith@example.com">john.smith@example.com</a>(type:&lt; EMAIL&gt;)<br><a href="http://example.com?q=bar" target="_blank" rel="noopener">http://example.com?q=bar</a>(type:&lt; URL&gt;)</p>
+<h2 id="路径层次分词器"><a href="#路径层次分词器" class="headerlink" title="路径层次分词器"></a>路径层次分词器</h2><p><code>path hierarchy tokenizer</code><br>输入: /usr/local/var/log/es/log<br>分词结果: /usr、/usr/local、 …. /usr/local/var/log/es/log<br>因此有相同父目录的路径搜索(分词有相同部分)，能互相搜到。</p>
+<h1 id="分词过滤器"><a href="#分词过滤器" class="headerlink" title="分词过滤器"></a>分词过滤器</h1><p>标准分词过滤器: 啥也不做;<br>小写过滤器、停用词过滤器、长度分词过滤器: 将最短和最长的单词过滤掉(自行设置min\max);<br>截断分词过滤器: 截断超出长度token;<br>修建分词过滤器: trim<br>限制分词数量分词过滤器: 限制最多多少个token被索引,比如设置max=8;<br>reverse分词过滤器: 把token反转，可以用于支持后缀索引;<br>唯一分词过滤器: 每个单词只保留第一次出现的位置(去重了)<br>ascii折叠分词过滤器: 尽量转ascii<br>同义词分词过滤器: 转成同义词<br>ngram过滤器: 略<br>滑动窗口分词过滤器: 略</p>
+<h1 id="提取词干"><a href="#提取词干" class="headerlink" title="提取词干"></a>提取词干</h1><p>这个好像只是英文有用。把单词缩减到词根。<br>administrations -&gt; administr<br>词干提取器: snowball,porter_stem,kstem<br>字典提取词干: hunspell分词过滤器+字典</p>
+<h1 id="打分相关"><a href="#打分相关" class="headerlink" title="打分相关"></a>打分相关</h1><ol>
+<li>TF-IDF: 词频、逆文档频率<img src="/images/2020-07/tf-idf.png" class="" width="800" height="1200" title="tf-idf"></li>
+<li>Okapi BM25;</li>
+<li>随机性分歧: DFR相似度</li>
+<li>IB相似度;</li>
+<li>LM dirichlet相似度;</li>
+<li>LM Jelinek Mercer相似度;</li>
+</ol>
+<h2 id="BM25"><a href="#BM25" class="headerlink" title="BM25"></a>BM25</h2><figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line"><span class="attr">"mappings"</span>:&#123;</span><br><span class="line">    <span class="attr">"get-together"</span>: &#123;</span><br><span class="line">        <span class="attr">"properties"</span>: &#123;</span><br><span class="line">            <span class="attr">"title"</span>:&#123;</span><br><span class="line">                <span class="attr">"type"</span>:<span class="string">"string"</span></span><br><span class="line">                ,<span class="attr">"similarity"</span>: <span class="string">"BM25"</span></span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>BM25的3个重要参数:<br>k1: 数值, 词频的重要性; (默认1.2)<br>b: 0~1数值, 篇幅对于得分的影响程度; (默认0.75)<br>discount_overlaps: 多个分词出现在同一位置，是否影响长度的标准化(默认true)</p>
+<h2 id="boosting-加权"><a href="#boosting-加权" class="headerlink" title="boosting: 加权"></a>boosting: 加权</h2><p>可以用来修改文档相关性的程序。<br>包括:</p>
+<ul>
+<li>索引期boosting</li>
+<li>查询期boosting</li>
+</ul>
+<p>一般使用查询期boosting(避免重新索引全部文档)</p>
+<h1 id="相关性、语义搜索的一些方案"><a href="#相关性、语义搜索的一些方案" class="headerlink" title="相关性、语义搜索的一些方案"></a>相关性、语义搜索的一些方案</h1><p>首先所有的词向量模型都是基于分布假说的（distributional hypothesis）：拥有相似上下文的词，词义相似。</p>
+<p>参考: <a href="https://zhuanlan.zhihu.com/p/80737146" target="_blank" rel="noopener">https://zhuanlan.zhihu.com/p/80737146</a></p>
+<ol>
+<li>word embedding</li>
+<li>sentence embedding: 更难训练;</li>
+</ol>
+<p>word embedding算法:<br>word2vec：Skip-gram模型训练神经网络以预测句子中单词周围的上下文单词。<br>GloVe：单词的相似性取决于它们与其他上下文单词出现的频率。该算法训练单词共现计数的简单线性模型。<br>Fasttext：Facebook的词向量模型，其训练速度比word2vec的训练速度更快，效果又不丢失。</p>
+<p>网上现有的预训练模型：基于维基百科语料库.</p>
+<p>性能更优的方案:</p>
+<ol>
+<li>粗排: ES;</li>
+<li>精排: 语义模型计算相似度;</li>
+</ol>
+<p>工业界主流: 谷歌的bert模型</p>
+<h1 id="中文分词IK相关"><a href="#中文分词IK相关" class="headerlink" title="中文分词IK相关"></a>中文分词IK相关</h1><p><a href="https://github.com/medcl/elasticsearch-analysis-ik" target="_blank" rel="noopener">https://github.com/medcl/elasticsearch-analysis-ik</a></p>
+<p>索引时优先使用<code>analyzer</code>配置的分词器，对文档进行分词;<br>// 索引时用ik_max_word,尽量多分几个词出来;<br>查询时优先使用<code>search_analyzer</code>配置的分词器，对输入进行分词;<br>// 查询时使用ik_smark, 尽量用最长的token去查询;<br>//</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">curl -XPOST http://localhost:9200/index/_mapping -H 'Content-Type:application/json' -d'</span><br><span class="line">&#123;</span><br><span class="line">        "properties": &#123;</span><br><span class="line">            "content": &#123;</span><br><span class="line">                "type": "text",</span><br><span class="line">                "analyzer": "ik_max_word",</span><br><span class="line">                "search_analyzer": "ik_smart"</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">&#125;'</span><br></pre></td></tr></table></figure>
+
+<h1 id="实践遇到的问题"><a href="#实践遇到的问题" class="headerlink" title="实践遇到的问题"></a>实践遇到的问题</h1><h2 id="分词查询和关键字查询同时使用"><a href="#分词查询和关键字查询同时使用" class="headerlink" title="分词查询和关键字查询同时使用"></a>分词查询和关键字查询同时使用</h2><p>分词查询的时候，切分是ik_max_word，最大只切到单词；<br>比如“工具”就是最小粒度了，因此如果查询的时候使用”工”则不会查询到结果。</p>
+<p>如果是默认的标准分词器，则只会有单个字，不会有单词；</p>
+<p>所以如果两个都要支持，可以用两个字段，（存两个字段）<br>一个字段用 ik_max_word， 一个字段用 standard;<br>查询的时候也是用bool or 连接，命中一个即可。</p>
+<h3 id="可参考的解决方案"><a href="#可参考的解决方案" class="headerlink" title="可参考的解决方案"></a>可参考的解决方案</h3><p>用fields多加一个不分词的结果(name.raw)</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">    <span class="attr">"properties"</span>:&#123;</span><br><span class="line">        <span class="attr">"name"</span>: &#123;</span><br><span class="line">                <span class="attr">"type"</span>: <span class="string">"string"</span>,</span><br><span class="line">                <span class="attr">"analyzer"</span>: <span class="string">"standard"</span>, </span><br><span class="line">                <span class="attr">"fields"</span>: &#123;</span><br><span class="line">                    <span class="attr">"raw"</span>: &#123;</span><br><span class="line">                        <span class="attr">"index"</span>: <span class="string">"not_analyzed"</span>,</span><br><span class="line">                        <span class="attr">"type"</span>: <span class="string">"string"</span></span><br><span class="line">                    &#125;</span><br><span class="line">                    </span><br><span class="line">                &#125;</span><br><span class="line">        </span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">     </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<h1 id="整合网上的近义词库"><a href="#整合网上的近义词库" class="headerlink" title="整合网上的近义词库"></a>整合网上的近义词库</h1><p>思路1: 自定义一个分词过滤器；// 可复用程度高<br>思路2: 写入该字段前，先用网上的近义词库把文本解析成空格分割的token，然后用空白分词器索引；（查询时用分词器） // 灵活，不用跟版本<br>// 由于可以配置多个分词过滤器，所以可以同时配置空格分词过滤器和同义词分词过滤器</p>
+<p>维基百科近义词库： 528MB<br><a href="http://licstar.net/archives/tag/wikipedia-extractor" target="_blank" rel="noopener">http://licstar.net/archives/tag/wikipedia-extractor</a></p>
+<p>某个领域最好的词向量:<br><a href="http://licstar.net/archives/tag/%e8%af%8d%e5%90%91%e9%87%8f" target="_blank" rel="noopener">http://licstar.net/archives/tag/%e8%af%8d%e5%90%91%e9%87%8f</a></p>
+<p>考虑用boost加入相似度因素；（加权）</p>
+<p>词向量资料：<br><a href="http://licstar.net/archives/328" target="_blank" rel="noopener">http://licstar.net/archives/328</a></p>
+<h1 id="聚集"><a href="#聚集" class="headerlink" title="聚集"></a>聚集</h1><p>聚集有几个选项:</p>
+<h2 id="桶型聚集-group-by"><a href="#桶型聚集-group-by" class="headerlink" title="桶型聚集: (group by)"></a>桶型聚集: (group by)</h2><p>term: 词条聚集,就是统计文档数量;<br>significant_terms: 显著聚集<br>range: 范围聚集;<br>histogram: 直方图聚集;(类似范围，但是只需要提供间距即可)<br>嵌套聚集、反嵌套聚集、子聚集: 根据文档关系聚集;<br>地理距离聚集;</p>
+<h2 id="度量型聚集-agg"><a href="#度量型聚集-agg" class="headerlink" title="度量型聚集: (agg)"></a>度量型聚集: (agg)</h2><p>stats: 就是统计min,max,avg,count,sum信息;<br>extended_stats: 就是加上标准差这种更冷门的统计信息;<br>percentile: 分位数(近似,可以用compress参数控制精度和内存消耗)<br>cardinatily: 基数,也就是uv;// 近似的，hyperLogLog++, precision_threshold控制精度</p>
+<h2 id="过滤器和后过滤器"><a href="#过滤器和后过滤器" class="headerlink" title="过滤器和后过滤器"></a>过滤器和后过滤器</h2><h3 id="过滤器"><a href="#过滤器" class="headerlink" title="过滤器"></a>过滤器</h3><img src="/images/2020-07/es-filter.png" class="" width="800" height="1200" title="es-filter">
+<h3 id="后过滤器"><a href="#后过滤器" class="headerlink" title="后过滤器:"></a>后过滤器:</h3><img src="/images/2020-07/es-post-filter.png" class="" width="800" height="1200" title="es-post-filter">
+
+<p><em>两者区别</em></p>
+<p>文档-&gt;过滤器-&gt;查询-&gt;后过滤器-&gt;查询结果<br>文档-&gt;过滤器-&gt;查询-&gt;filter聚集-&gt;聚集结果</p>
+<p>换句话说就是后过滤器不影响聚集，过滤器则影响聚集结果。<br>filter聚集则只影响聚集。</p>
+<p>有一个例外是使用globel聚集，这样即使符合查询的只有2条文档，聚集也会应用到所有的文档上。(聚集比查询结果的数据源大)</p>
+<h1 id="文档间的关系"><a href="#文档间的关系" class="headerlink" title="文档间的关系"></a>文档间的关系</h1><h2 id="对象类型"><a href="#对象类型" class="headerlink" title="对象类型"></a>对象类型</h2><p>输入:</p>
+<figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">    <span class="attr">"name"</span>: <span class="string">"name1"</span></span><br><span class="line">    ,<span class="attr">"events"</span>: [</span><br><span class="line">        &#123;<span class="attr">"title"</span>: <span class="string">"hadoop"</span></span><br><span class="line">        ,"date”: "12月"</span><br><span class="line">        &#125;</span><br><span class="line">        ,&#123;"title": "es"</span><br><span class="line">        ,"date”: "6月"</span><br><span class="line">        &#125;</span><br><span class="line">    ]</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这种数据实际索引的时候，会把各个字段分别组成数组:</p>
+<figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">events.title: ["hadoop","es"]</span><br><span class="line">events.date: ["6月",“12月”]</span><br></pre></td></tr></table></figure>
+<p>所以搜的时候如果想搜6月的hadoop, 也可以搜出12月hadoop的文档(name1).</p>
+<h2 id="嵌套类型"><a href="#嵌套类型" class="headerlink" title="嵌套类型"></a>嵌套类型</h2><p>上面的情况可以用嵌套类型解决。<br>这个时候的索引:</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">[events.title: hadoop</span><br><span class="line">events.date: <span class="number">12</span>月</span><br><span class="line">,</span><br><span class="line">events.title: es</span><br><span class="line">events.date: <span class="number">6</span>月</span><br><span class="line"></span><br><span class="line">]</span><br></pre></td></tr></table></figure>
+
+<h2 id="父子关系和反规范化"><a href="#父子关系和反规范化" class="headerlink" title="父子关系和反规范化"></a>父子关系和反规范化</h2><p>父子关系的存储：<br>1.规范化：父文档和子文档分开存储，然后再存储一个映射关系；// 相关查询: has_parent/has_child<br>2.反规范化：子文档中存储父文档；（空间换时间）</p>
+<h2 id="嵌套json的存储"><a href="#嵌套json的存储" class="headerlink" title="嵌套json的存储"></a>嵌套json的存储</h2><p>由于ES的底层Lucence只支持扁平结构，ES支持嵌套json的方法是通过强行打平,如：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line"><span class="attr">"title"</span>: <span class="string">"titl1"</span></span><br><span class="line">,<span class="attr">"location"</span>:&#123;</span><br><span class="line">    <span class="attr">"name"</span>: <span class="string">"name1"</span></span><br><span class="line">    ,<span class="attr">"geolocation"</span>: <span class="string">"51.52,-0.09"</span></span><br><span class="line">&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>实际实施到Lucence层的时候是这样存的:</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">titile:</span> <span class="string">"title1"</span></span><br><span class="line"><span class="attr">location.name:</span> <span class="string">"name1"</span></span><br><span class="line"><span class="attr">location.geolocation:</span> <span class="string">"51.52,-0.09"</span></span><br></pre></td></tr></table></figure>
+<p>因此我们设计的key一定不要有小数点符号。<br>而且最好是一对一关系（不是数组）。</p>
+<p>父子关系的索引选项：<br>include_in_parent/include_in_root</p>
+<h3 id="一对一"><a href="#一对一" class="headerlink" title="一对一"></a>一对一</h3><p>嵌套json/对象</p>
+<h4 id="一对多"><a href="#一对多" class="headerlink" title="一对多"></a>一对多</h4><p>嵌套文档: 索引阶段进行join; // 同分片存储，保证本地连接<br>父子关系: 查询阶段进行join; // 不同分片,远程连接</p>
+<h4 id="多对多"><a href="#多对多" class="headerlink" title="多对多"></a>多对多</h4><p>反规法化: 可以处理多对多关系</p>
+<h1 id="ES扩展"><a href="#ES扩展" class="headerlink" title="ES扩展"></a>ES扩展</h1><p>ES集群使用master-slaver架构，master和slaver用心跳信息来判断彼此的存活；<br>（有点类似hadoop，不知道是不是也有hadoop的HA；hadoop在120个节点的时候namenode容易OOM，不知道ES有没有类似问题）<br>master\slaver互相ping应该会消耗一些带宽，可以考虑调节心跳频率调节性能。</p>
+<p>节点下线：先停用（停止数据写入、迁移）</p>
+<h2 id="集群升级"><a href="#集群升级" class="headerlink" title="集群升级"></a>集群升级</h2><h3 id="重启"><a href="#重启" class="headerlink" title="重启"></a>重启</h3><p>直接关闭整个集群，不可用。<br>然后升级所有节点，重启集群。<br>有一段时间不可用。</p>
+<h3 id="轮流重启"><a href="#轮流重启" class="headerlink" title="轮流重启"></a>轮流重启</h3><p>不牺牲可用性的情况下，重启集群；<br>基本步骤是：关一个节点，升级一个节点，重启这个节点，重新加入集群。<br>这里有一个关键就是，关闭某个节点的期间，不需要集群自己做rebalance.<br>因此配置：<code>cluster.routing.allocation.enable</code>=<code>none</code><br>可以用curl发命令修改这个配置。<br>过后重新设置为<code>all</code>。</p>
+<p>如果副本数&gt;1，上述操作期间服务依然可用。</p>
+<h2 id="别名API"><a href="#别名API" class="headerlink" title="别名API"></a>别名API</h2><figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">curl -XPOST 'localhost:9200/_aliases' -d '</span><br><span class="line">&#123;</span><br><span class="line">    <span class="attr">"actions"</span>: [</span><br><span class="line">        &#123;</span><br><span class="line">            <span class="attr">"add"</span>: &#123;</span><br><span class="line">                <span class="attr">"index"</span>: <span class="string">"get-together"</span>,</span><br><span class="line">                <span class="attr">"alias"</span>: <span class="string">"gt-alias"</span></span><br><span class="line">            &#125;</span><br><span class="line">        &#125;,</span><br><span class="line">        &#123;</span><br><span class="line">            <span class="attr">"remove"</span>: &#123;</span><br><span class="line">                <span class="attr">"index"</span>: <span class="string">"old-get-together"</span>,</span><br><span class="line">                <span class="attr">"alias"</span>: <span class="string">"gt-alias"</span></span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    ]</span><br><span class="line">&#125;'</span><br></pre></td></tr></table></figure>
+<p>可以分拆成两个命令：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">curl -XPUT 'http://localhost:9200/get-together/_alias/gt-alias'</span><br><span class="line">curl -XDELETE 'http://localhost:9200/old-get-together/_alias/gt-alias'</span><br></pre></td></tr></table></figure>
+<p>一个别名可以指向多个索引，甚至指向logs-开头的索引。<br>(类似于一个逻辑名称)<br>别名还可以附带一个过滤器。</p>
+<h2 id="路由"><a href="#路由" class="headerlink" title="路由"></a>路由</h2><p>默认路由策略：文档id<br>可以手动指定routing=xxx来影响分片行为。</p>
+<p>因此可以根据业务，把一起访问的文档路由到同一分片上。</p>
+<h3 id="debug-api-查看搜索的分片"><a href="#debug-api-查看搜索的分片" class="headerlink" title="debug api: 查看搜索的分片"></a>debug api: 查看搜索的分片</h3><p>routing为xxx时，会搜索哪个分片:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">curl -XGET 'localhost:9200/get-together/_search_shards&amp;routing=xxxx'</span><br></pre></td></tr></table></figure>
+
+
+<p>可以在别名中配置路由，简化查询操作。</p>
+<h1 id="性能优化"><a href="#性能优化" class="headerlink" title="性能优化"></a>性能优化</h1><h2 id="合并请求-bulk接口"><a href="#合并请求-bulk接口" class="headerlink" title="合并请求(bulk接口)"></a>合并请求(bulk接口)</h2><p>批量新增、批量更新、批量搜索</p>
+<h2 id="IO配置优化"><a href="#IO配置优化" class="headerlink" title="IO配置优化"></a>IO配置优化</h2><p>segments: 分段;</p>
+<p>ES接收到文档后:<br>分段的倒排索引</p>
+<h3 id="概念"><a href="#概念" class="headerlink" title="概念"></a>概念</h3><p>refresh: 刷新; 生效，重新打开索引;新建的索引生效, 以前的缓存失效;<br>flush: 冲刷; 刷盘，索引数据写入磁盘;<br>合并: 小分段合并成大分段; // 分段越多，查询越慢;<br>存储限流: 调节每秒写入的字节数;</p>
+<h3 id="优化策略"><a href="#优化策略" class="headerlink" title="优化策略"></a>优化策略</h3><h4 id="刷新频率降低"><a href="#刷新频率降低" class="headerlink" title="刷新频率降低"></a>刷新频率降低</h4><p>缓存失效的频率降低，性能更高，新文档慢一些生效；<br>// 默认每秒刷新, index.refresh_interval</p>
+<h4 id="刷盘频率降低"><a href="#刷盘频率降低" class="headerlink" title="刷盘频率降低"></a>刷盘频率降低</h4><p>IO消耗降低，性能更高，丢数据概率提高;<br>触发刷盘的时机:<br>1.内存缓存区已满;<br>2.固定间隔(定时器);<br>3.事务日志达到阈值;<br>因此调控的手段:<br>1.内存缓存区大小: indices.memory.index_buffer_size;<br>2.刷新间隔: index.translog.flush_threshold_period;<br>3.事务日志大小: index.translog.flush_threshold_size;</p>
+<h3 id="合并策略优化"><a href="#合并策略优化" class="headerlink" title="合并策略优化"></a>合并策略优化</h3><p>合并的作用：</p>
+<ol>
+<li>真正删除文档;</li>
+<li>分段越少，查询越快;</li>
+</ol>
+<p>触发合并的时机:</p>
+<ol>
+<li>索引文档;</li>
+<li>更新、删除文档;</li>
+</ol>
+<p>合并相关配置:<br><code>index.merge.policy.segments_per_tier</code>:<br>每层的分段数量;<br>高=&gt;写性能越好，越低=&gt;读性能越好;<br><code>index.merge.policy.max_merge_at_once</code>:<br>每次合并多少分段; 设置为等于<code>segments_per_tier</code>即可;<br><code>index.merge.policy.max_merged_segment</code>:<br>分段的最大规模;<br>低=&gt;写性能好; 高=&gt;读性能好;<br><code>index.merge.scheduler.max_thread_count</code>:<br>合并用的最大线程数;</p>
+<h3 id="存储限流"><a href="#存储限流" class="headerlink" title="存储限流"></a>存储限流</h3><p><code>indices.store.throttle.max_bytes_per_sec</code>:<br>最大IO吞吐量，默认20MB/s，默认只针对merge(合并分段);<br>(ssd的话，可以调大到100～200MB)</p>
+<p><code>indices.store.throttle.type</code>:<br>限流类型；<code>none</code>: 不限流, <code>all</code>: 所有磁盘操作; 默认: <code>merge</code>。</p>
+<h3 id="磁盘IO优化"><a href="#磁盘IO优化" class="headerlink" title="磁盘IO优化"></a>磁盘IO优化</h3><p>MMAPDirectory:<br>进程请求OS对磁盘文件进行内存映射(初始化开销);<br>也就是mmap，0拷贝，进程挂掉的话，内核会帮忙保存文件;</p>
+<p>NIOFDirectory:<br>进程将磁盘文件复制到JVM堆中;<br>也就是常规文件访问，进程挂掉，则文件修改丢失;</p>
+<p>相关配置:<br><code>index.store.type</code>: 默认<code>default</code>.<br>mmapfs: 只使用MMapDirectory, 静态索引，物理内存能放下索引时适用;<br>niofs: 只使用NIOFSDirectory,32位系统适用;</p>
+<p>可以对单个索引配置，也可以配置成全局。</p>
+<h2 id="缓存优化"><a href="#缓存优化" class="headerlink" title="缓存优化"></a>缓存优化</h2><p>ES的缓存分为:</p>
+<ol>
+<li>分片查询缓存: 缓存查询结果;</li>
+<li>OS缓存: 缓存索引到内存;</li>
+</ol>
+<h2 id="过滤器缓存"><a href="#过滤器缓存" class="headerlink" title="过滤器缓存"></a>过滤器缓存</h2><p>过滤器缓存可以在query时，在filter用<code>_cache</code>:true/false配置。<br>过滤器缓存在各个节点上，内存占比配置:<br><code>indices.cache.filter.size</code>: 默认10%<br>缓存淘汰策略: LRU<br>缓存生存时间:<br><code>index.cache.filter.expire</code>: 30m  (表示30分钟过期)</p>
+<p>比较简单的过滤器可以使用bitset来减少内存消耗；<br>比较复杂的过滤器则直接存储查询结果。<br>可以使用bitset的过滤器:<br>term,exists/missing,prefix</p>
+<h2 id="字段过滤器"><a href="#字段过滤器" class="headerlink" title="字段过滤器"></a>字段过滤器</h2><p>索引：token -&gt; 文档 ; (又叫倒排索引)<br>字段: 文档 -&gt; 词条; (主要用于排序和聚集)</p>
+<p>字段上可以用的过滤器:<br>terms过滤器<br>range过滤器</p>
+<h2 id="预热器优化"><a href="#预热器优化" class="headerlink" title="预热器优化"></a>预热器优化</h2><p>可以在索引上定义预热器。<br>即将按日期倒序查询:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">curl -XPUT 'localhost:9200/get-together/event/_warmer/upcoming_events' -d '&#123;</span><br><span class="line">    "sort":[</span><br><span class="line">        &#123;</span><br><span class="line">            "date": &#123;"order":"desc"&#125;</span><br><span class="line">        &#125;</span><br><span class="line">    ]</span><br><span class="line"></span><br><span class="line">&#125;'</span><br></pre></td></tr></table></figure>
+<p>即将查询热门分组:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">curl -XPUT 'localhost:9200/get-together/group/_warmer/top_tags' -d '&#123;</span><br><span class="line">    "aggs":&#123;</span><br><span class="line">        "top_tags":&#123;</span><br><span class="line">            "terms":&#123;</span><br><span class="line">                "field": "tags.verbatim"</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;'</span><br></pre></td></tr></table></figure>
+<p>可以创建索引的时候直接定义预热器。</p>
+<h2 id="脚本优化"><a href="#脚本优化" class="headerlink" title="脚本优化"></a>脚本优化</h2><p>如果只有数值型的操作，可以考虑用lucene表达式代替脚本；<br>性能：<br>不用脚本&gt;lucene表达式（js）&gt;java脚本&gt;其他脚本</p>
+<h2 id="ES查询过程"><a href="#ES查询过程" class="headerlink" title="ES查询过程"></a>ES查询过程</h2><h3 id="topN查询"><a href="#topN查询" class="headerlink" title="topN查询"></a>topN查询</h3><p>比如取10个结果:<br>1.每个分片取得分前10的;<br>2.合并所有分片的结果(归并排序);</p>
+<p>因此得分是在每个分片上算的（分片内得分）</p>
+<h3 id="分页查询"><a href="#分页查询" class="headerlink" title="分页查询"></a>分页查询</h3><p>{<br>“from”: 400<br>,”size”: 100<br>}<br>这种需要400～500的结果，但实际会取前500个，然后扔掉前400个。</p>
+<p>如果是顺序翻页需求，可以用scroll类型查询优化，查询的时候传递一个scroll=1m的参数，让ES等一分钟，以准备接收下一次翻页。这种情况下，每次ES都会返回一个scrollId。</p>
+<h1 id="集群管理"><a href="#集群管理" class="headerlink" title="集群管理"></a>集群管理</h1><h2 id="模版"><a href="#模版" class="headerlink" title="模版"></a>模版</h2><p>可以配置某个前缀的索引都应用某个配置模版。<br>（比如模版里定义别名）</p>
+<h3 id="多个模版的合并"><a href="#多个模版的合并" class="headerlink" title="多个模版的合并"></a>多个模版的合并</h3><p>多个模版可能匹配到同一个索引，这个时候多个模版的配置会合并。<br>合并的顺序按照order字段，0的先执行，然后1的覆盖0的，依此类推。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2020/07/22/2020-07/ES%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0/" data-id="ckcy58mud0000msamcfgubxqi" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/elasticsearch/" rel="tag">elasticsearch</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/es/" rel="tag">es</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2020-06/tcp调优" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2020/06/19/2020-06/tcp%E8%B0%83%E4%BC%98/" class="article-date">
@@ -1038,65 +1253,6 @@
 
 
   
-    <article id="post-2020-01/ThreadLocal的线性探测" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2020/01/12/2020-01/ThreadLocal%E7%9A%84%E7%BA%BF%E6%80%A7%E6%8E%A2%E6%B5%8B/" class="article-date">
-  <time datetime="2020-01-12T10:01:31.000Z" itemprop="datePublished">2020-01-12</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2020/01/12/2020-01/ThreadLocal%E7%9A%84%E7%BA%BF%E6%80%A7%E6%8E%A2%E6%B5%8B/">ThreadLocal的线性探测</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>参考:<br><a href="https://www.liaoxuefeng.com/wiki/1252599548343744/1306581251653666" target="_blank" rel="noopener">https://www.liaoxuefeng.com/wiki/1252599548343744/1306581251653666</a><br><a href="http://songkun.me/2019/10/26/2019-10-26-java-threadlocal-hash-clash/" target="_blank" rel="noopener">http://songkun.me/2019/10/26/2019-10-26-java-threadlocal-hash-clash/</a><br><a href="https://juejin.im/post/5d43e415e51d4561db5e39ed" target="_blank" rel="noopener">https://juejin.im/post/5d43e415e51d4561db5e39ed</a></p>
-<h1 id="避免ThreadLocal的内存泄露"><a href="#避免ThreadLocal的内存泄露" class="headerlink" title="避免ThreadLocal的内存泄露"></a>避免ThreadLocal的内存泄露</h1><p>参考上述资料,ThreadLocal是存在线程自己的变量,只不过用threadLocalMap把这个线程所有的ThreadLocal变量都集中存储了,key用的是ThreadLocal对象,value用的是对象T,也就是实际的数据。<br>由于key用的是弱引用,因此使用ThreadLocal时,使用结束时一定要进行<code>remove()</code>,否则会导致内存泄露。</p>
-<p>这里的内存泄露有3重含义:</p>
-<h2 id="局部ThreadLocal变量"><a href="#局部ThreadLocal变量" class="headerlink" title="局部ThreadLocal变量"></a>局部ThreadLocal变量</h2><p>这个数据语义上已经不用了,而且语法上ThreadLocal变量也已经离开作用域，也回收了,key变成了null;但由于ThreadLocal设计实现上的缺陷,ThreadLocalMap中的key变成null,value却不是null,依然强引用了数据,所以不能自动回收,需要程序员手动处理:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">try</span> &#123;</span><br><span class="line">    threadLocalUser.set(user);</span><br><span class="line">    ...</span><br><span class="line">&#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">    threadLocalUser.remove();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h2 id="static-ThreadLocal变量"><a href="#static-ThreadLocal变量" class="headerlink" title="static ThreadLocal变量"></a>static ThreadLocal变量</h2><p>这个数据语义上已经不用了,但语法上这个ThreadLocal是static，没有离开作用域,<br>因此理论上还能访问到,设计上的生命周期太过于长了。 这种属于设计缺陷。也需要程序员手动处理,代码同上,也是调用<code>remove()</code>方法。</p>
-<h2 id="搭配线程池的ThreadLocal变量"><a href="#搭配线程池的ThreadLocal变量" class="headerlink" title="搭配线程池的ThreadLocal变量"></a>搭配线程池的ThreadLocal变量</h2><p>这个数据本意上已经不用了,  如果不是线程池的线程，如果只是上述两种情况，也只会内存泄露一段时间，等到线程销毁的时候，就会释放相应的threadlocalMap和内存。<br>但如果搭配线程池使用，这里的ThreadLocalMap和ThreadLocal变量都会继续使用,永不释放内存。<br>因此程序语义变为不同任务都共享这个threadLocal变量，很可能有语义错误。<br>保险起见,也是同上,调用<code>remove()</code>方法即可。</p>
-<h1 id="remove方法背后-ThreadLocalMap的实现机制"><a href="#remove方法背后-ThreadLocalMap的实现机制" class="headerlink" title="remove方法背后: ThreadLocalMap的实现机制"></a>remove方法背后: ThreadLocalMap的实现机制</h1><p>remove方法的语义很简单,就是将ThreadLocalMap的对应key/value都删除。<br>实际底层实现却并不简单,涉及到性能考虑=&gt;线性探测法=&gt;删除时rehash的连锁反应,导致实现较为特殊。</p>
-<h2 id="斐波那契哈希"><a href="#斐波那契哈希" class="headerlink" title="斐波那契哈希"></a>斐波那契哈希</h2><p>ThreadLocalMap希望尽可能提高性能,因此使用斐波那契哈希,使用魔法数0x61c88647,为每一个ThreadLocal变量涉及了尽可能均匀、理论无碰撞的完美哈希，同时辅助以rehash扩容，来保证碰撞和线性探测死循环尽可能不发生。</p>
-<h2 id="线性探测与删除"><a href="#线性探测与删除" class="headerlink" title="线性探测与删除"></a>线性探测与删除</h2><p>ThreadLocalMap处理哈希冲突时使用的是线性探测法,因此删除key的时候不能直接简单把entry置为null; 它采用的方法是把后续每个不为null的entry进行rehash, 放在合适的位置,保证不会因为删除导致线性探测失效中断。这里会把整个哈希表的数组看作循环队列,一直rehash到null的entry,因为当前的entry一定是null,而且负载因子不会太高,而且是单线程,因此一定不会死循环,有终止条件。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">int</span> <span class="title">expungeStaleEntry</span><span class="params">(<span class="keyword">int</span> staleSlot)</span> </span>&#123;</span><br><span class="line">  Entry[] tab = table;</span><br><span class="line">  <span class="keyword">int</span> len = tab.length;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 删除对应位置的entry</span></span><br><span class="line">  tab[staleSlot].value = <span class="keyword">null</span>;</span><br><span class="line">  tab[staleSlot] = <span class="keyword">null</span>;</span><br><span class="line">  size--;</span><br><span class="line"></span><br><span class="line">  Entry e;</span><br><span class="line">  <span class="keyword">int</span> i;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// rehash过程,直到entry为null</span></span><br><span class="line">  <span class="keyword">for</span> (i = nextIndex(staleSlot, len);(e = tab[i]) != <span class="keyword">null</span>; i = nextIndex(i, len)) &#123;</span><br><span class="line">    ThreadLocal&lt;?&gt; k = e.get();</span><br><span class="line">    <span class="comment">// k为空,证明已经被垃圾回收了</span></span><br><span class="line">    <span class="keyword">if</span> (k == <span class="keyword">null</span>) &#123;</span><br><span class="line">        e.value = <span class="keyword">null</span>;</span><br><span class="line">        tab[i] = <span class="keyword">null</span>;</span><br><span class="line">        size--;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="keyword">int</span> h = k.threadLocalHashCode &amp; (len - <span class="number">1</span>);</span><br><span class="line">        <span class="comment">// 判断当前元素是否处于"真正"应该待的位置</span></span><br><span class="line">        <span class="keyword">if</span> (h != i) &#123;</span><br><span class="line">            tab[i] = <span class="keyword">null</span>;</span><br><span class="line">            <span class="comment">// 线性探测</span></span><br><span class="line">            <span class="keyword">while</span> (tab[h] != <span class="keyword">null</span>)</span><br><span class="line">                h = nextIndex(h, len);</span><br><span class="line">            tab[h] = e;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">return</span> i;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>综上, 理论上每次删除都会进行局部链的rehash,但是由于斐波那契哈希设计上是绝对均匀，因此这个”局部链”的长度理论上是非常短甚至是0.<br>此外, 除了这种rehash的方法,还可以对entry进行delete标记来确保线性探测不会中断。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2020/01/12/2020-01/ThreadLocal%E7%9A%84%E7%BA%BF%E6%80%A7%E6%8E%A2%E6%B5%8B/" data-id="ck96cxpqi00l0maam9guw40yb" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1123,6 +1279,10 @@
       <ul>
         
           <li>
+            <a href="/2022/08/30/2022-08/%E8%B0%83%E4%BC%98-cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-cpu毛刺问题</a>
+          </li>
+        
+          <li>
             <a href="/2022/05/31/2022-05/w-tinylfu%E7%BC%93%E5%AD%98%E7%AE%97%E6%B3%95/">w-tinylfu缓存算法</a>
           </li>
         
@@ -1136,10 +1296,6 @@
         
           <li>
             <a href="/2022/03/14/2022-03/%E4%B8%AD%E6%96%AD%E6%A2%B3%E7%90%86/">java方法是否可中断梳理</a>
-          </li>
-        
-          <li>
-            <a href="/2022/03/13/2022-03/mp4%E6%A0%BC%E5%BC%8F/">mp4格式</a>
           </li>
         
       </ul>

@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>调优-cpu毛刺问题 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="摘要1。线上服务追踪使用公共线程池的调用栈；2。动态调整线程池大小;3。拓展：pstack、strace非java进程; 背景线上服务偶尔会有一两个实例突然cpu飙到100%，尤其以刚启动的时候发生的概率高。虽然分钟级的平均使用率只有35%左右，但是秒级则会有几秒进入进程卡顿状态，影响服务的可用性。 问题定位1。定位线程池:cpu问题，首先想到的是线程池打满的可能。所以首先看监控里各个线程池的使用">
+<meta property="og:type" content="article">
+<meta property="og:title" content="调优-cpu毛刺问题">
+<meta property="og:url" content="http://xiaoyue26.github.io/2022/08/30/2022-08/%E8%B0%83%E4%BC%98-cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="摘要1。线上服务追踪使用公共线程池的调用栈；2。动态调整线程池大小;3。拓展：pstack、strace非java进程; 背景线上服务偶尔会有一两个实例突然cpu飙到100%，尤其以刚启动的时候发生的概率高。虽然分钟级的平均使用率只有35%左右，但是秒级则会有几秒进入进程卡顿状态，影响服务的可用性。 问题定位1。定位线程池:cpu问题，首先想到的是线程池打满的可能。所以首先看监控里各个线程池的使用">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2022-08-30T10:07:52.000Z">
+<meta property="article:modified_time" content="2022-08-31T07:01:35.347Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="java">
+<meta property="article:tag" content="caffeine">
+<meta property="article:tag" content="线程池">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2022-08/调优-cpu毛刺问题" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2022/08/30/2022-08/%E8%B0%83%E4%BC%98-cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/" class="article-date">
+  <time datetime="2022-08-30T10:07:52.000Z" itemprop="datePublished">2022-08-30</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E6%80%A7%E8%83%BD/">性能</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      调优-cpu毛刺问题
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="摘要"><a href="#摘要" class="headerlink" title="摘要"></a>摘要</h1><p>1。线上服务追踪使用公共线程池的调用栈；<br>2。动态调整线程池大小;<br>3。拓展：pstack、strace非java进程;</p>
+<h1 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h1><p>线上服务偶尔会有一两个实例突然cpu飙到100%，尤其以刚启动的时候发生的概率高。<br>虽然分钟级的平均使用率只有35%左右，但是秒级则会有几秒进入进程卡顿状态，影响服务的可用性。</p>
+<h1 id="问题定位"><a href="#问题定位" class="headerlink" title="问题定位"></a>问题定位</h1><h2 id="1。定位线程池"><a href="#1。定位线程池" class="headerlink" title="1。定位线程池:"></a>1。定位线程池:</h2><p>cpu问题，首先想到的是线程池打满的可能。所以首先看监控里各个线程池的使用率。<br>然后发现打满的线程池名字是: <code>fork-join-common-pool</code>。</p>
+<p>这里就很尴尬了，因为如果是业务命名好的线程池，就可以立即知道涉及到的业务和相关代码的位置了。</p>
+<blockquote>
+<p>这里监控线程池使用率用的是java.util.concurrent.ThreadPoolExecutor.getActiveCount<br>或java.util.concurrent.ForkJoinPool.getActiveThreadCount<br>对比java.util.concurrent.ThreadPoolExecutor.getMaximumPoolSize<br>或java.util.concurrent.ForkJoinPool.getParallelism<br>启动所有线程池的时候注册一下reporter即可。</p>
+</blockquote>
+<h2 id="2。追踪调用栈"><a href="#2。追踪调用栈" class="headerlink" title="2。追踪调用栈"></a>2。追踪调用栈</h2><p>这种不命名线程池的不规范的使用，给定位问题带来了麻烦。<br>需要登陆到容器里，然后用<code>arthas</code>连上jvm:</p>
+<figure class="highlight shell"><figcaption><span>script</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">stack java.util.concurrent.ForkJoinPool externalSubmit -n 3</span><br><span class="line"><span class="meta">#</span><span class="bash"> 需要设置options unsafe <span class="literal">true</span></span></span><br></pre></td></tr></table></figure>
+
+<p>看一下提交任务的代码的调用栈:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">ts&#x3D;2022-08-24 18:16:20;thread_name&#x3D;csc-infra-executor-348;id&#x3D;f2e45;is_daemon&#x3D;false;priority&#x3D;5;TCCL&#x3D;jdk.internal.loader.ClassLoaders$AppClassLoader@531d72ca</span><br><span class="line">    @java.util.concurrent.ForkJoinPool.signalWork()</span><br><span class="line">        at java.util.concurrent.ForkJoinPool.externalPush(ForkJoinPool.java:1903)</span><br><span class="line">        at java.util.concurrent.ForkJoinPool.externalSubmit(ForkJoinPool.java:1921)</span><br><span class="line">        at java.util.concurrent.ForkJoinPool.execute(ForkJoinPool.java:2453)</span><br><span class="line">        at com.github.benmanes.caffeine.cache.BoundedLocalCache.scheduleDrainBuffers(BoundedLocalCache.java:1427)</span><br><span class="line">        at com.github.benmanes.caffeine.cache.BoundedLocalCache.scheduleAfterWrite(BoundedLocalCache.java:1394)</span><br><span class="line">        at com.github.benmanes.caffeine.cache.BoundedLocalCache.afterWrite(BoundedLocalCache.java:1364)</span><br><span class="line">        at com.github.benmanes.caffeine.cache.BoundedLocalCache.doComputeIfAbsent(BoundedLocalCache.java:2470)</span><br><span class="line">        at com.github.benmanes.caffeine.cache.BoundedLocalCache.computeIfAbsent(BoundedLocalCache.java:2386)</span><br><span class="line">        at com.github.benmanes.caffeine.cache.LocalCache.computeIfAbsent(LocalCache.java:108)</span><br><span class="line">        at com.github.benmanes.caffeine.cache.LocalLoadingCache.get(LocalLoadingCache.java:54)</span><br><span class="line">        at com.github.benmanes.caffeine.guava.CaffeinatedGuavaLoadingCache.get(CaffeinatedGuavaLoadingCache.java:59)</span><br><span class="line">        at</span><br></pre></td></tr></table></figure>
+<p>结果挺意外的，原来是使用的<code>caffeine</code>的缓存默认用的公共线程池。<br>翻了一下公司封装的接口里没法往里面传自己的线程池，不传默认就用公共forkjoin线程池，worker数量=core * 2;<br>因此吞吐量太低了。一旦遇到有大量缓存需要重载的时候，就会卡住，因此会cpu毛刺。<br>平时因为设置得过期时间和刷新时间好，不会触发；启动的时候，缓存还是空的，因此线程池会打满，请求堆积、cpu毛刺。</p>
+<h2 id="3。解决方案"><a href="#3。解决方案" class="headerlink" title="3。解决方案"></a>3。解决方案</h2><p>首先是推动公司基础部门把这个漏暴露的接口补上；<br>其次是使用自己创建的线程池时，要确定线程池的大小。<br>这个问题一方面有网上的公式:</p>
+<blockquote>
+<p>cpu密集: 线程池大小=core * 2;<br>IO密集: 线程池大小= IO时间/cpu时间 * 2;</p>
+</blockquote>
+<p>其实一般业务系统，又不是机器学习之类的算法程序，基本上都是IO密集；<br>可以算一下下游返回时间大概多少(超时时间)，除以(总时间-IO时间)即可。</p>
+<p>除了根据上面的公式直接拍，如果后续下游有变化，动态调整也很重要，所以最好是用可以动态调整线程池大小的封装。<br>可以借用<code>com.google.common.util.concurrent.ForwardingExecutorService</code>，稍微封装一下。<br>主要注意的就是调大<code>corePoolSize</code>之前，要先调大<code>maximumPoolSize</code>;<br>反之则反过来。（也不是每种线程池都能调,jdk默认是让调的）</p>
+<h2 id="4。拓展"><a href="#4。拓展" class="headerlink" title="4。拓展"></a>4。拓展</h2><p>jvm进程我们一般先:<br>1.top一下看进程id;<br>2.<code>top -Hp &lt;pid&gt;</code>看进程内线程id(十进制);<br>3.<code>printf &quot;%x\n&quot; &lt;pid&gt;</code>看16进制nid;<br>4.<code>jstack &lt;pid&gt; | grep &lt;nid&gt; -A 30</code>看具体栈;</p>
+<p>如果是非jvm程序，则不能用<code>jstack</code>,可以用<code>pstack</code>:</p>
+<figure class="highlight shell"><figcaption><span>script</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">pstack &lt;线程id&gt;</span><br><span class="line">``` </span><br><span class="line">不过信息就比jstack少很多了。</span><br><span class="line">还可以:</span><br><span class="line">```shell script</span><br><span class="line">strace -o strace.log -tt -p &lt;线程id&gt;</span><br></pre></td></tr></table></figure>
+<p>追踪运行时的汇编。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2022/08/30/2022-08/%E8%B0%83%E4%BC%98-cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/" data-id="cl7h9tj8g0000h3amavv924c2" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/caffeine/" rel="tag">caffeine</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E7%BA%BF%E7%A8%8B%E6%B1%A0/" rel="tag">线程池</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+  
+    <a href="/2022/05/31/2022-05/w-tinylfu%E7%BC%93%E5%AD%98%E7%AE%97%E6%B3%95/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">w-tinylfu缓存算法</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#摘要"><span class="toc-number">1.</span> <span class="toc-text">摘要</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#背景"><span class="toc-number">2.</span> <span class="toc-text">背景</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#问题定位"><span class="toc-number">3.</span> <span class="toc-text">问题定位</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#1。定位线程池"><span class="toc-number">3.1.</span> <span class="toc-text">1。定位线程池:</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2。追踪调用栈"><span class="toc-number">3.2.</span> <span class="toc-text">2。追踪调用栈</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3。解决方案"><span class="toc-number">3.3.</span> <span class="toc-text">3。解决方案</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4。拓展"><span class="toc-number">3.4.</span> <span class="toc-text">4。拓展</span></a></li></ol></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2022 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

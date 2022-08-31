@@ -72,6 +72,161 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-12/如何阅读thread-dump" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/12/06/2018-12/%E5%A6%82%E4%BD%95%E9%98%85%E8%AF%BBthread-dump/" class="article-date">
+  <time datetime="2018-12-06T01:24:17.000Z" itemprop="datePublished">2018-12-06</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/jvm/">jvm</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/12/06/2018-12/%E5%A6%82%E4%BD%95%E9%98%85%E8%AF%BBthread-dump/">如何阅读thread dump</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="生成thread-dump"><a href="#生成thread-dump" class="headerlink" title="生成thread dump"></a>生成thread dump</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">jstack &lt;PID&gt;</span><br></pre></td></tr></table></figure>
+
+<h1 id="查看thread-dump文件"><a href="#查看thread-dump文件" class="headerlink" title="查看thread dump文件"></a>查看thread dump文件</h1><ol>
+<li>保存成<code>xxx.tdump</code>文件,用<code>jvisualvm</code>打开;</li>
+<li>✔ 用网站打开: <a href="http://spotify.github.io/threaddump-analyzer/" target="_blank" rel="noopener">http://spotify.github.io/threaddump-analyzer/</a></li>
+<li>用文本编辑器打开.</li>
+</ol>
+<p>其中第二个方法，用网站查看最好用。<br>此外还可以用另一个网站: <a href="http://fastthread.io/" target="_blank" rel="noopener">http://fastthread.io/</a><br>这个网站还能看core dump和hs_err_pid142043.log</p>
+<h2 id="jvisualvm查看thread-dump"><a href="#jvisualvm查看thread-dump" class="headerlink" title="jvisualvm查看thread dump"></a>jvisualvm查看thread dump</h2><p>和用文本编辑器的区别只有一个，就是多了语法高亮(字体颜色有区分)。<br>某个日志如下:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">&quot;Attach Listener&quot; #16866 daemon prio&#x3D;9 os_prio&#x3D;0 tid&#x3D;0x00007f6574001000 nid&#x3D;0x2edea waiting on condition [0x0000000000000000]</span><br><span class="line">   java.lang.Thread.State: RUNNABLE</span><br></pre></td></tr></table></figure>
+
+<p>各部分含义:</p>
+<ul>
+<li>线程名称：<code>Attach Listener</code></li>
+<li>线程类型: <code>daemon</code></li>
+<li>tid: jvm内部线程id;</li>
+<li>nid: 线程id(系统真实)16进制;</li>
+<li>线程状态: RUNNABLE</li>
+<li>[0x0000000000000000]： 起始栈地址。</li>
+</ul>
+<h3 id="案例-遇到cpu100-的情况"><a href="#案例-遇到cpu100-的情况" class="headerlink" title="案例: 遇到cpu100%的情况"></a>案例: 遇到cpu100%的情况</h3><ol>
+<li>查看某进程下占用高的线程id:<br><code>top –H –p &lt;进程id&gt;</code><br>这里从结果里得到比如 16143 线程id;</li>
+<li>查看thread dump:<br><code>jstack -l &lt;进程id&gt;</code><br>上一步的线程id(16143)转换为16进制为<code>0x3f0f</code>,因此在thread dump中看看<code>0x3f0f</code>相关信息即可。（也就是上文中的nid）<br>（可以定位到具体是啥线程了）</li>
+</ol>
+<h2 id="网站查看thread-dump"><a href="#网站查看thread-dump" class="headerlink" title="网站查看thread dump"></a>网站查看thread dump</h2><p><a href="http://spotify.github.io/threaddump-analyzer" target="_blank" rel="noopener">http://spotify.github.io/threaddump-analyzer</a><br>几个改进:</p>
+<ol>
+<li>会合并相同栈的线程; (类似一个group by);</li>
+<li>会列出锁占用情况(<code>Synchronizers</code>面板);</li>
+<li>Top Methods From 50 Running Threads。<img src="/images/2018-12/groupbythread.png" class="" width="800" height="1200" title="groupbythread">
+<img src="/images/2018-12/spotify.png" class="" width="800" height="1200" title="spotify">
+<img src="/images/2018-12/topmethod.png" class="" width="800" height="1200" title="topmethod">
+
+</li>
+</ol>
+<h3 id="tip-10进制转16进制"><a href="#tip-10进制转16进制" class="headerlink" title="tip 10进制转16进制"></a>tip 10进制转16进制</h3><p>用<code>top -H -p pid</code>找到cpu占用高的线程id(10进制)以后，要去thread dump里找具体是哪个nid(16进制),因此需要用这个linux命令:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"># 把10进制的26转成16进制:</span><br><span class="line">echo &#39;obase&#x3D;16;ibase&#x3D;10;26&#39; | bc</span><br></pre></td></tr></table></figure>
+<p>或者用printf:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">printf %x&#39;\n&#39; 26</span><br><span class="line"># 结果是1a</span><br></pre></td></tr></table></figure>
+
+<h3 id="线程状态"><a href="#线程状态" class="headerlink" title="线程状态"></a>线程状态</h3><ul>
+<li>java中的线程状态:<br>线程状态转化大致如下:</li>
+</ul>
+<ol>
+<li><code>New</code>=&gt;<code>Runnable</code>=&gt;<code>Terminated</code> // 理想状态</li>
+<li><code>Runnable</code> =&gt; <code>Blocked</code>/<code>Waiting</code>/<code>Time_Waited</code>=&gt;<code>Runnable</code> // 可能误入的歧途</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>状态</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>New</td>
+<td>创建线程后,调用<code>start()</code>前.</td>
+</tr>
+<tr>
+<td>Runnable</td>
+<td>就绪和运行中.</td>
+</tr>
+<tr>
+<td>Terminated</td>
+<td>终止. 执行完毕</td>
+</tr>
+<tr>
+<td>Blocked</td>
+<td>阻塞.  阻塞于锁. (<code>synchronized</code>)</td>
+</tr>
+<tr>
+<td>Waiting</td>
+<td>等待.  等待其他线程的中断或者通知.(<code>Lock</code>类)</td>
+</tr>
+<tr>
+<td>Time_Waiting</td>
+<td>超时等待. 比Waiting多一个超时返回功能.(<code>Lock</code>类)</td>
+</tr>
+</tbody></table>
+<p><a href="http://xiaoyue26.github.io/2018/02/03/2018-02/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC%E5%9B%9B%E7%AB%A0/">http://xiaoyue26.github.io/2018/02/03/2018-02/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC%E5%9B%9B%E7%AB%A0/</a></p>
+<ul>
+<li><code>thread dump</code>中的线程状态:<br>示例状态与相应线程名:<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;&#x2F; java.lang.Thread.State: RUNNABLE</span><br><span class="line">RUNNABLE: Attach Listener</span><br><span class="line">TIMED_WAITING (parking): HikariPool-1 housekeeper</span><br><span class="line">TIMED_WAITING (on object monitor): Abandoned connection cleanup thread</span><br><span class="line">TIMED_WAITING (sleeping): Hashed wheel timer</span><br><span class="line">WAITING (on object monitor): Finalizer</span><br></pre></td></tr></table></figure>
+<img src="/images/2018-12/thread_dump.png" class="" width="800" height="1200" title="thread_dump">
+
+</li>
+</ul>
+<p>状态对应含义详解:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Runnable: 就绪或运行中</span><br><span class="line">Wait on condition: sleeping或者等待事件</span><br><span class="line">Waiting for Monitor Entry and in Object.wait(): 在synchronized,等待对象锁</span><br></pre></td></tr></table></figure>
+<p>其中<code>synchronized</code>与<code>obj.wait()</code>这对好基友:<br>对象锁: 每个对象的临界区<code>Monitor</code></p>
+<h3 id="线程栈示例"><a href="#线程栈示例" class="headerlink" title="线程栈示例"></a>线程栈示例</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">&quot;Abandoned connection cleanup thread&quot; #81 daemon prio&#x3D;5 os_prio&#x3D;0 tid&#x3D;0x00007f66acbbc000 nid&#x3D;0x279b in Object.wait() [0x00007f6646a8b000]</span><br><span class="line">   java.lang.Thread.State: TIMED_WAITING (on object monitor)</span><br><span class="line">	at java.lang.Object.wait(Native Method)</span><br><span class="line">	at java.lang.ref.ReferenceQueue.remove(ReferenceQueue.java:143)</span><br><span class="line">	- locked &lt;0x0000000080210720&gt; (a java.lang.ref.ReferenceQueue$Lock)</span><br><span class="line">	at com.mysql.jdbc.AbandonedConnectionCleanupThread.run(AbandonedConnectionCleanupThread.java:43)</span><br></pre></td></tr></table></figure>
+<p>先lock<code>0x0000000080210720</code>,然后wait.<br>可以想象代码可能是形如:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">synchronized(obj) &#123;  </span><br><span class="line">       obj.wait();  </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="Monitor、Entry-Set、Waiting-Set"><a href="#Monitor、Entry-Set、Waiting-Set" class="headerlink" title="Monitor、Entry Set、Waiting Set"></a>Monitor、Entry Set、Waiting Set</h3><p><code>Monitor</code>的两个set: <code>Entry Set</code>, <code>Waiting Set</code>.<br>首先得进入<code>Entry Set</code>,才能通往<code>Waiting Set</code>，因此要先<code>Synchronized</code>才行。<br><code>Entry Set</code>: <code>synchronized</code><br><code>Waiting Set</code>: <code>obj.wait()</code>// syn后。// 会释放对象锁。<br>唤醒<code>Waiting Set</code>： 在<code>synchronized</code>后调用<code>notify</code></p>
+<h3 id="问题定位"><a href="#问题定位" class="headerlink" title="问题定位"></a>问题定位</h3><h4 id="Cpu很忙：检查runnable的线程"><a href="#Cpu很忙：检查runnable的线程" class="headerlink" title="Cpu很忙：检查runnable的线程;"></a>Cpu很忙：检查runnable的线程;</h4><ol>
+<li>隔一段时间，收集几次thread dump;</li>
+<li>比较其中runnable的代码变化。</li>
+</ol>
+<p>没变化=&gt;可能在死循环;<br>有变化=&gt;正常。</p>
+<h3 id="Cpu很闲：检查waiting-for-monitor-entry的线程。"><a href="#Cpu很闲：检查waiting-for-monitor-entry的线程。" class="headerlink" title="Cpu很闲：检查waiting for monitor entry的线程。"></a>Cpu很闲：检查waiting for monitor entry的线程。</h3><ol>
+<li>隔一段时间，收集几次thread dump;</li>
+<li>比较其中waiting for monitor entry的代码变化。</li>
+</ol>
+<p>没变化=&gt;可能在死等(死锁); =&gt;可以<br>有变化=&gt;正常。</p>
+<h3 id="Thin-Lock-Fat-Lock-Spin-Lock"><a href="#Thin-Lock-Fat-Lock-Spin-Lock" class="headerlink" title="Thin Lock, Fat Lock, Spin Lock:"></a>Thin Lock, Fat Lock, Spin Lock:</h3><p><code>Thin Lock</code>: 某线程通过<code>CAS</code>获得<code>thin lock</code>,其他线程进入<code>spin lock</code>;<br><code>fat lock</code>:  <code>monitor_enter</code>/<code>monitor_exit</code>，其他线程进入<code>wait()</code>,不消耗cpu;<br>// 第二个获得锁的人把锁升级成<code>fat lock</code>。// 不能回退/降级</p>
+<p><code>Tasuki</code>锁：（Oracle的BEA JRockit与IBM的JVM）</p>
+<ol>
+<li><code>thin lock</code>取消忙等待；</li>
+<li><code>fat lock</code>可以回退/降级，通过采样数据分析决定。</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/12/06/2018-12/%E5%A6%82%E4%BD%95%E9%98%85%E8%AF%BBthread-dump/" data-id="ck96cxpox00f2maamd9r35835" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/jvm/" rel="tag">jvm</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-11/jvisualvm-运行时java程序监控" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/11/27/2018-11/jvisualvm-%E8%BF%90%E8%A1%8C%E6%97%B6java%E7%A8%8B%E5%BA%8F%E7%9B%91%E6%8E%A7/" class="article-date">
@@ -897,145 +1052,6 @@
 
 
   
-    <article id="post-2018-10/Netty-in-action第14-15章案例研究-笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/10/14/2018-10/Netty-in-action%E7%AC%AC14-15%E7%AB%A0%E6%A1%88%E4%BE%8B%E7%A0%94%E7%A9%B6-%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2018-10-14T04:00:00.000Z" itemprop="datePublished">2018-10-14</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/Netty/">Netty</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/10/14/2018-10/Netty-in-action%E7%AC%AC14-15%E7%AB%A0%E6%A1%88%E4%BE%8B%E7%A0%94%E7%A9%B6-%E7%AC%94%E8%AE%B0/">Netty-in-action第14-15章案例研究-笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="文件上传案例-Droplr"><a href="#文件上传案例-Droplr" class="headerlink" title="文件上传案例: Droplr"></a>文件上传案例: Droplr</h1><h2 id="需求"><a href="#需求" class="headerlink" title="需求:"></a>需求:</h2><p>上传文件到S3,返回一个下载url。</p>
-<p>数据流: 客户端=&gt;服务端=&gt;S3</p>
-<h2 id="原始方案"><a href="#原始方案" class="headerlink" title="原始方案:"></a>原始方案:</h2><ol>
-<li>服务器接受上传,存成文件;</li>
-<li>服务器上传到S3;</li>
-<li>服务器回复url给客户端。</li>
-</ol>
-<p>缺点: </p>
-<ol>
-<li>每个上传开销大占用大量内存,导致并发低;</li>
-<li>上传完整个文件才开始上传S3,而瓶颈恰恰在于S3。</li>
-<li>有磁盘IO。</li>
-</ol>
-<h2 id="改进方案"><a href="#改进方案" class="headerlink" title="改进方案"></a>改进方案</h2><p>流式上传,只在内存,不过磁盘。</p>
-<ol>
-<li>服务器接受上传，每块数据实时传输到S3;</li>
-<li>接受和上传做速度适配，保持低内存消耗，高并发；</li>
-<li>最后返回url给客户端。</li>
-</ol>
-<p>并发达到10K。</p>
-<h3 id="要点"><a href="#要点" class="headerlink" title="要点"></a>要点</h3><ol>
-<li><code>IdelStateHandler</code>关闭不活跃的连接,回滚历史进度(速度控制失败时);</li>
-<li>并发达到上限时,返回503;</li>
-<li>需要保证<code>HttpChunk</code>的顺序(线程池)。<br>(注: 503: 服务不可用（服务器资源耗尽，拒绝服务）)</li>
-</ol>
-<p>http-client库:<br><a href="https://github.com/akka/akka-http" target="_blank" rel="noopener">https://github.com/akka/akka-http</a><br><a href="https://github.com/AsyncHttpClient/async-http-client" target="_blank" rel="noopener">https://github.com/AsyncHttpClient/async-http-client</a></p>
-<h1 id="实时数据同步：FireBase（被谷歌收购）"><a href="#实时数据同步：FireBase（被谷歌收购）" class="headerlink" title="实时数据同步：FireBase（被谷歌收购）"></a>实时数据同步：FireBase（被谷歌收购）</h1><h2 id="需求1"><a href="#需求1" class="headerlink" title="需求1:"></a>需求1:</h2><p>在各个用户和设备之间实时同步数据。<br>(服务器同步到各个客户端)</p>
-<h2 id="解决方案"><a href="#解决方案" class="headerlink" title="解决方案"></a>解决方案</h2><p>长轮询+WebSocket.<br>先使用长轮询连接，当WebSocket可用时切换到WebSocket。</p>
-<p>难点在于长轮询。</p>
-<h2 id="具体细节"><a href="#具体细节" class="headerlink" title="具体细节"></a>具体细节</h2><p>轮询 : 客户端每隔N秒轮询一次;实时性不强,开销大（空转）;<br>长轮询 : 客户端询问一次服务器,然后等待服务器响应,收到响应以后才继续轮询。<br>在服务端没有回复客户端的期间,如果客户端此时想发送数据给服务端,它会先阻塞。<br><code>此时，客户端手头的数据会堆积在缓冲区。</code><br>换言之，限制是: <code>未完成请求数&lt;=1</code>。(同一个客户端)</p>
-<h3 id="长轮询"><a href="#长轮询" class="headerlink" title="长轮询"></a>长轮询</h3><p>优点: 没有新数据时,服务器可以不回应客户端,这样客户端就不会接着轮询,减少空转;<br>缺点: 客户端发送数据可能被阻塞。 </p>
-<h4 id="改进"><a href="#改进" class="headerlink" title="改进"></a>改进</h4><p>客户端: 限制改成<code>未完成请求数&lt;=2</code>。(从1上调到2)<br>服务端: 如果当前有1个未完成请求<code>A</code>，此时又收到了同一个客户端的第二个请求<code>B</code>(一般第二个是发送数据的请求),会先对<code>A</code>进行空响应,然后处理请求<code>B</code>。</p>
-<p>引入新问题: <strong>消息的有序性;</strong><br>解决方案: 元数据加入消息序列号。</p>
-<p>引入新问题: <strong>连接断开检测</strong><br>解决方案:<br>客户端: 超时重试(以区分于慢速网络)。<br>服务端: 超时判断为连接断开。</p>
-<p>要点: Netty支持一个端口多个协议(HTTP,Websocket,长轮询,TCP)</p>
-<h2 id="需求2"><a href="#需求2" class="headerlink" title="需求2:"></a>需求2:</h2><p>加密环境(<code>SSLHandler</code>)下，基于带宽计费。</p>
-<h3 id="方案"><a href="#方案" class="headerlink" title="方案:"></a>方案:</h3><ol>
-<li>解密前统计字节数;</li>
-<li>解密后得到账户名,计入该账户的账单。</li>
-</ol>
-<p>要点: 统计字节数提前到解密前，提高性能。</p>
-<h1 id="app推送通知-Urban-Airship案例"><a href="#app推送通知-Urban-Airship案例" class="headerlink" title="app推送通知: Urban Airship案例"></a>app推送通知: Urban Airship案例</h1><h2 id="需求-1"><a href="#需求-1" class="headerlink" title="需求"></a>需求</h2><p>实时推送通知</p>
-<h2 id="方案-1"><a href="#方案-1" class="headerlink" title="方案"></a>方案</h2><ol>
-<li>app维护一条到后端服务的连接;</li>
-<li>借助第三方推送服务中转,服务器把消息传输给第三方平台，然后转交给app。</li>
-</ol>
-<p>其中苹果的APNS推送服务的使用流程:</p>
-<ol>
-<li>生产者: 通过TCP+SSLv3连接到APNS服务器,使用X.509证书进行身份认证;</li>
-<li>生产者: 按APNS规定的格式，发送消息(二进制);</li>
-<li>生产者: 读取(消息id,错误码)或成功。(因为有消息id,这里可以异步)</li>
-</ol>
-<p>其中消息格式是大端字节序，可以如下显式指定:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ByteBuf buf = Unpooled.buffer(size).order(ByteOrder.BIG_ENDIAN);</span><br></pre></td></tr></table></figure>
-
-<p>初始化,设置允许重新协商密钥:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> ChannelPipeline pipeline = channel.pipeline();</span><br><span class="line"> <span class="keyword">final</span> SslHandler handler = <span class="keyword">new</span> SslHandler(clientEngine);</span><br><span class="line"> handler.setEnableRenegotiation(<span class="keyword">true</span>);<span class="comment">// 重新协商</span></span><br><span class="line"> pipeline.addLast(<span class="string">"ssl"</span>, handler);</span><br><span class="line"> pipeline.addLast(<span class="string">"decoder"</span>, <span class="keyword">new</span> ApnsResponseDecoder());</span><br></pre></td></tr></table></figure>
-
-<h2 id="需要注意的经验"><a href="#需要注意的经验" class="headerlink" title="需要注意的经验"></a>需要注意的经验</h2><ol>
-<li>运营商可能不允许TCP的keep-alive特性,会积极剔除空闲的TCP会话;</li>
-<li>移动运营商可能禁止UDP.</li>
-</ol>
-<h1 id="第15章-案例研究，第二部分"><a href="#第15章-案例研究，第二部分" class="headerlink" title="第15章 案例研究，第二部分"></a>第15章 案例研究，第二部分</h1><h1 id="服务通信案例-Nifty和Swift-Facebook"><a href="#服务通信案例-Nifty和Swift-Facebook" class="headerlink" title="服务通信案例: Nifty和Swift(Facebook)"></a>服务通信案例: Nifty和Swift(Facebook)</h1><p><code>Thrift</code>: facebook开发的跨语言rpc远程调用、服务通信的框架。<br>组件:</p>
-<ol>
-<li>IDL: 定义通信的格式;</li>
-<li>协议；</li>
-<li>传输接口;</li>
-<li>编译器: 从IDL生成服务端和客户端的存根代码(不同语言);</li>
-<li>客户端和服务端实现。</li>
-</ol>
-<h2 id="场景"><a href="#场景" class="headerlink" title="场景:"></a>场景:</h2><p>由于<code>Thrift</code>是跨语言的远程调用。<br>其中C++版本基于<code>libevent</code>\ <code>Folly</code>开发，性能很高;<br>Java版本(<code>Nifty</code>)基于<code>Netty</code>开发，性能与C++版本不相上下。</p>
-<p><strong>Nifty</strong>：</p>
-<blockquote>
-<p>基于<code>Netty</code>的<code>Thrift</code>java实现。</p>
-</blockquote>
-<h3 id="需求1：-按顺序响应"><a href="#需求1：-按顺序响应" class="headerlink" title="需求1： 按顺序响应"></a>需求1： 按顺序响应</h3><p>客户端可能会要求:<br>服务器端并行处理请求，但是返回响应必须是顺序的。</p>
-<p>解决方案: 服务器端并行处理请求, 返回前排序响应。(缓冲处理好的请求结果)<br>开销: 缓冲响应的内存。（所以如果客户端不要求顺序响应，可以免除这部分开销）</p>
-<p>Netty4的实现支持: <code>EventExecutor</code><br>Netty3的实现支持: <code>OrderedMemoryAwareThreadPoolExcecutor</code></p>
-<p><strong>Swift</strong></p>
-<blockquote>
-<p>用注解来定义模型，无效IDL文件和存根。<br>底层使用Nifty作为I/O引擎。<br><a href="https://github.com/facebookarchive/swift" target="_blank" rel="noopener">https://github.com/facebookarchive/swift</a><br>已经不再维护。<br>还在维护的类似开源项目是:<br><a href="https://github.com/airlift/drift" target="_blank" rel="noopener">https://github.com/airlift/drift</a></p>
-</blockquote>
-<h2 id="超时处理"><a href="#超时处理" class="headerlink" title="超时处理"></a>超时处理</h2><p>问题: 每个请求维护一个超时事件的话，代价很昂贵。</p>
-<p>方案1: 超时集。<br>每个客户端维护一个计时器，或者每组相同超时间隔的请求，维护一个计时器。<br>每次超时结束以后，进行下一个超时计时器。<br>优点: 开销小;<br>缺点: 要求超时间隔长度一致。</p>
-<p>方案2: 使用<code>Netty</code>的<code>HashedWheelTimer</code>工具类。（空间换时间）<br>算法来自:<br><a href="http://www.cs.columbia.edu/~nahum/w6998/papers/sosp87-timing-wheels.pdf" target="_blank" rel="noopener">http://www.cs.columbia.edu/~nahum/w6998/papers/sosp87-timing-wheels.pdf</a><br>示例代码:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">HashedWheelTimer timer = <span class="keyword">new</span> HashedWheelTimer(<span class="number">100</span>, TimeUnit.MILLISECONDS, <span class="number">16</span>);</span><br><span class="line">System.out.println(LocalTime.now());</span><br><span class="line">timer.newTimeout((timeout) -&gt; &#123;</span><br><span class="line">    System.out.println(LocalTime.now());</span><br><span class="line">    System.out.println(timeout);</span><br><span class="line">&#125;, <span class="number">5</span>, TimeUnit.SECONDS);</span><br><span class="line"><span class="comment">//阻塞main线程</span></span><br><span class="line">System.in.read();</span><br></pre></td></tr></table></figure>
-
-
-<h1 id="RPC框架案例-Finagle-Twitter"><a href="#RPC框架案例-Finagle-Twitter" class="headerlink" title="RPC框架案例: Finagle(Twitter)"></a>RPC框架案例: Finagle(Twitter)</h1><p>前端api端点&lt;=&gt;<code>Finagle</code>&lt;=&gt;后端服务们(提供:用户信息、twitter、时间线)<br>(大部分是scala开发。原先是ruby on rails)</p>
-<img src="/images/2018-10/15.6.png" class="" width="400" height="600" title="Finagle">
-<p>主要功能包括: SSL、打日志(统计)、负载均衡</p>
-<h3 id="负载均衡（故障管理）"><a href="#负载均衡（故障管理）" class="headerlink" title="负载均衡（故障管理）"></a>负载均衡（故障管理）</h3><p>客户端统计所有服务器的延迟、未完成请求数（负载），<br>每次选择最低负载的主机派发请求。</p>
-<p>失败请求=&gt;从列表中移除对应服务器=&gt;后台不断尝试重连。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/10/14/2018-10/Netty-in-action%E7%AC%AC14-15%E7%AB%A0%E6%A1%88%E4%BE%8B%E7%A0%94%E7%A9%B6-%E7%AC%94%E8%AE%B0/" data-id="ck96cxpoo00dxmaamfjyfcdyu" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Netty/" rel="tag">Netty</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1062,6 +1078,10 @@
       <ul>
         
           <li>
+            <a href="/2022/08/30/2022-08/%E8%B0%83%E4%BC%98-cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-cpu毛刺问题</a>
+          </li>
+        
+          <li>
             <a href="/2022/05/31/2022-05/w-tinylfu%E7%BC%93%E5%AD%98%E7%AE%97%E6%B3%95/">w-tinylfu缓存算法</a>
           </li>
         
@@ -1075,10 +1095,6 @@
         
           <li>
             <a href="/2022/03/14/2022-03/%E4%B8%AD%E6%96%AD%E6%A2%B3%E7%90%86/">java方法是否可中断梳理</a>
-          </li>
-        
-          <li>
-            <a href="/2022/03/13/2022-03/mp4%E6%A0%BC%E5%BC%8F/">mp4格式</a>
           </li>
         
       </ul>

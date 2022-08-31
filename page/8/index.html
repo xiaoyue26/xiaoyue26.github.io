@@ -72,6 +72,108 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-02/redis设计与实现笔记5-事件" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/21/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B05-%E4%BA%8B%E4%BB%B6/" class="article-date">
+  <time datetime="2019-02-21T13:53:58.000Z" itemprop="datePublished">2019-02-21</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/02/21/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B05-%E4%BA%8B%E4%BB%B6/">redis设计与实现笔记5-事件</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>redis服务器需要处理的事件可以分为两类：</p>
+<ol>
+<li>文件事件(file event): 套接字的抽象。服务器通过套接字与客户端或其他服务端连接、通信；</li>
+<li>时间事件(time event): 定时任务。</li>
+</ol>
+<h2 id="文件事件"><a href="#文件事件" class="headerlink" title="文件事件"></a>文件事件</h2><p>事件模型是基于Reactor开发的:</p>
+<img src="/images/2019-02/file_event_handler.png" class="" width="800" height="1200" title="file_event_handler">
+<ol>
+<li>套接字;</li>
+<li>IO多路复用程序；</li>
+<li>事件分派器;(dispatcher)</li>
+<li>事件处理器。</li>
+</ol>
+<p>每当一个套接字准备好执行：<br>连接应答(accept)、<br>写入、<br>读取、<br>关闭<br>等操作时，就会产生一个事件（可能并发）。</p>
+<img src="/images/2019-02/force_single.png" class="" width="800" height="1200" title="force_single">
+<p><code>IO多路复用程序</code>：把上游并发的事件组织成一个队列（方便下游单线程地使用）。<br>当上一个套接字事件被处理完以后，IO多路复用程序才会向事件分派器传送下一个套接字事件。</p>
+<h3 id="IO多路复用"><a href="#IO多路复用" class="headerlink" title="IO多路复用"></a>IO多路复用</h3><p>具体啥是IO多路复用？就是一个进程处理多个连接。<br>方案有很多：(详见:<a href="http://xiaoyue26.github.io/2017/11/06/2017-11/epoll%E7%9B%B8%E5%85%B3%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86/">http://xiaoyue26.github.io/2017/11/06/2017-11/epoll%E7%9B%B8%E5%85%B3%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86/</a>)</p>
+<ol>
+<li>循环、轮询；</li>
+<li>Select;</li>
+<li>poll;</li>
+<li>epoll(红黑树)/kqueue(哈希表);</li>
+<li>libevent库。</li>
+</ol>
+<h3 id="事件优先级"><a href="#事件优先级" class="headerlink" title="事件优先级"></a>事件优先级</h3><p>先处理可读，再处理可写。</p>
+<h3 id="API接口"><a href="#API接口" class="headerlink" title="API接口"></a>API接口</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">1. createFileEvent(套接字描述符,事件类型,事件处理器):开始监听;</span><br><span class="line">2. deleteFileEvent(套接字描述符,事件类型): 取消监听;</span><br><span class="line">3. getFileEvents(套接字描述符): 返回被监听的事件类型;</span><br><span class="line">4. wait(套接字描述符,事件类型,超时时长(ms)): 等待事件;</span><br><span class="line">5. apiPoll(超时时长): 等待所有被监听事件直至至少一个发生；</span><br><span class="line">6. processEvent():等待事件,然后分派;</span><br><span class="line">7. getApiName: 返回底层使用的IO库(epoll,poll或select等)</span><br></pre></td></tr></table></figure>
+
+<h2 id="时间事件"><a href="#时间事件" class="headerlink" title="时间事件"></a>时间事件</h2><ol>
+<li>定时事件：指定时间后执行1次；</li>
+<li>周期事件：每隔指定时间就执行1次（总N次)。</li>
+</ol>
+<h3 id="时间事件属性："><a href="#时间事件属性：" class="headerlink" title="时间事件属性："></a>时间事件属性：</h3><ol>
+<li>id: 全局唯一，递增；</li>
+<li>when: 毫秒，事件到达时间；</li>
+<li>timeProc: 函数，到期执行。</li>
+</ol>
+<p>定时事件和周期事件区分：</p>
+<ol>
+<li>timeProc返回<code>AE_NOMORE</code>: no more事件，不再调用；</li>
+<li>timeProc返回30： 周期事件，30ms后再次调用。</li>
+</ol>
+<p>TODO: 全局唯一id=&gt;服务器内唯一？</p>
+<h3 id="实现"><a href="#实现" class="headerlink" title="实现"></a>实现</h3><img src="/images/2019-02/time_event.png" class="" width="800" height="1200" title="time_event">
+<p>所有时间事件放在一个无序链表中，每次遍历整个链表，查找所有已到达的时间事件。</p>
+<h3 id="性能"><a href="#性能" class="headerlink" title="性能"></a>性能</h3><p>由于时间事件很少（1，2个），所以虽然实现很naive，性能也还行。</p>
+<h3 id="现有时间事件"><a href="#现有时间事件" class="headerlink" title="现有时间事件"></a>现有时间事件</h3><p><code>serverCron</code>:（每100ms）</p>
+<ol>
+<li>更新统计信息：时间、内存、数据库占用；</li>
+<li>清理过期KV；</li>
+<li>关闭清理失效客户端；</li>
+<li>AOF\RDB持久化；</li>
+<li>主从同步；</li>
+<li>集群模式：定期同步、连接测试。</li>
+</ol>
+<h2 id="事件循环"><a href="#事件循环" class="headerlink" title="事件循环"></a>事件循环</h2><img src="/images/2019-02/all_event.png" class="" width="800" height="1200" title="all_event">
+<p>事件无抢占。<br>先文件事件后时间事件，因此时间事件一般会滞后一点。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/21/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B05-%E4%BA%8B%E4%BB%B6/" data-id="ck96cxpp700g8maamdrkkafkw" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2019-02/redis设计与实现笔记4-持久化" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/02/17/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B04-%E6%8C%81%E4%B9%85%E5%8C%96/" class="article-date">
@@ -1252,66 +1354,6 @@
 
 
   
-    <article id="post-2019-02/简单解释CAP原理" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/02/01/2019-02/%E7%AE%80%E5%8D%95%E8%A7%A3%E9%87%8ACAP%E5%8E%9F%E7%90%86/" class="article-date">
-  <time datetime="2019-02-01T01:33:53.000Z" itemprop="datePublished">2019-02-01</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F/">分布式</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/02/01/2019-02/%E7%AE%80%E5%8D%95%E8%A7%A3%E9%87%8ACAP%E5%8E%9F%E7%90%86/">简单解释CAP原理</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>关于CAP原理的术语描述很多,其实给理解带来了障碍。(以下是维基百科:)</p>
-<blockquote>
-<p>一致性（Consistency）： （等同于所有节点访问同一份最新的数据副本）<br>可用性（Availability）：（每次请求都能获取到非错的响应——但是不保证获取的数据为最新数据）<br>分区容错性（Partition tolerance）：（以实际效果而言，分区相当于对通信的时限要求。系统如果不能在时限内达成数据一致性，就意味着发生了分区的情况，必须就当前操作在C和A之间做出选择。）</p>
-</blockquote>
-<img src="/images/2019-02/cap.png" class="" width="800" height="1200" title="cap">
-<p>如图所示,CAP最多只能取两者。（如果每项要彻底达标，只能取2个，但也可以三者都不完全实现）</p>
-<p>改成自然语言，通俗解释一下，就容易理解多了:</p>
-<blockquote>
-<p>C: 一致性。达成一致的速度足够快、或者每次更新是整个集群原子性的操作。如果有一个中控节点(单点瓶颈)，很容易让值变更是原子性的。(但也牺牲了A)<br>A: 可用性。 没有单点瓶颈，挂1，2个节点也能正常工作。<br>P: 可分性。 把集群切两半，让它们失联，让两半都能正常工作。</p>
-</blockquote>
-<h2 id="具体案例的CAP取舍"><a href="#具体案例的CAP取舍" class="headerlink" title="具体案例的CAP取舍"></a>具体案例的CAP取舍</h2><p>大部分的分布式系统(或者说集群)都是先取P，然后取舍A或者C（引入单点，或者使用P2P的协议）。</p>
-<p><code>lease机制</code>: CP。例如hdfs中pipeline写入,client先申请租约lease，然后写入3备份后才返回。一致性由client单点控制完成,P由3副本完成，牺牲了A（有单点）。<br><code>Quorum机制</code>:C+0.5A+0.5P。N个副本，更新W个，读R个。<br><code>2PC/两阶段提交</code>: C+0.1A+0.1P。<br><code>Paxos</code>: C+0.8C+0.8P。</p>
-<p><code>redis-cluster</code>: AP。key的分布:用gossip协议(类似于p2p)达成一致性,因此C比较慢。<br><code>redis-sentile</code>: CP。key的分布:各节点完全独立,数据存在哪里完全由客户端单点维护。因此没有A。<br><code>codis</code>：CP。由代理单点维护key的分布，因此也没有A。</p>
-<p>一个实际的系统可能涉及到很多分布式协议，因此每个部分对于CAP的取舍可能会有不同。<br>HDFS系统: CP。大部分看起来是有单点。<br>ceph系统: AP。大部分看起来是p2p的，</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/02/01/2019-02/%E7%AE%80%E5%8D%95%E8%A7%A3%E9%87%8ACAP%E5%8E%9F%E7%90%86/" data-id="ck96cxppa00gkmaam2ka94wve" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/" rel="tag">分布式</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1338,6 +1380,10 @@
       <ul>
         
           <li>
+            <a href="/2022/08/30/2022-08/%E8%B0%83%E4%BC%98-cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-cpu毛刺问题</a>
+          </li>
+        
+          <li>
             <a href="/2022/05/31/2022-05/w-tinylfu%E7%BC%93%E5%AD%98%E7%AE%97%E6%B3%95/">w-tinylfu缓存算法</a>
           </li>
         
@@ -1351,10 +1397,6 @@
         
           <li>
             <a href="/2022/03/14/2022-03/%E4%B8%AD%E6%96%AD%E6%A2%B3%E7%90%86/">java方法是否可中断梳理</a>
-          </li>
-        
-          <li>
-            <a href="/2022/03/13/2022-03/mp4%E6%A0%BC%E5%BC%8F/">mp4格式</a>
           </li>
         
       </ul>
