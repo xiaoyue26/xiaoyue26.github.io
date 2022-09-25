@@ -72,6 +72,68 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-RTTI与反射" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2015/10/18/RTTI%E4%B8%8E%E5%8F%8D%E5%B0%84/" class="article-date">
+  <time datetime="2015-10-18T12:53:45.000Z" itemprop="datePublished">2015-10-18</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2015/10/18/RTTI%E4%B8%8E%E5%8F%8D%E5%B0%84/">RTTI与反射</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <blockquote>
+<ul>
+<li><code>RTTI</code>:<br>  运行期类型鉴定。在编译期通过载入和检查<code>.class</code>文件,从而鉴定类型。</li>
+<li><code>反射</code>:<br>  运行期类信息。应用场景:反序列化,远程调用(RM)，访问私用变量和方法。编译期<code>.class</code>文件不可用,只能在运行期获得<code>.class</code>文件，在运行期载入和检查<code>.class</code>文件。</li>
+</ul>
+</blockquote>
+<p>1.<code>RTTI</code>:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//RTTI的例子:</span></span><br><span class="line"><span class="keyword">if</span>(<span class="keyword">boolean</span><span class="class">.<span class="keyword">class</span></span>==Boolean.TYPE)</span><br><span class="line">    System.out.println(<span class="string">"boolean true"</span>);</span><br><span class="line">Gun gun=<span class="keyword">new</span> Gun();</span><br><span class="line"><span class="keyword">if</span><span class="comment">//(Gun.class.isInstance(gun))//方式1;</span></span><br><span class="line">(Class.forName(<span class="string">"test1.RTTI$Gun"</span>).isInstance(gun ))<span class="comment">//方式2反射。</span></span><br><span class="line">    System.out.println(<span class="string">"gun is instance of  Gun"</span>);</span><br><span class="line">    <span class="comment">//此处Gun是test1包下RTTI类中的一个内部类。</span></span><br></pre></td></tr></table></figure>
+<p>2.反射:<br><a href="http://blog.csdn.net/stevenhu_223/article/details/9286121" target="_blank" rel="noopener">http://blog.csdn.net/stevenhu_223/article/details/9286121</a></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">Class&lt;?&gt; class1 = Class.forName(<span class="string">"test1.RTTI$Gun"</span>);</span><br><span class="line">Method[] methods = class1.getMethods();</span><br><span class="line"><span class="keyword">for</span> (Method method : methods)</span><br><span class="line">	out.println(method);</span><br><span class="line">out.println(<span class="string">"constructos:--"</span>);</span><br><span class="line">Constructor[] constructors=class1.getConstructors();</span><br><span class="line"><span class="keyword">for</span> (Constructor method : constructors)</span><br><span class="line">	out.println(method);</span><br><span class="line">Method me1=class1.getMethod(<span class="string">"getdata"</span>, <span class="keyword">int</span><span class="class">.<span class="keyword">class</span>)</span>;</span><br><span class="line">Type returnType=me1.getReturnType();</span><br><span class="line">Object output=me1.invoke(class1.newInstance(),<span class="number">3</span>);</span><br><span class="line">out.println(output);</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p><code>getFields</code>方法获取所有<code>public</code>属性；<br><code>getDeclaredFields</code>方法获取所有属性,包括<code>private</code>。<br><code>getMethods</code>方法获取所有<code>public</code>方法;<br><code>getDeclaredMethods</code>方法获取所有方法,包括<code>private</code>。</p>
+</blockquote>
+<p>可通过<code>getDeclaredMethods</code>获取私有方法；<br>然后<code>nameMethod.setAccessible(true);</code><br>然后就可以执行<code>private</code>方法了。</p>
+<p>此外，获取方法时，除了指定方法名，还要指定参数类型列表，多个参数时可这样写:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Class&lt;?&gt; clazz=Gun<span class="class">.<span class="keyword">class</span></span>;</span><br><span class="line">Method allValuesMethod = clazz.getDeclaredMethod(<span class="string">"setAllValues"</span>, <span class="keyword">new</span> Class[]&#123;String<span class="class">.<span class="keyword">class</span>, <span class="title">int</span>.<span class="title">class</span>, <span class="title">float</span>.<span class="title">class</span>&#125;)</span>;</span><br></pre></td></tr></table></figure>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2015/10/18/RTTI%E4%B8%8E%E5%8F%8D%E5%B0%84/" data-id="ck96cxpkh0007maam3ataayqq" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-java线程同步之callable与future" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2015/10/14/java%E7%BA%BF%E7%A8%8B%E5%90%8C%E6%AD%A5%E4%B9%8Bcallable%E4%B8%8Efuture/" class="article-date">
@@ -671,59 +733,6 @@
 
 
   
-    <article id="post-vagrant笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2015/07/06/vagrant%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2015-07-06T11:29:02.000Z" itemprop="datePublished">2015-07-06</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/%E9%85%8D%E7%BD%AE/">配置</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2015/07/06/vagrant%E7%AC%94%E8%AE%B0/">vagrant笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>##操作环境为win7物理机vmware中的Ubuntu12.04.5 amd64，客户机自带virtural box.<br>1.直接安装：</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">sudo apt-get install ruby rubygems</span><br><span class="line">sudo apt-get install vagrant#1.x版本</span><br></pre></td></tr></table></figure>
-<p>或者官网下载最新版然后安装：</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo dpkg -i vagrant_1.7.4_x86_64.deb</span><br></pre></td></tr></table></figure>
-<p>从vagrant的[box列表][1]下载一个base box，例如presice32.box。<br>（由于笔者的虚拟机没法再次虚拟化<code>64</code>位的系统,所以选用了<code>32</code>位box。猜测应该是没有打开cpu或者bios的虚拟化设置。）<br>首先移动到工作目录，如<code>~/vagrant_workplace/boxes/ubuntu12.04</code>。<br>##从本地添加一个box,并命名为ubuntu12.04：<br><code>vagrant box add ubuntu12.04 ./precise32.box</code><br>##初始化box:<br><code>vagrant init ubuntu12.04</code><br>##启动虚拟机box:<br><code>vagrant up</code><br>##ssh登录到box:<br><code>vagrant ssh</code><br>##重启：<br><code>vagrant reload</code><br>##打包分发 以虚拟机ubuntu12.04为Base创建myubuntu32.box：<br><code>vagrant package –output myubuntu32.box –base ubuntu12.04</code><br>##关闭虚拟机<br><code>vagrant halt</code><br>##销毁虚拟机<br><code>vagrant destroy</code><br>##移除添加的box:<br><code>vagrant box remove ubuntu12.04</code></p>
-<p>box下载列表：<br><a href="http://www.vagrantbox.es/" target="_blank" rel="noopener">http://www.vagrantbox.es/</a><br><a href="https://atlas.hashicorp.com/boxes/search?utm_source=vagrantcloud.com&amp;vagrantcloud=1" target="_blank" rel="noopener">https://atlas.hashicorp.com/boxes/search?utm_source=vagrantcloud.com&amp;vagrantcloud=1</a></p>
-<p>下一步学stash<br>  [1]: <a href="http://www.vagrantbox.es/" target="_blank" rel="noopener">http://www.vagrantbox.es/</a></p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2015/07/06/vagrant%E7%AC%94%E8%AE%B0/" data-id="ck96cxpm8005zmaamhvt56xbp" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E9%85%8D%E7%BD%AE/" rel="tag">配置</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -750,6 +759,10 @@
       <ul>
         
           <li>
+            <a href="/2022/09/25/2022-09/%E8%B0%83%E4%BC%98-%E8%A7%A3%E5%86%B3%E7%BA%BF%E7%A8%8B%E6%B1%A0%E9%80%A0%E6%88%90%E7%9A%84%E8%BF%9B%E7%A8%8B%E5%8D%A1%E9%A1%BF%E3%80%81cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-解决线程池造成的进程卡顿、cpu毛刺问题</a>
+          </li>
+        
+          <li>
             <a href="/2022/08/30/2022-08/%E8%B0%83%E4%BC%98-cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-cpu毛刺问题</a>
           </li>
         
@@ -763,10 +776,6 @@
         
           <li>
             <a href="/2022/03/16/2022-03/cms%E7%9A%84gc%E8%A7%A6%E5%8F%91%E6%9D%A1%E4%BB%B6/">cms的gc触发条件</a>
-          </li>
-        
-          <li>
-            <a href="/2022/03/14/2022-03/%E4%B8%AD%E6%96%AD%E6%A2%B3%E7%90%86/">java方法是否可中断梳理</a>
           </li>
         
       </ul>

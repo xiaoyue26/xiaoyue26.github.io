@@ -72,6 +72,79 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-Hive-Serde" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2017/01/14/Hive-Serde/" class="article-date">
+  <time datetime="2017-01-14T11:26:56.000Z" itemprop="datePublished">2017-01-14</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/hadoop/">hadoop</a>►<a class="article-category-link" href="/categories/hadoop/hive/">hive</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2017/01/14/Hive-Serde/">Hive Serde</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="Serde相关"><a href="#Serde相关" class="headerlink" title="Serde相关"></a>Serde相关</h1><p><a href="https://www.coder4.com/archives/4031" target="_blank" rel="noopener">https://www.coder4.com/archives/4031</a><br>反序列化原理(<code>Deserialize</code>):</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">HDFS files –&gt; InputFileFormat –&gt; &lt;key, value&gt; –&gt; Deserializer –&gt; Row object</span><br></pre></td></tr></table></figure>
+<p>序列化原理(<code>Serialize</code>):</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Row object –&gt; Serializer –&gt; &lt;key, value&gt; –&gt; OutputFileFormat –&gt; HDFS files</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>hive的serde内置:<br>Avro<br>ORC<br>RegEx<br>Thrift<br>Parquet<br>CSV<br>JsonSerDe</p>
+</blockquote>
+<h3 id="自定义Serde"><a href="#自定义Serde" class="headerlink" title="自定义Serde:"></a>自定义Serde:</h3><blockquote>
+<p>需要extends AbstractSerDe, 实现6个方法:<br>initialize<br>,deserialize,getSerializedClass,serialize<br>,getSerDeStats,getObjectInspector<br>参见Hive1.2.1的openCSV实现,可以总结各个方法的作用.</p>
+</blockquote>
+<p>1.<code>initialize</code>方法:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">读取hadoop配置和表配置(建表语句中的),准备一些和元数据有关的数据.</span><br><span class="line">比如所有列的类型,输出列的size,分隔符等等.将这些信息存到对象里备用.</span><br></pre></td></tr></table></figure>
+
+<p>2.<code>serialize</code>方法:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">序列化. </span><br><span class="line">由原理可知,输入是一个Row对象,输出是一些Key,value对,以便被OutputFileFormat解析.</span><br><span class="line">由于OpenCSV使用的OutputFileFormat是</span><br><span class="line">org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat</span><br><span class="line">因此,这个方法的输出要与之吻合.</span><br><span class="line">    &#x2F;**</span><br><span class="line">     * 输入: 行对象 (行数据Obj,行类型ObjOI)</span><br><span class="line">     * 输出: Key,value.  要和hive默认的outputFileFormat吻合.</span><br><span class="line">     * 即要和 org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat</span><br><span class="line">     * 的输入相同. 而这个类是忽略Key的,因此这个方法的实际输出只有Value.</span><br><span class="line">     * *&#x2F;</span><br><span class="line">OpenCSV里的大致内容就是把行类型ObjOI转成StructOI,</span><br><span class="line">然后把每一列的类型取出来,再用类型把数据取出来,再把数据全转成String,</span><br><span class="line">传给CSVWriter,写到一个StringWriter里,然后转成一个Text返回.</span><br></pre></td></tr></table></figure>
+
+<p>3.<code>deserialize</code>方法:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">反序列化.</span><br><span class="line">由原理可知,输入是一个Key,Value,输出是一个行对象.</span><br><span class="line">其中Key,Value由InputFileFormat生成,对于OpenCSV来说就是默认的Hive设定:</span><br><span class="line">org.apache.hadoop.mapred.TextInputFormat</span><br><span class="line">输出实际上是一个List&lt;String&gt;. </span><br><span class="line"></span><br><span class="line">OpenCSV里的大致内容就是把输入转成Text再转成String然后用CSVReader读出来,</span><br><span class="line">写到一个String[]里,再存到一个List&lt;String&gt;里(补一些缺的,确保列数一样),然后返回.</span><br></pre></td></tr></table></figure>
+
+<p>4.<code>getObjectInspector</code>方法:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">返回整个表的结构类型OI.</span><br><span class="line">从内容上看返回了StructOI.(包括列名和列数,每一列的类型)</span><br><span class="line">对于OpenCSV来说每一列都是String.</span><br></pre></td></tr></table></figure>
+
+<p>5.<code>getSerializedClass</code>方法:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">获取写的时候返回的类.</span><br><span class="line">对于OpenCSV来说,返回Text.class.</span><br><span class="line">因为它的Serialize方法的下游是hive的</span><br><span class="line">org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat</span><br><span class="line">而且Serialize的实现实际上也返回了一个Text.(声明的只是Writable)</span><br></pre></td></tr></table></figure>
+
+<p>6.<code>getSerDeStats</code>方法:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">返回序列化类的写入状态信息,具体包括RawDataSize和RowCount. 也就是原始数据大小和行数.</span><br><span class="line">Hive1.2.1实现的不是很健全.自己用得也很少.</span><br><span class="line">只在两处提取了这个信息:</span><br><span class="line">1. FileSinkOperator. 写入数据的时候获取了一下RawDataSize.</span><br><span class="line">2. MapOperator. 读取数据的时候获取了一下RawDataSize.</span><br><span class="line"></span><br><span class="line">甚至对于openCSV,它直接返回了一个null.</span><br><span class="line">对于Hive1.2.1,我们自定义实现Serde的时候,也可以返回null,因为Hive1.2.1的源码中对于这个返回值都是有null判定的. 但如果要对性能做进一步研究,要记录这两个数据,可以参考</span><br><span class="line">LazySimpleSerDe中的实现.</span><br></pre></td></tr></table></figure>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2017/01/14/Hive-Serde/" data-id="ck96cxpkj000dmaam13eoalec" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/hive/" rel="tag">hive</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-HDFS-namenode" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2017/01/07/HDFS-namenode/" class="article-date">
@@ -860,171 +933,6 @@
 
 
   
-    <article id="post-spark中的存储" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2016/03/26/spark%E4%B8%AD%E7%9A%84%E5%AD%98%E5%82%A8/" class="article-date">
-  <time datetime="2016-03-26T07:12:52.000Z" itemprop="datePublished">2016-03-26</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/spark/">spark</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2016/03/26/spark%E4%B8%AD%E7%9A%84%E5%AD%98%E5%82%A8/">spark中的存储</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <ul>
-<li>#存储架构<img src="/images/storage_in_spark(1).png" class="" width="400" height="600" title="存储架构">
-
-</li>
-</ul>
-<blockquote>
-<p>Spark是一种基于内存的运算框架。数据存储在worker节点中。对于每一个worker，worker Excutor有一个JVM，数据存储在JVM中。</p>
-</blockquote>
-<hr>
-<ul>
-<li>#故障恢复<img src="/images/storage_in_spark(2).png" class="" width="400" height="600" title="故障恢复">
-
-</li>
-</ul>
-<blockquote>
-<p>当计算引擎的进程损坏，Cache 丢失，Spark只能重新启动并计算恢复数据。</p>
-</blockquote>
-<hr>
-<ul>
-<li>#Lineage(世代)<img src="/images/storage_in_spark(3).png" class="" width="400" height="600" title="Lineage">
-
-</li>
-</ul>
-<blockquote>
-<p>Lineage保证数据的Reliability。</p>
-</blockquote>
-<ul>
-<li>当数据E丢失后：</li>
-</ul>
-<ol>
-<li>通过世代找到相应的之前数据，重新部署一个Job将数据重新计算。</li>
-<li>将数据在底层文件系统中备份。</li>
-</ol>
-<hr>
-<ul>
-<li>#数据流<img src="/images/storage_in_spark(4).png" class="" width="400" height="600" title="Lineage">
-
-</li>
-</ul>
-<blockquote>
-<p>计算数据在JVM的内存中存储一份，以保证较少的网络通信和读写。同时记录存储数据的世代(lineage)，当数据丢失时，基于世代将job重新运行，得到相应数据。</p>
-</blockquote>
-<hr>
-<ul>
-<li>#计算过程<img src="/images/storage_in_spark(5).png" class="" width="400" height="600" title="Lineage">
-
-</li>
-</ul>
-<blockquote>
-<p>Spark内部，单个executor进程内RDD的分片数据是用Iterator流式访问的。<br>Iterator的hasNext方法和next方法是由RDD lineage上各个transformation携带的闭包函数复合而成的。<br>该复合Iterator每访问一个元素，就对该元素应用相应的复合函数，得到的结果再流式地落地。空间复杂度为O(1)。</p>
-</blockquote>
-<hr>
-<ul>
-<li>#持久化</li>
-</ul>
-<blockquote>
-<p><code>spark.local.dir</code>：可以设置Spark的暂存目录，包括映射输出文件和需要存储在磁盘上的RDDs。这个磁盘目录在系统上面访问速度越快越好。可以用逗号隔开来设置多个目录。默认值为’/tmp’。<br><code>org.apache.spark.storage.StorageLevel</code>中5种持久化的级别.(<code>result.persist(StorageLevel.DISK_ONLY)</code>) 默认为<code>MEMORY_ONLY</code>。</p>
-</blockquote>
-<table>
-<thead>
-<tr>
-<th align="center">级别</th>
-<th align="center">空间</th>
-<th align="center">时间</th>
-<th align="center">内存</th>
-<th align="center">磁盘</th>
-<th align="center">备注</th>
-</tr>
-</thead>
-<tbody><tr>
-<td align="center">MEMORY_ONLY</td>
-<td align="center">多</td>
-<td align="center">少</td>
-<td align="center">使用</td>
-<td align="center">不使用</td>
-<td align="center">-</td>
-</tr>
-<tr>
-<td align="center">MEMORY_ONLY_SER</td>
-<td align="center">少</td>
-<td align="center">多</td>
-<td align="center">使用</td>
-<td align="center">不使用</td>
-<td align="center">-</td>
-</tr>
-<tr>
-<td align="center">MEMORY_AND_DISK</td>
-<td align="center">多</td>
-<td align="center">中等</td>
-<td align="center">部分</td>
-<td align="center">部分</td>
-<td align="center">如果数据在内存中放不下，则溢写到磁盘上</td>
-</tr>
-<tr>
-<td align="center">MEMORY_AND_DISK_SER</td>
-<td align="center">少</td>
-<td align="center">多</td>
-<td align="center">部分</td>
-<td align="center">部分</td>
-<td align="center">如果数据在内存中放不下，则溢写到磁盘上。在内存中存放序列化后的数据。</td>
-</tr>
-<tr>
-<td align="center">DISK_ONLY</td>
-<td align="center">少</td>
-<td align="center">多</td>
-<td align="center">部分</td>
-<td align="center">部分</td>
-<td align="center">-</td>
-</tr>
-</tbody></table>
-<hr>
-<ul>
-<li>#数据分享<img src="/images/storage_in_spark(6).png" class="" width="400" height="600" title="数据分享">
-
-</li>
-</ul>
-<blockquote>
-<p>在Spark中，如果job2需要Job1运算的数据，Job1首先需要将数据写入到HDFS的block中，会产生硬盘甚至跨网络的读写，同时在HDFS中默认数据需要写三份，因此造成性能的损失。</p>
-</blockquote>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2016/03/26/spark%E4%B8%AD%E7%9A%84%E5%AD%98%E5%82%A8/" data-id="ck96cxplw004xmaam1bb14dt1" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spark/" rel="tag">spark</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/storage/" rel="tag">storage</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1051,6 +959,10 @@
       <ul>
         
           <li>
+            <a href="/2022/09/25/2022-09/%E8%B0%83%E4%BC%98-%E8%A7%A3%E5%86%B3%E7%BA%BF%E7%A8%8B%E6%B1%A0%E9%80%A0%E6%88%90%E7%9A%84%E8%BF%9B%E7%A8%8B%E5%8D%A1%E9%A1%BF%E3%80%81cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-解决线程池造成的进程卡顿、cpu毛刺问题</a>
+          </li>
+        
+          <li>
             <a href="/2022/08/30/2022-08/%E8%B0%83%E4%BC%98-cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-cpu毛刺问题</a>
           </li>
         
@@ -1064,10 +976,6 @@
         
           <li>
             <a href="/2022/03/16/2022-03/cms%E7%9A%84gc%E8%A7%A6%E5%8F%91%E6%9D%A1%E4%BB%B6/">cms的gc触发条件</a>
-          </li>
-        
-          <li>
-            <a href="/2022/03/14/2022-03/%E4%B8%AD%E6%96%AD%E6%A2%B3%E7%90%86/">java方法是否可中断梳理</a>
           </li>
         
       </ul>

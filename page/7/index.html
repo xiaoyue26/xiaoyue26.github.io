@@ -72,6 +72,87 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-03/mysql统计信息更新" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/03/31/2019-03/mysql%E7%BB%9F%E8%AE%A1%E4%BF%A1%E6%81%AF%E6%9B%B4%E6%96%B0/" class="article-date">
+  <time datetime="2019-03-31T11:38:49.000Z" itemprop="datePublished">2019-03-31</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/03/31/2019-03/mysql%E7%BB%9F%E8%AE%A1%E4%BF%A1%E6%81%AF%E6%9B%B4%E6%96%B0/">mysql统计信息更新</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <blockquote>
+<p>本文只关注innodb。 </p>
+</blockquote>
+<p>mysql优化器选择执行计划的时候需要依据一定的采样统计信息，不然对数据完全不了解的话，就无法选择成本低的执行计划了。</p>
+<p>统计信息的配置有以下几个自由度:</p>
+<ol>
+<li>是否持久化;</li>
+<li>更新统计信息的时机;</li>
+<li>采样多少个page。 </li>
+</ol>
+<h1 id="是否持久化"><a href="#是否持久化" class="headerlink" title="是否持久化"></a>是否持久化</h1><p>采样统计信息可以有两种选择：</p>
+<ol>
+<li>持久化: 默认是持久化，也就是存磁盘。</li>
+<li>非持久化.</li>
+</ol>
+<p>控制的选项:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">show variables like &#39;%innodb_stats_persistent%&#39;;</span><br></pre></td></tr></table></figure>
+<p>默认是on，也就是持久化。<br>具体存哪里呢，主要是存mysql库和information_schema库下(5.6.x):</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">INFORMATION_SCHEMA.TABLES</span><br><span class="line">INFORMATION_SCHEMA.STATISTICS</span><br><span class="line">mysql.innodb_table_stats</span><br><span class="line">mysql.innodb_index_stats</span><br></pre></td></tr></table></figure>
+
+<h1 id="更新统计信息的时机"><a href="#更新统计信息的时机" class="headerlink" title="更新统计信息的时机"></a>更新统计信息的时机</h1><p>相关参数:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">innodb_stats_on_metadata: 是否每次都重新计算统计信息(配合非持久化使用),默认off;</span><br><span class="line">innodb_stats_auto_recalc: 插入数据量超过原表10%的时候更新统计信息,默认on。</span><br></pre></td></tr></table></figure>
+<p>总结一下mysql更新统计信息的时机:</p>
+<ol>
+<li>手动运行触发语句如<code>analyze table xx</code>的时候;</li>
+<li>如果<code>innodb_stats_auto_recalc</code>为on: 插入数据量超过原表10%的时候更新统计信息;</li>
+<li>如果<code>innodb_stats_on_metadata</code>为on: 每次查询schema.table表的是更新统计信息(一般不开启，性能太差)。</li>
+</ol>
+<h1 id="采样page数量"><a href="#采样page数量" class="headerlink" title="采样page数量"></a>采样page数量</h1><p>相关参数:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">| innodb_stats_sample_pages            | 8     |</span><br><span class="line">| innodb_stats_persistent_sample_pages | 20    |</span><br><span class="line">| innodb_stats_transient_sample_pages  | 8     |</span><br></pre></td></tr></table></figure>
+<p><code>innodb_stats_sample_pages</code>废弃改成了<code>innodb_stats_persistent_sample_pages</code>和<code>innodb_stats_transient_sample_pages</code>,灵活控制持久化和非持久化下的采样page数。</p>
+<p>可以看出默认情况持久化采样20个page。 </p>
+<h2 id="单表配置"><a href="#单表配置" class="headerlink" title="单表配置"></a>单表配置</h2><p>上述所有都是全局配置，还可以为每个表单独3个参数:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">STATS_PERSISTENT  : 1: 持久化统计信息;</span><br><span class="line">STATS_AUTO_RECALC : 超过10%更新统计信息。</span><br><span class="line">STATS_SAMPLE_PAGES: 采样页数。</span><br></pre></td></tr></table></figure>
+<p>可以看出为每个表设置的参数依然是这3个自由度: 是否持久化、更新统计信息时机、采样页数。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/03/31/2019-03/mysql%E7%BB%9F%E8%AE%A1%E4%BF%A1%E6%81%AF%E6%9B%B4%E6%96%B0/" data-id="ck96cxppi00hhmaam20j0cn5z" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2019-03/spark语法概要" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/03/31/2019-03/spark%E8%AF%AD%E6%B3%95%E6%A6%82%E8%A6%81/" class="article-date">
@@ -872,97 +953,6 @@
 
 
   
-    <article id="post-2019-02/redis设计与实现笔记6-客户端与服务器" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/02/21/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B06-%E5%AE%A2%E6%88%B7%E7%AB%AF%E4%B8%8E%E6%9C%8D%E5%8A%A1%E5%99%A8/" class="article-date">
-  <time datetime="2019-02-21T13:55:54.000Z" itemprop="datePublished">2019-02-21</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/redis/">redis</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/02/21/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B06-%E5%AE%A2%E6%88%B7%E7%AB%AF%E4%B8%8E%E6%9C%8D%E5%8A%A1%E5%99%A8/">redis设计与实现笔记6-客户端与服务器</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="客户端"><a href="#客户端" class="headerlink" title="客户端"></a>客户端</h1><p>服务端保存的客户端状态:(<code>redisClient</code>)</p>
-<ol>
-<li>套接字;</li>
-<li>客户端名字</li>
-<li>标志值flag;</li>
-<li>正在使用的数据库指针\号码;</li>
-<li>客户端当前要执行的命令、参数..;</li>
-<li>客户端输入、输出缓冲区；</li>
-<li>复制状态信息；</li>
-<li>事务状态；</li>
-<li>身份验证标志：0未通过；1：已经通过身份验证；</li>
-<li>创建时间、最后一次通信时间；</li>
-<li>其他。</li>
-</ol>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">redisServer</span>&#123;</span></span><br><span class="line">    <span class="comment">// 所有客户端状态的链表</span></span><br><span class="line">    <span class="built_in">list</span> *clients;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h2 id="相关命令"><a href="#相关命令" class="headerlink" title="相关命令"></a>相关命令</h2><p>列出客户端:</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">127.0.0.1:6379&gt; client list</span><br><span class="line">id=489 addr=127.0.0.1:57480 fd=5 name= age=6151 idle=582 flags=N db=0 sub=0 psub=0 multi=-1 qbuf=0 qbuf-free=0 obl=0 oll=0 omem=0 events=r cmd=get</span><br><span class="line">id=490 addr=127.0.0.1:38584 fd=6 name= age=15 idle=0 flags=N db=0 sub=0 psub=0 multi=-1 qbuf=0 qbuf-free=32768 obl=0 oll=0 omem=0 events=r cmd=client</span><br></pre></td></tr></table></figure>
-
-<h2 id="套接字fd"><a href="#套接字fd" class="headerlink" title="套接字fd"></a>套接字fd</h2><p>fd=-1: 伪客户端:加载AOF或执行Lua脚本；<br>fd&gt;-1: 普通客户端。</p>
-<h2 id="名字-name"><a href="#名字-name" class="headerlink" title="名字(name)"></a>名字(name)</h2><p>默认都没有名字，可以使用<code>client setname</code>命令设置。</p>
-<h2 id="客户端关闭"><a href="#客户端关闭" class="headerlink" title="客户端关闭"></a>客户端关闭</h2><p>关闭的原因：</p>
-<ol>
-<li>客户端进程退出、被杀死(<code>Client kill</code>)，网络连接断开；</li>
-<li>客户端发送了不符合协议格式的命令，被关闭；</li>
-<li>空转时间超过<code>timeout</code>配置;</li>
-<li>发送命令大小超过输入缓冲区限制；</li>
-<li>回复命令大小超过输出缓冲区限制。</li>
-</ol>
-<p>输出缓冲区需满足的两个限制：</p>
-<ol>
-<li>硬性限制：超出硬性限制大小，立即关闭；</li>
-<li>软性限制：最多可以超出软性限制持续时长xxx秒。</li>
-</ol>
-<p>示例配置：</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 普通客户端硬性限制和软性限制都不限制:</span></span><br><span class="line">client-output-buffer-limit normal 0 0 0</span><br><span class="line"><span class="meta">#</span><span class="bash"> 从服务器客户端硬性限制为256MB,软性限制为64MB、60秒：</span></span><br><span class="line">client-output-buffer-limit slave 256mb 64mb 60</span><br><span class="line"><span class="meta">#</span><span class="bash"> 执行发布与订阅功能的客户端：硬性限制32mb,软性限制8mb 60秒:</span></span><br><span class="line">client-output-buffer-limit 32mb 8mb 60</span><br></pre></td></tr></table></figure>
-
-<h1 id="服务端"><a href="#服务端" class="headerlink" title="服务端"></a>服务端</h1><h2 id="命令的执行流程"><a href="#命令的执行流程" class="headerlink" title="命令的执行流程"></a>命令的执行流程</h2><ol>
-<li>用户=&gt;客户端: 输入命令；</li>
-<li>客户端=&gt;服务端: 命令按通信协议传输到服务器输入缓冲区；</li>
-<li>服务端: 等待可读事件发生后，读输入缓冲区，解析命令；</li>
-<li>服务端：执行命令，将回复写入输出缓冲区；</li>
-<li>服务端=&gt;客户端：等待可写事件发生后，从输出缓冲区传输给客户端。</li>
-<li>客户端=&gt;用户: 回显命令结果。</li>
-</ol>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/02/21/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B06-%E5%AE%A2%E6%88%B7%E7%AB%AF%E4%B8%8E%E6%9C%8D%E5%8A%A1%E5%99%A8/" data-id="ck96cxpp800gdmaam9y4n3nq6" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -989,6 +979,10 @@
       <ul>
         
           <li>
+            <a href="/2022/09/25/2022-09/%E8%B0%83%E4%BC%98-%E8%A7%A3%E5%86%B3%E7%BA%BF%E7%A8%8B%E6%B1%A0%E9%80%A0%E6%88%90%E7%9A%84%E8%BF%9B%E7%A8%8B%E5%8D%A1%E9%A1%BF%E3%80%81cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-解决线程池造成的进程卡顿、cpu毛刺问题</a>
+          </li>
+        
+          <li>
             <a href="/2022/08/30/2022-08/%E8%B0%83%E4%BC%98-cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-cpu毛刺问题</a>
           </li>
         
@@ -1002,10 +996,6 @@
         
           <li>
             <a href="/2022/03/16/2022-03/cms%E7%9A%84gc%E8%A7%A6%E5%8F%91%E6%9D%A1%E4%BB%B6/">cms的gc触发条件</a>
-          </li>
-        
-          <li>
-            <a href="/2022/03/14/2022-03/%E4%B8%AD%E6%96%AD%E6%A2%B3%E7%90%86/">java方法是否可中断梳理</a>
           </li>
         
       </ul>

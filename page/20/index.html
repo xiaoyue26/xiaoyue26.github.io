@@ -72,6 +72,171 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-spark中的存储" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2016/03/26/spark%E4%B8%AD%E7%9A%84%E5%AD%98%E5%82%A8/" class="article-date">
+  <time datetime="2016-03-26T07:12:52.000Z" itemprop="datePublished">2016-03-26</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/spark/">spark</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2016/03/26/spark%E4%B8%AD%E7%9A%84%E5%AD%98%E5%82%A8/">spark中的存储</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <ul>
+<li>#存储架构<img src="/images/storage_in_spark(1).png" class="" width="400" height="600" title="存储架构">
+
+</li>
+</ul>
+<blockquote>
+<p>Spark是一种基于内存的运算框架。数据存储在worker节点中。对于每一个worker，worker Excutor有一个JVM，数据存储在JVM中。</p>
+</blockquote>
+<hr>
+<ul>
+<li>#故障恢复<img src="/images/storage_in_spark(2).png" class="" width="400" height="600" title="故障恢复">
+
+</li>
+</ul>
+<blockquote>
+<p>当计算引擎的进程损坏，Cache 丢失，Spark只能重新启动并计算恢复数据。</p>
+</blockquote>
+<hr>
+<ul>
+<li>#Lineage(世代)<img src="/images/storage_in_spark(3).png" class="" width="400" height="600" title="Lineage">
+
+</li>
+</ul>
+<blockquote>
+<p>Lineage保证数据的Reliability。</p>
+</blockquote>
+<ul>
+<li>当数据E丢失后：</li>
+</ul>
+<ol>
+<li>通过世代找到相应的之前数据，重新部署一个Job将数据重新计算。</li>
+<li>将数据在底层文件系统中备份。</li>
+</ol>
+<hr>
+<ul>
+<li>#数据流<img src="/images/storage_in_spark(4).png" class="" width="400" height="600" title="Lineage">
+
+</li>
+</ul>
+<blockquote>
+<p>计算数据在JVM的内存中存储一份，以保证较少的网络通信和读写。同时记录存储数据的世代(lineage)，当数据丢失时，基于世代将job重新运行，得到相应数据。</p>
+</blockquote>
+<hr>
+<ul>
+<li>#计算过程<img src="/images/storage_in_spark(5).png" class="" width="400" height="600" title="Lineage">
+
+</li>
+</ul>
+<blockquote>
+<p>Spark内部，单个executor进程内RDD的分片数据是用Iterator流式访问的。<br>Iterator的hasNext方法和next方法是由RDD lineage上各个transformation携带的闭包函数复合而成的。<br>该复合Iterator每访问一个元素，就对该元素应用相应的复合函数，得到的结果再流式地落地。空间复杂度为O(1)。</p>
+</blockquote>
+<hr>
+<ul>
+<li>#持久化</li>
+</ul>
+<blockquote>
+<p><code>spark.local.dir</code>：可以设置Spark的暂存目录，包括映射输出文件和需要存储在磁盘上的RDDs。这个磁盘目录在系统上面访问速度越快越好。可以用逗号隔开来设置多个目录。默认值为’/tmp’。<br><code>org.apache.spark.storage.StorageLevel</code>中5种持久化的级别.(<code>result.persist(StorageLevel.DISK_ONLY)</code>) 默认为<code>MEMORY_ONLY</code>。</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th align="center">级别</th>
+<th align="center">空间</th>
+<th align="center">时间</th>
+<th align="center">内存</th>
+<th align="center">磁盘</th>
+<th align="center">备注</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">MEMORY_ONLY</td>
+<td align="center">多</td>
+<td align="center">少</td>
+<td align="center">使用</td>
+<td align="center">不使用</td>
+<td align="center">-</td>
+</tr>
+<tr>
+<td align="center">MEMORY_ONLY_SER</td>
+<td align="center">少</td>
+<td align="center">多</td>
+<td align="center">使用</td>
+<td align="center">不使用</td>
+<td align="center">-</td>
+</tr>
+<tr>
+<td align="center">MEMORY_AND_DISK</td>
+<td align="center">多</td>
+<td align="center">中等</td>
+<td align="center">部分</td>
+<td align="center">部分</td>
+<td align="center">如果数据在内存中放不下，则溢写到磁盘上</td>
+</tr>
+<tr>
+<td align="center">MEMORY_AND_DISK_SER</td>
+<td align="center">少</td>
+<td align="center">多</td>
+<td align="center">部分</td>
+<td align="center">部分</td>
+<td align="center">如果数据在内存中放不下，则溢写到磁盘上。在内存中存放序列化后的数据。</td>
+</tr>
+<tr>
+<td align="center">DISK_ONLY</td>
+<td align="center">少</td>
+<td align="center">多</td>
+<td align="center">部分</td>
+<td align="center">部分</td>
+<td align="center">-</td>
+</tr>
+</tbody></table>
+<hr>
+<ul>
+<li>#数据分享<img src="/images/storage_in_spark(6).png" class="" width="400" height="600" title="数据分享">
+
+</li>
+</ul>
+<blockquote>
+<p>在Spark中，如果job2需要Job1运算的数据，Job1首先需要将数据写入到HDFS的block中，会产生硬盘甚至跨网络的读写，同时在HDFS中默认数据需要写三份，因此造成性能的损失。</p>
+</blockquote>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2016/03/26/spark%E4%B8%AD%E7%9A%84%E5%AD%98%E5%82%A8/" data-id="ck96cxplw004xmaam1bb14dt1" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spark/" rel="tag">spark</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/storage/" rel="tag">storage</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-jdk1-7中fork-join并发框架源码浅析及具体实例分析" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2016/02/26/jdk1-7%E4%B8%ADfork-join%E5%B9%B6%E5%8F%91%E6%A1%86%E6%9E%B6%E6%BA%90%E7%A0%81%E6%B5%85%E6%9E%90%E5%8F%8A%E5%85%B7%E4%BD%93%E5%AE%9E%E4%BE%8B%E5%88%86%E6%9E%90/" class="article-date">
@@ -694,68 +859,6 @@
 
 
   
-    <article id="post-RTTI与反射" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2015/10/18/RTTI%E4%B8%8E%E5%8F%8D%E5%B0%84/" class="article-date">
-  <time datetime="2015-10-18T12:53:45.000Z" itemprop="datePublished">2015-10-18</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2015/10/18/RTTI%E4%B8%8E%E5%8F%8D%E5%B0%84/">RTTI与反射</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <blockquote>
-<ul>
-<li><code>RTTI</code>:<br>  运行期类型鉴定。在编译期通过载入和检查<code>.class</code>文件,从而鉴定类型。</li>
-<li><code>反射</code>:<br>  运行期类信息。应用场景:反序列化,远程调用(RM)，访问私用变量和方法。编译期<code>.class</code>文件不可用,只能在运行期获得<code>.class</code>文件，在运行期载入和检查<code>.class</code>文件。</li>
-</ul>
-</blockquote>
-<p>1.<code>RTTI</code>:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//RTTI的例子:</span></span><br><span class="line"><span class="keyword">if</span>(<span class="keyword">boolean</span><span class="class">.<span class="keyword">class</span></span>==Boolean.TYPE)</span><br><span class="line">    System.out.println(<span class="string">"boolean true"</span>);</span><br><span class="line">Gun gun=<span class="keyword">new</span> Gun();</span><br><span class="line"><span class="keyword">if</span><span class="comment">//(Gun.class.isInstance(gun))//方式1;</span></span><br><span class="line">(Class.forName(<span class="string">"test1.RTTI$Gun"</span>).isInstance(gun ))<span class="comment">//方式2反射。</span></span><br><span class="line">    System.out.println(<span class="string">"gun is instance of  Gun"</span>);</span><br><span class="line">    <span class="comment">//此处Gun是test1包下RTTI类中的一个内部类。</span></span><br></pre></td></tr></table></figure>
-<p>2.反射:<br><a href="http://blog.csdn.net/stevenhu_223/article/details/9286121" target="_blank" rel="noopener">http://blog.csdn.net/stevenhu_223/article/details/9286121</a></p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">Class&lt;?&gt; class1 = Class.forName(<span class="string">"test1.RTTI$Gun"</span>);</span><br><span class="line">Method[] methods = class1.getMethods();</span><br><span class="line"><span class="keyword">for</span> (Method method : methods)</span><br><span class="line">	out.println(method);</span><br><span class="line">out.println(<span class="string">"constructos:--"</span>);</span><br><span class="line">Constructor[] constructors=class1.getConstructors();</span><br><span class="line"><span class="keyword">for</span> (Constructor method : constructors)</span><br><span class="line">	out.println(method);</span><br><span class="line">Method me1=class1.getMethod(<span class="string">"getdata"</span>, <span class="keyword">int</span><span class="class">.<span class="keyword">class</span>)</span>;</span><br><span class="line">Type returnType=me1.getReturnType();</span><br><span class="line">Object output=me1.invoke(class1.newInstance(),<span class="number">3</span>);</span><br><span class="line">out.println(output);</span><br></pre></td></tr></table></figure>
-<blockquote>
-<p><code>getFields</code>方法获取所有<code>public</code>属性；<br><code>getDeclaredFields</code>方法获取所有属性,包括<code>private</code>。<br><code>getMethods</code>方法获取所有<code>public</code>方法;<br><code>getDeclaredMethods</code>方法获取所有方法,包括<code>private</code>。</p>
-</blockquote>
-<p>可通过<code>getDeclaredMethods</code>获取私有方法；<br>然后<code>nameMethod.setAccessible(true);</code><br>然后就可以执行<code>private</code>方法了。</p>
-<p>此外，获取方法时，除了指定方法名，还要指定参数类型列表，多个参数时可这样写:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Class&lt;?&gt; clazz=Gun<span class="class">.<span class="keyword">class</span></span>;</span><br><span class="line">Method allValuesMethod = clazz.getDeclaredMethod(<span class="string">"setAllValues"</span>, <span class="keyword">new</span> Class[]&#123;String<span class="class">.<span class="keyword">class</span>, <span class="title">int</span>.<span class="title">class</span>, <span class="title">float</span>.<span class="title">class</span>&#125;)</span>;</span><br></pre></td></tr></table></figure>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2015/10/18/RTTI%E4%B8%8E%E5%8F%8D%E5%B0%84/" data-id="ck96cxpkh0007maam3ataayqq" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -782,6 +885,10 @@
       <ul>
         
           <li>
+            <a href="/2022/09/25/2022-09/%E8%B0%83%E4%BC%98-%E8%A7%A3%E5%86%B3%E7%BA%BF%E7%A8%8B%E6%B1%A0%E9%80%A0%E6%88%90%E7%9A%84%E8%BF%9B%E7%A8%8B%E5%8D%A1%E9%A1%BF%E3%80%81cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-解决线程池造成的进程卡顿、cpu毛刺问题</a>
+          </li>
+        
+          <li>
             <a href="/2022/08/30/2022-08/%E8%B0%83%E4%BC%98-cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-cpu毛刺问题</a>
           </li>
         
@@ -795,10 +902,6 @@
         
           <li>
             <a href="/2022/03/16/2022-03/cms%E7%9A%84gc%E8%A7%A6%E5%8F%91%E6%9D%A1%E4%BB%B6/">cms的gc触发条件</a>
-          </li>
-        
-          <li>
-            <a href="/2022/03/14/2022-03/%E4%B8%AD%E6%96%AD%E6%A2%B3%E7%90%86/">java方法是否可中断梳理</a>
           </li>
         
       </ul>

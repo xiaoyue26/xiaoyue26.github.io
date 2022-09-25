@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>调优-解决线程池造成的进程卡顿、cpu毛刺问题 | 笔记本</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="背景&amp;现象背景有个qps较高的rpc，使用了线程池来并发请求多个下游服务，且设定了对于下游的超时时间。 现象rpc服务调用下游时，时不时出现耗时很高的情况，平均耗时挺低的，但是p99和p995就比较高了，达到秒级，超过了设定的调用下游的超时时间。从rpc monitor上看，调用下游实际也用不了这么长时间，说明不是跨span的耗时；使用arthas  trace查看方法级的耗时:   可以">
+<meta property="og:type" content="article">
+<meta property="og:title" content="调优-解决线程池造成的进程卡顿、cpu毛刺问题">
+<meta property="og:url" content="http://xiaoyue26.github.io/2022/09/25/2022-09/%E8%B0%83%E4%BC%98-%E8%A7%A3%E5%86%B3%E7%BA%BF%E7%A8%8B%E6%B1%A0%E9%80%A0%E6%88%90%E7%9A%84%E8%BF%9B%E7%A8%8B%E5%8D%A1%E9%A1%BF%E3%80%81cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/index.html">
+<meta property="og:site_name" content="笔记本">
+<meta property="og:description" content="背景&amp;现象背景有个qps较高的rpc，使用了线程池来并发请求多个下游服务，且设定了对于下游的超时时间。 现象rpc服务调用下游时，时不时出现耗时很高的情况，平均耗时挺低的，但是p99和p995就比较高了，达到秒级，超过了设定的调用下游的超时时间。从rpc monitor上看，调用下游实际也用不了这么长时间，说明不是跨span的耗时；使用arthas  trace查看方法级的耗时:   可以">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2022-09/trace_supply.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2022-09/start.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2022-09/core_thread.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2022-09/p99.png">
+<meta property="og:image" content="http://xiaoyue26.github.io/images/2022-09/timeout.png">
+<meta property="article:published_time" content="2022-09-25T07:11:32.000Z">
+<meta property="article:modified_time" content="2022-09-25T07:32:42.092Z">
+<meta property="article:author" content="风梦七">
+<meta property="article:tag" content="java">
+<meta property="article:tag" content="线程池">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://xiaoyue26.github.io/images/2022-09/trace_supply.png">
+  
+    <link rel="alternate" href="/atom.xml" title="笔记本" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+
+<meta name="generator" content="Hexo 4.2.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    
+    <div id="header-inner" class="inner">
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="搜索"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://xiaoyue26.github.io"></form>
+      </div>
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">首页</a>
+        
+          <a class="main-nav-link" href="/archives">归档</a>
+        
+          <a class="main-nav-link" href="/about">关于</a>
+        
+      </nav>
+      
+    </div>
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">笔记本</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">风梦七</a>
+        </h2>
+      
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-2022-09/调优-解决线程池造成的进程卡顿、cpu毛刺问题" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2022/09/25/2022-09/%E8%B0%83%E4%BC%98-%E8%A7%A3%E5%86%B3%E7%BA%BF%E7%A8%8B%E6%B1%A0%E9%80%A0%E6%88%90%E7%9A%84%E8%BF%9B%E7%A8%8B%E5%8D%A1%E9%A1%BF%E3%80%81cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/" class="article-date">
+  <time datetime="2022-09-25T07:11:32.000Z" itemprop="datePublished">2022-09-25</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E6%80%A7%E8%83%BD/">性能</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      调优-解决线程池造成的进程卡顿、cpu毛刺问题
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="背景-amp-现象"><a href="#背景-amp-现象" class="headerlink" title="背景&amp;现象"></a>背景&amp;现象</h1><h2 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h2><p>有个qps较高的rpc，使用了线程池来并发请求多个下游服务，且设定了对于下游的超时时间。</p>
+<h2 id="现象"><a href="#现象" class="headerlink" title="现象"></a>现象</h2><p>rpc服务调用下游时，时不时出现耗时很高的情况，平均耗时挺低的，但是p99和p995就比较高了，达到秒级，超过了设定的调用下游的超时时间。<br>从rpc monitor上看，调用下游实际也用不了这么长时间，说明不是跨span的耗时；<br>使用arthas  trace查看方法级的耗时:</p>
+<img src="/images/2022-09/trace_supply.png" class="" width="800" height="1200" title="trace_supply">
+<img src="/images/2022-09/start.png" class="" width="800" height="1200" title="start">
+<p>可以发现是频繁start新的thread导致的。</p>
+<p>再查看日志里的线程编号：<br>-thread-7665821<br>已经达到七百万了！</p>
+<p>参考以前的学习：<br><a href="http://xiaoyue26.github.io/2022/03/14/2022-03/%E4%B8%AD%E6%96%AD%E6%A2%B3%E7%90%86/">http://xiaoyue26.github.io/2022/03/14/2022-03/%E4%B8%AD%E6%96%AD%E6%A2%B3%E7%90%86/</a></p>
+<img src="/images/2022-09/core_thread.png" class="" width="800" height="1200" title="core_thread">
+<p>由于jvm线程与内核线程一一对应(hotpot jvm下)，频繁回收、创建带来的内核态切换、系统调用开销过于大了。</p>
+<h1 id="解决方案"><a href="#解决方案" class="headerlink" title="解决方案"></a>解决方案</h1><p>综上可以发现线程池里有频繁的线程回收、再创建操作，需要关闭core线程自动回收的机制（基础框架内默认是开启回收）</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">DynamicThreadExecutor.dynamic(POOL_SIZE::get, <span class="string">"csc-center-executor-%d"</span>, <span class="keyword">false</span>);</span><br></pre></td></tr></table></figure>
+
+<p>字段注释：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@param</span> allowCoreThreadTimeout 是否允许核心线程超时后被回收，</span><br><span class="line">*         超时时间参数可通过为&#123;<span class="meta">@link</span> ExecutorBuilder.coreThreadKeepAliveMillis&#125;设置</span><br><span class="line">*         默认超时时间为<span class="number">1</span>分钟</span><br></pre></td></tr></table></figure>
+
+<h1 id="收益"><a href="#收益" class="headerlink" title="收益"></a>收益</h1><p>请求耗时p99\p995、超时异常大幅降低；</p>
+<img src="/images/2022-09/p99.png" class="" width="800" height="1200" title="p99">
+<img src="/images/2022-09/timeout.png" class="" width="800" height="1200" title="timeout">
+
+<h1 id="更多参考代码"><a href="#更多参考代码" class="headerlink" title="更多参考代码"></a>更多参考代码</h1><p>也可以自己选择喜欢的builder创建:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> DynamicThreadExecutor fromBuilder = DynamicThreadExecutor.dynamic(POOL_SIZE::get,</span><br><span class="line">       num -&gt; ExecutorsEx.newBlockingThreadPool(ExecutorBuilder</span><br><span class="line">               .newBuilder()</span><br><span class="line">               .allowCoreThreadTimeout(<span class="keyword">false</span>)</span><br><span class="line">               .threadSize(num)</span><br><span class="line">               .queueSize(num)</span><br><span class="line">               .theadNameFormat(<span class="string">"from-builder-%d"</span>)));</span><br></pre></td></tr></table></figure>
+
+<h1 id="注意事项-可能的坑"><a href="#注意事项-可能的坑" class="headerlink" title="注意事项(可能的坑)"></a>注意事项(可能的坑)</h1><ol>
+<li>摘要中的代码默认创建的是BlockingThreadPool，不支持嵌套使用。不要在提交的任务中再次提交任务到同一个线程池，以免死锁。<br>(jdk中的支持嵌套调用)</li>
+</ol>
+<h1 id="参考资料"><a href="#参考资料" class="headerlink" title="参考资料"></a>参考资料</h1><p><a href="https://zhuanlan.zhihu.com/p/342929293" target="_blank" rel="noopener">https://zhuanlan.zhihu.com/p/342929293</a></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2022/09/25/2022-09/%E8%B0%83%E4%BC%98-%E8%A7%A3%E5%86%B3%E7%BA%BF%E7%A8%8B%E6%B1%A0%E9%80%A0%E6%88%90%E7%9A%84%E8%BF%9B%E7%A8%8B%E5%8D%A1%E9%A1%BF%E3%80%81cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/" data-id="cl8h0idzb0000dzama6npgvog" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E7%BA%BF%E7%A8%8B%E6%B1%A0/" rel="tag">线程池</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+  <div id="random_posts">
+    <h2>推荐文章</h2>
+    <div class="random_posts_ul">
+      <script>
+          var random_count =4
+          var site = {BASE_URI:'/'};
+          function load_random_posts(obj) {
+              var arr=site.posts;
+              if (!obj) return;
+              // var count = $(obj).attr('data-count') || 6;
+              for (var i, tmp, n = arr.length; n; i = Math.floor(Math.random() * n), tmp = arr[--n], arr[n] = arr[i], arr[i] = tmp);
+              arr = arr.slice(0, random_count);
+              var html = '<ul>';
+            
+              for(var j=0;j<arr.length;j++){
+                var item=arr[j];
+                html += '<li><strong>' + 
+                item.date + ':&nbsp;&nbsp;<a href="' + (site.BASE_URI+item.uri) + '">' + 
+                (item.title || item.uri) + '</a></strong>';
+                if(item.excerpt){
+                  html +='<div class="post-excerpt">'+item.excerpt+'</div>';
+                }
+                html +='</li>';
+                
+              }
+              $(obj).html(html + '</ul>');
+          }
+          $('.random_posts_ul').each(function () {
+              var c = this;
+              if (!site.posts || !site.posts.length){
+                  $.getJSON(site.BASE_URI + 'js/posts.js',function(json){site.posts = json;load_random_posts(c)});
+              } 
+               else{
+                load_random_posts(c);
+              }
+          });
+      </script>
+    </div>
+  </div>
+
+    
+<nav id="article-nav">
+  
+  
+    <a href="/2022/08/30/2022-08/%E8%B0%83%E4%BC%98-cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">下一篇</strong>
+      <div class="article-nav-title">调优-cpu毛刺问题</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+ 
+     
+  <div class="comments" id="comments">
+    
+     
+       
+      <div id="cloud-tie-wrapper" class="cloud-tie-wrapper"></div>
+    
+       
+      
+      
+  </div>
+ 
+  
+
+</section>
+           
+    <aside id="sidebar">
+  
+    
+
+  
+    
+    <div class="widget-wrap">
+    
+      <div class="widget" id="toc-widget-fixed">
+      
+        <strong class="toc-title">文章目录</strong>
+        <div class="toc-widget-list">
+              <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#背景-amp-现象"><span class="toc-number">1.</span> <span class="toc-text">背景&amp;现象</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#背景"><span class="toc-number">1.1.</span> <span class="toc-text">背景</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#现象"><span class="toc-number">1.2.</span> <span class="toc-text">现象</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#解决方案"><span class="toc-number">2.</span> <span class="toc-text">解决方案</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#收益"><span class="toc-number">3.</span> <span class="toc-text">收益</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#更多参考代码"><span class="toc-number">4.</span> <span class="toc-text">更多参考代码</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#注意事项-可能的坑"><span class="toc-number">5.</span> <span class="toc-text">注意事项(可能的坑)</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#参考资料"><span class="toc-number">6.</span> <span class="toc-text">参考资料</span></a></li></ol>
+          </div>
+      </div>
+    </div>
+
+  
+    
+
+  
+    
+  
+    
+  
+    
+
+  
+</aside>
+
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-left">
+      &copy; 2014 - 2022 风梦七&nbsp;|&nbsp;
+      主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
+    </div>
+     <div id="footer-right">
+      联系方式&nbsp;|&nbsp;296671657@qq.com
+    </div>
+  </div>
+</footer>
+ 
+<script src="/jquery/jquery.min.js"></script>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">首页</a>
+  
+    <a href="/archives" class="mobile-nav-link">归档</a>
+  
+    <a href="/about" class="mobile-nav-link">关于</a>
+  
+</nav>
+    <img class="back-to-top-btn" src="/images/fly-to-top.png"/>
+<script>
+// Elevator script included on the page, already.
+window.onload = function() {
+  var elevator = new Elevator({
+    selector:'.back-to-top-btn',
+    element: document.querySelector('.back-to-top-btn'),
+    duration: 1000 // milliseconds
+  });
+}
+</script>
+      
+
+  
+    <script>
+      var cloudTieConfig = {
+        url: document.location.href, 
+        sourceId: "",
+        productKey: "e2fb4051c49842688ce669e634bc983f",
+        target: "cloud-tie-wrapper"
+      };
+    </script>
+    <script src="https://img1.ws.126.net/f2e/tie/yun/sdk/loader.js"></script>
+    
+
+  
+
+
+
+
+
+
+
+<!-- author:forvoid begin -->
+<!-- author:forvoid begin -->
+
+<!-- author:forvoid end -->
+
+<!-- author:forvoid end -->
+
+
+  
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        tex2jax: {
+          inlineMath: [ ['$','$'], ["\\(","\\)"]  ],
+          processEscapes: true,
+          skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        }
+      })
+    </script>
+
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax(), i;
+        for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+        }
+      })
+    </script>
+    <script type="text/javascript" src="https://cdn.rawgit.com/mathjax/MathJax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+  
+
+
+ 
+<script src="/js/is.js"></script>
+
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+<script src="/js/elevator.js"></script>
+
+  </div>
+</body>
+</html>

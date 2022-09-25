@@ -72,6 +72,241 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-03/高性能Mysql笔记-第六章-2" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/03/11/2018-03/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC%E5%85%AD%E7%AB%A0-2/" class="article-date">
+  <time datetime="2018-03-11T09:09:07.000Z" itemprop="datePublished">2018-03-11</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/03/11/2018-03/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC%E5%85%AD%E7%AB%A0-2/">高性能Mysql笔记-第六章(2)</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <ul>
+<li>前情提要：<br>SQL</li>
+<li>hash(SQL)<strong>查询缓存</strong></li>
+<li><blockquote>
+<p>SQL</p>
+</blockquote>
+</li>
+<li><strong>语法解析器</strong>-</li>
+<li><blockquote>
+<p>解析树</p>
+</blockquote>
+</li>
+<li><strong>预处理</strong>-</li>
+<li><blockquote>
+<p>解析树(合法,有权限)</p>
+</blockquote>
+</li>
+<li><strong>优化器</strong>-</li>
+<li><blockquote>
+<p>最优执行计划</p>
+</blockquote>
+</li>
+<li><blockquote>
+<p>接下来就要查询执行引擎了：</p>
+</blockquote>
+</li>
+</ul>
+<h2 id="6-4-4-查询执行引擎"><a href="#6-4-4-查询执行引擎" class="headerlink" title="6.4.4 查询执行引擎"></a>6.4.4 查询执行引擎</h2><ul>
+<li>工作原理<br>查询执行引擎根据执行计划，访问存储引擎的相关API。(Handler Api)<br>查询中每张表由一个Handler实例表示，抽象了底层存储引擎的具体实现。</li>
+</ul>
+<h2 id="6-4-5-返回结果给客户端"><a href="#6-4-5-返回结果给客户端" class="headerlink" title="6.4.5 返回结果给客户端"></a>6.4.5 返回结果给客户端</h2><p>采用TCP传输结果给客户端，为了避免服务器存储太多的结果，每生成一部分结果，就可以向客户端逐步返回结果集。<br>相关参数：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">SQL_BUFFER_RESULT</span><br><span class="line">-- 结果集的缓冲区</span><br></pre></td></tr></table></figure>
+<p>此外，查询的结果如果可以缓存，也会缓存下来。</p>
+<h1 id="6-5-优化器的局限性"><a href="#6-5-优化器的局限性" class="headerlink" title="6.5 优化器的局限性"></a>6.5 优化器的局限性</h1><h2 id="6-5-1-关联子查询"><a href="#6-5-1-关联子查询" class="headerlink" title="6.5.1 关联子查询"></a>6.5.1 关联子查询</h2><ul>
+<li>案例<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">Select * from film</span><br><span class="line">where id in (</span><br><span class="line">    select film_id </span><br><span class="line">    from film_actor</span><br><span class="line">    where actor_id&#x3D;1</span><br><span class="line">);</span><br></pre></td></tr></table></figure>
+
+</li>
+</ul>
+<p>优化器改写后：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">select * from film</span><br><span class="line">where exists(</span><br><span class="line">    select * from film_actor</span><br><span class="line">    where actor_id&#x3D;1</span><br><span class="line">    and film_id&#x3D;film.id</span><br><span class="line">);</span><br></pre></td></tr></table></figure>
+<p>通过explain命令，可以看到<br>执行流程是：</p>
+<ol>
+<li>对film进行全表扫描，得到所有id；</li>
+<li>使用id逐个排查film_actor表。</li>
+</ol>
+<ul>
+<li><p>缺点<br>对于film表很大的时候，性能很差。</p>
+</li>
+<li><p>解决方案1</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">select film.*</span><br><span class="line">from film</span><br><span class="line">join film_actor</span><br><span class="line">on id&#x3D;film_id</span><br><span class="line">where actor_id&#x3D;1;</span><br></pre></td></tr></table></figure>
+<p>这个查询优化后，会使用较小的表作为驱动表，因此可以回避上述缺点。</p>
+</li>
+</ul>
+<ul>
+<li>解决方案2<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">select * from film</span><br><span class="line">where id in</span><br><span class="line">( select group_concat(film_id)</span><br><span class="line">from film_actor</span><br><span class="line">where actor_id&#x3D;1</span><br><span class="line">);</span><br></pre></td></tr></table></figure>
+这个查询优化后，会先对film_actor进行处理，生成IN列表后，会先排序，然后二分查找。仅当film很大，而film_actor表很小的时候效率比原来的方案高。（换言之，不一定更高）</li>
+</ul>
+<h2 id="6-5-2-UNION的限制"><a href="#6-5-2-UNION的限制" class="headerlink" title="6.5.2 UNION的限制"></a>6.5.2 UNION的限制</h2><p>外层的limit20无法提前传入内层，因此可以自己手动在内层先Limit一下，减少数据量。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">(select * from t1</span><br><span class="line">limit 20</span><br><span class="line">)</span><br><span class="line">UNION ALL</span><br><span class="line">(select * from t2</span><br><span class="line">limit 20</span><br><span class="line">)</span><br><span class="line">limit 20</span><br></pre></td></tr></table></figure>
+
+<p><strong>以下是几个不支持的特性：</strong></p>
+<h2 id="6-5-5-Mysql无法并行执行"><a href="#6-5-5-Mysql无法并行执行" class="headerlink" title="6.5.5 Mysql无法并行执行"></a>6.5.5 Mysql无法并行执行</h2><p>Mysql无法利用多核。</p>
+<h2 id="6-5-6-哈希关联"><a href="#6-5-6-哈希关联" class="headerlink" title="6.5.6 哈希关联"></a>6.5.6 哈希关联</h2><p>Mysql的关联都是嵌套关联，不支持哈希关联。<br>不过可以通过建立哈希索引来曲线实现哈希关联。<br>Memory存储的索引都是哈希索引。</p>
+<h2 id="6-5-7-松散索引扫描"><a href="#6-5-7-松散索引扫描" class="headerlink" title="6.5.7 松散索引扫描"></a>6.5.7 松散索引扫描</h2><p>例如当索引为(a,b)，而查询条件中只有b的时候，由于不是最左前缀索引，因此无法利用索引，Mysql只能进行全表扫描。</p>
+<p>如果有松散索引扫描：<br>先扫描a列第一个值对应的b列的范围；<br>再扫描a列第二个值对应的b列的范围；<br>以此类推，就能少扫描很多数据行。<br>（类似一个对a列值进行枚举的过程）</p>
+<p>可惜Mysql还不支持松散索引扫描。</p>
+<h2 id="6-5-8-最大值和最小值优化"><a href="#6-5-8-最大值和最小值优化" class="headerlink" title="6.5.8 最大值和最小值优化"></a>6.5.8 最大值和最小值优化</h2><ul>
+<li>案例<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">select min(id) from actor</span><br><span class="line">where first_name&#x3D;&#39;PENELOPE&#39;</span><br></pre></td></tr></table></figure>
+
+</li>
+</ul>
+<p>其中first_name列没有索引，而id是主键列。</p>
+<p>因此Mysql的处理方法是：</p>
+<ol>
+<li>进行全表扫描获取符合where的数据行；</li>
+<li>将上述数据中的id取min.</li>
+</ol>
+<ul>
+<li><p>优化方案<br>由于数据是按主键顺序排列的，因此全表扫描的时候，顺序IO，顺序扫描，遇到的主键也是递增的。因此扫描时遇到的第一个符合条件的数据行，它的主键值一定是最小的。</p>
+</li>
+<li><p>优化后的SQL</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">select id from actor</span><br><span class="line">use index(primary)</span><br><span class="line">where first_name&#x3D;&#39;PENELOPE&#39; limit 1;</span><br></pre></td></tr></table></figure></li>
+<li><p>优点：<br>快。</p>
+</li>
+<li><p>缺点：<br>可读性差。依赖于底层数据的物理组织。<br>没人能看懂这里是要取最小值。</p>
+</li>
+</ul>
+<h2 id="6-5-9-同一张表同时查询和更新"><a href="#6-5-9-同一张表同时查询和更新" class="headerlink" title="6.5.9 同一张表同时查询和更新"></a>6.5.9 同一张表同时查询和更新</h2><p>Mysql无法运行的SQL：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">update t AS out_t</span><br><span class="line">set cnt&#x3D; (</span><br><span class="line">    select count(1) from t as in_t</span><br><span class="line">    where in_t.type&#x3D;out_t.type</span><br><span class="line">);</span><br></pre></td></tr></table></figure>
+<p>上述SQL的语意是将表中相似行（type相同）的数量，记录到所有行的cnt列中。</p>
+<ul>
+<li>改写后可以运行：<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">update t </span><br><span class="line">join </span><br><span class="line">    (select type,count(1) as cnt</span><br><span class="line">    from t</span><br><span class="line">    group by type</span><br><span class="line">    ) AS tmp using (type)</span><br><span class="line">set t.cnt&#x3D;tmp.cnt</span><br></pre></td></tr></table></figure>
+上述SQL使用生成表（临时表）的形式绕过了同时进行查询和更新的限制，查询的是临时表，更改的是原表。</li>
+</ul>
+<p><strong>上述是Mysql不支持的特性。</strong></p>
+<h1 id="6-6-查询优化器的提示-hint"><a href="#6-6-查询优化器的提示-hint" class="headerlink" title="6.6 查询优化器的提示(hint)"></a>6.6 查询优化器的提示(hint)</h1><p>这些提示随版本可能会变化。<br>目前可以使用的一些提示如下：</p>
+<ul>
+<li><strong>High_priority/Low_priority</strong><br>（作用不大，只对使用表锁的引擎有效）<br>多个语句同时访问某一个表时，哪些语句的优先级高。<br>原理：<br>等待某个表锁的语句组成等待队列。<br>这个提示可以控制等待队列中的排列顺序。</li>
+</ul>
+<ul>
+<li><strong>Delayed</strong><br>（有用）<br>对于<code>Insert</code>和<code>Replace</code>有效。<br>相应处理流程：</li>
+</ul>
+<ol>
+<li>立即回复客户端；</li>
+<li>将插入的行数据放入缓冲区；</li>
+<li>表空闲时将数据批量写入。</li>
+</ol>
+<p>适用场景： 日志系统；<br>缺点：</p>
+<ol>
+<li>并不是所有存储引擎都支持；</li>
+<li>导致<code>Last_insert_id()</code>无法正常工作；</li>
+<li>不知道什么时候数据才真正落地。(有效性不好保证)</li>
+</ol>
+<ul>
+<li><p><strong>Straight_join</strong><br>手动指定表的关联顺序。</p>
+</li>
+<li><p><strong>SQL_SMALL_RESULT</strong>/<strong>SQL_BIG_RESULT</strong><br>告诉优化器对于<code>Group by</code>或<code>Distinct</code>查询如何使用临时表及排序。</p>
+</li>
+</ul>
+<p>SQL_SMALL_RESULT：<br>结果集会很小，将结果集放在内存中的索引临时表，以避免排序操作。</p>
+<p>SQL_BIG_RESULT：<br>结果集会很大，建议使用磁盘临时表进行排序。（外排）</p>
+<ul>
+<li><strong>SQL_BUFFER_RESULT</strong><br>使用这个hint:<br>将查询结果放入一个临时表中，然后尽可能快地释放表锁。</li>
+</ul>
+<p>不使用这个hint:<br>查询结果全部发送给客户端后，才释放表锁。</p>
+<ul>
+<li><p><strong>SQL_Cache/Sql_no_cache</strong><br>是否缓存SQL结果。(详见第七章)</p>
+</li>
+<li><p><strong>SQL_CALC_FOUND_ROWS</strong><br>(不该使用)<br>返回结果中加上结果集的大小。（Limit之前）</p>
+</li>
+</ul>
+<ul>
+<li><p><strong>For update</strong>/<strong>Lock in share mode</strong><br>(尽可能避免使用)<br>只对实现了行锁的存储引擎有效。</p>
+</li>
+<li><p><strong>Use index/ignore index/force index</strong><br>(有用)<br>指定优化器使用或不使用哪些索引。</p>
+</li>
+<li><p><strong>optimizer_search_depth</strong><br>(有用)<br>优化器穷举执行计划的限度。<br>如果查询长时间处于<code>statistics</code>状态，可以考虑调低此参数。</p>
+</li>
+<li><p><strong>optimizer_prune_level</strong><br>默认开启。<br>是否根据扫描的行数决定跳过某些执行计划。</p>
+</li>
+</ul>
+<p>上述hint即使有用，也不应滥用，不应假设自己比优化器的选择更优，可以实验验证。<br>应注意到随着版本升级，有些hint可能过时。（优化器变得更聪明）</p>
+<h1 id="6-7-优化特定类型的查询"><a href="#6-7-优化特定类型的查询" class="headerlink" title="6.7 优化特定类型的查询"></a>6.7 优化特定类型的查询</h1><h2 id="6-7-1-count查询优化"><a href="#6-7-1-count查询优化" class="headerlink" title="6.7.1 count查询优化"></a>6.7.1 count查询优化</h2><p>count(1)等效于count(*)。</p>
+<ol>
+<li>利用Myisam特性优化</li>
+</ol>
+<ul>
+<li>MyIsam特性：<br>统计信息中记录数据行数量，因此全表count极快。</li>
+</ul>
+<p>案例：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">select count(1)</span><br><span class="line">from t</span><br><span class="line">where id&gt;5;</span><br></pre></td></tr></table></figure>
+<p>其中id上有索引。</p>
+<p>优化后：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">select  (select count(1) from t ) </span><br><span class="line">     - count(1)</span><br><span class="line">FROM t</span><br><span class="line">where id&lt;&#x3D;5；</span><br></pre></td></tr></table></figure>
+<p>优化前扫描的为&gt;5的所有行；(可能很多)<br>优化后扫描的为&lt;=5的所有行（最多5行）。</p>
+<p>应当注意到上述优化只对<code>MyISam</code>引擎有用。</p>
+<ol start="2">
+<li>使用近似值<br>使用explain中预估的行数。</li>
+<li>缓存、汇总表</li>
+</ol>
+<h2 id="6-7-2-优化关联查询"><a href="#6-7-2-优化关联查询" class="headerlink" title="6.7.2 优化关联查询"></a>6.7.2 优化关联查询</h2><ol>
+<li>关联键上有索引；</li>
+<li>Group by,order by只涉及一张表的列；</li>
+</ol>
+<h2 id="6-7-4-优化Group-by和Distinct"><a href="#6-7-4-优化Group-by和Distinct" class="headerlink" title="6.7.4 优化Group by和Distinct"></a>6.7.4 优化Group by和Distinct</h2><p>Group by和Distinct会互相转化。</p>
+<p>无法使用索引时，Groupby的两种策略：</p>
+<ol>
+<li>用临时表进行分组；(内存排序)</li>
+<li>用排序进行分组。(外排)</li>
+</ol>
+<p>可以通过hint干预优化器的选择。</p>
+<p><strong>关联查询+GroupBy</strong></p>
+<ul>
+<li>案例<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">select first_name,last_name,count(1)</span><br><span class="line">from film_actor</span><br><span class="line">join actor using (actor_id)</span><br><span class="line">group by first_name,last_name</span><br></pre></td></tr></table></figure>
+
+</li>
+</ul>
+<p>优化后：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">select first_name,last_name,count(1)</span><br><span class="line">from film_actor</span><br><span class="line">join actor using(actor_id)</span><br><span class="line">group by actor_id</span><br></pre></td></tr></table></figure>
+<p>上述查询group by和select列不同.</p>
+<ul>
+<li>相关参数<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">SQL_MODE&#x3D;ONLY_FULL_GROUP_BY</span><br><span class="line">这种取值时，这类查询会直接返回错误。</span><br></pre></td></tr></table></figure>
+上述优化之所以能更优，是因为：</li>
+</ul>
+<ol>
+<li>ID唯一决定了姓名，而且姓名唯一；</li>
+<li>ID列分组效率高，而且所在的表小。</li>
+</ol>
+<p>取消GROUP BY排序：<br>使用<code>ORDER BY NULL</code>，否则结果会按分组的字段进行排序。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/03/11/2018-03/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC%E5%85%AD%E7%AB%A0-2/" data-id="ck96cxpo200bhmaam5obdg11m" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-03/高性能Mysql笔记-第六章-1" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/03/09/2018-03/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC%E5%85%AD%E7%AB%A0-1/" class="article-date">
@@ -1708,260 +1943,6 @@
 
 
   
-    <article id="post-2018-01/java并发编程的艺术笔记-第三章" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/01/21/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF%E7%AC%94%E8%AE%B0-%E7%AC%AC%E4%B8%89%E7%AB%A0/" class="article-date">
-  <time datetime="2018-01-21T14:10:41.000Z" itemprop="datePublished">2018-01-21</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/01/21/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF%E7%AC%94%E8%AE%B0-%E7%AC%AC%E4%B8%89%E7%AB%A0/">java并发编程的艺术笔记-第三章</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="Java内存模型"><a href="#Java内存模型" class="headerlink" title="Java内存模型"></a>Java内存模型</h1><p>内容有4个部分:</p>
-<ol>
-<li>基本概念</li>
-<li>顺序一致性</li>
-<li>同步原语的内存语义</li>
-<li>内存模型的设计原理</li>
-</ol>
-<h2 id="3-1-基本概念"><a href="#3-1-基本概念" class="headerlink" title="3.1 基本概念"></a>3.1 基本概念</h2><p>并发编程的两个关键问题:</p>
-<ol>
-<li>线程之间通信: 何种机制交换数据,包括共享内存和消息传递;</li>
-<li>线程之间同步: 不同线程的操作发生的顺序. </li>
-</ol>
-<p>JAVA的线程通信: 共享内存(隐式). </p>
-<p>JAVA的内存:</p>
-<ol>
-<li>堆内存(共享):   实例域,静态域,数组元素;</li>
-<li>栈内存(不共享): 局部变量,方法参数,异常参数.</li>
-</ol>
-<p>线程A,B通信流程:</p>
-<ol>
-<li>线程A把自己内存中更新过的共享变量刷新到主内存中;(把cpu缓存刷到内存)</li>
-<li>线程B把到主内存中读取A更新后的共享变量. (把内存刷新到cpu缓存)</li>
-</ol>
-<h2 id="3-1-3-源代码到指令序列的重排序"><a href="#3-1-3-源代码到指令序列的重排序" class="headerlink" title="3.1.3 源代码到指令序列的重排序"></a>3.1.3 源代码到指令序列的重排序</h2><p>3种重排类型:</p>
-<ol>
-<li>编译器优化的重排序: 单线程程序语义不改变;</li>
-<li>指令级并行的重排序: 多线程的指令重排并行执行;</li>
-<li>内存系统的重排序: 指令实际执行的时候,由于缓存/缓冲的存在,加载和存储可能看起来是乱序执行.</li>
-</ol>
-<p>2和3属于处理器重排序.</p>
-<p>JAVA内存模型约束:</p>
-<ol>
-<li>禁止某些编译器优化;</li>
-<li>插入某些特定类型内存屏障(Memory Fence指令),禁止特定类型处理器重排序.</li>
-</ol>
-<h2 id="3-1-4-并发编程模型的分类"><a href="#3-1-4-并发编程模型的分类" class="headerlink" title="3.1.4 并发编程模型的分类"></a>3.1.4 并发编程模型的分类</h2><p>写缓冲区: 临时保存向内存写入的数据. (避免cpu等待io)<br>仅对该cpu可见. </p>
-<p>内存屏障指令:<br><strong>1.LoadLoad Barries</strong></p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Load1;LoadLoad;Load2</span><br><span class="line">&#x2F;&#x2F; 确保Load1的装载先于Load2及后续Load指令</span><br></pre></td></tr></table></figure>
-
-<p><strong>2.StoreStore Barries:</strong></p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Store1;StoreStore;Store2</span><br><span class="line">&#x2F;&#x2F; 确保Store1的数据先于Store2及后续Store指令</span><br><span class="line">&#x2F;&#x2F; 刷新到内存</span><br></pre></td></tr></table></figure>
-
-<p><strong>3.LoadStore Barries:</strong></p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Load1;LoadStore;Store2</span><br><span class="line">&#x2F;&#x2F; 确保Load1的装载先于Store2及后续Store指令</span><br></pre></td></tr></table></figure>
-
-<p><strong>4.StoreLoad Barries:</strong></p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Store1;StoreLoad;Load2</span><br><span class="line">&#x2F;&#x2F; 确保Store1的装载先于Load2及后续Load指令</span><br><span class="line">&#x2F;&#x2F; 刷新到内存.</span><br><span class="line">&#x2F;&#x2F; 且会使它之前的所有内存访问指令(Load和Store)都完成后,才执行之后的.</span><br></pre></td></tr></table></figure>
-
-<p>其中第四个,StoreLoad屏障最严格,会把写缓冲区刷新到内存,开销最大,大部分cpu都支持.</p>
-<h3 id="3-1-5-Happens-before规则"><a href="#3-1-5-Happens-before规则" class="headerlink" title="3.1.5 Happens-before规则"></a>3.1.5 Happens-before规则</h3><ol>
-<li>程序顺序规则: 单线程内顺序一致性; // 有数据依赖的指令不重排. 保证结果和顺序执行一致即可.</li>
-<li>锁规则:  解锁先于获得锁;</li>
-<li>volidate,原子变量: 写before读; </li>
-<li>线程启动. Thread.start之后才会有run等其他操作发生.</li>
-<li>中断. (1)A线程中断B线程;(2)B检测到中断. 保证(1)在(2)前面.</li>
-<li>终结器. 构造函数在终结器之前执行完成.</li>
-<li>传递性: 上述规则可以传递.</li>
-</ol>
-<p>上述规则被JVM翻译成各种约束(具体来说就是在指令里加一些内存屏障),影响了编译器重排序和处理器重排序.</p>
-<h2 id="3-2-顺序一致性"><a href="#3-2-顺序一致性" class="headerlink" title="3.2 顺序一致性"></a>3.2 顺序一致性</h2><h3 id="顺序一致性"><a href="#顺序一致性" class="headerlink" title="顺序一致性"></a>顺序一致性</h3><p>顺序一致性: 所有线程看到的执行顺序一致.<br>正确使用了同步机制,才能达到顺序一致性.<br>主要解决的是以下两者的矛盾:<br>(1) 程序员希望指令重排的约束越多越好, 保证执行结果好理解;<br>(2) 编译器/cpu希望约束越少越好,执行可以快一些.<br>顺序一致性: 约束的数量够用,让程序运行的结果与完全约束(顺序执行)一致. </p>
-<h3 id="3-2-1-数据依赖性"><a href="#3-2-1-数据依赖性" class="headerlink" title="3.2.1 数据依赖性"></a>3.2.1 数据依赖性</h3><p>编译器和处理器: </p>
-<ol>
-<li>单线程: 考虑数据依赖性; (写后读,写后写,读后写)</li>
-<li>不同线程\不同处理器: 不考虑数据依赖性.</li>
-</ol>
-<h3 id="3-2-2-as-if-serial语义"><a href="#3-2-2-as-if-serial语义" class="headerlink" title="3.2.2 as-if-serial语义"></a>3.2.2 as-if-serial语义</h3><p>编译器和处理器: 单线程语义不变.<br>// 约束够用,执行结果和串行执行结果一致.</p>
-<hr>
-<h2 id="一些约束的具体实现方案"><a href="#一些约束的具体实现方案" class="headerlink" title="一些约束的具体实现方案:"></a>一些约束的具体实现方案:</h2><h3 id="volatile变量"><a href="#volatile变量" class="headerlink" title="volatile变量"></a>volatile变量</h3><p>读: 读取最新的内存值(不一定是CPU缓存值); (有原子性)<br>写: 写入cpu缓存后,刷新到内存; (有原子性)<br>自增: 相当于先读后写两个操作, 不具有原子性. </p>
-<p>用<code>volatile</code>代替锁.(从内存语义上说,由于它与锁有相同内存效果,可以实现)</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">volatile</span> <span class="keyword">boolean</span> flag=<span class="keyword">false</span>;</span><br><span class="line">A:</span><br><span class="line">a=<span class="number">10</span>;</span><br><span class="line">flag=<span class="keyword">true</span>;</span><br><span class="line"></span><br><span class="line">B:</span><br><span class="line"><span class="keyword">int</span> i;</span><br><span class="line"><span class="keyword">while</span>(<span class="keyword">true</span>)&#123;</span><br><span class="line"><span class="keyword">if</span>(flag)&#123;</span><br><span class="line">i=a;</span><br><span class="line"><span class="keyword">break</span>;</span><br><span class="line">&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<ol>
-<li>对A来说,由于单线程的语义符合程序顺序规则,flag=true发生在a=10之后;</li>
-<li>对B来说,由于flag是volatile变量,flag=true之后才能取到i. 因此达到了通信的效果,B中能正确取到A中的a的10.</li>
-</ol>
-<h3 id="3-4-4-volatile内存语义的实现"><a href="#3-4-4-volatile内存语义的实现" class="headerlink" title="3.4.4 volatile内存语义的实现"></a>3.4.4 volatile内存语义的实现</h3><p>内存屏障:(JMM内存模型采用的是保守策略,保证在所有cpu上都能正确)</p>
-<ol>
-<li>volatile写前面插入StoreStore屏障;</li>
-<li>volatile写后面插入StoreLoad屏障;</li>
-<li>volatile读后面插入LoadLoad屏障;</li>
-<li>volatile读后面插入LoadStore屏障.</li>
-</ol>
-<p>volatile写指令序列:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">普通读写</span><br><span class="line">StoreStore屏障&#x2F;&#x2F; 先把前面的Store刷新到内存,再执行volatile写.(其实没必要,只是新版本赋予了volatile锁的内存语义)</span><br><span class="line">volatile写</span><br><span class="line">StoreLoad屏障 &#x2F;&#x2F; 先把volatie写的store刷新到内存,再执行读.(免得读到污染值)</span><br><span class="line">volatile读</span><br></pre></td></tr></table></figure>
-
-<p>volatile读指令序列:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">volatile读</span><br><span class="line">LoadLoad屏障 &#x2F;&#x2F; 禁止下面的读越过volatile</span><br><span class="line">LoadStore屏障&#x2F;&#x2F; 禁止下面的写越过volatile</span><br><span class="line">普通读写</span><br></pre></td></tr></table></figure>
-<p>这俩屏障x86里没有.因为x86只有写-读重排序,没必要有.<br>此外,个人理解这俩屏障也没啥意义,唯一能想到的用处还是让<code>voldatile</code>具有锁的功能. 毕竟是JSR-133之后才加的.</p>
-<h2 id="3-5-锁的内存语义"><a href="#3-5-锁的内存语义" class="headerlink" title="3.5 锁的内存语义"></a>3.5 锁的内存语义</h2><p><code>ReentrantLock</code>的实现依赖于:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">FariSync</span><br><span class="line">NonfaiSync</span><br><span class="line">Sync</span><br><span class="line">AQS(AbstrackQueuedSynchronizer)</span><br></pre></td></tr></table></figure>
-<p>其中AQS里头有个<code>volatile</code>变量:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">volatile</span> <span class="keyword">int</span> state;</span><br></pre></td></tr></table></figure>
-<p>锁的内存语义基本就靠这个<code>volatile</code>变量和CAS操作.</p>
-<p>1.加锁流程:(公平锁)</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">获取volatile变量state;</span><br><span class="line">CAS操作更改state变量的值.</span><br><span class="line">若更改成功则获取锁成功.</span><br></pre></td></tr></table></figure>
-<p>2.解锁流程:(公平锁)</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">一些操作...</span><br><span class="line">写state变量. </span><br><span class="line">其他线程立刻发现了state变化,可以竞争这个锁了.</span><br></pre></td></tr></table></figure>
-
-
-<p>CAS操作能保证(读-改-写)操作原子执行.<br>CAS操作的底层实现:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">LOCK总线;</span><br><span class="line">禁止该指令与前后读写指令重排;</span><br><span class="line">将写缓冲区数据刷新到内存.</span><br></pre></td></tr></table></figure>
-
-<h3 id="3-5-4-concurrent包的实现"><a href="#3-5-4-concurrent包的实现" class="headerlink" title="3.5.4 concurrent包的实现"></a>3.5.4 concurrent包的实现</h3><p>实现层次如下:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">LOCK,同步器,阻塞队列,Executor,并发容器</span><br><span class="line">AQS,非阻塞数据结构,原子变量类</span><br><span class="line">volatile变量的读写,CAS</span><br></pre></td></tr></table></figure>
-
-<h2 id="3-6-final域的内存语义"><a href="#3-6-final域的内存语义" class="headerlink" title="3.6 final域的内存语义"></a>3.6 final域的内存语义</h2><h3 id="3-6-1-final域的重排序规则"><a href="#3-6-1-final域的重排序规则" class="headerlink" title="3.6.1 final域的重排序规则"></a>3.6.1 final域的重排序规则</h3><ol>
-<li>在构造函数内对一个final域的写入,与随和把这个对象的引用赋值给一个引用变量,这俩操作不能重排;</li>
-<li>初次读包含final域的对象,初次读这个final域,这俩操作不能重排.</li>
-</ol>
-<p>规则1的实现(构造函数中):</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">final域的写</span><br><span class="line">StoreStore屏障 &#x2F;&#x2F; 先把上述写(Store)的结果刷新到内存. 再写引用. </span><br><span class="line">构造函数return &#x2F;&#x2F; 把对象地址赋值给引用</span><br></pre></td></tr></table></figure>
-
-<p>示例代码:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">FinalObj obj=inputObj; <span class="comment">// 别的线程负责创建的对象</span></span><br><span class="line"><span class="keyword">int</span> a=obj.i;<span class="comment">// 如果i是final的,那一定能读到初始化以后的值; </span></span><br><span class="line"><span class="keyword">int</span> b=obj.j;<span class="comment">// 如果j不是final的,那可能读到还没初始化的值.</span></span><br></pre></td></tr></table></figure>
-
-<p>规则2的实现:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">LoadLoad屏障&#x2F;&#x2F; 保证先Load到引用. (明明有数据依赖)</span><br><span class="line">final域的读</span><br></pre></td></tr></table></figure>
-<p>大多数cpu不需要这个规则也能正确进行final读,但还是有少部分cpu会无视间接依赖,因此需要这个规则.(需要加入这个屏障)<br>示例代码:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">FinalObj obj=inputObj; <span class="comment">// 别的线程负责创建的对象</span></span><br><span class="line"><span class="keyword">int</span> a=obj.i;<span class="comment">// 如果i是final的,那会等obj读到对象引用后再去读i;</span></span><br><span class="line"><span class="keyword">int</span> b=obj.j;<span class="comment">// 如果j不是final的,那可能没等到读到对象obj,就直接取读j了,读取错误.</span></span><br></pre></td></tr></table></figure>
-
-
-<p>最后,由于x86处理器很多重排并不会做,所以其实final域的内存屏障都不需要加,会被省略.</p>
-<h3 id="3-8-4-类初始化中的约束"><a href="#3-8-4-类初始化中的约束" class="headerlink" title="3.8.4 类初始化中的约束"></a>3.8.4 类初始化中的约束</h3><p>类的初始化是啥:</p>
-<blockquote>
-<p>Class加载=&gt;连接=&gt;初始化=&gt;使用=&gt;卸载;<br>其中连接分为:<br>验证=&gt;准备=&gt;解析. </p>
-</blockquote>
-<p>具体来说:</p>
-<ul>
-<li>加载</li>
-</ul>
-<ol>
-<li>通过类全名获取二进制字节流;</li>
-<li>将字节流中的静态存储(常量)转换为方法区的运行时数据;</li>
-<li>JAVA堆中生成代表类的Class对象,指向方法区的数据.</li>
-</ol>
-<ul>
-<li><p>验证: 格式/元数据/访问验证;</p>
-</li>
-<li><p>准备: 类变量(非常量)分配到堆,赋予初值;</p>
-</li>
-<li><p>解析 </p>
-<blockquote>
-<p>4类符号引用的解析: 类/接口,字段,类方法,接口方法. 把这些引用解析到实际的目标对象.<br>这个和初始化过程可能混在一起.</p>
-</blockquote>
-</li>
-<li><p>初始化</p>
-<blockquote>
-<ol>
-<li>分配对象的内存空间</li>
-<li>初始化对象</li>
-<li>设置instance指向内存空间</li>
-</ol>
-</blockquote>
-</li>
-<li><p>初始化发生的时机:// <code>T</code>是一个类</p>
-<blockquote>
-<ol>
-<li>T的实例被创建;// 如<code>new</code></li>
-<li>T的静态方法被调用;// <code>static</code></li>
-<li>T的静态字段(非常量)被使用/赋值; // <code>static</code>成员被读写.<br>// 对于第3点,如果是类常量,加载阶段已经完成了.</li>
-</ol>
-</blockquote>
-</li>
-</ul>
-<p>还有一个时机:</p>
-<p>4.T是一个顶级类,而且一个断言语句嵌套在T内部被执行.// TODO<br>// 这个没懂.= = || </p>
-<p>小结:</p>
-<blockquote>
-<p>static常量: 加载期完成,存储在方法区,从堆区Class对象指过去;<br>static变量: 准备期分配到堆,初始化阶段赋值.<br>成员变量: 初始化阶段完成.</p>
-</blockquote>
-<p><strong>类初始化存在竞态条件</strong><br>多个线程可能同时对一个类进行初始化,因此需要锁.<br>JVM对于每一个类或接口都有唯一的初始化锁<code>LC</code>.(放在<code>Class</code>对象中)<br>初始化流程:</p>
-<ol>
-<li>获取<code>Class</code>对象中的<code>LC</code>锁;</li>
-<li>读取<code>Class</code>对象的state,发现是<code>noInitialization</code>,设置为<code>initializing</code>;// 表示从<code>未初始化</code>改成<code>正在初始化</code>,以便别的线程知道;</li>
-<li>释放<code>LC</code>锁.  // 这个时候别的线程可以获取到锁,然后知道有人正在初始化,于是等待.</li>
-<li>初始化类的static变量;</li>
-<li>分配实例对象内存空间,初始化对象,赋值地址给引用(解析);</li>
-<li>设置state=<code>initializated</code>. // 初始化结束. 唤醒等待的线程.</li>
-</ol>
-<p>基于上述过程的单例如下:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">A</span></span>&#123; </span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">B</span> </span>&#123;</span><br><span class="line">        <span class="keyword">public</span> <span class="keyword">static</span> C c=<span class="function">New <span class="title">C</span><span class="params">()</span></span>;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> C <span class="title">getC</span><span class="params">()</span></span>&#123;</span><br><span class="line">        <span class="keyword">return</span> B.c; <span class="comment">// 导致B类初始化.</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// 使用时:</span></span><br><span class="line">C c=A.getC(); <span class="comment">// 导致A被初始化.</span></span><br></pre></td></tr></table></figure>
-<p>相比于双检,利用了<code>Class</code>对象的初始化锁<code>LC</code>. 达到线程安全的目的.<br>上述初始化流程的第5,6步顺序不会重排,因此可以不用<code>volatile</code>来保证引用的解析晚于对象的构建;</p>
-<p>之所以使用内部类B: 想达到懒汉的目的.<br>如果不用内部类, 可以这么写:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">A</span></span>&#123; </span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">static</span> C c=<span class="keyword">new</span> C();</span><br><span class="line">    <span class="function"><span class="keyword">private</span> <span class="title">A</span><span class="params">()</span></span>&#123;&#125;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> C <span class="title">getC</span><span class="params">()</span></span>&#123;</span><br><span class="line">        <span class="keyword">return</span> c;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// 使用:</span></span><br><span class="line">C c=A.getC(); <span class="comment">// 导致A被初始化.</span></span><br></pre></td></tr></table></figure>
-<p>区别在于导致A被初始化的途径多,而上一个方法中导致B被初始化的途径少(只有getC一个途径,毕竟B是private).<br>对于第一个方法:</p>
-<blockquote>
-<p>A被初始化=&gt;没关系;<br>调用getC()方法=&gt;B被初始化=&gt; c对象构建. </p>
-</blockquote>
-<p>对于第二个方法:</p>
-<blockquote>
-<p>A被初始化=&gt; c对象构建.</p>
-</blockquote>
-<p>A被初始化的途径很多,(A的静态方法被访问,A的静态变量被访问,A被创建实例,A中有断言执行),如果要让第二个方法达到足够懒,需要额外做的事情:</p>
-<ol>
-<li>只有getC()一个静态方法;</li>
-<li>只有C一个静态变量;</li>
-<li>不让创建对象(private构造函数)</li>
-<li>没有断言执行嵌套在内部.</li>
-</ol>
-<p>不过两种方法都不能抵挡序列化.(得用枚举才行)</p>
-<h2 id="3-9-JAVA内存模型综述"><a href="#3-9-JAVA内存模型综述" class="headerlink" title="3.9 JAVA内存模型综述"></a>3.9 JAVA内存模型综述</h2><h3 id="3-9-1-CPU内存模型"><a href="#3-9-1-CPU内存模型" class="headerlink" title="3.9.1 CPU内存模型"></a>3.9.1 CPU内存模型</h3><p>根据重排的剧烈程度,或者说约束的强弱,可以把CPU划分为几种类型:<br>(性能由低到高,约束逐渐减少)</p>
-<ol>
-<li>TSO模型(Total Store Order). 写-读顺序会进行重排;// 因为要使用写缓冲区</li>
-<li>PSO模型(Partial Store Order). 写-读,写-写都会进行重排. </li>
-<li>RMO模型(Relaxed Memory Order). 写-读,写-写,读-读,读-写都会进行重排.<br>(PowerPC内存模型也是)</li>
-</ol>
-<p>上述重排都在遵守数据依赖的前提下,不然连单线程程序的正确性都无法保证了.<br>所有CPU都起码是TSO模型,因为都需要写缓冲区. </p>
-<h3 id="3-9-2-各种内存模型之间的关系"><a href="#3-9-2-各种内存模型之间的关系" class="headerlink" title="3.9.2 各种内存模型之间的关系"></a>3.9.2 各种内存模型之间的关系</h3><p>JAVA内存模型: JMM. 是语言级内存模型, 把底层的CPU的内存模型进行封装, 通过加入内存屏障, 让底层对于程序员来说变成一致的JMM. (平台无关) </p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/01/21/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF%E7%AC%94%E8%AE%B0-%E7%AC%AC%E4%B8%89%E7%AB%A0/" data-id="ck96cxpnr009zmaam3ftybqax" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%B9%B6%E5%8F%91/" rel="tag">并发</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1988,6 +1969,10 @@
       <ul>
         
           <li>
+            <a href="/2022/09/25/2022-09/%E8%B0%83%E4%BC%98-%E8%A7%A3%E5%86%B3%E7%BA%BF%E7%A8%8B%E6%B1%A0%E9%80%A0%E6%88%90%E7%9A%84%E8%BF%9B%E7%A8%8B%E5%8D%A1%E9%A1%BF%E3%80%81cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-解决线程池造成的进程卡顿、cpu毛刺问题</a>
+          </li>
+        
+          <li>
             <a href="/2022/08/30/2022-08/%E8%B0%83%E4%BC%98-cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-cpu毛刺问题</a>
           </li>
         
@@ -2001,10 +1986,6 @@
         
           <li>
             <a href="/2022/03/16/2022-03/cms%E7%9A%84gc%E8%A7%A6%E5%8F%91%E6%9D%A1%E4%BB%B6/">cms的gc触发条件</a>
-          </li>
-        
-          <li>
-            <a href="/2022/03/14/2022-03/%E4%B8%AD%E6%96%AD%E6%A2%B3%E7%90%86/">java方法是否可中断梳理</a>
           </li>
         
       </ul>

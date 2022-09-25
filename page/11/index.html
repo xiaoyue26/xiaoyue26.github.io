@@ -72,6 +72,88 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-10/mysql优化实战-范围查询转点查询" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/10/22/2018-10/mysql%E4%BC%98%E5%8C%96%E5%AE%9E%E6%88%98-%E8%8C%83%E5%9B%B4%E6%9F%A5%E8%AF%A2%E8%BD%AC%E7%82%B9%E6%9F%A5%E8%AF%A2/" class="article-date">
+  <time datetime="2018-10-22T02:28:25.000Z" itemprop="datePublished">2018-10-22</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/10/22/2018-10/mysql%E4%BC%98%E5%8C%96%E5%AE%9E%E6%88%98-%E8%8C%83%E5%9B%B4%E6%9F%A5%E8%AF%A2%E8%BD%AC%E7%82%B9%E6%9F%A5%E8%AF%A2/">mysql优化实战-范围查询转点查询</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="反直觉优化"><a href="#反直觉优化" class="headerlink" title="反直觉优化"></a>反直觉优化</h1><h2 id="慢查询"><a href="#慢查询" class="headerlink" title="慢查询:"></a>慢查询:</h2><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> *</span><br><span class="line">    <span class="keyword">from</span> layer_data.layers_push b</span><br><span class="line">    <span class="keyword">where</span> group_key=<span class="string">'nopushtest'</span></span><br><span class="line">    <span class="keyword">AND</span> utype=<span class="string">'10w1'</span></span><br><span class="line">    <span class="keyword">AND</span> dt&gt;=<span class="number">20180620</span> <span class="keyword">AND</span> dt&lt;=<span class="number">20181020</span></span><br><span class="line">    <span class="keyword">AND</span> bucket_id=<span class="number">60</span></span><br></pre></td></tr></table></figure>
+<p>上述SQL执行时间约在2.10秒,通过查看执行计划,可以发现有一个异常的指标,预估扫描的行数(<code>rows</code>)为96W，而实际结果行数应该在几十条。(查询涉及到的列合起来是联合主键)<br>此外<code>type</code>为<code>range</code>，执行的是范围扫描。<br>查询计划:(<code>explain exntended select ...</code>)</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">+----+-------------+-------------+-------+---------------+---------+---------+------+--------+-------------+</span><br><span class="line">| id | select_type | table       | type  | possible_keys | key     | key_len | ref  | rows   | Extra       |</span><br><span class="line">+----+-------------+-------------+-------+---------------+---------+---------+------+--------+-------------+</span><br><span class="line">|  1 | SIMPLE      | layers_push | range | PRIMARY       | PRIMARY | 216     | NULL | 989236 | Using where |</span><br><span class="line">+----+-------------+-------------+-------+---------------+---------+---------+------+--------+-------------+</span><br></pre></td></tr></table></figure>
+
+
+<h2 id="快查询-（反直觉优化）"><a href="#快查询-（反直觉优化）" class="headerlink" title="快查询:（反直觉优化）"></a>快查询:（反直觉优化）</h2><p>基于上面观察到预估行数异常，一个自然的思路就是引入一个很小的辅助表来帮助优化器减少扫描的行数。辅助表的主键与原表分布相同: </p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> b.*</span><br><span class="line"><span class="keyword">from</span> layer_data.layers__nopushtest a</span><br><span class="line"><span class="keyword">join</span> layer_data.layers_push b</span><br><span class="line"> <span class="keyword">ON</span> a.dt=b.dt</span><br><span class="line"><span class="keyword">AND</span> a.bucket_id=b.bucket_id</span><br><span class="line"><span class="keyword">AND</span> b.group_key=<span class="string">'nopushtest'</span></span><br><span class="line"><span class="keyword">AND</span> b.dt <span class="keyword">between</span> <span class="number">20180620</span> <span class="keyword">AND</span> <span class="number">20181020</span></span><br><span class="line"><span class="keyword">AND</span> b.utype=<span class="string">'10w1'</span></span><br><span class="line">    <span class="keyword">where</span> a.dt&gt;=<span class="number">20180620</span> <span class="keyword">and</span> a.dt&lt;=<span class="number">20181020</span></span><br><span class="line">    <span class="keyword">and</span> a.utype=<span class="string">'w1'</span></span><br><span class="line">    <span class="keyword">and</span> a.bucket_id=<span class="number">60</span></span><br></pre></td></tr></table></figure>
+<p>优化后,执行时间大约在0.05秒,快了40多倍。<br>优化后的执行计划:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">+----+-------------+-------+--------+---------------+---------+---------+-----------------------------------+-------+--------------------------+</span><br><span class="line">| id | select_type | table | type   | possible_keys | key     | key_len | ref                               | rows  | Extra                    |</span><br><span class="line">+----+-------------+-------+--------+---------------+---------+---------+-----------------------------------+-------+--------------------------+</span><br><span class="line">|  1 | SIMPLE      | a     | range  | PRIMARY       | PRIMARY | 38      | NULL                              | 23925 | Using where; Using index |</span><br><span class="line">|  1 | SIMPLE      | b     | eq_ref | PRIMARY       | PRIMARY | 216     | layer_data.a.dt,const,const,const |     1 | Using where              |</span><br><span class="line">+----+-------------+-------+--------+---------------+---------+---------+-----------------------------------+-------+--------------------------+</span><br></pre></td></tr></table></figure>
+<p>执行流程:<br>第一步:范围扫描表a,得到连接键的所有可能取值;<br>第二步: 表b的type是eq_ref(等值连接,而且是唯一键),ref是<code>layer_data.a.dt,const,const,const</code>，预估扫描的行数变成只有1。</p>
+<h1 id="原理分析"><a href="#原理分析" class="headerlink" title="原理分析"></a>原理分析</h1><h2 id="慢查询的执行计划"><a href="#慢查询的执行计划" class="headerlink" title="慢查询的执行计划:"></a>慢查询的执行计划:</h2><p>预估的行数有96w，执行计划是从dt为20180620的数据页顺序扫描到dt为20181020的数据页。</p>
+<h3 id="范围查询的扫描行数预估："><a href="#范围查询的扫描行数预估：" class="headerlink" title="范围查询的扫描行数预估："></a>范围查询的扫描行数预估：</h3><p>这里由于使用的mysql版本是5.6(可以通过<code>select version();</code>语句查看)，预估的流程:</p>
+<ol>
+<li>取符合where条件的最左边的数据页及后续的8个页，再加上符合where条件的最右边的数据页,共计10个页进行采样;</li>
+<li>根据上述采样结果，以及与总数据的采样比，估算出需要扫描的行数。</li>
+</ol>
+<h2 id="快查询的执行计划"><a href="#快查询的执行计划" class="headerlink" title="快查询的执行计划:"></a>快查询的执行计划:</h2><p>因为有辅助的小表帮忙，扫描的行数减少。执行计划是先范围扫描小表，得到所有连接键的取值后，用表b的索引挨个儿进行点查询（<code>type</code>是<code>eq_ref</code>，而不是<code>range</code>）,扫描的数据页大大减少。</p>
+<p><code>range</code>类型查询:</p>
+<blockquote>
+<p>以下操作符会导致查询计划为range:<br>=, &lt;&gt;, &gt;, &gt;=, &lt;, &lt;=, IS NULL, &lt;=&gt;, BETWEEN, IN (…)</p>
+</blockquote>
+<h1 id="符合直觉的优化"><a href="#符合直觉的优化" class="headerlink" title="符合直觉的优化"></a>符合直觉的优化</h1><p>由于mysql对in有特殊的优化: 把范围查询转换为多次点查询。<br>此时虽然查询计划是<code>range</code>，但实际执行时候不会进行范围扫描，而会进行点查询。<br>因此也可以把查询改写成:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span>   *</span><br><span class="line">    <span class="keyword">from</span> layer_data.layers_push b</span><br><span class="line">    <span class="keyword">where</span> group_key=<span class="string">'nopushtest'</span></span><br><span class="line">    <span class="keyword">AND</span> utype=<span class="string">'10w1'</span></span><br><span class="line">    <span class="keyword">AND</span> dt  <span class="keyword">in</span>  (<span class="number">20180805</span>,<span class="number">20180806</span>,<span class="number">20180807</span>,<span class="number">20180808</span>,<span class="number">20180809</span>,<span class="number">20180810</span>,<span class="number">20180811</span>,<span class="number">20180812</span>,<span class="number">20180813</span>,<span class="number">20180814</span>,<span class="number">20180815</span>,<span class="number">20180816</span>,<span class="number">20180817</span>,<span class="number">20180818</span>,<span class="number">20180819</span>,<span class="number">20180820</span>,<span class="number">20180821</span>,<span class="number">20180822</span>,<span class="number">20180823</span>,<span class="number">20180824</span>,<span class="number">20180825</span>,<span class="number">20180826</span>,<span class="number">20180827</span>,<span class="number">20180828</span>,<span class="number">20180829</span>,<span class="number">20180830</span>,<span class="number">20180831</span></span><br><span class="line">,<span class="number">20180901</span>,<span class="number">20180902</span>,<span class="number">20180903</span>,<span class="number">20180904</span>,<span class="number">20180905</span>,<span class="number">20180906</span>,<span class="number">20180907</span>,<span class="number">20180908</span>,<span class="number">20180909</span>,<span class="number">20180910</span>,<span class="number">20180911</span>,<span class="number">20180912</span>,<span class="number">20180913</span>,<span class="number">20180914</span>,<span class="number">20180915</span>,<span class="number">20180916</span>,<span class="number">20180917</span>,<span class="number">20180918</span>,<span class="number">20180919</span>,<span class="number">20180920</span>,<span class="number">20180921</span>,<span class="number">20180922</span>,<span class="number">20180923</span>,<span class="number">20180924</span>,<span class="number">20180925</span>,<span class="number">20180926</span>,<span class="number">20180927</span>,<span class="number">20180928</span>,<span class="number">20180929</span>,<span class="number">20180930</span></span><br><span class="line">,<span class="number">20181001</span>,<span class="number">20181002</span>,<span class="number">20181003</span>,<span class="number">20181004</span>,<span class="number">20181005</span>,<span class="number">20181006</span>,<span class="number">20181007</span>,<span class="number">20181008</span>,<span class="number">20181009</span>,<span class="number">20181010</span>,<span class="number">20181011</span>,<span class="number">20181012</span>,<span class="number">20181013</span>,<span class="number">20181014</span>,<span class="number">20181015</span>,<span class="number">20181016</span>,<span class="number">20181017</span>,<span class="number">20181018</span>,<span class="number">20181019</span>,<span class="number">20181020</span>,<span class="number">20181021</span>,<span class="number">20181022</span>,<span class="number">20181023</span>,<span class="number">20181024</span>,<span class="number">20181025</span>,<span class="number">20181026</span>,<span class="number">20181027</span>)</span><br><span class="line">    <span class="keyword">AND</span> bucket_id=<span class="number">60</span></span><br></pre></td></tr></table></figure>
+<p>优点:<br>直观,速度最快。<br>缺点:<br>啰嗦，改写起来比较麻烦，只适用于能使用代码预处理sql的地方，而且有最大长度限制。</p>
+<h3 id="in查询的扫描行数预估"><a href="#in查询的扫描行数预估" class="headerlink" title="in查询的扫描行数预估"></a>in查询的扫描行数预估</h3><p>有两种方式:</p>
+<ol>
+<li>精确计算(<code>index_dive</code>): 直接查询对应的行;</li>
+<li>采样预估(<code>index statistics</code>): 采样10个数据页,通过索引的选择性统计数据，预估总行数。</li>
+</ol>
+<p>具体采取哪种方式，由<code>eq_range_index_dive_limit</code>参数控制(默认是10)。<br>小于<code>eq_range_index_dive_limit</code>的时候，采用方法1，精确计算；<br>大于等于<code>eq_range_index_dive_limit</code>的时候，采用方法2, 采样预估。</p>
+<h1 id="执行计划耗时"><a href="#执行计划耗时" class="headerlink" title="执行计划耗时"></a>执行计划耗时</h1><p>可以通过命令查看某个查询的具体耗时及具体发生了哪些操作:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">set</span> profiling=<span class="number">1</span>;</span><br><span class="line"><span class="comment">-- select * from xxx ;</span></span><br><span class="line"><span class="keyword">show</span> <span class="keyword">profiles</span>;</span><br><span class="line"><span class="keyword">show</span> profile <span class="keyword">for</span> <span class="keyword">query</span> <span class="number">1</span>;</span><br><span class="line"><span class="keyword">show</span> profile <span class="keyword">all</span> <span class="keyword">for</span> <span class="keyword">query</span> <span class="number">1</span>; <span class="comment">-- cpu,io等详细信息</span></span><br></pre></td></tr></table></figure>
+<p>这里可以看到之前的慢查询发生了51w个block io input。</p>
+<h1 id="优化器查询计划选择"><a href="#优化器查询计划选择" class="headerlink" title="优化器查询计划选择"></a>优化器查询计划选择</h1><p>可以通过命令查看某个查询生成执行计划时，考虑过哪些方案，以及对于where条件的等价变换，最终选择了哪个方案(<code>chosen:true</code>)。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">set</span> optimizer_trace=<span class="string">"enabled=on"</span>;</span><br><span class="line"><span class="keyword">SET</span> optimizer_trace_max_mem_size=<span class="number">1000000</span>;</span><br><span class="line"><span class="keyword">explain</span> <span class="keyword">select</span> xxx</span><br><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> information_schema.OPTIMIZER_TRACE\G</span><br></pre></td></tr></table></figure>
+<p>可以看到对于之前慢查询的查询条件只用到了dt条件，其他where条件是在服务器层进行过滤的。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/10/22/2018-10/mysql%E4%BC%98%E5%8C%96%E5%AE%9E%E6%88%98-%E8%8C%83%E5%9B%B4%E6%9F%A5%E8%AF%A2%E8%BD%AC%E7%82%B9%E6%9F%A5%E8%AF%A2/" data-id="ck96cxpoq00e7maam5h9zcfq9" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-10/Netty-in-action第14-15章案例研究-笔记" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/10/14/2018-10/Netty-in-action%E7%AC%AC14-15%E7%AB%A0%E6%A1%88%E4%BE%8B%E7%A0%94%E7%A9%B6-%E7%AC%94%E8%AE%B0/" class="article-date">
@@ -1351,162 +1433,6 @@ r3是关键的加密保护的随机数，r1,r2,r3一起生成key。<br>r1,r2的�
 
 
   
-    <article id="post-2018-08/Netty-in-action第四章-传输-笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/08/19/2018-08/Netty-in-action%E7%AC%AC%E5%9B%9B%E7%AB%A0-%E4%BC%A0%E8%BE%93-%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2018-08-19T12:07:49.000Z" itemprop="datePublished">2018-08-19</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/Netty/">Netty</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/08/19/2018-08/Netty-in-action%E7%AC%AC%E5%9B%9B%E7%AB%A0-%E4%BC%A0%E8%BE%93-%E7%AC%94%E8%AE%B0/">Netty in action第四章-传输-笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="Netty通用api"><a href="#Netty通用api" class="headerlink" title="Netty通用api"></a>Netty通用api</h1><p><code>Netty</code>为<code>oio</code>/<code>nio</code>的传输实现封装了一个通用<code>api</code>。<br>方便用户低成本切换。<br>代码见:<br><a href="https://github.com/xiaoyue26/netty-in-action-cn/blob/ChineseVersion/chapter4/" target="_blank" rel="noopener">https://github.com/xiaoyue26/netty-in-action-cn/blob/ChineseVersion/chapter4/</a></p>
-<p>使用<code>netty</code>的话,阻塞和非阻塞实现的切换只需两行:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// oio</span></span><br><span class="line">NioEventLoopGroup group = <span class="keyword">new</span> NioEventLoopGroup();</span><br><span class="line">b.group(group).channel(OioServerSocketChannel<span class="class">.<span class="keyword">class</span>)</span></span><br><span class="line"><span class="class"></span></span><br><span class="line"><span class="class">// <span class="title">nio</span></span></span><br><span class="line"><span class="class"><span class="title">NioEventLoopGroup</span> <span class="title">group</span> </span>= <span class="keyword">new</span> NioEventLoopGroup();</span><br><span class="line">b.group(group).channel(NioServerSocketChannel<span class="class">.<span class="keyword">class</span>)</span></span><br></pre></td></tr></table></figure>
-<p>也就是把<code>EvenLoopGroup</code>和<code>SeverSocketChannel</code>的实现换一下。</p>
-<h2 id="Channel接口"><a href="#Channel接口" class="headerlink" title="Channel接口"></a>Channel接口</h2><img src="/images/2018-08/4.1.jpg" class="" width="400" height="600" title="Channel接口">
-<p><code>Channel</code>接口的父接口包括:</p>
-<blockquote>
-<p>Comparable<Channel>: 每个Channel是独一无二的,不可以相等,但是可以排序;<br>AttributeMap: 获得各种属性</p>
-</blockquote>
-<p>依赖的接口:</p>
-<blockquote>
-<p>ChannelPipeLine: 有个方法返回它的pipeline;// 实现上大多有这个成员<br>ChannelConfig: 有个方法返回它的config;</p>
-</blockquote>
-<p>子接口:</p>
-<blockquote>
-<p>ServerChannel<br>AbstractChannel: 如果引用不相等，保证当hash值相同时,CompareTo方法会抛出Error。</p>
-</blockquote>
-<p>相关代码：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">final</span> <span class="keyword">int</span> <span class="title">compareTo</span><span class="params">(Channel o)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (<span class="keyword">this</span> == o) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">long</span> ret = hashCode - o.hashCode();</span><br><span class="line">        <span class="keyword">if</span> (ret &gt; <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="number">1</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> (ret &lt; <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="keyword">return</span> -<span class="number">1</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        ret = System.identityHashCode(<span class="keyword">this</span>) - System.identityHashCode(o);</span><br><span class="line">        <span class="keyword">if</span> (ret != <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="keyword">return</span> (<span class="keyword">int</span>) ret;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">// Jackpot! - different objects with same hashes</span></span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> Error();</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
-
-
-
-
-
-<p><code>ChannelPipeLine</code>中的设计模式: 拦截过滤器.(类似于Unix管道命令)</p>
-<p>Netty提供的<code>Channel</code>实现都是线程安全的，可以支持多个线程并发写一个<code>Channel</code>。</p>
-<h2 id="Netty提供的传输实现"><a href="#Netty提供的传输实现" class="headerlink" title="Netty提供的传输实现"></a>Netty提供的传输实现</h2><p>包括:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">NIO  : 基于选择器</span><br><span class="line">Epoll: JNI驱动，支持linux上才有的特性,比NIO更快;</span><br><span class="line">OIO :  阻塞流</span><br><span class="line">Local: VM内部通过管道进行通信</span><br><span class="line">Embedded: 测试时使用。</span><br></pre></td></tr></table></figure>
-
-<h3 id="NIO传输实现"><a href="#NIO传输实现" class="headerlink" title="NIO传输实现"></a>NIO传输实现</h3><img src="/images/2018-08/4.2.jpg" class="" width="400" height="600" title="Channel接口">
-<p>实现上基于选择器，类似于一个注册表，用户注册各种事件的处理函数。<br>可能的状态变化包括:<br>op_accept: 接受新连接并创建<code>channel</code>时;<br>op_connect: 建立一个连接时；<br>op_read: 可以读时；<br>op_write: 可以写时。</p>
-<h3 id="Epoll传输实现"><a href="#Epoll传输实现" class="headerlink" title="Epoll传输实现"></a>Epoll传输实现</h3><p>性能比NIO更高。代码更改:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">EpollEventLoopGroup</span><br><span class="line">EpollServerSocketChannel<span class="class">.<span class="keyword">class</span></span></span><br></pre></td></tr></table></figure>
-
-<h3 id="水平触发LT"><a href="#水平触发LT" class="headerlink" title="水平触发LT"></a>水平触发LT</h3><blockquote>
-<p>只要有事件没消费完就一直提醒。(底层把没处理完的回调重新加入readylist)</p>
-</blockquote>
-<h3 id="边缘触发ET"><a href="#边缘触发ET" class="headerlink" title="边缘触发ET"></a>边缘触发ET</h3><blockquote>
-<p>有新事件才提醒。（底层省略了重新加入readylist那一步）</p>
-</blockquote>
-<p>优缺点对比:</p>
-<table>
-<thead>
-<tr>
-<th align="center">属性</th>
-<th align="left">水平触发(LT)</th>
-<th align="center">边缘触发(ET)</th>
-</tr>
-</thead>
-<tbody><tr>
-<td align="center">开销</td>
-<td align="left">较大</td>
-<td align="center">较小</td>
-</tr>
-<tr>
-<td align="center">时效性</td>
-<td align="left">时效性高</td>
-<td align="center">时效性较低</td>
-</tr>
-<tr>
-<td align="center">数据安全</td>
-<td align="left">无遗漏</td>
-<td align="center">需要小心编程，否则有遗漏风险</td>
-</tr>
-</tbody></table>
-<p>单线程时: 水平触发时效性好一些；<br>高并发时: 边缘触发并发度好一些。</p>
-<p>jdk实现: 水平触发<br>netty实现: 边缘触发</p>
-<h3 id="OIO传输实现"><a href="#OIO传输实现" class="headerlink" title="OIO传输实现"></a>OIO传输实现</h3><p>Netty使用超时机制来让OIO和NIO的API统一。</p>
-<h3 id="Local传输实现"><a href="#Local传输实现" class="headerlink" title="Local传输实现"></a>Local传输实现</h3><p>用于在同一个JVM中运行的客户端和服务端之间的通信。<br>服务端并不绑定物理网络地址，也不接受真正的网络流量。<br>可以一开始先使用<code>Local</code>传输实现，方便以后有需求的时候迁移到<code>NIO</code>,<code>Epoll</code>实现。</p>
-<h3 id="Embedded传输实现"><a href="#Embedded传输实现" class="headerlink" title="Embedded传输实现"></a>Embedded传输实现</h3><p>用途： 创建单元测试。</p>
-<h2 id="传输的用例"><a href="#传输的用例" class="headerlink" title="传输的用例"></a>传输的用例</h2><p>Netty4支持的网络协议:</p>
-<table>
-<thead>
-<tr>
-<th align="center">传输实现</th>
-<th align="left">TCP</th>
-<th align="center">UDP</th>
-<th align="center">SCTP</th>
-<th align="center">UDT</th>
-</tr>
-</thead>
-<tbody><tr>
-<td align="center">NIO</td>
-<td align="left">√</td>
-<td align="center">√</td>
-<td align="center">√</td>
-<td align="center">√</td>
-</tr>
-<tr>
-<td align="center">Epoll</td>
-<td align="left">√</td>
-<td align="center">√</td>
-<td align="center">X</td>
-<td align="center">X</td>
-</tr>
-<tr>
-<td align="center">OIO</td>
-<td align="left">√</td>
-<td align="center">√</td>
-<td align="center">√</td>
-<td align="center">√</td>
-</tr>
-<tr>
-<td align="center">网络协议备注</td>
-<td align="left"></td>
-<td align="center"></td>
-<td align="center">串流控制传输协议，较冷门，目前主要应用在电信领域</td>
-<td align="center">基于UDP的可靠传输</td>
-</tr>
-</tbody></table>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/08/19/2018-08/Netty-in-action%E7%AC%AC%E5%9B%9B%E7%AB%A0-%E4%BC%A0%E8%BE%93-%E7%AC%94%E8%AE%B0/" data-id="ck96cxpod00csmaama7v53sj5" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Netty/" rel="tag">Netty</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1533,6 +1459,10 @@ r3是关键的加密保护的随机数，r1,r2,r3一起生成key。<br>r1,r2的�
       <ul>
         
           <li>
+            <a href="/2022/09/25/2022-09/%E8%B0%83%E4%BC%98-%E8%A7%A3%E5%86%B3%E7%BA%BF%E7%A8%8B%E6%B1%A0%E9%80%A0%E6%88%90%E7%9A%84%E8%BF%9B%E7%A8%8B%E5%8D%A1%E9%A1%BF%E3%80%81cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-解决线程池造成的进程卡顿、cpu毛刺问题</a>
+          </li>
+        
+          <li>
             <a href="/2022/08/30/2022-08/%E8%B0%83%E4%BC%98-cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-cpu毛刺问题</a>
           </li>
         
@@ -1546,10 +1476,6 @@ r3是关键的加密保护的随机数，r1,r2,r3一起生成key。<br>r1,r2的�
         
           <li>
             <a href="/2022/03/16/2022-03/cms%E7%9A%84gc%E8%A7%A6%E5%8F%91%E6%9D%A1%E4%BB%B6/">cms的gc触发条件</a>
-          </li>
-        
-          <li>
-            <a href="/2022/03/14/2022-03/%E4%B8%AD%E6%96%AD%E6%A2%B3%E7%90%86/">java方法是否可中断梳理</a>
           </li>
         
       </ul>

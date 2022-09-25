@@ -72,6 +72,97 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2020-12/升级HTTP2笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/12/19/2020-12/%E5%8D%87%E7%BA%A7HTTP2%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2020-12-19T07:45:17.000Z" itemprop="datePublished">2020-12-19</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/http/">http</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2020/12/19/2020-12/%E5%8D%87%E7%BA%A7HTTP2%E7%AC%94%E8%AE%B0/">升级HTTP2笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="已知的坑"><a href="#已知的坑" class="headerlink" title="已知的坑"></a>已知的坑</h1><h2 id="header大小写"><a href="#header大小写" class="headerlink" title="header大小写"></a>header大小写</h2><p>header names按http1.1协议是不区分大小写的，http2里全是小写，nginx反向代理会保留大小写，所以如果以前的代码依赖大写，就会挂掉。</p>
+<p>(为啥h2里变小写了: HPACK算法, 解压的时候查表还原header names, 类似于哈夫曼算法)</p>
+<h2 id="与websocket不能共用域名-只支持https"><a href="#与websocket不能共用域名-只支持https" class="headerlink" title="与websocket不能共用域名, 只支持https"></a>与websocket不能共用域名, 只支持https</h2><p>websocket和http2都是从http协议握手协商升级过去的，也就是起点是http1.1。 两种协商过程:</p>
+<ul>
+<li>http1.1 -Upgrade=&gt; websocket+ssl (wss)</li>
+<li>http1.1 -Upgrade=&gt; http2</li>
+</ul>
+<p>H2是基于https的，因此如果某个域名切换到H2以后，就只能支持https的链接了，不再支持http;<br>如果硬要不加密、不安全，可以使用H2C，但是主流浏览器都声称不会支持H2C，因此这个选项其实并不实际。</p>
+<p> (这个倒是不能算坑，只能算一个特性)</p>
+<h1 id="Why-为什么要升级到H2"><a href="#Why-为什么要升级到H2" class="headerlink" title="Why: 为什么要升级到H2"></a>Why: 为什么要升级到H2</h1><p>主要是性能上的优化。</p>
+<p>Http2的修改:</p>
+<p>1.header压缩: HPACK算法;</p>
+<p>2.服务器推送: server push，推送html里的css,js; </p>
+<p>3.pipeline请求;</p>
+<p>4.多路复用，同域名单个TCP连接，划分stream id;</p>
+<p>5.二进制传输;</p>
+<p>其中1、3、5肯定提升性能；</p>
+<p>2则取决于缓存策略，因为可能服务器push了客户端已经缓存的资源，浪费带宽；</p>
+<p>4取决于优先级策略，因为把以前前端手动控制的优先级策略，交给浏览器内核来自动实现，按<a href="https://blog.cloudflare.com/zh/better-http-2-prioritization-for-a-faster-web-zh/" target="_blank" rel="noopener">https://blog.cloudflare.com/zh/better-http-2-prioritization-for-a-faster-web-zh/</a> ， 谷歌内核是最接近最优策略的。但是由于以前可以多开TCP连接，现在是单开，因此如果有大图片，会阻塞后面的小图片。</p>
+<p>谷歌的优先级处理逻辑如下：</p>
+<img src="/images/2020-12/chrome_loading-1.gif" class="" width="800" height="1200" title="loading">
+
+<p>此外，由于有了特性4，不再需要前端内联资源，因此一些针对http1.1的优化可以回滚，好处是可以简化代码，提高缓存效率，去掉重复建立连接的开销；</p>
+<p>坏处就是不能再依赖多开TCP连接了，图片只能一张一张刷开。</p>
+<h1 id="HOW-怎么升级到H2"><a href="#HOW-怎么升级到H2" class="headerlink" title="HOW:怎么升级到H2"></a>HOW:怎么升级到H2</h1><p>根据nginx官网的指导，没有必要全链路H2,只需要client到nginx是H2就够了(terminate protocol)。后端服务可以维持原来的协议。（类似于以前升级https）</p>
+<p>因此只需要修改nginx配置即可，对后端服务无感知。(如下图)</p>
+<img src="/images/2020-12/ng.png" class="" width="800" height="1200" title="ng">
+
+<p>ng官网指导: <a href="https://www.nginx.com/blog/7-tips-for-faster-http2-performance/" target="_blank" rel="noopener">https://www.nginx.com/blog/7-tips-for-faster-http2-performance/</a></p>
+<h2 id="为什么没必要全链路H2"><a href="#为什么没必要全链路H2" class="headerlink" title="为什么没必要全链路H2:"></a>为什么没必要全链路H2:</h2><p>按ng官网的说法，H2的主要优点是性能提高，对于内网网速来说，这点提升意义不大；</p>
+<p>因此nginx只在服务端支持H2, 不支持客户端H2(转发的时候)。</p>
+<p>如果想要全链路H2, 就不能用nginx了。</p>
+<h1 id="参考资料："><a href="#参考资料：" class="headerlink" title="参考资料："></a>参考资料：</h1><p>1.<a href="https://zhuanlan.zhihu.com/p/276057825" target="_blank" rel="noopener">https://zhuanlan.zhihu.com/p/276057825</a></p>
+<p>2.<a href="https://www.cnblogs.com/confach/p/10141273.html" target="_blank" rel="noopener">https://www.cnblogs.com/confach/p/10141273.html</a></p>
+<p>3.<a href="https://zhuanlan.zhihu.com/p/89471776" target="_blank" rel="noopener">https://zhuanlan.zhihu.com/p/89471776</a></p>
+<p>4.<a href="https://juejin.im/post/6844903745218674695" target="_blank" rel="noopener">https://juejin.im/post/6844903745218674695</a></p>
+<p>5.<a href="https://blog.cloudflare.com/zh/better-http-2-prioritization-for-a-faster-web-zh/" target="_blank" rel="noopener">https://blog.cloudflare.com/zh/better-http-2-prioritization-for-a-faster-web-zh/</a></p>
+<p>6.<a href="https://hpbn.co/http2/#stream-prioritization" target="_blank" rel="noopener">https://hpbn.co/http2/#stream-prioritization</a></p>
+<p>7.<a href="https://calendar.perfplanet.com/2018/http2-prioritization/" target="_blank" rel="noopener">https://calendar.perfplanet.com/2018/http2-prioritization/</a></p>
+<p>8.<a href="https://www.jianshu.com/p/e57ca4fec26f" target="_blank" rel="noopener">https://www.jianshu.com/p/e57ca4fec26f</a></p>
+<p>9.<a href="https://zhuanlan.zhihu.com/p/26559480" target="_blank" rel="noopener">https://zhuanlan.zhihu.com/p/26559480</a></p>
+<p>10.<a href="https://www.cnblogs.com/ranFengHua/p/10816956.html" target="_blank" rel="noopener">https://www.cnblogs.com/ranFengHua/p/10816956.html</a></p>
+<p>11.<a href="https://blog.csdn.net/liujiyong7/article/details/64478317" target="_blank" rel="noopener">https://blog.csdn.net/liujiyong7/article/details/64478317</a></p>
+<p>12.<a href="https://www.nginx.com/blog/7-tips-for-faster-http2-performance/" target="_blank" rel="noopener">https://www.nginx.com/blog/7-tips-for-faster-http2-performance/</a></p>
+<p>13.<a href="https://www.cnblogs.com/operationhome/p/12577540.html" target="_blank" rel="noopener">https://www.cnblogs.com/operationhome/p/12577540.html</a></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2020/12/19/2020-12/%E5%8D%87%E7%BA%A7HTTP2%E7%AC%94%E8%AE%B0/" data-id="cklkmfo8y0001pdam8kzy25s3" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/http/" rel="tag">http</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/nginx/" rel="tag">nginx</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2020-07/ES实战笔记" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2020/07/22/2020-07/ES%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0/" class="article-date">
@@ -1168,91 +1259,6 @@
 
 
   
-    <article id="post-2020-03/分布式事务" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2020/03/23/2020-03/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/" class="article-date">
-  <time datetime="2020-03-23T06:20:40.000Z" itemprop="datePublished">2020-03-23</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2020/03/23/2020-03/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/">分布式事务</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <blockquote>
-<p>参考:<br><a href="https://segmentfault.com/a/1190000016397619#item-1-1" target="_blank" rel="noopener">https://segmentfault.com/a/1190000016397619#item-1-1</a><br><a href="https://www.cnblogs.com/duanxz/p/5226316.html" target="_blank" rel="noopener">https://www.cnblogs.com/duanxz/p/5226316.html</a></p>
-</blockquote>
-<p>文中提到的主要是微信支付数据库层面的分布式事务优化。</p>
-<h2 id="优化前"><a href="#优化前" class="headerlink" title="优化前"></a>优化前</h2><p>架构上分为:<br>客户端;<br>CN: Coordinator,协调节点, 类似于对外的服务接口、代理，帮忙协调锁资源;<br>GTM： Global Transaction Manager, 类似于全局锁，全局事务管理器<br>DN: 具体数据节点; </p>
-<p>逻辑很简单，就是CN每次向GTM申请锁，确保分布式事务的安全；<br>CN估计有多个，可能是react模式。<br>这种锁就像直接synchronized了全局，并发纯靠GTM单点纵向拓展。</p>
-<h2 id="优化后"><a href="#优化后" class="headerlink" title="优化后"></a>优化后</h2><p>锁下放到DN层。</p>
-<h1 id="分布式事务"><a href="#分布式事务" class="headerlink" title="分布式事务"></a>分布式事务</h1><p>分布式事务： 多个子系统一致成功、或一致失败回滚。</p>
-<p>4种类型: </p>
-<ol>
-<li>优先考虑避免分布式事务：可以将两个子系统的数据库表放在同一个从库下时：直接使用mysql事务，避免分布式事务;</li>
-<li>无法放在同一个从库下时: 使用TCC;</li>
-<li>特殊限制下: TCC+MQ;</li>
-<li>只要求最终一致性时: 使用MQ异步处理，反复重试。</li>
-</ol>
-<p>2PC和TCC的区别:<br>2PC: 数据库层，性能差(数据库锁)；<br>TCC: 应用层，性能高，开发成本高(需要保证幂等性)。</p>
-<h1 id="TCC"><a href="#TCC" class="headerlink" title="TCC"></a>TCC</h1><p>TCC： Try-Cancel-Commit<br>开源实现: <code>ByteTCC</code></p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">1、Try：尝试执行业务。</span><br><span class="line">完成所有业务检查(一致性)</span><br><span class="line">预留必须业务资源(准隔离性)</span><br><span class="line"></span><br><span class="line">2、Confirm：确认执行业务。</span><br><span class="line">真正执行业务</span><br><span class="line">不做任何业务检查</span><br><span class="line">只使用Try阶段预留的业务资源</span><br><span class="line"></span><br><span class="line">3、Cancel：取消执行业务</span><br><span class="line">释放Try阶段预留的业务资源</span><br></pre></td></tr></table></figure>
-<p>其中Confirm和cancel接口需要是幂等的。</p>
-<img src="/images/2020-03/tcc.png" class="" width="800" height="1200" title="tcc">
-<p>每个子事务实现TCC的几个幂等接口。</p>
-<ol>
-<li>使用try锁定资源;</li>
-<li>所有子事务: 写redo日志(持久化)\undo日志(回滚), 执行操作;</li>
-<li>所有子事务: commit提交;</li>
-<li>失败则cancel取消。</li>
-</ol>
-<h2 id="特例"><a href="#特例" class="headerlink" title="特例"></a>特例</h2><p>最后一个子事务可以只实现TryCommit合并:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">IF(代金券.Try) &#123;</span><br><span class="line">    IF(现金支付.TryAndCommit) &#123;</span><br><span class="line">        代金券.Commit</span><br><span class="line">    &#125;  &#123;</span><br><span class="line">        代金券.Cancel</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-
-<h1 id="特殊限制下"><a href="#特殊限制下" class="headerlink" title="特殊限制下"></a>特殊限制下</h1><p>超强一致性：两个从库之间转账。<br>特殊限制： </p>
-<p>加钱: 可以try\commit\cancel;<br>减钱: 不能try，只能tryCommit(也就是一步到位,不能打日志反复重试(不让记录redo log(什么？你想记录用户的密码？))，不能cancel(有undo日志也无法回滚)),能失败。</p>
-<h3 id="方案"><a href="#方案" class="headerlink" title="方案"></a>方案</h3><p>方案1： 从库A先+100，然后从库B-100，最后都提交。<br>方案2： 从库B先-100，然后从库A+100，最后都提交。</p>
-<p>方案1, 需要平台先垫钱，肯定是不行的。<br>方案2, 如果-100的操作是无法try的(比如依赖银行系统)，只能直接tryCommit，也就是只能位于末尾，否则就无法符合TCC的模式了。</p>
-<p>方案3：<br>从库A+100:  Try;<br>从库B-100： TryCommit;<br>从库A+100:  Commit;</p>
-<p>方案3可行，略麻烦。<br>方案3的简化：<br>从库B-100: TryCommit;<br>发布事件到MQ;<br>从库A订阅事件，反复重试+100。 </p>
-<h1 id="最终一致性"><a href="#最终一致性" class="headerlink" title="最终一致性"></a>最终一致性</h1><p>将只需要最终一致性的子事务全部放在MQ中。<br>(类似发通知之类的事件)<br>发布事件到MQ，反复异步重试直到成功（削峰、错峰重试(随机探测)）</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2020/03/23/2020-03/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/" data-id="ck96cxpql00lcmaamb3uahuf3" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/" rel="tag">分布式事务</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%B9%B6%E5%8F%91/" rel="tag">并发</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1279,6 +1285,10 @@
       <ul>
         
           <li>
+            <a href="/2022/09/25/2022-09/%E8%B0%83%E4%BC%98-%E8%A7%A3%E5%86%B3%E7%BA%BF%E7%A8%8B%E6%B1%A0%E9%80%A0%E6%88%90%E7%9A%84%E8%BF%9B%E7%A8%8B%E5%8D%A1%E9%A1%BF%E3%80%81cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-解决线程池造成的进程卡顿、cpu毛刺问题</a>
+          </li>
+        
+          <li>
             <a href="/2022/08/30/2022-08/%E8%B0%83%E4%BC%98-cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-cpu毛刺问题</a>
           </li>
         
@@ -1292,10 +1302,6 @@
         
           <li>
             <a href="/2022/03/16/2022-03/cms%E7%9A%84gc%E8%A7%A6%E5%8F%91%E6%9D%A1%E4%BB%B6/">cms的gc触发条件</a>
-          </li>
-        
-          <li>
-            <a href="/2022/03/14/2022-03/%E4%B8%AD%E6%96%AD%E6%A2%B3%E7%90%86/">java方法是否可中断梳理</a>
           </li>
         
       </ul>

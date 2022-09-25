@@ -72,6 +72,73 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-07/hll算法原理" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/07/06/2019-07/hll%E7%AE%97%E6%B3%95%E5%8E%9F%E7%90%86/" class="article-date">
+  <time datetime="2019-07-06T09:19:23.000Z" itemprop="datePublished">2019-07-06</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/">数据结构与算法</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/07/06/2019-07/hll%E7%AE%97%E6%B3%95%E5%8E%9F%E7%90%86/">hll算法原理</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="What-HLL-HyperLogLog是啥"><a href="#What-HLL-HyperLogLog是啥" class="headerlink" title="What: HLL/HyperLogLog是啥"></a>What: HLL/HyperLogLog是啥</h1><p>近似计算uv的算法,每一千万错误率0.5%.<br>谷歌改进后的算法为HLL++/HyperLogLog plus算法，改进了一些边界和精度问题（分类处理了稀疏和稠密的数据集情况，稀疏转化成稠密）。HLL++在边界条件下从1.5%优化到0.5%。而且不会出现突变高的错误率情况。</p>
+<img src="/images/2019-07/hll_plus.png" class="" width="800" height="1200" title="hll_plus">
+
+<p>论文:<br><a href="http://static.googleusercontent.com/media/research.google.com/en/us/pubs/archive/40671.pdf" target="_blank" rel="noopener">http://static.googleusercontent.com/media/research.google.com/en/us/pubs/archive/40671.pdf</a></p>
+<h1 id="How-HLL原理"><a href="#How-HLL原理" class="headerlink" title="How: HLL原理"></a>How: HLL原理</h1><h2 id="n次伯努利"><a href="#n次伯努利" class="headerlink" title="n次伯努利"></a>n次伯努利</h2><p>进行了n次进行抛硬币实验，每次分别记录下第一次抛到正面的抛掷次数K1~Kn，那么可以用n次实验中最大的抛掷次数Kmax;<br>则可以预估实验组数量为n的预估值=2^Kmax.<br>参考:<br><a href="http://www.rainybowe.com/blog/2017/07/13/%E7%A5%9E%E5%A5%87%E7%9A%84HyperLogLog%E7%AE%97%E6%B3%95/index.html" target="_blank" rel="noopener">http://www.rainybowe.com/blog/2017/07/13/%E7%A5%9E%E5%A5%87%E7%9A%84HyperLogLog%E7%AE%97%E6%B3%95/index.html</a></p>
+<h2 id="LC算法"><a href="#LC算法" class="headerlink" title="LC算法"></a>LC算法</h2><p>所有数据hash以后，从低位开始第一个1的位置K。<br>预估值为2^K.</p>
+<h2 id="HLL算法"><a href="#HLL算法" class="headerlink" title="HLL算法"></a>HLL算法</h2><p>分桶后求调和平均，概率上减少异常。</p>
+<h2 id="redis中的实现"><a href="#redis中的实现" class="headerlink" title="redis中的实现"></a>redis中的实现</h2><p>代码：<a href="https://github.com/antirez/redis/blob/unstable/src/hyperloglog.c" target="_blank" rel="noopener">https://github.com/antirez/redis/blob/unstable/src/hyperloglog.c</a><br>内存: 2^14个桶,每个桶6bit。(实际作为一个大数组12KB。)</p>
+<ol>
+<li>每个输入通过hash算法得出64bit哈希值x；</li>
+<li>x的低14位,用来选择桶号(0-2^14-1号)Mi;</li>
+<li>x的高50位,用来找K(也就是第一次出现1的位置，或者说0后缀的长度)，把K存入Mi。</li>
+</ol>
+<p>这样处理完所有用户输入后，用公式算出n的估计值:</p>
+<img src="/images/2019-07/hll.png" class="" width="800" height="1200" title="hll">
+
+<blockquote>
+<p>对于第三点中的K,(也就是n次伯努利里的Kmax) (对于每个用户id的Kmax值存入桶的6位中)<br>高位剩下50位,第一个1的位置最大是50,而2^6=64，所以能够存下50这个数字(以及其他所有Kmax)。</p>
+</blockquote>
+<p>HLL++的话还要加入更多的边界调整。</p>
+<h2 id="可视化模拟"><a href="#可视化模拟" class="headerlink" title="可视化模拟"></a>可视化模拟</h2><p><a href="http://content.research.neustar.biz/blog/hll.html" target="_blank" rel="noopener">http://content.research.neustar.biz/blog/hll.html</a><br>上述链接中是m=64个桶(4*16的方阵)，每个格子中存放一个十进制数，实际最大是2^6也就是64，如果新来了K值，则会和原来的K值做逻辑交运算。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/07/06/2019-07/hll%E7%AE%97%E6%B3%95%E5%8E%9F%E7%90%86/" data-id="ck96cxppy00ixmaam5scrc2mc" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/hll/" rel="tag">hll</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/hyperloglog/" rel="tag">hyperloglog</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E7%AE%97%E6%B3%95/" rel="tag">算法</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2019-07/粗俗理解clickhouse" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/07/06/2019-07/%E7%B2%97%E4%BF%97%E7%90%86%E8%A7%A3clickhouse/" class="article-date">
@@ -1003,87 +1070,6 @@
 
 
   
-    <article id="post-2019-03/mysql统计信息更新" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/03/31/2019-03/mysql%E7%BB%9F%E8%AE%A1%E4%BF%A1%E6%81%AF%E6%9B%B4%E6%96%B0/" class="article-date">
-  <time datetime="2019-03-31T11:38:49.000Z" itemprop="datePublished">2019-03-31</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/mysql/">mysql</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/03/31/2019-03/mysql%E7%BB%9F%E8%AE%A1%E4%BF%A1%E6%81%AF%E6%9B%B4%E6%96%B0/">mysql统计信息更新</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <blockquote>
-<p>本文只关注innodb。 </p>
-</blockquote>
-<p>mysql优化器选择执行计划的时候需要依据一定的采样统计信息，不然对数据完全不了解的话，就无法选择成本低的执行计划了。</p>
-<p>统计信息的配置有以下几个自由度:</p>
-<ol>
-<li>是否持久化;</li>
-<li>更新统计信息的时机;</li>
-<li>采样多少个page。 </li>
-</ol>
-<h1 id="是否持久化"><a href="#是否持久化" class="headerlink" title="是否持久化"></a>是否持久化</h1><p>采样统计信息可以有两种选择：</p>
-<ol>
-<li>持久化: 默认是持久化，也就是存磁盘。</li>
-<li>非持久化.</li>
-</ol>
-<p>控制的选项:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">show variables like &#39;%innodb_stats_persistent%&#39;;</span><br></pre></td></tr></table></figure>
-<p>默认是on，也就是持久化。<br>具体存哪里呢，主要是存mysql库和information_schema库下(5.6.x):</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">INFORMATION_SCHEMA.TABLES</span><br><span class="line">INFORMATION_SCHEMA.STATISTICS</span><br><span class="line">mysql.innodb_table_stats</span><br><span class="line">mysql.innodb_index_stats</span><br></pre></td></tr></table></figure>
-
-<h1 id="更新统计信息的时机"><a href="#更新统计信息的时机" class="headerlink" title="更新统计信息的时机"></a>更新统计信息的时机</h1><p>相关参数:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">innodb_stats_on_metadata: 是否每次都重新计算统计信息(配合非持久化使用),默认off;</span><br><span class="line">innodb_stats_auto_recalc: 插入数据量超过原表10%的时候更新统计信息,默认on。</span><br></pre></td></tr></table></figure>
-<p>总结一下mysql更新统计信息的时机:</p>
-<ol>
-<li>手动运行触发语句如<code>analyze table xx</code>的时候;</li>
-<li>如果<code>innodb_stats_auto_recalc</code>为on: 插入数据量超过原表10%的时候更新统计信息;</li>
-<li>如果<code>innodb_stats_on_metadata</code>为on: 每次查询schema.table表的是更新统计信息(一般不开启，性能太差)。</li>
-</ol>
-<h1 id="采样page数量"><a href="#采样page数量" class="headerlink" title="采样page数量"></a>采样page数量</h1><p>相关参数:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">| innodb_stats_sample_pages            | 8     |</span><br><span class="line">| innodb_stats_persistent_sample_pages | 20    |</span><br><span class="line">| innodb_stats_transient_sample_pages  | 8     |</span><br></pre></td></tr></table></figure>
-<p><code>innodb_stats_sample_pages</code>废弃改成了<code>innodb_stats_persistent_sample_pages</code>和<code>innodb_stats_transient_sample_pages</code>,灵活控制持久化和非持久化下的采样page数。</p>
-<p>可以看出默认情况持久化采样20个page。 </p>
-<h2 id="单表配置"><a href="#单表配置" class="headerlink" title="单表配置"></a>单表配置</h2><p>上述所有都是全局配置，还可以为每个表单独3个参数:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">STATS_PERSISTENT  : 1: 持久化统计信息;</span><br><span class="line">STATS_AUTO_RECALC : 超过10%更新统计信息。</span><br><span class="line">STATS_SAMPLE_PAGES: 采样页数。</span><br></pre></td></tr></table></figure>
-<p>可以看出为每个表设置的参数依然是这3个自由度: 是否持久化、更新统计信息时机、采样页数。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/03/31/2019-03/mysql%E7%BB%9F%E8%AE%A1%E4%BF%A1%E6%81%AF%E6%9B%B4%E6%96%B0/" data-id="ck96cxppi00hhmaam20j0cn5z" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1110,6 +1096,10 @@
       <ul>
         
           <li>
+            <a href="/2022/09/25/2022-09/%E8%B0%83%E4%BC%98-%E8%A7%A3%E5%86%B3%E7%BA%BF%E7%A8%8B%E6%B1%A0%E9%80%A0%E6%88%90%E7%9A%84%E8%BF%9B%E7%A8%8B%E5%8D%A1%E9%A1%BF%E3%80%81cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-解决线程池造成的进程卡顿、cpu毛刺问题</a>
+          </li>
+        
+          <li>
             <a href="/2022/08/30/2022-08/%E8%B0%83%E4%BC%98-cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-cpu毛刺问题</a>
           </li>
         
@@ -1123,10 +1113,6 @@
         
           <li>
             <a href="/2022/03/16/2022-03/cms%E7%9A%84gc%E8%A7%A6%E5%8F%91%E6%9D%A1%E4%BB%B6/">cms的gc触发条件</a>
-          </li>
-        
-          <li>
-            <a href="/2022/03/14/2022-03/%E4%B8%AD%E6%96%AD%E6%A2%B3%E7%90%86/">java方法是否可中断梳理</a>
           </li>
         
       </ul>

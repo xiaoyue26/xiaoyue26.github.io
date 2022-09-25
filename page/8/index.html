@@ -72,6 +72,97 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-02/redis设计与实现笔记6-客户端与服务器" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/21/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B06-%E5%AE%A2%E6%88%B7%E7%AB%AF%E4%B8%8E%E6%9C%8D%E5%8A%A1%E5%99%A8/" class="article-date">
+  <time datetime="2019-02-21T13:55:54.000Z" itemprop="datePublished">2019-02-21</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/02/21/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B06-%E5%AE%A2%E6%88%B7%E7%AB%AF%E4%B8%8E%E6%9C%8D%E5%8A%A1%E5%99%A8/">redis设计与实现笔记6-客户端与服务器</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="客户端"><a href="#客户端" class="headerlink" title="客户端"></a>客户端</h1><p>服务端保存的客户端状态:(<code>redisClient</code>)</p>
+<ol>
+<li>套接字;</li>
+<li>客户端名字</li>
+<li>标志值flag;</li>
+<li>正在使用的数据库指针\号码;</li>
+<li>客户端当前要执行的命令、参数..;</li>
+<li>客户端输入、输出缓冲区；</li>
+<li>复制状态信息；</li>
+<li>事务状态；</li>
+<li>身份验证标志：0未通过；1：已经通过身份验证；</li>
+<li>创建时间、最后一次通信时间；</li>
+<li>其他。</li>
+</ol>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">redisServer</span>&#123;</span></span><br><span class="line">    <span class="comment">// 所有客户端状态的链表</span></span><br><span class="line">    <span class="built_in">list</span> *clients;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="相关命令"><a href="#相关命令" class="headerlink" title="相关命令"></a>相关命令</h2><p>列出客户端:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">127.0.0.1:6379&gt; client list</span><br><span class="line">id=489 addr=127.0.0.1:57480 fd=5 name= age=6151 idle=582 flags=N db=0 sub=0 psub=0 multi=-1 qbuf=0 qbuf-free=0 obl=0 oll=0 omem=0 events=r cmd=get</span><br><span class="line">id=490 addr=127.0.0.1:38584 fd=6 name= age=15 idle=0 flags=N db=0 sub=0 psub=0 multi=-1 qbuf=0 qbuf-free=32768 obl=0 oll=0 omem=0 events=r cmd=client</span><br></pre></td></tr></table></figure>
+
+<h2 id="套接字fd"><a href="#套接字fd" class="headerlink" title="套接字fd"></a>套接字fd</h2><p>fd=-1: 伪客户端:加载AOF或执行Lua脚本；<br>fd&gt;-1: 普通客户端。</p>
+<h2 id="名字-name"><a href="#名字-name" class="headerlink" title="名字(name)"></a>名字(name)</h2><p>默认都没有名字，可以使用<code>client setname</code>命令设置。</p>
+<h2 id="客户端关闭"><a href="#客户端关闭" class="headerlink" title="客户端关闭"></a>客户端关闭</h2><p>关闭的原因：</p>
+<ol>
+<li>客户端进程退出、被杀死(<code>Client kill</code>)，网络连接断开；</li>
+<li>客户端发送了不符合协议格式的命令，被关闭；</li>
+<li>空转时间超过<code>timeout</code>配置;</li>
+<li>发送命令大小超过输入缓冲区限制；</li>
+<li>回复命令大小超过输出缓冲区限制。</li>
+</ol>
+<p>输出缓冲区需满足的两个限制：</p>
+<ol>
+<li>硬性限制：超出硬性限制大小，立即关闭；</li>
+<li>软性限制：最多可以超出软性限制持续时长xxx秒。</li>
+</ol>
+<p>示例配置：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 普通客户端硬性限制和软性限制都不限制:</span></span><br><span class="line">client-output-buffer-limit normal 0 0 0</span><br><span class="line"><span class="meta">#</span><span class="bash"> 从服务器客户端硬性限制为256MB,软性限制为64MB、60秒：</span></span><br><span class="line">client-output-buffer-limit slave 256mb 64mb 60</span><br><span class="line"><span class="meta">#</span><span class="bash"> 执行发布与订阅功能的客户端：硬性限制32mb,软性限制8mb 60秒:</span></span><br><span class="line">client-output-buffer-limit 32mb 8mb 60</span><br></pre></td></tr></table></figure>
+
+<h1 id="服务端"><a href="#服务端" class="headerlink" title="服务端"></a>服务端</h1><h2 id="命令的执行流程"><a href="#命令的执行流程" class="headerlink" title="命令的执行流程"></a>命令的执行流程</h2><ol>
+<li>用户=&gt;客户端: 输入命令；</li>
+<li>客户端=&gt;服务端: 命令按通信协议传输到服务器输入缓冲区；</li>
+<li>服务端: 等待可读事件发生后，读输入缓冲区，解析命令；</li>
+<li>服务端：执行命令，将回复写入输出缓冲区；</li>
+<li>服务端=&gt;客户端：等待可写事件发生后，从输出缓冲区传输给客户端。</li>
+<li>客户端=&gt;用户: 回显命令结果。</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/21/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B06-%E5%AE%A2%E6%88%B7%E7%AB%AF%E4%B8%8E%E6%9C%8D%E5%8A%A1%E5%99%A8/" data-id="ck96cxpp800gdmaam9y4n3nq6" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2019-02/redis设计与实现笔记5-事件" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/02/21/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B05-%E4%BA%8B%E4%BB%B6/" class="article-date">
@@ -1287,73 +1378,6 @@
 
 
   
-    <article id="post-2019-02/半小时真正理解记住paxos协议" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/02/01/2019-02/%E5%8D%8A%E5%B0%8F%E6%97%B6%E7%9C%9F%E6%AD%A3%E7%90%86%E8%A7%A3%E8%AE%B0%E4%BD%8Fpaxos%E5%8D%8F%E8%AE%AE/" class="article-date">
-  <time datetime="2019-02-01T01:45:14.000Z" itemprop="datePublished">2019-02-01</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F/">分布式</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/02/01/2019-02/%E5%8D%8A%E5%B0%8F%E6%97%B6%E7%9C%9F%E6%AD%A3%E7%90%86%E8%A7%A3%E8%AE%B0%E4%BD%8Fpaxos%E5%8D%8F%E8%AE%AE/">半小时真正理解记住paxos协议</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>摘要:</p>
-<blockquote>
-<p>简单浏览一遍流程，然后看半小时视频: <a href="https://www.bilibili.com/video/av36134550" target="_blank" rel="noopener">https://www.bilibili.com/video/av36134550</a><br>就OK了。</p>
-</blockquote>
-<p>paxos是分布式一致性协议，对于CAP的取舍是完全的C，较好的A，较好的P。<br>（关于CAP: <a href="http://xiaoyue26.github.io/2019/02/01/2019-02/简单解释CAP原理">http://xiaoyue26.github.io/2019/02/01/2019-02/简单解释CAP原理</a> ）</p>
-<h1 id="paxos协商流程"><a href="#paxos协商流程" class="headerlink" title="paxos协商流程"></a>paxos协商流程</h1><h2 id="两个角色"><a href="#两个角色" class="headerlink" title="两个角色"></a>两个角色</h2><p>Proposer<br>Acceptor</p>
-<h2 id="流程"><a href="#流程" class="headerlink" title="流程"></a>流程</h2><p>首先大致扫一遍下叙流程，第一遍大概率是完全懵逼看不懂的，花1分钟在脑中留下一点点印象即可:</p>
-<h3 id="准备阶段（prepare）Proposer申请epoch"><a href="#准备阶段（prepare）Proposer申请epoch" class="headerlink" title="准备阶段（prepare）Proposer申请epoch"></a>准备阶段（prepare）Proposer申请epoch</h3><p>第一阶段A：Proposer选择一个提议编号n，向所有的Acceptor广播Prepare（n）请求。</p>
-<p>第一阶段B：若Acceptor接收到Prepare（n）请求，两个选择:<br>    (1)n&gt;接受过的n_old: 接受请求,返回<code>(n_old,value_old)</code>。<br>    (2)n&lt;接受过的n_old: 拒绝请求。</p>
-<h3 id="接受阶段（提交阶段）"><a href="#接受阶段（提交阶段）" class="headerlink" title="接受阶段（提交阶段）"></a>接受阶段（提交阶段）</h3><p>第二阶段A：Proposer得到了Acceptor响应:<br>1.如果未超过半数accpetor响应，直接转为提议失败；</p>
-<p>2.如果超过多数Acceptor的承诺，又分为不同情况：<br>(1)如果所有Acceptor返回的value都是<code>null</code>，那么向所有的Acceptor发送<code>(n,value_n)</code>;<br>(2)如果存在Acceptor返回的value不为<code>null</code>，那么从所有接受过的值中选择对应的n_old最大的作为提议的值value_old，提议编号仍然为n。但此时Proposer就不能提议自己的值，只能信任Acceptor通过的值，维护一但获得确定性取值就不能更改原则: 向所有Acceptor发送<code>(n,value_old of max n_old)</code>。</p>
-<p>第二阶段B：Acceptor接收到提议<code>(n,value)</code>后：<br>(1)n!=本地保存的last_n，拒绝。<br>(2)n=本地保存的last_n，写入本地值。</p>
-<h2 id="看教学视频"><a href="#看教学视频" class="headerlink" title="看教学视频:"></a>看教学视频:</h2><p><a href="https://www.bilibili.com/video/av36134550" target="_blank" rel="noopener">https://www.bilibili.com/video/av36134550</a></p>
-<p>由于之前花1分钟浏览了流程，视频看到15分钟的时候心里就会已经有数了。<br>看完30分钟就理解记住了。</p>
-<h2 id="温习要点"><a href="#温习要点" class="headerlink" title="温习要点"></a>温习要点</h2><ol>
-<li>类似于CAS，仅当，当前值为null时，才能提议值为value。</li>
-<li>类似于jdk里的hashmap扩容，当发现有人捷足先登的时候，放下陈见开始辅助n_old完成value_old的扩散。发送(n,value_old)，以自己的名义，但是以别人的值，帮助一致性尽快达成。</li>
-<li>Acceptor对于epoch: 喜新厌旧,总是接受最大的epoch，防止Proposor单点故障死等。</li>
-<li>Proposor对于value: 喜旧厌新,总是接受更旧的value，尽快达成一致性。</li>
-</ol>
-<p>以上就是Basic Paxos。其实依然会有活锁，需要引进leader缓解。leader挂了的时候退化到Basic Paxos，出现活锁几率提升。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/02/01/2019-02/%E5%8D%8A%E5%B0%8F%E6%97%B6%E7%9C%9F%E6%AD%A3%E7%90%86%E8%A7%A3%E8%AE%B0%E4%BD%8Fpaxos%E5%8D%8F%E8%AE%AE/" data-id="ck96cxppb00gnmaamhyerfdxe" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/paxos/" rel="tag">paxos</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/" rel="tag">分布式</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1380,6 +1404,10 @@
       <ul>
         
           <li>
+            <a href="/2022/09/25/2022-09/%E8%B0%83%E4%BC%98-%E8%A7%A3%E5%86%B3%E7%BA%BF%E7%A8%8B%E6%B1%A0%E9%80%A0%E6%88%90%E7%9A%84%E8%BF%9B%E7%A8%8B%E5%8D%A1%E9%A1%BF%E3%80%81cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-解决线程池造成的进程卡顿、cpu毛刺问题</a>
+          </li>
+        
+          <li>
             <a href="/2022/08/30/2022-08/%E8%B0%83%E4%BC%98-cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-cpu毛刺问题</a>
           </li>
         
@@ -1393,10 +1421,6 @@
         
           <li>
             <a href="/2022/03/16/2022-03/cms%E7%9A%84gc%E8%A7%A6%E5%8F%91%E6%9D%A1%E4%BB%B6/">cms的gc触发条件</a>
-          </li>
-        
-          <li>
-            <a href="/2022/03/14/2022-03/%E4%B8%AD%E6%96%AD%E6%A2%B3%E7%90%86/">java方法是否可中断梳理</a>
           </li>
         
       </ul>

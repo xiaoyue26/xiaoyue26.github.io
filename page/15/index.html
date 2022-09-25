@@ -72,6 +72,260 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-01/java并发编程的艺术笔记-第三章" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/01/21/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF%E7%AC%94%E8%AE%B0-%E7%AC%AC%E4%B8%89%E7%AB%A0/" class="article-date">
+  <time datetime="2018-01-21T14:10:41.000Z" itemprop="datePublished">2018-01-21</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/01/21/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF%E7%AC%94%E8%AE%B0-%E7%AC%AC%E4%B8%89%E7%AB%A0/">java并发编程的艺术笔记-第三章</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="Java内存模型"><a href="#Java内存模型" class="headerlink" title="Java内存模型"></a>Java内存模型</h1><p>内容有4个部分:</p>
+<ol>
+<li>基本概念</li>
+<li>顺序一致性</li>
+<li>同步原语的内存语义</li>
+<li>内存模型的设计原理</li>
+</ol>
+<h2 id="3-1-基本概念"><a href="#3-1-基本概念" class="headerlink" title="3.1 基本概念"></a>3.1 基本概念</h2><p>并发编程的两个关键问题:</p>
+<ol>
+<li>线程之间通信: 何种机制交换数据,包括共享内存和消息传递;</li>
+<li>线程之间同步: 不同线程的操作发生的顺序. </li>
+</ol>
+<p>JAVA的线程通信: 共享内存(隐式). </p>
+<p>JAVA的内存:</p>
+<ol>
+<li>堆内存(共享):   实例域,静态域,数组元素;</li>
+<li>栈内存(不共享): 局部变量,方法参数,异常参数.</li>
+</ol>
+<p>线程A,B通信流程:</p>
+<ol>
+<li>线程A把自己内存中更新过的共享变量刷新到主内存中;(把cpu缓存刷到内存)</li>
+<li>线程B把到主内存中读取A更新后的共享变量. (把内存刷新到cpu缓存)</li>
+</ol>
+<h2 id="3-1-3-源代码到指令序列的重排序"><a href="#3-1-3-源代码到指令序列的重排序" class="headerlink" title="3.1.3 源代码到指令序列的重排序"></a>3.1.3 源代码到指令序列的重排序</h2><p>3种重排类型:</p>
+<ol>
+<li>编译器优化的重排序: 单线程程序语义不改变;</li>
+<li>指令级并行的重排序: 多线程的指令重排并行执行;</li>
+<li>内存系统的重排序: 指令实际执行的时候,由于缓存/缓冲的存在,加载和存储可能看起来是乱序执行.</li>
+</ol>
+<p>2和3属于处理器重排序.</p>
+<p>JAVA内存模型约束:</p>
+<ol>
+<li>禁止某些编译器优化;</li>
+<li>插入某些特定类型内存屏障(Memory Fence指令),禁止特定类型处理器重排序.</li>
+</ol>
+<h2 id="3-1-4-并发编程模型的分类"><a href="#3-1-4-并发编程模型的分类" class="headerlink" title="3.1.4 并发编程模型的分类"></a>3.1.4 并发编程模型的分类</h2><p>写缓冲区: 临时保存向内存写入的数据. (避免cpu等待io)<br>仅对该cpu可见. </p>
+<p>内存屏障指令:<br><strong>1.LoadLoad Barries</strong></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Load1;LoadLoad;Load2</span><br><span class="line">&#x2F;&#x2F; 确保Load1的装载先于Load2及后续Load指令</span><br></pre></td></tr></table></figure>
+
+<p><strong>2.StoreStore Barries:</strong></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Store1;StoreStore;Store2</span><br><span class="line">&#x2F;&#x2F; 确保Store1的数据先于Store2及后续Store指令</span><br><span class="line">&#x2F;&#x2F; 刷新到内存</span><br></pre></td></tr></table></figure>
+
+<p><strong>3.LoadStore Barries:</strong></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Load1;LoadStore;Store2</span><br><span class="line">&#x2F;&#x2F; 确保Load1的装载先于Store2及后续Store指令</span><br></pre></td></tr></table></figure>
+
+<p><strong>4.StoreLoad Barries:</strong></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Store1;StoreLoad;Load2</span><br><span class="line">&#x2F;&#x2F; 确保Store1的装载先于Load2及后续Load指令</span><br><span class="line">&#x2F;&#x2F; 刷新到内存.</span><br><span class="line">&#x2F;&#x2F; 且会使它之前的所有内存访问指令(Load和Store)都完成后,才执行之后的.</span><br></pre></td></tr></table></figure>
+
+<p>其中第四个,StoreLoad屏障最严格,会把写缓冲区刷新到内存,开销最大,大部分cpu都支持.</p>
+<h3 id="3-1-5-Happens-before规则"><a href="#3-1-5-Happens-before规则" class="headerlink" title="3.1.5 Happens-before规则"></a>3.1.5 Happens-before规则</h3><ol>
+<li>程序顺序规则: 单线程内顺序一致性; // 有数据依赖的指令不重排. 保证结果和顺序执行一致即可.</li>
+<li>锁规则:  解锁先于获得锁;</li>
+<li>volidate,原子变量: 写before读; </li>
+<li>线程启动. Thread.start之后才会有run等其他操作发生.</li>
+<li>中断. (1)A线程中断B线程;(2)B检测到中断. 保证(1)在(2)前面.</li>
+<li>终结器. 构造函数在终结器之前执行完成.</li>
+<li>传递性: 上述规则可以传递.</li>
+</ol>
+<p>上述规则被JVM翻译成各种约束(具体来说就是在指令里加一些内存屏障),影响了编译器重排序和处理器重排序.</p>
+<h2 id="3-2-顺序一致性"><a href="#3-2-顺序一致性" class="headerlink" title="3.2 顺序一致性"></a>3.2 顺序一致性</h2><h3 id="顺序一致性"><a href="#顺序一致性" class="headerlink" title="顺序一致性"></a>顺序一致性</h3><p>顺序一致性: 所有线程看到的执行顺序一致.<br>正确使用了同步机制,才能达到顺序一致性.<br>主要解决的是以下两者的矛盾:<br>(1) 程序员希望指令重排的约束越多越好, 保证执行结果好理解;<br>(2) 编译器/cpu希望约束越少越好,执行可以快一些.<br>顺序一致性: 约束的数量够用,让程序运行的结果与完全约束(顺序执行)一致. </p>
+<h3 id="3-2-1-数据依赖性"><a href="#3-2-1-数据依赖性" class="headerlink" title="3.2.1 数据依赖性"></a>3.2.1 数据依赖性</h3><p>编译器和处理器: </p>
+<ol>
+<li>单线程: 考虑数据依赖性; (写后读,写后写,读后写)</li>
+<li>不同线程\不同处理器: 不考虑数据依赖性.</li>
+</ol>
+<h3 id="3-2-2-as-if-serial语义"><a href="#3-2-2-as-if-serial语义" class="headerlink" title="3.2.2 as-if-serial语义"></a>3.2.2 as-if-serial语义</h3><p>编译器和处理器: 单线程语义不变.<br>// 约束够用,执行结果和串行执行结果一致.</p>
+<hr>
+<h2 id="一些约束的具体实现方案"><a href="#一些约束的具体实现方案" class="headerlink" title="一些约束的具体实现方案:"></a>一些约束的具体实现方案:</h2><h3 id="volatile变量"><a href="#volatile变量" class="headerlink" title="volatile变量"></a>volatile变量</h3><p>读: 读取最新的内存值(不一定是CPU缓存值); (有原子性)<br>写: 写入cpu缓存后,刷新到内存; (有原子性)<br>自增: 相当于先读后写两个操作, 不具有原子性. </p>
+<p>用<code>volatile</code>代替锁.(从内存语义上说,由于它与锁有相同内存效果,可以实现)</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">volatile</span> <span class="keyword">boolean</span> flag=<span class="keyword">false</span>;</span><br><span class="line">A:</span><br><span class="line">a=<span class="number">10</span>;</span><br><span class="line">flag=<span class="keyword">true</span>;</span><br><span class="line"></span><br><span class="line">B:</span><br><span class="line"><span class="keyword">int</span> i;</span><br><span class="line"><span class="keyword">while</span>(<span class="keyword">true</span>)&#123;</span><br><span class="line"><span class="keyword">if</span>(flag)&#123;</span><br><span class="line">i=a;</span><br><span class="line"><span class="keyword">break</span>;</span><br><span class="line">&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<ol>
+<li>对A来说,由于单线程的语义符合程序顺序规则,flag=true发生在a=10之后;</li>
+<li>对B来说,由于flag是volatile变量,flag=true之后才能取到i. 因此达到了通信的效果,B中能正确取到A中的a的10.</li>
+</ol>
+<h3 id="3-4-4-volatile内存语义的实现"><a href="#3-4-4-volatile内存语义的实现" class="headerlink" title="3.4.4 volatile内存语义的实现"></a>3.4.4 volatile内存语义的实现</h3><p>内存屏障:(JMM内存模型采用的是保守策略,保证在所有cpu上都能正确)</p>
+<ol>
+<li>volatile写前面插入StoreStore屏障;</li>
+<li>volatile写后面插入StoreLoad屏障;</li>
+<li>volatile读后面插入LoadLoad屏障;</li>
+<li>volatile读后面插入LoadStore屏障.</li>
+</ol>
+<p>volatile写指令序列:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">普通读写</span><br><span class="line">StoreStore屏障&#x2F;&#x2F; 先把前面的Store刷新到内存,再执行volatile写.(其实没必要,只是新版本赋予了volatile锁的内存语义)</span><br><span class="line">volatile写</span><br><span class="line">StoreLoad屏障 &#x2F;&#x2F; 先把volatie写的store刷新到内存,再执行读.(免得读到污染值)</span><br><span class="line">volatile读</span><br></pre></td></tr></table></figure>
+
+<p>volatile读指令序列:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">volatile读</span><br><span class="line">LoadLoad屏障 &#x2F;&#x2F; 禁止下面的读越过volatile</span><br><span class="line">LoadStore屏障&#x2F;&#x2F; 禁止下面的写越过volatile</span><br><span class="line">普通读写</span><br></pre></td></tr></table></figure>
+<p>这俩屏障x86里没有.因为x86只有写-读重排序,没必要有.<br>此外,个人理解这俩屏障也没啥意义,唯一能想到的用处还是让<code>voldatile</code>具有锁的功能. 毕竟是JSR-133之后才加的.</p>
+<h2 id="3-5-锁的内存语义"><a href="#3-5-锁的内存语义" class="headerlink" title="3.5 锁的内存语义"></a>3.5 锁的内存语义</h2><p><code>ReentrantLock</code>的实现依赖于:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">FariSync</span><br><span class="line">NonfaiSync</span><br><span class="line">Sync</span><br><span class="line">AQS(AbstrackQueuedSynchronizer)</span><br></pre></td></tr></table></figure>
+<p>其中AQS里头有个<code>volatile</code>变量:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">volatile</span> <span class="keyword">int</span> state;</span><br></pre></td></tr></table></figure>
+<p>锁的内存语义基本就靠这个<code>volatile</code>变量和CAS操作.</p>
+<p>1.加锁流程:(公平锁)</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">获取volatile变量state;</span><br><span class="line">CAS操作更改state变量的值.</span><br><span class="line">若更改成功则获取锁成功.</span><br></pre></td></tr></table></figure>
+<p>2.解锁流程:(公平锁)</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">一些操作...</span><br><span class="line">写state变量. </span><br><span class="line">其他线程立刻发现了state变化,可以竞争这个锁了.</span><br></pre></td></tr></table></figure>
+
+
+<p>CAS操作能保证(读-改-写)操作原子执行.<br>CAS操作的底层实现:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">LOCK总线;</span><br><span class="line">禁止该指令与前后读写指令重排;</span><br><span class="line">将写缓冲区数据刷新到内存.</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-5-4-concurrent包的实现"><a href="#3-5-4-concurrent包的实现" class="headerlink" title="3.5.4 concurrent包的实现"></a>3.5.4 concurrent包的实现</h3><p>实现层次如下:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">LOCK,同步器,阻塞队列,Executor,并发容器</span><br><span class="line">AQS,非阻塞数据结构,原子变量类</span><br><span class="line">volatile变量的读写,CAS</span><br></pre></td></tr></table></figure>
+
+<h2 id="3-6-final域的内存语义"><a href="#3-6-final域的内存语义" class="headerlink" title="3.6 final域的内存语义"></a>3.6 final域的内存语义</h2><h3 id="3-6-1-final域的重排序规则"><a href="#3-6-1-final域的重排序规则" class="headerlink" title="3.6.1 final域的重排序规则"></a>3.6.1 final域的重排序规则</h3><ol>
+<li>在构造函数内对一个final域的写入,与随和把这个对象的引用赋值给一个引用变量,这俩操作不能重排;</li>
+<li>初次读包含final域的对象,初次读这个final域,这俩操作不能重排.</li>
+</ol>
+<p>规则1的实现(构造函数中):</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">final域的写</span><br><span class="line">StoreStore屏障 &#x2F;&#x2F; 先把上述写(Store)的结果刷新到内存. 再写引用. </span><br><span class="line">构造函数return &#x2F;&#x2F; 把对象地址赋值给引用</span><br></pre></td></tr></table></figure>
+
+<p>示例代码:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">FinalObj obj=inputObj; <span class="comment">// 别的线程负责创建的对象</span></span><br><span class="line"><span class="keyword">int</span> a=obj.i;<span class="comment">// 如果i是final的,那一定能读到初始化以后的值; </span></span><br><span class="line"><span class="keyword">int</span> b=obj.j;<span class="comment">// 如果j不是final的,那可能读到还没初始化的值.</span></span><br></pre></td></tr></table></figure>
+
+<p>规则2的实现:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">LoadLoad屏障&#x2F;&#x2F; 保证先Load到引用. (明明有数据依赖)</span><br><span class="line">final域的读</span><br></pre></td></tr></table></figure>
+<p>大多数cpu不需要这个规则也能正确进行final读,但还是有少部分cpu会无视间接依赖,因此需要这个规则.(需要加入这个屏障)<br>示例代码:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">FinalObj obj=inputObj; <span class="comment">// 别的线程负责创建的对象</span></span><br><span class="line"><span class="keyword">int</span> a=obj.i;<span class="comment">// 如果i是final的,那会等obj读到对象引用后再去读i;</span></span><br><span class="line"><span class="keyword">int</span> b=obj.j;<span class="comment">// 如果j不是final的,那可能没等到读到对象obj,就直接取读j了,读取错误.</span></span><br></pre></td></tr></table></figure>
+
+
+<p>最后,由于x86处理器很多重排并不会做,所以其实final域的内存屏障都不需要加,会被省略.</p>
+<h3 id="3-8-4-类初始化中的约束"><a href="#3-8-4-类初始化中的约束" class="headerlink" title="3.8.4 类初始化中的约束"></a>3.8.4 类初始化中的约束</h3><p>类的初始化是啥:</p>
+<blockquote>
+<p>Class加载=&gt;连接=&gt;初始化=&gt;使用=&gt;卸载;<br>其中连接分为:<br>验证=&gt;准备=&gt;解析. </p>
+</blockquote>
+<p>具体来说:</p>
+<ul>
+<li>加载</li>
+</ul>
+<ol>
+<li>通过类全名获取二进制字节流;</li>
+<li>将字节流中的静态存储(常量)转换为方法区的运行时数据;</li>
+<li>JAVA堆中生成代表类的Class对象,指向方法区的数据.</li>
+</ol>
+<ul>
+<li><p>验证: 格式/元数据/访问验证;</p>
+</li>
+<li><p>准备: 类变量(非常量)分配到堆,赋予初值;</p>
+</li>
+<li><p>解析 </p>
+<blockquote>
+<p>4类符号引用的解析: 类/接口,字段,类方法,接口方法. 把这些引用解析到实际的目标对象.<br>这个和初始化过程可能混在一起.</p>
+</blockquote>
+</li>
+<li><p>初始化</p>
+<blockquote>
+<ol>
+<li>分配对象的内存空间</li>
+<li>初始化对象</li>
+<li>设置instance指向内存空间</li>
+</ol>
+</blockquote>
+</li>
+<li><p>初始化发生的时机:// <code>T</code>是一个类</p>
+<blockquote>
+<ol>
+<li>T的实例被创建;// 如<code>new</code></li>
+<li>T的静态方法被调用;// <code>static</code></li>
+<li>T的静态字段(非常量)被使用/赋值; // <code>static</code>成员被读写.<br>// 对于第3点,如果是类常量,加载阶段已经完成了.</li>
+</ol>
+</blockquote>
+</li>
+</ul>
+<p>还有一个时机:</p>
+<p>4.T是一个顶级类,而且一个断言语句嵌套在T内部被执行.// TODO<br>// 这个没懂.= = || </p>
+<p>小结:</p>
+<blockquote>
+<p>static常量: 加载期完成,存储在方法区,从堆区Class对象指过去;<br>static变量: 准备期分配到堆,初始化阶段赋值.<br>成员变量: 初始化阶段完成.</p>
+</blockquote>
+<p><strong>类初始化存在竞态条件</strong><br>多个线程可能同时对一个类进行初始化,因此需要锁.<br>JVM对于每一个类或接口都有唯一的初始化锁<code>LC</code>.(放在<code>Class</code>对象中)<br>初始化流程:</p>
+<ol>
+<li>获取<code>Class</code>对象中的<code>LC</code>锁;</li>
+<li>读取<code>Class</code>对象的state,发现是<code>noInitialization</code>,设置为<code>initializing</code>;// 表示从<code>未初始化</code>改成<code>正在初始化</code>,以便别的线程知道;</li>
+<li>释放<code>LC</code>锁.  // 这个时候别的线程可以获取到锁,然后知道有人正在初始化,于是等待.</li>
+<li>初始化类的static变量;</li>
+<li>分配实例对象内存空间,初始化对象,赋值地址给引用(解析);</li>
+<li>设置state=<code>initializated</code>. // 初始化结束. 唤醒等待的线程.</li>
+</ol>
+<p>基于上述过程的单例如下:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">A</span></span>&#123; </span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">B</span> </span>&#123;</span><br><span class="line">        <span class="keyword">public</span> <span class="keyword">static</span> C c=<span class="function">New <span class="title">C</span><span class="params">()</span></span>;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> C <span class="title">getC</span><span class="params">()</span></span>&#123;</span><br><span class="line">        <span class="keyword">return</span> B.c; <span class="comment">// 导致B类初始化.</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// 使用时:</span></span><br><span class="line">C c=A.getC(); <span class="comment">// 导致A被初始化.</span></span><br></pre></td></tr></table></figure>
+<p>相比于双检,利用了<code>Class</code>对象的初始化锁<code>LC</code>. 达到线程安全的目的.<br>上述初始化流程的第5,6步顺序不会重排,因此可以不用<code>volatile</code>来保证引用的解析晚于对象的构建;</p>
+<p>之所以使用内部类B: 想达到懒汉的目的.<br>如果不用内部类, 可以这么写:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">A</span></span>&#123; </span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">static</span> C c=<span class="keyword">new</span> C();</span><br><span class="line">    <span class="function"><span class="keyword">private</span> <span class="title">A</span><span class="params">()</span></span>&#123;&#125;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> C <span class="title">getC</span><span class="params">()</span></span>&#123;</span><br><span class="line">        <span class="keyword">return</span> c;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// 使用:</span></span><br><span class="line">C c=A.getC(); <span class="comment">// 导致A被初始化.</span></span><br></pre></td></tr></table></figure>
+<p>区别在于导致A被初始化的途径多,而上一个方法中导致B被初始化的途径少(只有getC一个途径,毕竟B是private).<br>对于第一个方法:</p>
+<blockquote>
+<p>A被初始化=&gt;没关系;<br>调用getC()方法=&gt;B被初始化=&gt; c对象构建. </p>
+</blockquote>
+<p>对于第二个方法:</p>
+<blockquote>
+<p>A被初始化=&gt; c对象构建.</p>
+</blockquote>
+<p>A被初始化的途径很多,(A的静态方法被访问,A的静态变量被访问,A被创建实例,A中有断言执行),如果要让第二个方法达到足够懒,需要额外做的事情:</p>
+<ol>
+<li>只有getC()一个静态方法;</li>
+<li>只有C一个静态变量;</li>
+<li>不让创建对象(private构造函数)</li>
+<li>没有断言执行嵌套在内部.</li>
+</ol>
+<p>不过两种方法都不能抵挡序列化.(得用枚举才行)</p>
+<h2 id="3-9-JAVA内存模型综述"><a href="#3-9-JAVA内存模型综述" class="headerlink" title="3.9 JAVA内存模型综述"></a>3.9 JAVA内存模型综述</h2><h3 id="3-9-1-CPU内存模型"><a href="#3-9-1-CPU内存模型" class="headerlink" title="3.9.1 CPU内存模型"></a>3.9.1 CPU内存模型</h3><p>根据重排的剧烈程度,或者说约束的强弱,可以把CPU划分为几种类型:<br>(性能由低到高,约束逐渐减少)</p>
+<ol>
+<li>TSO模型(Total Store Order). 写-读顺序会进行重排;// 因为要使用写缓冲区</li>
+<li>PSO模型(Partial Store Order). 写-读,写-写都会进行重排. </li>
+<li>RMO模型(Relaxed Memory Order). 写-读,写-写,读-读,读-写都会进行重排.<br>(PowerPC内存模型也是)</li>
+</ol>
+<p>上述重排都在遵守数据依赖的前提下,不然连单线程程序的正确性都无法保证了.<br>所有CPU都起码是TSO模型,因为都需要写缓冲区. </p>
+<h3 id="3-9-2-各种内存模型之间的关系"><a href="#3-9-2-各种内存模型之间的关系" class="headerlink" title="3.9.2 各种内存模型之间的关系"></a>3.9.2 各种内存模型之间的关系</h3><p>JAVA内存模型: JMM. 是语言级内存模型, 把底层的CPU的内存模型进行封装, 通过加入内存屏障, 让底层对于程序员来说变成一致的JMM. (平台无关) </p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/01/21/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF%E7%AC%94%E8%AE%B0-%E7%AC%AC%E4%B8%89%E7%AB%A0/" data-id="ck96cxpnr009zmaam3ftybqax" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%B9%B6%E5%8F%91/" rel="tag">并发</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-01/hive抽样" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/01/20/2018-01/hive%E6%8A%BD%E6%A0%B7/" class="article-date">
@@ -1136,79 +1390,6 @@
 
 
   
-    <article id="post-2017-12/hive调优之数据倾斜" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2017/12/26/2017-12/hive%E8%B0%83%E4%BC%98%E4%B9%8B%E6%95%B0%E6%8D%AE%E5%80%BE%E6%96%9C/" class="article-date">
-  <time datetime="2017-12-26T11:35:00.000Z" itemprop="datePublished">2017-12-26</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/hadoop/">hadoop</a>►<a class="article-category-link" href="/categories/hadoop/hive/">hive</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2017/12/26/2017-12/hive%E8%B0%83%E4%BC%98%E4%B9%8B%E6%95%B0%E6%8D%AE%E5%80%BE%E6%96%9C/">hive调优之数据倾斜</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>上一篇中记录了hive调优的一些常规手段. 但对于某些数据集, 常规手段是无能为力的, 例如数据倾斜时.</p>
-<p>对于hive而言,数据倾斜就是某个reducer跑得特别慢,这一点可以从日志中reducer开在99%或某个值很久看出,也可以从web ui中查看:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">运行后:</span><br><span class="line">http:&#x2F;&#x2F;xxx:19888&#x2F;jobhistory&#x2F;tasks&#x2F;job_1472710912354_3070682&#x2F;r</span><br><span class="line">运行前:</span><br><span class="line">http:&#x2F;&#x2F;xxx:8088&#x2F;proxy&#x2F;application_1472710912354_3070684&#x2F;mapreduce&#x2F;tasks&#x2F;job_1472710912354_3070684&#x2F;r</span><br></pre></td></tr></table></figure>
-<p>如果具体看日志的话,会发现大部分时间在进行外排.<br>对于这种任务最重要的是消除外排,有如下几种优化手段:</p>
-<h2 id="1-加内存"><a href="#1-加内存" class="headerlink" title="1. 加内存"></a>1. 加内存</h2><p>最简单粗暴就是给reduce加内存了. 让它别外排:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">set</span> mapreduce.reduce.memory.mb=<span class="number">10240</span>;</span><br></pre></td></tr></table></figure>
-<p>类似的,如果mapper内存不够,可以减小每个mapper处理的数据量,增大mapper的数量:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">set</span> mapreduce.input.fileinputformat.split.maxsize=<span class="number">64000000</span>;</span><br></pre></td></tr></table></figure>
-
-<h2 id="2-倾斜key单独处理"><a href="#2-倾斜key单独处理" class="headerlink" title="2. 倾斜key单独处理"></a>2. 倾斜key单独处理</h2><p>第二种手段也比较简单, 就是把出现倾斜的key找出来,假如很少的话,可以把它们摘出来,单独处理(或遗弃). 开启hive自动消除数据倾斜:(效果有效)</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">set</span> hive.optimize.skewjoin = <span class="literal">true</span>;</span><br><span class="line"><span class="keyword">set</span> hive.skewjoin.key=<span class="number">1000</span>;</span><br><span class="line"><span class="keyword">set</span> hive.groupby.skewindata=<span class="literal">true</span>;</span><br><span class="line"><span class="keyword">set</span> hive.groupby.mapaggr.checkinterval=<span class="number">100</span>;</span><br></pre></td></tr></table></figure>
-
-<h2 id="3-局部聚合-1-相同value聚合"><a href="#3-局部聚合-1-相同value聚合" class="headerlink" title="3. 局部聚合(1): 相同value聚合"></a>3. 局部聚合(1): 相同value聚合</h2><p>(没有什么优化是增加一个阶段不能解决的.如果有,就再加一个阶段)<br>为了减少最后汇聚到reducer上的数据量,可以在之前增加一个阶段,对某个key的数据进行局部聚合. </p>
-<p>以某次需求为例,需要求各个省市区维度下的丢包率\延迟的50,90,99分位数.数据量每天200G. 分位数计算极其耗时, 尤其是计算周统计数据时, 数据量达到TB级. </p>
-<p>在使用了前一篇优化笔记手段以及上述手段后,依然耗时4小时.原来查询最耗时的部分如下:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span>  es</span><br><span class="line">       ,province</span><br><span class="line">       ,city</span><br><span class="line">       ,ipOprator</span><br><span class="line">       ,percentile(xxx,<span class="number">0.5</span>,<span class="number">0.9</span>,<span class="number">0.99</span>)</span><br><span class="line"><span class="keyword">FROM</span> ttt</span><br><span class="line"><span class="keyword">GROUP</span> <span class="keyword">BY</span> es,province,ipOprator <span class="keyword">with</span> <span class="keyword">cube</span></span><br></pre></td></tr></table></figure>
-<p>查看hive的percentile源码实现,其对于同一个key的处理逻辑大致这么几步:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">(依次输入每个value)</span><br><span class="line">1. O(n)</span><br><span class="line">把所有value放进一个Map&lt;value,LongWriteable&gt;里,相同的value则增加map中的计数值;</span><br><span class="line">2. O(nlogn)</span><br><span class="line">在reduce中把map中的所有entry放入一个List中,然后对List根据value值进行全排序(&#96;Collections.sort(entriesList, new MyComparator());&#96;);</span><br><span class="line">3. O(n)</span><br><span class="line">从头开始扫一遍上一步的List, 根据计数器的值总和,分位数,定位到对应的分位数,返回.</span><br></pre></td></tr></table></figure>
-<p>将其重写为可以进行局部聚合, 从而略去第一步:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span>  es</span><br><span class="line">       ,province</span><br><span class="line">       ,city</span><br><span class="line">       ,ipOprator</span><br><span class="line">      ,percent_new(c1,<span class="keyword">num</span>,<span class="number">0.5</span>,<span class="number">0.9</span>,<span class="number">0.99</span>)</span><br><span class="line"><span class="keyword">FROM</span> (<span class="keyword">select</span> es,province,ipOprator,c1,<span class="keyword">count</span>(<span class="number">1</span>) <span class="keyword">as</span> <span class="keyword">num</span></span><br><span class="line">    <span class="keyword">FROM</span> xxx</span><br><span class="line">    <span class="keyword">GROUP</span> <span class="keyword">BY</span> es,province,ipOprator,c1</span><br><span class="line">) <span class="keyword">as</span> t </span><br><span class="line"><span class="keyword">GROUP</span> <span class="keyword">BY</span> es,province,ipOprator <span class="keyword">with</span> <span class="keyword">cube</span></span><br></pre></td></tr></table></figure>
-<p>优化后,时间缩短到30分钟.</p>
-<ul>
-<li>TODO:<br>优化第二步中的全排序. </li>
-</ul>
-<h2 id="4-局部聚合2-相同key聚合"><a href="#4-局部聚合2-相同key聚合" class="headerlink" title="4. 局部聚合2: 相同key聚合"></a>4. 局部聚合2: 相同key聚合</h2><p>由于上一案例中的聚合函数是分位数计算,聚合的粒度只能达到相同value聚合,对于其他聚合函数,如最大值,最小值等,如果语义上能对相同key先聚合,问题的规模就可以进一步缩小. 方法是先把相同key的数据分拆成不同的key,加上前缀或后缀 如:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">key -&gt; key_1</span><br><span class="line">key -&gt; key_2</span><br><span class="line">...</span><br><span class="line">key -&gt; key_10</span><br></pre></td></tr></table></figure>
-<p>分拆的数量等于并行度,取决于原有的数据集, 然后先进行一阶段聚合,最后去掉前缀后缀,再进行一次聚合得到最后的结果.<br>这种方法的关键就是要求同一个key的聚合计算可以分拆.</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2017/12/26/2017-12/hive%E8%B0%83%E4%BC%98%E4%B9%8B%E6%95%B0%E6%8D%AE%E5%80%BE%E6%96%9C/" data-id="ck96cxpnk0090maam4d5qhboj" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/hive/" rel="tag">hive</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1235,6 +1416,10 @@
       <ul>
         
           <li>
+            <a href="/2022/09/25/2022-09/%E8%B0%83%E4%BC%98-%E8%A7%A3%E5%86%B3%E7%BA%BF%E7%A8%8B%E6%B1%A0%E9%80%A0%E6%88%90%E7%9A%84%E8%BF%9B%E7%A8%8B%E5%8D%A1%E9%A1%BF%E3%80%81cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-解决线程池造成的进程卡顿、cpu毛刺问题</a>
+          </li>
+        
+          <li>
             <a href="/2022/08/30/2022-08/%E8%B0%83%E4%BC%98-cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-cpu毛刺问题</a>
           </li>
         
@@ -1248,10 +1433,6 @@
         
           <li>
             <a href="/2022/03/16/2022-03/cms%E7%9A%84gc%E8%A7%A6%E5%8F%91%E6%9D%A1%E4%BB%B6/">cms的gc触发条件</a>
-          </li>
-        
-          <li>
-            <a href="/2022/03/14/2022-03/%E4%B8%AD%E6%96%AD%E6%A2%B3%E7%90%86/">java方法是否可中断梳理</a>
           </li>
         
       </ul>
