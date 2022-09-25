@@ -72,6 +72,81 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-12/如何阅读heap-dump文件" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/12/13/2018-12/%E5%A6%82%E4%BD%95%E9%98%85%E8%AF%BBheap-dump%E6%96%87%E4%BB%B6/" class="article-date">
+  <time datetime="2018-12-13T13:44:55.000Z" itemprop="datePublished">2018-12-13</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/jvm/">jvm</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/12/13/2018-12/%E5%A6%82%E4%BD%95%E9%98%85%E8%AF%BBheap-dump%E6%96%87%E4%BB%B6/">如何阅读heap dump文件</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>参考资料: <a href="http://www.importnew.com/24393.html" target="_blank" rel="noopener">http://www.importnew.com/24393.html</a></p>
+<p>首先可以尝试用google-perftools查看统计结果,然后用MAT查看heap dump的详细内容。</p>
+<h1 id="谷歌的性能分析工具google-perftools"><a href="#谷歌的性能分析工具google-perftools" class="headerlink" title="谷歌的性能分析工具google-perftools"></a>谷歌的性能分析工具google-perftools</h1><p><code>/usr/local/gperftools/bin/pprof --text $JAVA_HOME/bin/java /data/gperf/ worker.0001.heap</code><br>查看统计结果。</p>
+<h1 id="下载MAT"><a href="#下载MAT" class="headerlink" title="下载MAT"></a>下载MAT</h1><p><a href="https://eclipse.org/mat/downloads.php" target="_blank" rel="noopener">https://eclipse.org/mat/downloads.php</a><br>注意打开的时候要选打开heap dump，而不是open file，不然会打开失败。</p>
+<h2 id="术语"><a href="#术语" class="headerlink" title="术语"></a>术语</h2><h3 id="Retained-Heap"><a href="#Retained-Heap" class="headerlink" title="Retained Heap"></a>Retained Heap</h3><p><code>Retained: 持有,阻拦</code><br>对象以及它所持有的其它引用（包括直接和间接）所占的总内存。</p>
+<p><code>tips</code></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">如果A,B都持有C对象引用，则C的内存不计入A或B。</span><br></pre></td></tr></table></figure>
+
+<h3 id="Shallow-heap"><a href="#Shallow-heap" class="headerlink" title="Shallow heap"></a>Shallow heap</h3><p><code>Shallow: 浅</code><br>对象本身占用内存的大小，不包含其引用的对象。</p>
+<ul>
+<li>常规对象（非数组）的shallow size有其成员变量的数量和类型决定。</li>
+<li>数组的shallow size有数组元素的类型（对象类型、基本类型）和数组长度决定<h4 id="Shallow-size最大一般是byte-char-int"><a href="#Shallow-size最大一般是byte-char-int" class="headerlink" title="Shallow size最大一般是byte[], char[], int[]"></a><code>Shallow size</code>最大一般是<code>byte[], char[], int[]</code></h4></li>
+</ul>
+<h2 id="Action面板的功能"><a href="#Action面板的功能" class="headerlink" title="Action面板的功能"></a>Action面板的功能</h2><h3 id="Histogram"><a href="#Histogram" class="headerlink" title="Histogram"></a>Histogram</h3><p><code>默认Shallow size排序</code><br>列出每个class的实例数量、大小(内存中的对象统计),可以查看某些对象的具体值:</p>
+<img src="/images/2018-12/stringvalue.png" class="" width="800" height="1200" title="stringvalue">
+
+<p>进一步操作: <code>group by package</code>:</p>
+<img src="/images/2018-12/hist_groupby.png" class="" width="800" height="1200" title="hist_groupby">
+
+<h3 id="Dominator-Tree"><a href="#Dominator-Tree" class="headerlink" title="Dominator Tree"></a>Dominator Tree</h3><p><code>默认Retained Heap排序</code><br>列出最大的对象以及其依赖存活的Object。<br><code>TIPS</code>: 这里有黄点的是GC Root。</p>
+<h3 id="Top-Consumers"><a href="#Top-Consumers" class="headerlink" title="Top Consumers"></a>Top Consumers</h3><img src="/images/2018-12/top_consumer.png" class="" width="800" height="1200" title="top_consumer">
+<p>从3个角度列出最占用内存的对象，展现形式有表格和图。<br>三个角度: class,class loader,包。</p>
+<h3 id="Duplicate-Class"><a href="#Duplicate-Class" class="headerlink" title="Duplicate Class"></a>Duplicate Class</h3><p>列出由多个class loader加载的class。</p>
+<h2 id="图例"><a href="#图例" class="headerlink" title="图例"></a>图例</h2><p>带有黄点的对象: GCRoot（如果是<code>System class</code>可以不用管）</p>
+<h2 id="常用操作"><a href="#常用操作" class="headerlink" title="常用操作"></a>常用操作</h2><p><code>Path to GC Roots</code> -&gt; <code>exclude weak references</code>: 看看为啥没有回收。</p>
+<p><code>List Object</code>-&gt;<code>With incoming reference</code>: 看看都有谁用了这个对象;</p>
+<img src="/images/2018-12/with_in.png" class="" width="800" height="1200" title="with_in">
+
+<p><code>List Object</code>-&gt;<code>With outcoming reference</code>: 看看里面都有啥。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/12/13/2018-12/%E5%A6%82%E4%BD%95%E9%98%85%E8%AF%BBheap-dump%E6%96%87%E4%BB%B6/" data-id="ck96cxpow00exmaam9p5274gi" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/jvm/" rel="tag">jvm</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-12/快速查看大量gc日志的gui工具" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/12/11/2018-12/%E5%BF%AB%E9%80%9F%E6%9F%A5%E7%9C%8B%E5%A4%A7%E9%87%8Fgc%E6%97%A5%E5%BF%97%E7%9A%84gui%E5%B7%A5%E5%85%B7/" class="article-date">
@@ -980,92 +1055,6 @@
 
 
   
-    <article id="post-2018-10/flask多线程下，连接泄露的bug" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/10/23/2018-10/flask%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%8B%EF%BC%8C%E8%BF%9E%E6%8E%A5%E6%B3%84%E9%9C%B2%E7%9A%84bug/" class="article-date">
-  <time datetime="2018-10-23T08:35:52.000Z" itemprop="datePublished">2018-10-23</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/mysql/">mysql</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/10/23/2018-10/flask%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%8B%EF%BC%8C%E8%BF%9E%E6%8E%A5%E6%B3%84%E9%9C%B2%E7%9A%84bug/">flask多线程下，连接泄露的bug</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="架构图"><a href="#架构图" class="headerlink" title="架构图"></a>架构图</h1><img src="/images/2018-10/flask.png" class="" width="400" height="600" title="flask">
-
-<p>如图所示，底层使用mysql，web服务使用<code>flask-SqlAlchemy</code>的连接池（复用连接，减少创建销毁开销），逻辑层代码使用线程池（异步IO操作，如果要异步cpu操作，可以很方便改成进程池）。</p>
-<h1 id="基础知识"><a href="#基础知识" class="headerlink" title="基础知识"></a>基础知识</h1><ol>
-<li>使用<code>db.engine.execute(sql)</code>: 从连接池获取一个连接,执行完sql后自动<code>commit</code>;(<code>commit</code>操作的回调是: 归还连接到池里); </li>
-<li>使用<code>session</code>的<code>orm</code>(<code>xxxModel.query等</code>): 默认配置及推荐配置是<code>autocommit=false</code>，执行完增删查改后，处于事务未提交的状态，也就是没有归还连接。如果要归还连接，可以使用语句:<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">db.session.commit()</span><br><span class="line">db.session.rollback()</span><br><span class="line">db.session.close()</span><br><span class="line">db.session.remove(): 底层会调用db.session.close()</span><br></pre></td></tr></table></figure>
-
-</li>
-</ol>
-<p>小结:</p>
-<blockquote>
-<p>db.engine.execute(sql) =&gt; 自动commit =&gt; 自动归还<br>session(orm) =&gt; 手动commit =&gt; 手动归还<br>因此db.engine.execute(sql)是绝对安全的;<br>orm是有条件的。接着往下看orm的安全条件。</p>
-</blockquote>
-<h2 id="线程与session"><a href="#线程与session" class="headerlink" title="线程与session"></a>线程与session</h2><p>使用flask的SqlAlchemy插件<code>flask-SqlAlchemy</code>时，每个线程可以直接用<code>db.session</code>获得session，即使不显式获得，使用orm的model时，其实也隐式得获得了<code>session</code>。</p>
-<h3 id="线程与session的关系"><a href="#线程与session的关系" class="headerlink" title="线程与session的关系:"></a>线程与session的关系:</h3><p>每个线程有自己的<code>threadlocal</code>的<code>session</code>对象，并且随着线程销毁，会自动释放<code>session</code>,也就是会隐式调用<code>session.remove</code>，也就是会隐式释放<code>session</code>的连接。</p>
-<p>多线程两种使用:</p>
-<ol>
-<li><code>t1=threading.Thread(...)</code>;</li>
-<li>线程池: <code>future= pool.submit(...)</code>.<br>方法1的线程使用完以后自动销毁=&gt;session自动销毁=&gt;连接自动释放;<br>方法2的线程使用完以后归还线程池=&gt;session手动销毁=&gt;连接释放。</li>
-</ol>
-<p>小结:<br>不使用线程池=&gt;连接自动释放;<br>使用线程池=&gt;连接手动释放.<br>手动释放的方法:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">db.session.remove()</span><br></pre></td></tr></table></figure>
-
-<h1 id="空闲连接超时与连接释放bug"><a href="#空闲连接超时与连接释放bug" class="headerlink" title="空闲连接超时与连接释放bug"></a>空闲连接超时与连接释放bug</h1><p>前面说到使用线程池时，连接没有自动释放，一直维护在线程的threadlocal存储中(tls)。那么这样似乎也没有什么关系，只要线程池大小&lt;连接池大小,这样连接池有空闲连接，每个线程也有自己的连接可以用，一切似乎也相安无事。</p>
-<p>然而，这里有一个之前没有提到的机制：空闲连接超时回收。</p>
-<h3 id="空闲连接超时回收"><a href="#空闲连接超时回收" class="headerlink" title="空闲连接超时回收"></a>空闲连接超时回收</h3><h4 id="mysql服务端"><a href="#mysql服务端" class="headerlink" title="mysql服务端:"></a>mysql服务端:</h4><p>定期检查现存连接的空闲时间，把超出<code>wait_timeout</code>的连接删除，此时客户端保存的长连接引用就失效了; 这个时间的设定:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">global</span> <span class="keyword">variables</span> <span class="keyword">like</span> <span class="string">'wait_timeout'</span>;</span><br><span class="line"><span class="keyword">set</span> <span class="keyword">global</span> wait_timeout=<span class="number">10</span>*<span class="number">60</span>; <span class="comment">-- seconds</span></span><br></pre></td></tr></table></figure>
-
-<h4 id="web服务"><a href="#web服务" class="headerlink" title="web服务:"></a>web服务:</h4><p>flask会定期检查连接池里的连接，把空闲连接删除，重新向mysql服务端申请新的连接，这样就不会访问到失效的连接引用了。其中定期的时间是: <code>app.config[&#39;SQLALCHEMY_POOL_RECYCLE&#39;] =xxx</code>(秒，应当设置为小于<code>wait_timeout</code>)。这就是为什么最好连接用完及时归还，否则可能就没法被flask刷新成新连接。</p>
-<h4 id="空闲连接超时与连接释放bug-1"><a href="#空闲连接超时与连接释放bug-1" class="headerlink" title="空闲连接超时与连接释放bug"></a>空闲连接超时与连接释放bug</h4><p>bug发生的流程</p>
-<ol>
-<li>mysql服务端清除了空闲时间过长的连接;</li>
-<li>线程池中线程一直不销毁，因此持有了活了很久的session;</li>
-<li>活了很久的session持有了空闲很久的连接, 这个连接其实已经被服务端销毁了，因此已经不可用了，但是由于其一直没有归还到连接池中，因此一直没有得到更新。</li>
-<li>此时web服务收到数据请求，使用该线程中的该session中的连接，就会抛异常了，因为连接已经不可用了。</li>
-</ol>
-<p>一般来说，空闲时间很长以后，线程池里所有线程的所有session的所有连接都会失效，因此就会完全无法通过orm访问数据库了。</p>
-<p>相关异常信息:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">MySQL server has gone away</span><br><span class="line">Can&#39;t reconnect until invalid transaction is rolled back</span><br></pre></td></tr></table></figure>
-<p>这里之所以说<code>invalid transaction is rolled back</code>，是因为老session收到数据请求后，准备要用连接了。<br>而连接上的事务没有自动提交，也没有rollback，因此不能直接用。<br>因此尝试把连接上，上一次请求的事务提交，但由于连接已经失效，所以失败了。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/10/23/2018-10/flask%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%8B%EF%BC%8C%E8%BF%9E%E6%8E%A5%E6%B3%84%E9%9C%B2%E7%9A%84bug/" data-id="ck96cxpop00e4maamerbl1rgc" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/flask/" rel="tag">flask</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/python/" rel="tag">python</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1092,6 +1081,10 @@
       <ul>
         
           <li>
+            <a href="/2022/09/25/2022-09/nc%E5%91%BD%E4%BB%A4%E7%AC%94%E8%AE%B0/">nc命令笔记</a>
+          </li>
+        
+          <li>
             <a href="/2022/09/25/2022-09/%E8%B0%83%E4%BC%98-%E8%A7%A3%E5%86%B3%E7%BA%BF%E7%A8%8B%E6%B1%A0%E9%80%A0%E6%88%90%E7%9A%84%E8%BF%9B%E7%A8%8B%E5%8D%A1%E9%A1%BF%E3%80%81cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-解决线程池造成的进程卡顿、cpu毛刺问题</a>
           </li>
         
@@ -1105,10 +1098,6 @@
         
           <li>
             <a href="/2022/03/25/2022-03/G1%E8%B0%83%E4%BC%98-%E5%A4%8D%E6%9D%82%E4%B8%9A%E5%8A%A1%E6%B2%BB%E7%90%86%E5%B0%8F%E8%AE%B0/">G1调优-复杂业务治理小记</a>
-          </li>
-        
-          <li>
-            <a href="/2022/03/16/2022-03/cms%E7%9A%84gc%E8%A7%A6%E5%8F%91%E6%9D%A1%E4%BB%B6/">cms的gc触发条件</a>
           </li>
         
       </ul>

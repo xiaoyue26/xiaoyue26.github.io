@@ -72,6 +72,60 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-拷贝工厂" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2017/03/03/%E6%8B%B7%E8%B4%9D%E5%B7%A5%E5%8E%82/" class="article-date">
+  <time datetime="2017-03-03T11:51:39.000Z" itemprop="datePublished">2017-03-03</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/">设计模式</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2017/03/03/%E6%8B%B7%E8%B4%9D%E5%B7%A5%E5%8E%82/">拷贝工厂</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>尽量不使用继承，使用聚合。</p>
+<blockquote>
+<p>聚合:雁群与雁<br>组合:雁与翅膀</p>
+</blockquote>
+<p>除了builder模式，还有一个有用的技巧：<code>拷贝工厂</code>。</p>
+<p><code>cloneable</code>接口和<code>clone</code>方法依赖于整个对象继承树的健壮性，由于设计理念是链式调用父类的<code>clone</code>方法，维护难度过高，出错概率太大。</p>
+<p>可行的方案之一是使用拷贝构造函数。</p>
+<p>更推荐的方案是使用<code>拷贝工厂</code>，例如下文的:<br><code>public static ClassA newInstance(ClassA obj);</code></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> test1;</span><br><span class="line"><span class="keyword">import</span> <span class="keyword">static</span> java.lang.System.out;</span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">ClassA</span> </span>&#123;</span><br><span class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">		ClassA a1=<span class="keyword">new</span> ClassA(<span class="string">"a1"</span>,<span class="number">1</span>);</span><br><span class="line">		ClassA a2=ClassA.newInstance(a1);</span><br><span class="line">		a1.AInt=<span class="number">2</span>;</span><br><span class="line">		a1.AString=<span class="string">"changed"</span>;</span><br><span class="line">		a1.array[<span class="number">0</span>]=<span class="number">100</span>;</span><br><span class="line">		out.println(a1.AString);</span><br><span class="line">		out.println(a2.AString);</span><br><span class="line">		out.println(a1.AInt);</span><br><span class="line">		out.println(a2.AInt);</span><br><span class="line">		out.println(a1.array[<span class="number">0</span>]);</span><br><span class="line">		out.println(a2.array[<span class="number">0</span>]);</span><br><span class="line">	&#125;</span><br><span class="line">	String AString;</span><br><span class="line">	<span class="keyword">int</span> AInt;</span><br><span class="line">	<span class="keyword">int</span> array[];</span><br><span class="line">	<span class="function"><span class="keyword">public</span> <span class="title">ClassA</span><span class="params">(String aString,<span class="keyword">int</span> aInt)</span> </span>&#123;</span><br><span class="line">		<span class="keyword">this</span>.AString=aString;</span><br><span class="line">		<span class="keyword">this</span>.AInt=aInt;</span><br><span class="line">		array=<span class="keyword">new</span> <span class="keyword">int</span>[<span class="number">1</span>];</span><br><span class="line">		array[<span class="number">0</span>]=<span class="number">1</span>;</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="function"><span class="keyword">private</span> <span class="title">ClassA</span><span class="params">()</span> </span>&#123;&#125;</span><br><span class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">static</span> ClassA <span class="title">newInstance</span><span class="params">(ClassA obj)</span> </span>&#123;</span><br><span class="line">		ClassA classA = <span class="keyword">new</span> ClassA();</span><br><span class="line">		classA.AInt = obj.AInt;</span><br><span class="line">		classA.AString = obj.AString;<span class="comment">// 并没有任何问题 </span></span><br><span class="line">		classA.array = obj.array.clone();<span class="comment">// 基本对象</span></span><br><span class="line">		<span class="comment">//other deepcopy here</span></span><br><span class="line">		<span class="keyword">return</span> classA;</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2017/03/03/%E6%8B%B7%E8%B4%9D%E5%B7%A5%E5%8E%82/" data-id="ck96cxpmc006fmaamdp9c9ra8" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/" rel="tag">设计模式</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-log4j2配置学习笔记" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2017/03/02/log4j2%E9%85%8D%E7%BD%AE%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/" class="article-date">
@@ -1203,75 +1257,6 @@
 
 
   
-    <article id="post-hive-udf" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2017/01/15/hive-udf/" class="article-date">
-  <time datetime="2017-01-15T11:29:01.000Z" itemprop="datePublished">2017-01-15</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/hadoop/">hadoop</a>►<a class="article-category-link" href="/categories/hadoop/hive/">hive</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2017/01/15/hive-udf/">hive udf</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>中位数算法:<br><a href="https://segmentfault.com/a/1190000008322873" target="_blank" rel="noopener">https://segmentfault.com/a/1190000008322873</a><br><a href="http://www.voidcn.com/article/p-yzrnuwwi-bdv.html" target="_blank" rel="noopener">http://www.voidcn.com/article/p-yzrnuwwi-bdv.html</a></p>
-<h1 id="hive类型和java类型"><a href="#hive类型和java类型" class="headerlink" title="hive类型和java类型"></a>hive类型和java类型</h1><table>
-<tr><td>Hive column type</td>    <td>UDF types</td></tr>
-<tr><td>string    </td>    
-<td>java.lang.String, org.apache.hadoop.io.Text</td></tr>
-<tr><td>int    </td>    
-<td>int, java.lang.Integer, org.apache.hadoop.io.IntWritable</td></tr>
-<tr><td>boolean    </td>    
-<td>bool, java.lang.Boolean, org.apache.hadoop.io.BooleanWritable</td></tr>
-<tr><td>array<type>    </td>    <td>java.util.List<Java type></td></tr>
-<tr><td>map<ktype, vtype>    </td>    
-<td>java.util.Map<Java type for K, Java type for V></td></tr>
-<tr><td>struct    </td>    <td>Don't use Simple UDF, use GenericUDF</td></tr>
-</table>
-
-
-<h1 id="UDAF"><a href="#UDAF" class="headerlink" title="UDAF"></a>UDAF</h1><p><a href="http://www.cnblogs.com/ggjucheng/archive/2013/02/01/2888051.html" target="_blank" rel="noopener">http://www.cnblogs.com/ggjucheng/archive/2013/02/01/2888051.html</a><br><code>GenericUDAFEvaluator</code>的几种<code>MODE</code>定义如下:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">public static enum Mode &#123;</span><br><span class="line">    &#x2F;**</span><br><span class="line">     * PARTIAL1: 这个是mapreduce的map阶段:从原始数据到部分数据聚合</span><br><span class="line">     * 将会调用iterate()和terminatePartial()</span><br><span class="line">     *&#x2F;</span><br><span class="line">    PARTIAL1,</span><br><span class="line">        &#x2F;**</span><br><span class="line">     * PARTIAL2: 这个是mapreduce的map端的Combiner阶段，负责在map端合并map的数据::从部分数据聚合到部分数据聚合:</span><br><span class="line">     * 将会调用merge() 和 terminatePartial() </span><br><span class="line">     *&#x2F;</span><br><span class="line">    PARTIAL2,</span><br><span class="line">        &#x2F;**</span><br><span class="line">     * FINAL: mapreduce的reduce阶段:从部分数据的聚合到完全聚合 </span><br><span class="line">     * 将会调用merge()和terminate()</span><br><span class="line">     *&#x2F;</span><br><span class="line">    FINAL,</span><br><span class="line">        &#x2F;**</span><br><span class="line">     * COMPLETE: 如果出现了这个阶段，表示mapreduce只有map，没有reduce，所以map端就直接出结果了:从原始数据直接到完全聚合</span><br><span class="line">      * 将会调用 iterate()和terminate()</span><br><span class="line">     *&#x2F;</span><br><span class="line">    COMPLETE</span><br><span class="line">  &#125;;</span><br></pre></td></tr></table></figure>
-
-<p>特别提醒：<br>Merge函数的输入参数是(State other),因为other对象会被复用,因此other里的成员的使用不能是浅拷贝,(比如直接塞到当前state里),可以用深拷贝.(对于List,Map等容器)</p>
-<p>系统内置的UDAF函数可以从:<code>FunctionRegistry</code>类中查看.<br>流程控制更为精细的UDAF,AVG:<br><code>org.apache.hadoop.hive.ql.udf.generic.GenericUDAFAverage</code></p>
-<p>hive调用java方法:<br>select java_method(“java.lang.Math”,”max”,1,2);</p>
-<h1 id="UDF数据类型相关"><a href="#UDF数据类型相关" class="headerlink" title="UDF数据类型相关"></a>UDF数据类型相关</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">select array(1,2,3) -- &#x3D;&gt; [1,2,3]</span><br><span class="line">select array(1,&#39;2&#39;,3) -- &#x3D;&gt; [&#39;1&#39;,&#39;2&#39;,&#39;3&#39;] 只要有一个string,就全是string</span><br><span class="line">select array(1,NULL,3) -- &#x3D;&gt; [1,NULL,3] NULL则不影响类型转换.</span><br></pre></td></tr></table></figure>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2017/01/15/hive-udf/" data-id="ck96cxpl50023maamai3w6mig" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/hive/" rel="tag">hive</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1298,6 +1283,10 @@
       <ul>
         
           <li>
+            <a href="/2022/09/25/2022-09/nc%E5%91%BD%E4%BB%A4%E7%AC%94%E8%AE%B0/">nc命令笔记</a>
+          </li>
+        
+          <li>
             <a href="/2022/09/25/2022-09/%E8%B0%83%E4%BC%98-%E8%A7%A3%E5%86%B3%E7%BA%BF%E7%A8%8B%E6%B1%A0%E9%80%A0%E6%88%90%E7%9A%84%E8%BF%9B%E7%A8%8B%E5%8D%A1%E9%A1%BF%E3%80%81cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-解决线程池造成的进程卡顿、cpu毛刺问题</a>
           </li>
         
@@ -1311,10 +1300,6 @@
         
           <li>
             <a href="/2022/03/25/2022-03/G1%E8%B0%83%E4%BC%98-%E5%A4%8D%E6%9D%82%E4%B8%9A%E5%8A%A1%E6%B2%BB%E7%90%86%E5%B0%8F%E8%AE%B0/">G1调优-复杂业务治理小记</a>
-          </li>
-        
-          <li>
-            <a href="/2022/03/16/2022-03/cms%E7%9A%84gc%E8%A7%A6%E5%8F%91%E6%9D%A1%E4%BB%B6/">cms的gc触发条件</a>
           </li>
         
       </ul>

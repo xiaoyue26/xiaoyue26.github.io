@@ -72,6 +72,95 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-02/redis设计与实现笔记7-复制" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/24/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B07-%E5%A4%8D%E5%88%B6/" class="article-date">
+  <time datetime="2019-02-24T12:46:10.000Z" itemprop="datePublished">2019-02-24</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/02/24/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B07-%E5%A4%8D%E5%88%B6/">redis设计与实现笔记7-复制</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="第15章-复制"><a href="#第15章-复制" class="headerlink" title="第15章 复制"></a>第15章 复制</h1><p>redis服务器B执行slave of命令后可变成另一台服务器的从库：</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">127.0.0.1:12345&gt; SLAVEOF 127.0.0.1 6379</span><br><span class="line"><span class="comment"># 12345端口就变成6379的从库了。</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="旧版复制功能的实现"><a href="#旧版复制功能的实现" class="headerlink" title="旧版复制功能的实现"></a>旧版复制功能的实现</h2><ol>
+<li>同步(<code>sync</code>): 更新从库状态；</li>
+<li>传播(<code>propagate</code>): 持续维持一致性。</li>
+</ol>
+<h3 id="同步"><a href="#同步" class="headerlink" title="同步"></a>同步</h3><p>主库发RDB文件给从库，从库载入一下。</p>
+<p>旧版缺点：<br>每次断线后，重新同步，也就是重新生成RDB文件，重新全量载入。</p>
+<h2 id="新版复制功能的实现-2-8-版本"><a href="#新版复制功能的实现-2-8-版本" class="headerlink" title="新版复制功能的实现(2.8+版本)"></a>新版复制功能的实现(2.8+版本)</h2><p>引入<code>PSYNC</code>命令，它有两种模式:</p>
+<ol>
+<li>完整重同步: 初次复制；</li>
+<li>部分重同步：断线重连。</li>
+</ol>
+<h3 id="部分重同步："><a href="#部分重同步：" class="headerlink" title="部分重同步："></a>部分重同步：</h3><ol>
+<li>主从库的复制偏移量;(replication offset)</li>
+<li>主库的复制积压缓冲区;(replication backlog):默认1MB，FIFO队列。</li>
+<li>服务器的运行id(run ID)。</li>
+</ol>
+<p>如果重连时，需要的数据还在缓冲区，就部分同步；<br>如果重连时，需要的数据已经被删除，就完全同步。</p>
+<p>所以缓冲区设置稍微大一些最好。</p>
+<h3 id="复制流程"><a href="#复制流程" class="headerlink" title="复制流程"></a>复制流程</h3><ol>
+<li>从库:记录主库地址端口等信息到内存；</li>
+<li>建立套接字连接；</li>
+<li>从库: PING 主库: PONG，确认连接健康；</li>
+<li>身份验证：(是否需要认证，密码)，两个维度都需要相同才能继续；</li>
+<li>从库=&gt;主库: 请用xxx端口联系从库;</li>
+<li>同步： 主库从库互为客户端：<br>完全同步： 主库=&gt;从库: 保存在缓冲区的写命令;<br>部分同步： 主库=&gt;从库: 保存在复制积压缓冲区的写命令。</li>
+<li>命令传播： 主库=&gt;从库: 新的写命令。</li>
+</ol>
+<h3 id="心跳检测"><a href="#心跳检测" class="headerlink" title="心跳检测"></a>心跳检测</h3><p>从库=&gt;主库: </p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">REPLCONF ACK &lt;replication_offset&gt; <span class="comment"># 从库当前复制偏移量</span></span><br></pre></td></tr></table></figure>
+<p>三个作用：</p>
+<ol>
+<li>主库确定各个从库的健康状态；</li>
+<li>检测命令丢失：主库检测从库有没有漏的复制，漏则重发；</li>
+<li><code>min_slave_to_write</code>参数：如果配置了这个，主库可以在从库太少的时候拒绝写命令。</li>
+</ol>
+<h1 id="slaveof命令源码细节"><a href="#slaveof命令源码细节" class="headerlink" title="slaveof命令源码细节"></a>slaveof命令源码细节</h1><p>从库确认收到主库的完整rdb文件后，才清空旧数据库。<br>(而不是说不分青红皂白上来就把自己清空了，那就太傻了。)<br>相关代码(<a href="https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/replication.c" target="_blank" rel="noopener">https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/replication.c</a>):</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* Check if the transfer is now complete */</span></span><br><span class="line">    <span class="comment">// 检查 RDB 是否已经传送完毕</span></span><br><span class="line">    <span class="comment">// 1036行: </span></span><br><span class="line">    <span class="keyword">if</span> (server.repl_transfer_read == server.repl_transfer_size) &#123;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 完毕，将临时文件改名为 dump.rdb</span></span><br><span class="line">        <span class="keyword">if</span> (rename(server.repl_transfer_tmpfile,server.rdb_filename) == <span class="number">-1</span>) &#123;</span><br><span class="line">            redisLog(REDIS_WARNING,<span class="string">"Failed trying to rename the temp DB into dump.rdb in MASTER &lt;-&gt; SLAVE synchronization: %s"</span>, strerror(errno));</span><br><span class="line">            replicationAbortSyncTransfer();</span><br><span class="line">            <span class="keyword">return</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 先清空旧数据库</span></span><br><span class="line">        redisLog(REDIS_NOTICE, <span class="string">"MASTER &lt;-&gt; SLAVE sync: Flushing old data"</span>);</span><br><span class="line">        signalFlushedDb(<span class="number">-1</span>);</span><br><span class="line">        emptyDb(replicationEmptyDbCallback);</span><br></pre></td></tr></table></figure>
+
+
+
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/24/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B07-%E5%A4%8D%E5%88%B6/" data-id="ck96cxpp900ggmaamg7s40wnv" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2019-02/redis设计与实现笔记6-客户端与服务器" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/02/21/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B06-%E5%AE%A2%E6%88%B7%E7%AB%AF%E4%B8%8E%E6%9C%8D%E5%8A%A1%E5%99%A8/" class="article-date">
@@ -1244,140 +1333,6 @@
 
 
   
-    <article id="post-2019-02/高性能mysql第七章-笔记-高级特性" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/02/11/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC%E4%B8%83%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E9%AB%98%E7%BA%A7%E7%89%B9%E6%80%A7/" class="article-date">
-  <time datetime="2019-02-11T14:31:10.000Z" itemprop="datePublished">2019-02-11</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/mysql/">mysql</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/02/11/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC%E4%B8%83%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E9%AB%98%E7%BA%A7%E7%89%B9%E6%80%A7/">高性能mysql第七章-笔记-高级特性</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="高级特性"><a href="#高级特性" class="headerlink" title="高级特性"></a>高级特性</h1><p>略过: 分区表,合并表,全文索引</p>
-<h2 id="视图"><a href="#视图" class="headerlink" title="视图"></a>视图</h2><p>视图会影响优化器</p>
-<h2 id="存储过程"><a href="#存储过程" class="headerlink" title="存储过程"></a>存储过程</h2><p>在线系统: 不推荐使用;<br>离线系统: 如果代码很简单，为了批量性能可以考虑。</p>
-<h2 id="游标"><a href="#游标" class="headerlink" title="游标"></a>游标</h2><p>游标使用临时表实现。</p>
-<p>因此：</p>
-<ol>
-<li>逐行只读;</li>
-<li>会执行整个查询。</li>
-</ol>
-<p>基于2，如果只读一小部分结果，请使用limit。<br>(也就是不要使用游标来实现limit的效果，直接使用limit语句即可)</p>
-<h2 id="prepareStatement"><a href="#prepareStatement" class="headerlink" title="prepareStatement"></a>prepareStatement</h2><h3 id="流程"><a href="#流程" class="headerlink" title="流程"></a>流程</h3><ol>
-<li>客户端=&gt;服务端: SQL原型</li>
-<li>服务端: SQL原型=&gt;部分执行计划A;</li>
-<li>服务端=&gt;客户端: A的句柄;</li>
-<li>客户端=&gt;服务端: 变量、A的句柄.</li>
-</ol>
-<p>优点:</p>
-<ol>
-<li>服务端: SQL解析只需解析/优化一次;</li>
-<li>通信: 只发送参数+句柄，通信成本降低;</li>
-<li>缓存: 参数可以被缓存;</li>
-<li>安全: 无须转义、由于执行计划定了，不会被SQL注入。</li>
-</ol>
-<p><code>prepareStatement</code>的三类优化:<br>(和传入参数无关的)</p>
-<ol>
-<li>准备阶段: 根据已知条件,where条件优化;</li>
-<li>第一次执行: 简化嵌套关联,将外关联转化成内关联;</li>
-<li>每次SQL执行:<br>(1) 过滤分区;<br>(2) 尽量移除count,min,max;<br>(3) 移除常量表达式;<br>(4) 检测常量表;<br>(5) 做必要的等值传播;<br>(6) 分析和优化ref,range和索引优化等访问数据的方法;<br>(7) 优化关联顺序。</li>
-</ol>
-<h2 id="绑定变量"><a href="#绑定变量" class="headerlink" title="绑定变量"></a>绑定变量</h2><p><code>set @xxx:= 123</code><br>绑定变量是会话级的。</p>
-<h2 id="字符集和校对"><a href="#字符集和校对" class="headerlink" title="字符集和校对"></a>字符集和校对</h2><p>字符集(<code>encode</code>)： 二进制&lt;=&gt;某类编码字符<br>校对(<code>collation</code>)：某字符集的排序规则。</p>
-<p>校对集都是针对某一个字符集的。(类似于弱实体)</p>
-<p>相关设置分为两类:</p>
-<ol>
-<li>创建对象时候的默认值</li>
-<li>服务器和客户端通信的设置</li>
-</ol>
-<h3 id="1-创建对象时候的默认值"><a href="#1-创建对象时候的默认值" class="headerlink" title="1. 创建对象时候的默认值"></a>1. 创建对象时候的默认值</h3><p>(1)<code>character_set_server</code>: 服务器创建数据库默认值;<br>(2)表字符集;<br>(3)列字符集.<br>越小范围的优先级越高。</p>
-<h3 id="2-服务器和客户端通信的设置"><a href="#2-服务器和客户端通信的设置" class="headerlink" title="2. 服务器和客户端通信的设置"></a>2. 服务器和客户端通信的设置</h3><h4 id="服务端"><a href="#服务端" class="headerlink" title="服务端:"></a>服务端:</h4><img src="/images/2019-02/mysql_char.png" class="" width="800" height="1200" title="mysql_char">
-<p>(1)<code>character_set_client</code>: 服务端总是假设客户端按照<code>character_set_client</code>设置的字符集来传输数据和sql语句;<br>(2)<code>character_set_connection</code>: 服务器收到客户端sql后,转换成<code>character_set_connection</code>类型;<br>(3)<code>character_result</code>:服务端返回数据时,转换成<code>character_result</code>类型。</p>
-<h4 id="客户端"><a href="#客户端" class="headerlink" title="客户端:"></a>客户端:</h4><p>客户端: <code>jdbc:mysql://localhost:3306/exceltest1?useUnicode=true&amp;characterEncoding=UTF-8</code></p>
-<p>客户端可以使用<code>set names utf-8</code>语句来告诉服务端自己将使用<code>utf-8</code>传输数据。</p>
-<h4 id="特殊情况"><a href="#特殊情况" class="headerlink" title="特殊情况"></a>特殊情况</h4><p>诡异的<code>character_set_database</code>: 某个数据库的默认字符集。当数据库改变的时候，它也会改变。当没有指定数据库的时候，会按照<code>character_set_server</code>。</p>
-<p><code>Load Data Infile</code>:<br>数据库总是将文件中的字符按照字符集<code>character_set_database</code>来解析。<br>mysql加载数据的时候，总是以同一个字符集处理所有数据，不管表中的列是否有不同的字符集设定。</p>
-<p><code>Select Into OutFile</code>:<br>输出文件时不会自动做转码，也不能指定。唯一的方法是手动调用函数<code>convert</code>。</p>
-<h4 id="查看字符集设置"><a href="#查看字符集设置" class="headerlink" title="查看字符集设置"></a>查看字符集设置</h4><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SHOW</span> <span class="keyword">VARIABLES</span> <span class="keyword">LIKE</span> <span class="string">'character%'</span>;</span><br></pre></td></tr></table></figure>
-
-<p>查看mysql支持的校对集: <code>show collation</code></p>
-<p>一般校对集是字符集加上三种后缀:<br><code>_bin</code>: 二进制比较;<br><code>_ci</code>: 忽略大小写(ignore);<br><code>_cs</code>: 大小写敏感(sensitive)</p>
-<p>大小写敏感比二进制比较更加复杂，会有更多规则。</p>
-<h3 id="mysql如何选择字符集"><a href="#mysql如何选择字符集" class="headerlink" title="mysql如何选择字符集"></a>mysql如何选择字符集</h3><p>每个字符集有对应的默认校对集；<br>每个校对集有对应的默认字符集。（一般来说，校对集依赖于字符集）</p>
-<ol>
-<li>如果用户设置了: 那肯定按用户设置的来;</li>
-<li>如果设置了一部分: 根据用户设置找默认的。</li>
-<li>什么都没设置: 根据默认配置设置。</li>
-</ol>
-<h1 id="分布式（XA）事务"><a href="#分布式（XA）事务" class="headerlink" title="分布式（XA）事务"></a>分布式（XA）事务</h1><p>两阶段提交。<br>协调者+参与者。</p>
-<ol>
-<li>所有参与者完成准备工作；</li>
-<li>协调者收到所有参与者的回复，提交事务。</li>
-</ol>
-<p>两种XA: 内部XA,外部XA。</p>
-<h2 id="内部XA"><a href="#内部XA" class="headerlink" title="内部XA"></a>内部XA</h2><p>mysql是插件式的，因此每个存储引擎是互相独立，不知道彼此存在的。<br>他们之间协调需要分布式事务。(内部XA)</p>
-<ul>
-<li>跨存储引擎的事务需要内部XA。</li>
-</ul>
-<p>如果开启了二进制日志，日志也可以看作一种特别的存储引擎，因此也需要内部XA。</p>
-<h2 id="外部XA"><a href="#外部XA" class="headerlink" title="外部XA"></a>外部XA</h2><p>mysql对xa协议支持不完整，无法在一个XA中关联多个连接。<br>外部XA网络开销大，建议引入<code>MQ</code>解决，而不使用外部XA。</p>
-<h1 id="查询缓存"><a href="#查询缓存" class="headerlink" title="查询缓存"></a>查询缓存</h1><ol>
-<li>检查sql是不是<code>select</code>开头,如果数据源表没有更改,hash查找缓存,返回结果;</li>
-<li>如果有确定性结果,存储查询语句的结果和hash值到缓存。</li>
-</ol>
-<p>由于2(确定性结果)，所以使用<code>current_date</code>这样的函数时，sql结果不会被缓存。</p>
-<p>查询缓存的注意事项:</p>
-<ol>
-<li>不能有长时间的事务;(会引入全局锁)</li>
-<li>不要占用太大内存(过度依赖缓存)，可以直接使用redis。</li>
-</ol>
-<p>过度依赖缓存的话，缓存清理以后系统会假死很久。</p>
-<h2 id="查询缓存的配置参数"><a href="#查询缓存的配置参数" class="headerlink" title="查询缓存的配置参数"></a>查询缓存的配置参数</h2><p><code>show variables like &#39;%query_cache%&#39;</code></p>
-<h3 id="query-cache-type"><a href="#query-cache-type" class="headerlink" title="query_cache_type"></a>query_cache_type</h3><p>三种取值:</p>
-<ol>
-<li>OFF(0): 关闭,默认值。</li>
-<li>ON(1):  打开</li>
-<li>DEMAND(2): sql里写明<code>sql_cache</code>hint的语句才放入缓存。</li>
-</ol>
-<p><code>query_cache_size</code>: 查询缓存占的空间;<br><code>query_cache_limit</code>: 缓存结果集最大条数;</p>
-<p>清空缓存: <code>reset query cache</code><br>整理缓存碎片: <code>flush query cache</code>(服务僵死一段时间)</p>
-<img src="/images/2019-02/query_cache_opt.png" class="" width="800" height="1200" title="query_cache_opt">
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/02/11/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC%E4%B8%83%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E9%AB%98%E7%BA%A7%E7%89%B9%E6%80%A7/" data-id="ck96cxppg00hamaamd748dsy9" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1404,6 +1359,10 @@
       <ul>
         
           <li>
+            <a href="/2022/09/25/2022-09/nc%E5%91%BD%E4%BB%A4%E7%AC%94%E8%AE%B0/">nc命令笔记</a>
+          </li>
+        
+          <li>
             <a href="/2022/09/25/2022-09/%E8%B0%83%E4%BC%98-%E8%A7%A3%E5%86%B3%E7%BA%BF%E7%A8%8B%E6%B1%A0%E9%80%A0%E6%88%90%E7%9A%84%E8%BF%9B%E7%A8%8B%E5%8D%A1%E9%A1%BF%E3%80%81cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-解决线程池造成的进程卡顿、cpu毛刺问题</a>
           </li>
         
@@ -1417,10 +1376,6 @@
         
           <li>
             <a href="/2022/03/25/2022-03/G1%E8%B0%83%E4%BC%98-%E5%A4%8D%E6%9D%82%E4%B8%9A%E5%8A%A1%E6%B2%BB%E7%90%86%E5%B0%8F%E8%AE%B0/">G1调优-复杂业务治理小记</a>
-          </li>
-        
-          <li>
-            <a href="/2022/03/16/2022-03/cms%E7%9A%84gc%E8%A7%A6%E5%8F%91%E6%9D%A1%E4%BB%B6/">cms的gc触发条件</a>
           </li>
         
       </ul>

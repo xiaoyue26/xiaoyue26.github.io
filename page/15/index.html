@@ -72,6 +72,286 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-01/高性能Mysql笔记-第4章" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/01/27/2018-01/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC4%E7%AB%A0/" class="article-date">
+  <time datetime="2018-01-27T14:18:58.000Z" itemprop="datePublished">2018-01-27</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/01/27/2018-01/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC4%E7%AB%A0/">高性能Mysql笔记-第4章</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="第四章-Schema与数据类型优化"><a href="#第四章-Schema与数据类型优化" class="headerlink" title="第四章 Schema与数据类型优化"></a>第四章 Schema与数据类型优化</h1><h2 id="4-1-数据类型"><a href="#4-1-数据类型" class="headerlink" title="4.1 数据类型"></a>4.1 数据类型</h2><p>原则:</p>
+<blockquote>
+<ol>
+<li>更小的通常更好,<br>int 好于 char (如可以用int存储ip);<br>date/time/datetime 好于 char. </li>
+<li>尽量<code>Not Null</code>; // 因为NULL导致索引需要额外字节.// 不过这个影响不大</li>
+</ol>
+</blockquote>
+<p>ip转换函数: Inet_AtoN(), Inet_NtoA(). </p>
+<h2 id="4-1-1-整数"><a href="#4-1-1-整数" class="headerlink" title="4.1.1 整数"></a>4.1.1 整数</h2><p>包括:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">TinyInt : 8位 </span><br><span class="line">SmallInt: 16位</span><br><span class="line">MediumInt: 24位</span><br><span class="line">Int: 32位</span><br><span class="line">BigInt: 64位</span><br></pre></td></tr></table></figure>
+<p>如果加上<code>unsigned</code>,正数范围提高一倍.<br>对于计算来说,一般都会转化成BigInt进行计算;<br>聚合函数则转化成<code>Decimal</code>或<code>Double</code>.</p>
+<p><code>Int(11)</code>中的11没有意义,只是对于GUI或控制台来说显示长度为11. </p>
+<h2 id="4-1-2-实数"><a href="#4-1-2-实数" class="headerlink" title="4.1.2 实数"></a>4.1.2 实数</h2><p>包括:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Decimal: 类似于字符串. 精确小数,使用mysql实现的计算;</span><br><span class="line">Float : 4字节. 不精确,更快,使用cpu原生计算;</span><br><span class="line">Double: 8字节. 不精确,更快.</span><br></pre></td></tr></table></figure>
+
+<p>Decimal(18,9):<br>总长18,小数点右边9个数字.(所以左边也是9个数字)<br>左边9个数字占4个字节,右边9个数字占4个字节.<br>总共8个字节.</p>
+<ul>
+<li>Decimal的存储空间计算:<br>mysql把每9位数字存成4个字节. (转化成2进制字符串存储)<br>如果不足9位数字,存储空间消耗映射如下:<blockquote>
+<p>1-2位=&gt; 1字节<br>3-4位=&gt; 2字节<br>5-6位=&gt; 3字节<br>7-9位=&gt; 4字节</p>
+</blockquote>
+</li>
+</ul>
+<p>因此对于Decimal(20,6),左边14位数字需要空间=4+3=7B;右边6位需要3B,因此总共需要10B.</p>
+<p>Decimal最多65个数字. 如果是Decimal(P,D),则P&lt;=65,D&lt;=30,且D&lt;=P.<br>FLOAD,Double计算时转化为Double.</p>
+<p>如果想要精确计算又想速度快(如财务数据):</p>
+<blockquote>
+<p>使用BigInt,如果精度是1/10000,把所有数据乘以10000即可.</p>
+</blockquote>
+<h2 id="4-1-3-字符串"><a href="#4-1-3-字符串" class="headerlink" title="4.1.3 字符串"></a>4.1.3 字符串</h2><p>字符串需要关注的方面:</p>
+<ol>
+<li>字符集</li>
+<li>排序规则(校对规则/collation)</li>
+<li>存储方式: 与存储引擎的具体实现有关.</li>
+</ol>
+<p>字符串类型包括:</p>
+<ol>
+<li>char: 定长. 填充使用空格. 会截断末尾空格.</li>
+<li>varchar: 变长. (但如果使用ROW_FORMAT=FIXED,则会变成定长, 短的会填充补齐)</li>
+<li>Binary: 存储二进制字符串. (字节码) 填充时使用’\0’而不是空格.</li>
+<li>VarBinary: 变长二进制. </li>
+<li>BloB: 很长的二进制. </li>
+<li>Text: 很长的字符串.</li>
+</ol>
+<p><strong><code>varchar</code>的存储</strong><br>长度&lt;=255: 1个字节存储长度信息,其余存储数据;<br>长度&gt;255:  2个字节存储长度信息,其余存储数据.</p>
+<p>latin1字符集:<br>varchar(10)存储空间= 1+10=11B.<br>varchar(1000)存储空间= 2+1000=1002B.<br>过长的varchar: <code>InnoDb</code>将其存储为<code>BLOB</code>. </p>
+<p>UTF-8字符集:<br>varchar(1000)存储空间: 未知,因为UTF-8比较复杂,每个字符空间不定;<br>最大存储空间: 每个字符最多3B,因此最大空间为2+3000=3002B; </p>
+<p><strong>tip</strong><br>对于数据’hello’,varchar(100)和varchar(5)实际存储空间一致(如果是latin1,6B),<br>但使用varchar(5)在计算时能减少内存消耗. (尤其是使用内存临时表进行排序时)</p>
+<ul>
+<li><p>varchar的优点<br>与char相比节省存储空间,因为短的数据会占用更少的空间,不像定长会浪费. </p>
+</li>
+<li><p>varchar的缺点<br>变长行在update时可能需要额外工作,如果行变长,MyIsam会将行分拆成不同片段存储;<br>InnoDb会分裂页来使行可以放进页内.</p>
+</li>
+</ul>
+<p><strong>使用varchar的场景</strong></p>
+<ul>
+<li>max(列的长度) 远大于 avg(列的长度). 这样大部分数据只需要很少的空间.</li>
+<li>列的更新很少. (碎片不是问题)</li>
+<li>使用了像UTF-8这样的复杂字符集,每个字符都使用不同的字节数进行存储.</li>
+</ul>
+<p><strong>使用char的场景</strong></p>
+<ul>
+<li>所有数据长度很接近. (如密码的MD5值,长度完全一致)</li>
+<li>列更新频繁.(没碎片)</li>
+<li>非常短的列. (不用存储长度信息)</li>
+</ul>
+<blockquote>
+<p>char列中数据末尾的空格会被截断.还会根据排序需要填充空格.<br>(服务器层处理,与存储引擎无关)</p>
+</blockquote>
+<p><strong>BLOB和Text</strong><br>BLOB家族:</p>
+<ul>
+<li>TinyBlob</li>
+<li>SmallBlob = Blob</li>
+<li>MediumBlob</li>
+<li>LongBlob</li>
+</ul>
+<p>Text家族:</p>
+<ul>
+<li><p>TinyText</p>
+</li>
+<li><p>SmallText = Text</p>
+</li>
+<li><p>MediumText</p>
+</li>
+<li><p>LongText</p>
+</li>
+<li><p>存储<br>Blob和Text均作为对象存储(行里只存储指针),Innodb会使用专门的外部存储区域来存储实际的值. 指针的存储空间为1~4个字节.</p>
+</li>
+<li><p>排序<br>对每列前缀排序,前缀长度为<code>max_sort_length</code>个字节.<br>可以通过配置<code>max_sort_length</code>调整排序性能;<br>或者写<code>order by substring(col,length)</code>.</p>
+</li>
+<li><p>索引<br>Blob和Text列上建索引时,不能使用列的全部长度.</p>
+</li>
+<li><p>性能<br>由于Memory引擎不支持Blob和Text(以下讨论基于这个假设),<br>如果查询需要隐式临时表,将会使用MyIsam的磁盘临时表(内存到磁盘,性能下降).</p>
+</li>
+</ul>
+<p>explain执行计划中的extra列中包含<code>Using temporary</code>,说明查询使用了隐式临时表.</p>
+<p><strong>tips</strong></p>
+<ol>
+<li>避免使用Blob和Text类型;(过长varchar会变成text,因此varchar不能过长(&gt;255))</li>
+<li>临时手动转换成字符串; // 在使用Text的地方写substring(col,length);</li>
+</ol>
+<p>临时表从内存转化到磁盘的时机:</p>
+<ul>
+<li>有<code>Blob</code>或<code>Text</code>列;</li>
+<li>大小超过<code>max_heap_table_size</code>或<code>tmp_table_size</code>. </li>
+</ul>
+<p><strong>Enum(枚举)</strong><br>如果字符串列的取值固定,可以使用枚举代替字符串. (会影响排序规则)<br>ENUM: 存储时为整数,比较时为字符串,但又不是原字符串.(= =||)</p>
+<p>个人感觉, 这件事不应当在Mysql层做,应该在应用层做,因此此节略过.</p>
+<h2 id="4-1-4-日期和时间类型"><a href="#4-1-4-日期和时间类型" class="headerlink" title="4.1.4 日期和时间类型"></a>4.1.4 日期和时间类型</h2><p>相关类型包括:(最多只能精确到秒,如果要存储微秒,直接用bigint吧)</p>
+<ol>
+<li>DateTime: 1001年到9999年. 精度为秒. 8个字节整数. </li>
+<li>Timestamp: 1970年到2038年. 精度为秒. 4个字节整数.(才到2038年,根本不能用)</li>
+</ol>
+<p>个人感觉还是BigInt好,干净利落. (8B)</p>
+<h2 id="4-1-5-位数据类型-技术上来说是字符串类型"><a href="#4-1-5-位数据类型-技术上来说是字符串类型" class="headerlink" title="4.1.5 位数据类型(技术上来说是字符串类型)"></a>4.1.5 位数据类型(技术上来说是字符串类型)</h2><p>相关类型包括:<br>1.Bit. (避免使用,行为诡异,游离在字符串和数字间)<br>例如Bit(2)可以存储俩布尔值.最大是Bit(64).<br>MyIsam: 所有Bit列打包起来存储;<br>InnoDb,Memory: 每个Bit列使用一个恰当大小的整型存放.<br>服务器层: Bit列作为字符串类型检索,遇到数字上下文又变成数字.</p>
+<p>// 也就是存储时是数字,使用时是字符串或数字.</p>
+<p>2.SET: 保存多个布尔值.<br>可以使用Find_in_set()/Field()函数. </p>
+<ul>
+<li><p>缺点:<br>改变列定义的代价昂贵. 也无法在Set列上进行索引查找.</p>
+</li>
+<li><p>小结</p>
+<blockquote>
+<p>Mysql的位数据类型都不靠谱,还是使用整型吧.<br>自己在应用层进行位操作, 简单/清晰一些.</p>
+</blockquote>
+</li>
+</ul>
+<h2 id="4-1-6-ID列的数据类型选择"><a href="#4-1-6-ID列的数据类型选择" class="headerlink" title="4.1.6 ID列的数据类型选择"></a>4.1.6 ID列的数据类型选择</h2><p>通常使用整型. 确定数据范围即可. </p>
+<p><em>可以考虑使用美团的分布式ID生成器.</em></p>
+<h1 id="4-2-数据库设计原则"><a href="#4-2-数据库设计原则" class="headerlink" title="4.2 数据库设计原则"></a>4.2 数据库设计原则</h1><ol>
+<li>避免太多的列; 服务器层需要缓冲存储引擎层的行,变长的行会引入转换开销.</li>
+<li>避免太多关联;</li>
+<li>恰当使用NULL. 大多数时候避免NULL列,有时候可以使用.(当异常值不好定义时)</li>
+</ol>
+<h1 id="4-3-范式与反范式"><a href="#4-3-范式与反范式" class="headerlink" title="4.3 范式与反范式"></a>4.3 范式与反范式</h1><p>范式优点:</p>
+<ul>
+<li>更新简单;</li>
+<li>冗余少;</li>
+<li>设计更优雅;</li>
+<li>简单查询性能高.</li>
+</ul>
+<p>范式缺点:</p>
+<ul>
+<li>关联多,复杂查询性能低. </li>
+<li>复杂查询性能差.</li>
+</ul>
+<p>反范式(nosql)优点:</p>
+<ul>
+<li>关联少,复杂查询性能好.</li>
+</ul>
+<p>反范式缺点:</p>
+<ul>
+<li><p>经常需要distinct,group by操作,影响性能, 代码写起来烦. </p>
+</li>
+<li><p>更新性能差.</p>
+</li>
+<li><p>更新逻辑复杂.</p>
+</li>
+<li><p>小结<br>适当程度使用范式,不迷信三范式.<br>特定需求可以单独定制相应的缓存表和汇总表,而不改变原有的设计结构.</p>
+</li>
+</ul>
+<h2 id="4-4-缓存表和汇总表"><a href="#4-4-缓存表和汇总表" class="headerlink" title="4.4 缓存表和汇总表"></a>4.4 缓存表和汇总表</h2><p>对于某些检索需求,可以定制化得设计相应的缓存表和汇总表,而不用更改原有的设计.<br>如需要计算24小时内发送的消息数. 可以维护一个表.</p>
+<h2 id="4-4-1-物化视图"><a href="#4-4-1-物化视图" class="headerlink" title="4.4.1 物化视图"></a>4.4.1 物化视图</h2><p>Mysql并不原生支持,需要插件(FlexViews).</p>
+<h2 id="4-4-2-计数器表"><a href="#4-4-2-计数器表" class="headerlink" title="4.4.2 计数器表"></a>4.4.2 计数器表</h2><p>100个槽的计数器表:(预先插入100个0)</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">create</span> <span class="keyword">table</span> hit_counter(</span><br><span class="line"> slot <span class="built_in">tinyint</span> <span class="keyword">unsigned</span> <span class="keyword">not</span> <span class="literal">null</span> primary <span class="keyword">key</span>,</span><br><span class="line"> cnt <span class="built_in">int</span> <span class="keyword">unsigned</span> <span class="keyword">not</span> <span class="literal">null</span></span><br><span class="line">) <span class="keyword">engine</span>=<span class="keyword">innodb</span>;</span><br></pre></td></tr></table></figure>
+<p>每次更新计数器可以随机选一个slot进行,这样可以有更高的并发性能.<br>查询时只需要聚合一下结果就好:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> <span class="keyword">sum</span>(cnt)</span><br></pre></td></tr></table></figure>
+
+<h2 id="4-5-Alter-Table操作的优化"><a href="#4-5-Alter-Table操作的优化" class="headerlink" title="4.5 Alter Table操作的优化"></a>4.5 Alter Table操作的优化</h2><p>Mysql执行Alter操作流程: (大部分情况下)</p>
+<ol>
+<li>用新的结构创建一个空表;</li>
+<li>从旧表中查出所有数据插入新表.</li>
+<li>删除旧表.</li>
+</ol>
+<p>Innodb的优化: 通过排序来建立索引.使建索引更快并有一个紧凑的布局.</p>
+<p>大部分Alter操作导致Mysql服务中断. // 导致事务强制提交.<br>相应解决技巧:</p>
+<ol>
+<li>在一个不提供服务的机器上进行Alter,然后和提供服务的主库进行切换;</li>
+<li>影子拷贝. 复制一张新表,通过重命名交换两张表.</li>
+</ol>
+<p>不会引起表重建的Alter操作:</p>
+<ul>
+<li>更改或删除一个列的默认值.</li>
+</ul>
+<p>方法1: // 重建全表// 可以通过Show Status查到.</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">Alter</span> <span class="keyword">table</span> xxx</span><br><span class="line"><span class="keyword">MODIFY</span> <span class="keyword">COLUMN</span> <span class="keyword">duration</span> <span class="built_in">tinyint</span>(<span class="number">3</span>) <span class="keyword">not</span> <span class="literal">null</span> <span class="keyword">default</span> <span class="number">5</span>;</span><br></pre></td></tr></table></figure>
+
+<p>方法2:// 直接更改元数据(<code>.frm</code>文件).</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">Alter</span> <span class="keyword">table</span> xxx</span><br><span class="line"><span class="keyword">Alter</span> <span class="keyword">Column</span> <span class="keyword">duration</span> <span class="keyword">Set</span> <span class="keyword">Default</span> <span class="number">5</span>;</span><br></pre></td></tr></table></figure>
+
+<p>修改列的方法包括: Alter Column,Modify Column,Change Column.</p>
+<ul>
+<li><p><code>ALter Column</code>: 只能修改列的默认值.直接修改元数据,非常快.</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">alter</span> <span class="keyword">table</span> film <span class="keyword">alter</span> <span class="keyword">column</span> rental_duration <span class="keyword">set</span> <span class="keyword">default</span> <span class="number">5</span>;  </span><br><span class="line"><span class="keyword">alter</span> <span class="keyword">table</span> film <span class="keyword">alter</span> <span class="keyword">column</span> rental_duration <span class="keyword">drop</span> <span class="keyword">default</span>;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p><code>Change Column</code>: 可以修改列的一切. 修改数据(重建表)</p>
+</li>
+<li><p><code>Modify Column</code>: 比change少一个重命名功能,其他一样.</p>
+</li>
+</ul>
+<h3 id="4-5-1-只修改元数据-frm文件"><a href="#4-5-1-只修改元数据-frm文件" class="headerlink" title="4.5.1 只修改元数据(.frm文件)"></a>4.5.1 只修改元数据(.frm文件)</h3><p>适用场景:</p>
+<ul>
+<li>移除一个列的<code>Auto_increment</code>属性;</li>
+<li>增加移除更改ENUM和SET常量.</li>
+</ul>
+<p>流程:</p>
+<ol>
+<li>创建一张相同结构的空表,进行相应修改;</li>
+<li>关闭正在使用的表,并禁止任何表被打开; (通过执行Flush tables with read lock. )</li>
+<li>交换<code>.frm</code>文件;</li>
+<li>释放第二步的锁.(执行Unlock Tables)</li>
+</ol>
+<h3 id="4-5-2-快速创建MyIsam索引"><a href="#4-5-2-快速创建MyIsam索引" class="headerlink" title="4.5.2 快速创建MyIsam索引"></a>4.5.2 快速创建MyIsam索引</h3><p>流程:</p>
+<ol>
+<li>禁用索引;// Alter table xxx Disable Keys;</li>
+<li>加载数据;// Load Data</li>
+<li>启用索引.// Alter table xxx Enable Keys. </li>
+</ol>
+<blockquote>
+<p>之所以能更快,是因为不用逐行更改索引了. 批量建立索引可以使用排序构建, 索引树碎片更少,更紧凑.</p>
+</blockquote>
+<p>由于Disable Keys对于唯一索引无效(<code>Unique Key</code>),所以如果涉及到唯一索引,可以这么做:</p>
+<ol>
+<li>删除唯一索引;</li>
+<li>加载数据;</li>
+<li>重建唯一索引.<br>// 这种方法下,唯一性需要自行保证. 应用场景: 备份数据, 对数据知根知底的情况下.</li>
+</ol>
+<p>还有一种方法是通过交换元数据文件,如上一节中的做法.<br>然后通过<code>Repair Table</code>来重建索引, 个人觉得有些危险,还是删索引比较简单安全.</p>
+<hr>
+<p>前面两章的内容:(需要网上资料配合实验)</p>
+<h1 id="第二章-Benchmark"><a href="#第二章-Benchmark" class="headerlink" title="第二章 Benchmark"></a>第二章 Benchmark</h1><h1 id="第三章-服务器性能剖析"><a href="#第三章-服务器性能剖析" class="headerlink" title="第三章 服务器性能剖析"></a>第三章 服务器性能剖析</h1><p>查看某条查询执行的时间分布:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">set</span> profiling=<span class="number">1</span>;</span><br><span class="line"><span class="comment">-- select * from xxx ;</span></span><br><span class="line"><span class="keyword">show</span> <span class="keyword">profiles</span>;</span><br><span class="line"><span class="keyword">show</span> profile <span class="keyword">for</span> <span class="keyword">query</span> <span class="number">1</span>;</span><br></pre></td></tr></table></figure>
+<p>查看某查询的执行计划:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">explain</span> <span class="keyword">select</span> xxx;</span><br></pre></td></tr></table></figure>
+
+<p>sending data中的行为包括:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">关联时搜索匹配的行</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/01/27/2018-01/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC4%E7%AB%A0/" data-id="ck96cxpnv00almaambmrnc2bz" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-01/java并发编程的艺术笔记-第三章" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/01/21/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF%E7%AC%94%E8%AE%B0-%E7%AC%AC%E4%B8%89%E7%AB%A0/" class="article-date">
@@ -1315,81 +1595,6 @@
 
 
   
-    <article id="post-2018-01/java并发编程实战笔记-8章" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/01/01/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-8%E7%AB%A0/" class="article-date">
-  <time datetime="2018-01-01T07:34:18.000Z" itemprop="datePublished">2018-01-01</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/01/01/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-8%E7%AB%A0/">java并发编程实战笔记-8章</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="线程池的使用"><a href="#线程池的使用" class="headerlink" title="线程池的使用"></a>线程池的使用</h1><p>这章介绍实际应用中配置调优的一些高级选项. 以及各种坑.</p>
-<h1 id="8-1-任务与执行策略的隐形耦合"><a href="#8-1-任务与执行策略的隐形耦合" class="headerlink" title="8.1  任务与执行策略的隐形耦合"></a>8.1  任务与执行策略的隐形耦合</h1><p>有些任务需要指定执行策略:</p>
-<ol>
-<li>依赖性任务: 就是任务之间不独立</li>
-<li>线程不封闭的: 就是只能单线程跑的.</li>
-<li>对响应时间敏感的: 如GUI. </li>
-<li>使用ThreadLocal的: 线程池会重用线程. 因此可能有风险.</li>
-</ol>
-<h2 id="8-1-1-死锁"><a href="#8-1-1-死锁" class="headerlink" title="8.1.1 死锁"></a>8.1.1 死锁</h2><p>有界线程池不能无限提交. 如果里头的任务都死锁了,线程池也死锁了.</p>
-<h2 id="8-1-2-响应时间"><a href="#8-1-2-响应时间" class="headerlink" title="8.1.2 响应时间"></a>8.1.2 响应时间</h2><p>如果任务都很慢,线程池的响应时间自然也慢.<br>可以限时或者增大线程池容量.</p>
-<h1 id="8-2-线程池大小公式"><a href="#8-2-线程池大小公式" class="headerlink" title="8.2 线程池大小公式"></a>8.2 线程池大小公式</h1><p>N = cpu数量 = Runtime.getRuntime().availableProcessors();<br>U = 目标cpu利用率<br>W/C= 等待时间和执行时间的比率 (响应度)<br>SIZE = N*U/(1+W/C) </p>
-<h1 id="8-3-配置ThreadPoolExecutor"><a href="#8-3-配置ThreadPoolExecutor" class="headerlink" title="8.3 配置ThreadPoolExecutor"></a>8.3 配置ThreadPoolExecutor</h1><p>可以通过Executors获取jdk设计好的一些线程池实现.</p>
-<h2 id="8-3-1-线程的创建与取消"><a href="#8-3-1-线程的创建与取消" class="headerlink" title="8.3.1 线程的创建与取消"></a>8.3.1 线程的创建与取消</h2><p>基本大小: 没有任务时候的线程大小.<br>最大大小: 上限.<br>存活时间: 线程空闲时间达到存活时间,则被回收.</p>
-<h2 id="8-3-2-管理队列任务"><a href="#8-3-2-管理队列任务" class="headerlink" title="8.3.2 管理队列任务"></a>8.3.2 管理队列任务</h2><p>线程池满了以后,提交的任务进入等待队列.<br>newFixedThreadPool: 无界等待队列 LinkedBlockingQueue<br>newSingleThreadExecutor: 无界等待队列 LinkedBlockingQueue</p>
-<p>有界等待队列的话,需要饱和策略. </p>
-<h2 id="8-3-3-饱和策略"><a href="#8-3-3-饱和策略" class="headerlink" title="8.3.3 饱和策略"></a>8.3.3 饱和策略</h2><ol>
-<li>中止(默认): abort. 抛异常.</li>
-<li>调用者运行: 让主线程自己干. 拥塞会外延到TCP层. </li>
-<li>丢弃: 抛弃该任务. 不抛异常.</li>
-<li>丢弃最老: 丢弃下一个将要执行的.(如果用了优先级队列,就是抛弃优先级最高的,会造成错误.)</li>
-</ol>
-<h1 id="8-4-扩展ThreadPoolExecutor"><a href="#8-4-扩展ThreadPoolExecutor" class="headerlink" title="8.4 扩展ThreadPoolExecutor"></a>8.4 扩展ThreadPoolExecutor</h1><p>需要实际需求和应用案例才能学会. </p>
-<h1 id="8-5-递归算法的并行化"><a href="#8-5-递归算法的并行化" class="headerlink" title="8.5 递归算法的并行化"></a>8.5 递归算法的并行化</h1><p>首先循环可以并行化:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span>(<span class="keyword">final</span> Ele e: eles)&#123;</span><br><span class="line">    exec.execute(</span><br><span class="line">    <span class="keyword">new</span> Runnable()&#123;</span><br><span class="line">      <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span></span>&#123;process(e);&#125;</span><br><span class="line">    &#125;</span><br><span class="line">    );</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>递归也一样, 遍历依然是递归的, 但把每一个节点的计算收集到线程池中,异步计算.</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">dfs(node,exec,results)&#123;</span><br><span class="line"> exec.execute(...);</span><br><span class="line"> dfs(node.children());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-<p>第九章是图形界面,略过.</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/01/01/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-8%E7%AB%A0/" data-id="ck96cxpnu00aemaam6euicert" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1416,6 +1621,10 @@
       <ul>
         
           <li>
+            <a href="/2022/09/25/2022-09/nc%E5%91%BD%E4%BB%A4%E7%AC%94%E8%AE%B0/">nc命令笔记</a>
+          </li>
+        
+          <li>
             <a href="/2022/09/25/2022-09/%E8%B0%83%E4%BC%98-%E8%A7%A3%E5%86%B3%E7%BA%BF%E7%A8%8B%E6%B1%A0%E9%80%A0%E6%88%90%E7%9A%84%E8%BF%9B%E7%A8%8B%E5%8D%A1%E9%A1%BF%E3%80%81cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-解决线程池造成的进程卡顿、cpu毛刺问题</a>
           </li>
         
@@ -1429,10 +1638,6 @@
         
           <li>
             <a href="/2022/03/25/2022-03/G1%E8%B0%83%E4%BC%98-%E5%A4%8D%E6%9D%82%E4%B8%9A%E5%8A%A1%E6%B2%BB%E7%90%86%E5%B0%8F%E8%AE%B0/">G1调优-复杂业务治理小记</a>
-          </li>
-        
-          <li>
-            <a href="/2022/03/16/2022-03/cms%E7%9A%84gc%E8%A7%A6%E5%8F%91%E6%9D%A1%E4%BB%B6/">cms的gc触发条件</a>
           </li>
         
       </ul>

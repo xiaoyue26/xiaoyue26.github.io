@@ -72,6 +72,92 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-10/flask多线程下，连接泄露的bug" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/10/23/2018-10/flask%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%8B%EF%BC%8C%E8%BF%9E%E6%8E%A5%E6%B3%84%E9%9C%B2%E7%9A%84bug/" class="article-date">
+  <time datetime="2018-10-23T08:35:52.000Z" itemprop="datePublished">2018-10-23</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/10/23/2018-10/flask%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%8B%EF%BC%8C%E8%BF%9E%E6%8E%A5%E6%B3%84%E9%9C%B2%E7%9A%84bug/">flask多线程下，连接泄露的bug</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="架构图"><a href="#架构图" class="headerlink" title="架构图"></a>架构图</h1><img src="/images/2018-10/flask.png" class="" width="400" height="600" title="flask">
+
+<p>如图所示，底层使用mysql，web服务使用<code>flask-SqlAlchemy</code>的连接池（复用连接，减少创建销毁开销），逻辑层代码使用线程池（异步IO操作，如果要异步cpu操作，可以很方便改成进程池）。</p>
+<h1 id="基础知识"><a href="#基础知识" class="headerlink" title="基础知识"></a>基础知识</h1><ol>
+<li>使用<code>db.engine.execute(sql)</code>: 从连接池获取一个连接,执行完sql后自动<code>commit</code>;(<code>commit</code>操作的回调是: 归还连接到池里); </li>
+<li>使用<code>session</code>的<code>orm</code>(<code>xxxModel.query等</code>): 默认配置及推荐配置是<code>autocommit=false</code>，执行完增删查改后，处于事务未提交的状态，也就是没有归还连接。如果要归还连接，可以使用语句:<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">db.session.commit()</span><br><span class="line">db.session.rollback()</span><br><span class="line">db.session.close()</span><br><span class="line">db.session.remove(): 底层会调用db.session.close()</span><br></pre></td></tr></table></figure>
+
+</li>
+</ol>
+<p>小结:</p>
+<blockquote>
+<p>db.engine.execute(sql) =&gt; 自动commit =&gt; 自动归还<br>session(orm) =&gt; 手动commit =&gt; 手动归还<br>因此db.engine.execute(sql)是绝对安全的;<br>orm是有条件的。接着往下看orm的安全条件。</p>
+</blockquote>
+<h2 id="线程与session"><a href="#线程与session" class="headerlink" title="线程与session"></a>线程与session</h2><p>使用flask的SqlAlchemy插件<code>flask-SqlAlchemy</code>时，每个线程可以直接用<code>db.session</code>获得session，即使不显式获得，使用orm的model时，其实也隐式得获得了<code>session</code>。</p>
+<h3 id="线程与session的关系"><a href="#线程与session的关系" class="headerlink" title="线程与session的关系:"></a>线程与session的关系:</h3><p>每个线程有自己的<code>threadlocal</code>的<code>session</code>对象，并且随着线程销毁，会自动释放<code>session</code>,也就是会隐式调用<code>session.remove</code>，也就是会隐式释放<code>session</code>的连接。</p>
+<p>多线程两种使用:</p>
+<ol>
+<li><code>t1=threading.Thread(...)</code>;</li>
+<li>线程池: <code>future= pool.submit(...)</code>.<br>方法1的线程使用完以后自动销毁=&gt;session自动销毁=&gt;连接自动释放;<br>方法2的线程使用完以后归还线程池=&gt;session手动销毁=&gt;连接释放。</li>
+</ol>
+<p>小结:<br>不使用线程池=&gt;连接自动释放;<br>使用线程池=&gt;连接手动释放.<br>手动释放的方法:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">db.session.remove()</span><br></pre></td></tr></table></figure>
+
+<h1 id="空闲连接超时与连接释放bug"><a href="#空闲连接超时与连接释放bug" class="headerlink" title="空闲连接超时与连接释放bug"></a>空闲连接超时与连接释放bug</h1><p>前面说到使用线程池时，连接没有自动释放，一直维护在线程的threadlocal存储中(tls)。那么这样似乎也没有什么关系，只要线程池大小&lt;连接池大小,这样连接池有空闲连接，每个线程也有自己的连接可以用，一切似乎也相安无事。</p>
+<p>然而，这里有一个之前没有提到的机制：空闲连接超时回收。</p>
+<h3 id="空闲连接超时回收"><a href="#空闲连接超时回收" class="headerlink" title="空闲连接超时回收"></a>空闲连接超时回收</h3><h4 id="mysql服务端"><a href="#mysql服务端" class="headerlink" title="mysql服务端:"></a>mysql服务端:</h4><p>定期检查现存连接的空闲时间，把超出<code>wait_timeout</code>的连接删除，此时客户端保存的长连接引用就失效了; 这个时间的设定:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">global</span> <span class="keyword">variables</span> <span class="keyword">like</span> <span class="string">'wait_timeout'</span>;</span><br><span class="line"><span class="keyword">set</span> <span class="keyword">global</span> wait_timeout=<span class="number">10</span>*<span class="number">60</span>; <span class="comment">-- seconds</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="web服务"><a href="#web服务" class="headerlink" title="web服务:"></a>web服务:</h4><p>flask会定期检查连接池里的连接，把空闲连接删除，重新向mysql服务端申请新的连接，这样就不会访问到失效的连接引用了。其中定期的时间是: <code>app.config[&#39;SQLALCHEMY_POOL_RECYCLE&#39;] =xxx</code>(秒，应当设置为小于<code>wait_timeout</code>)。这就是为什么最好连接用完及时归还，否则可能就没法被flask刷新成新连接。</p>
+<h4 id="空闲连接超时与连接释放bug-1"><a href="#空闲连接超时与连接释放bug-1" class="headerlink" title="空闲连接超时与连接释放bug"></a>空闲连接超时与连接释放bug</h4><p>bug发生的流程</p>
+<ol>
+<li>mysql服务端清除了空闲时间过长的连接;</li>
+<li>线程池中线程一直不销毁，因此持有了活了很久的session;</li>
+<li>活了很久的session持有了空闲很久的连接, 这个连接其实已经被服务端销毁了，因此已经不可用了，但是由于其一直没有归还到连接池中，因此一直没有得到更新。</li>
+<li>此时web服务收到数据请求，使用该线程中的该session中的连接，就会抛异常了，因为连接已经不可用了。</li>
+</ol>
+<p>一般来说，空闲时间很长以后，线程池里所有线程的所有session的所有连接都会失效，因此就会完全无法通过orm访问数据库了。</p>
+<p>相关异常信息:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">MySQL server has gone away</span><br><span class="line">Can&#39;t reconnect until invalid transaction is rolled back</span><br></pre></td></tr></table></figure>
+<p>这里之所以说<code>invalid transaction is rolled back</code>，是因为老session收到数据请求后，准备要用连接了。<br>而连接上的事务没有自动提交，也没有rollback，因此不能直接用。<br>因此尝试把连接上，上一次请求的事务提交，但由于连接已经失效，所以失败了。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/10/23/2018-10/flask%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%8B%EF%BC%8C%E8%BF%9E%E6%8E%A5%E6%B3%84%E9%9C%B2%E7%9A%84bug/" data-id="ck96cxpop00e4maamerbl1rgc" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/flask/" rel="tag">flask</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/python/" rel="tag">python</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-10/mysql优化实战-范围查询转点查询" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/10/22/2018-10/mysql%E4%BC%98%E5%8C%96%E5%AE%9E%E6%88%98-%E8%8C%83%E5%9B%B4%E6%9F%A5%E8%AF%A2%E8%BD%AC%E7%82%B9%E6%9F%A5%E8%AF%A2/" class="article-date">
@@ -1294,145 +1380,6 @@ r3是关键的加密保护的随机数，r1,r2,r3一起生成key。<br>r1,r2的�
 
 
   
-    <article id="post-2018-09/Netty-in-action第五章-ByteBuf笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/09/01/2018-09/Netty-in-action%E7%AC%AC%E4%BA%94%E7%AB%A0-ByteBuf%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2018-09-01T10:40:59.000Z" itemprop="datePublished">2018-09-01</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/Netty/">Netty</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/09/01/2018-09/Netty-in-action%E7%AC%AC%E4%BA%94%E7%AB%A0-ByteBuf%E7%AC%94%E8%AE%B0/">Netty in Action第五章-ByteBuf笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>目录</p>
-<blockquote>
-<p>ByteBuf-Netty的数据容器<br>API详细信息<br>用例<br>内存分配</p>
-</blockquote>
-<p><code>ByteBuffer</code>: JAVA NIO使用的字节容器，使用复杂；<br><code>ByteBuf</code>:  Netty提供的字节容器，更简单灵活。</p>
-<h1 id="ByteBuf-API"><a href="#ByteBuf-API" class="headerlink" title="ByteBuf API"></a>ByteBuf API</h1><p><strong>优点</strong></p>
-<ul>
-<li>用户可以自定义缓冲区类型扩展</li>
-<li>透明的零拷贝</li>
-<li>容量按需增长</li>
-<li>读写切换不需要<code>flip()</code>方法</li>
-<li>读写使用不同索引</li>
-<li>支持方法链式调用</li>
-<li>支持引用计数 </li>
-<li>支持池化</li>
-</ul>
-<h1 id="外部接口"><a href="#外部接口" class="headerlink" title="外部接口:"></a>外部接口:</h1><ol>
-<li>从<code>Channel</code>或者<code>ctx</code>获取<code>ByteBuffAllocator</code>，然后再分配；</li>
-<li>用<code>Unpooled</code>工具类直接创建。<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 1. 从channel:</span></span><br><span class="line">Channel channel = ...;</span><br><span class="line">ByteBufAllocator allocator = channel.alloc(); <span class="comment">//1</span></span><br><span class="line">ByteBuf buf=allocator.heapBuffer();</span><br><span class="line"><span class="comment">// 2. 从ctx:</span></span><br><span class="line">ChannelHandlerContext ctx = ...;</span><br><span class="line">ByteBufAllocator allocator2 = ctx.alloc(); <span class="comment">//2</span></span><br><span class="line">ByteBuf buf=allocator.heapBuffer();</span><br><span class="line"><span class="comment">// 3. </span></span><br><span class="line">ByteBuf buf=Unpooled.buffer();</span><br></pre></td></tr></table></figure>
-
-</li>
-</ol>
-<h1 id="内部工作机制"><a href="#内部工作机制" class="headerlink" title="内部工作机制"></a>内部工作机制</h1><img src="/images/2018-09/5.1.jpg" class="" width="400" height="600" title="读写索引">
-<p>维护两个索引: <code>readerIndex</code>,<code>writerIndex</code><br>// 这样就省得用<code>flip</code>来回切换读写状态了。</p>
-<p>如上图,起始为空，读的时候发现<code>readerIndex</code>&gt;=<code>writerIndex</code>,因此失败。</p>
-<h1 id="使用模式"><a href="#使用模式" class="headerlink" title="使用模式"></a>使用模式</h1><h2 id="堆缓冲区-使用模式-也称支撑数组backing-array"><a href="#堆缓冲区-使用模式-也称支撑数组backing-array" class="headerlink" title="堆缓冲区-使用模式 (也称支撑数组backing array)"></a>堆缓冲区-使用模式 (也称支撑数组backing array)</h2><h2 id="（heap-buffer）"><a href="#（heap-buffer）" class="headerlink" title="（heap buffer）"></a>（heap buffer）</h2><p>最常用，将数据存储在<code>JVM</code>堆中。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">static</span> Random random = <span class="keyword">new</span> Random();</span><br><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> ByteBuf BYTE_BUF_FROM_SOMEWHERE = Unpooled.buffer(<span class="number">1024</span>);</span><br><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> Channel CHANNEL_FROM_SOMEWHERE = <span class="keyword">new</span> NioSocketChannel();</span><br><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> ChannelHandlerContext CHANNEL_HANDLER_CONTEXT_FROM_SOMEWHERE = DUMMY_INSTANCE;</span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">heapBuffer</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    ByteBuf heapBuf = BYTE_BUF_FROM_SOMEWHERE; <span class="comment">//get reference form somewhere</span></span><br><span class="line">    <span class="comment">//检查 ByteBuf 是否有一个支撑数组</span></span><br><span class="line">    <span class="keyword">if</span> (heapBuf.hasArray()) &#123;</span><br><span class="line">        <span class="comment">//如果有，则获取对该数组的引用</span></span><br><span class="line">        <span class="keyword">byte</span>[] array = heapBuf.array();</span><br><span class="line">        <span class="comment">//计算第一个字节的偏移量</span></span><br><span class="line">        <span class="keyword">int</span> offset = heapBuf.arrayOffset() + heapBuf.readerIndex();</span><br><span class="line">        <span class="comment">//获得可读字节数</span></span><br><span class="line">        <span class="keyword">int</span> length = heapBuf.readableBytes();</span><br><span class="line">        <span class="comment">//使用数组、偏移量和长度作为参数调用你的方法</span></span><br><span class="line">        handleArray(array, offset, length);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h2 id="直接缓冲区-使用模式"><a href="#直接缓冲区-使用模式" class="headerlink" title="直接缓冲区-使用模式"></a>直接缓冲区-使用模式</h2><h2 id="（direct-buffer）"><a href="#（direct-buffer）" class="headerlink" title="（direct buffer）"></a>（direct buffer）</h2><p>堆外内存，<code>directBuffer</code>,性能最好，省去一次复制。<br>缺点时要注意管理堆外内存。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">directBuffer</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    ByteBuf directBuf = BYTE_BUF_FROM_SOMEWHERE; <span class="comment">//get reference form somewhere</span></span><br><span class="line">    <span class="comment">//检查 ByteBuf 是否由数组支撑。如果不是，则这是一个直接缓冲区</span></span><br><span class="line">    <span class="keyword">if</span> (!directBuf.hasArray()) &#123;</span><br><span class="line">        <span class="comment">//获取可读字节数</span></span><br><span class="line">        <span class="keyword">int</span> length = directBuf.readableBytes();</span><br><span class="line">        <span class="comment">//分配一个新的数组来保存具有该长度的字节数据</span></span><br><span class="line">        <span class="keyword">byte</span>[] array = <span class="keyword">new</span> <span class="keyword">byte</span>[length];</span><br><span class="line">        <span class="comment">//将字节复制到该数组</span></span><br><span class="line">        directBuf.getBytes(directBuf.readerIndex(), array);</span><br><span class="line">        <span class="comment">//使用数组、偏移量和长度作为参数调用你的方法</span></span><br><span class="line">        handleArray(array, <span class="number">0</span>, length);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h2 id="复合缓冲区-使用模式"><a href="#复合缓冲区-使用模式" class="headerlink" title="复合缓冲区-使用模式"></a>复合缓冲区-使用模式</h2><h2 id="（composite-buffer）"><a href="#（composite-buffer）" class="headerlink" title="（composite buffer）"></a>（composite buffer）</h2><p>把上述两个模式复合，把多个<code>ByteBuf</code>聚合成一个视图处理。<br>消除了没有必要的复制，同时对外是一个通用的接口。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"> <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">byteBufComposite</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    CompositeByteBuf messageBuf = Unpooled.compositeBuffer();</span><br><span class="line">    ByteBuf headerBuf = BYTE_BUF_FROM_SOMEWHERE; <span class="comment">// can be backing or direct</span></span><br><span class="line">    ByteBuf bodyBuf = BYTE_BUF_FROM_SOMEWHERE;   <span class="comment">// can be backing or direct</span></span><br><span class="line">    <span class="comment">//将 ByteBuf 实例追加到 CompositeByteBuf</span></span><br><span class="line">    messageBuf.addComponents(headerBuf, bodyBuf);</span><br><span class="line">    <span class="comment">//...</span></span><br><span class="line">    <span class="comment">//删除位于索引位置为 0（第一个组件）的 ByteBuf</span></span><br><span class="line">    messageBuf.removeComponent(<span class="number">0</span>); <span class="comment">// remove the header</span></span><br><span class="line">    <span class="comment">//循环遍历所有的 ByteBuf 实例</span></span><br><span class="line">    <span class="keyword">for</span> (ByteBuf buf : messageBuf) &#123;</span><br><span class="line">        System.out.println(buf.toString());</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">byteBufCompositeArray</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    CompositeByteBuf compBuf = Unpooled.compositeBuffer();</span><br><span class="line">    <span class="comment">//获得可读字节数</span></span><br><span class="line">    <span class="keyword">int</span> length = compBuf.readableBytes();</span><br><span class="line">    <span class="comment">//分配一个具有可读字节数长度的新数组</span></span><br><span class="line">    <span class="keyword">byte</span>[] array = <span class="keyword">new</span> <span class="keyword">byte</span>[length];</span><br><span class="line">    <span class="comment">//将字节读到该数组中</span></span><br><span class="line">    compBuf.getBytes(compBuf.readerIndex(), array);</span><br><span class="line">    <span class="comment">//使用偏移量和长度作为参数使用该数组</span></span><br><span class="line">    handleArray(array, <span class="number">0</span>, array.length);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p><code>CompositeByteBuf</code>附加了许多功能。</p>
-<h1 id="字节级操作"><a href="#字节级操作" class="headerlink" title="字节级操作"></a>字节级操作</h1><h2 id="随机访问-（可以重复消费）-getXXX之类的方法"><a href="#随机访问-（可以重复消费）-getXXX之类的方法" class="headerlink" title="随机访问 （可以重复消费）(getXXX之类的方法)"></a>随机访问 （可以重复消费）(getXXX之类的方法)</h2><p><code>ByteBuf</code>的随机访问与普通数组类似:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span>(<span class="keyword">int</span> i;i&lt;buffer.capacity();i++)&#123;</span><br><span class="line">    <span class="keyword">byte</span> b=buffer.getByte(i);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>普通访问不会改变<code>readerIndex</code>和<code>writerIndex</code>。<br>要改变需要调用<code>readerIndex(index)</code>和<code>writerIndex(index)</code>。</p>
-<h2 id="顺序访问-（不会重复消费）-readXXX-skipXXX之类的方法"><a href="#顺序访问-（不会重复消费）-readXXX-skipXXX之类的方法" class="headerlink" title="顺序访问 （不会重复消费）(readXXX/skipXXX之类的方法)"></a>顺序访问 （不会重复消费）(readXXX/skipXXX之类的方法)</h2><img src="/images/2018-09/5.4.png" class="" width="400" height="600" title="读写索引">
-<p>如上图所示，这种访问方式可以看作消费数据，通过移动readerIndex，扩大了可丢弃字节（已读），减少了可读字节。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//迭代缓冲区的可读字节。</span></span><br><span class="line"> ByteBuf buffer = ...;</span><br><span class="line"> <span class="keyword">while</span> (buffer.isReadable()) &#123;</span><br><span class="line">     System.out.println(buffer.readByte());</span><br><span class="line"> &#125;</span><br></pre></td></tr></table></figure>
-
-<h2 id="丢弃discardable-bytes-类似于compact-gc"><a href="#丢弃discardable-bytes-类似于compact-gc" class="headerlink" title="丢弃discardable bytes(类似于compact/gc)"></a>丢弃discardable bytes(类似于compact/gc)</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//调用:</span></span><br><span class="line">byteBuf.discardReadBytes();</span><br></pre></td></tr></table></figure>
-<p>丢弃已读部分回收空间，本质上是扩大了可写字节。<br>底层的实现是把可读的数据移动到首部，<code>readerIndex=0;writerIndex-=readerIndex.</code>，因此导致内存复制，有性能开销，所以尽量不要调用。</p>
-<h2 id="顺序写入"><a href="#顺序写入" class="headerlink" title="顺序写入:"></a>顺序写入:</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 1.</span></span><br><span class="line">byteBuf.writeBytes(otherByteBuf);</span><br><span class="line"><span class="comment">// 2.</span></span><br><span class="line">byteBuf.writeInt(<span class="number">26</span>);</span><br></pre></td></tr></table></figure>
-
-<h2 id="索引修改"><a href="#索引修改" class="headerlink" title="索引修改"></a>索引修改</h2><p><code>readerIndex</code>和<code>writerIndex</code>这俩变量，除了因为上述数据操作而间接发生改变，也可以直接强行改它们而不管数据：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">markReaderIndex()<span class="comment">// 标记为x</span></span><br><span class="line">resetReaderIndex()<span class="comment">// 回到x,注意不是0</span></span><br><span class="line">markWriterIndex() <span class="comment">// 标记为y</span></span><br><span class="line">resetWriterIndex()<span class="comment">// 回到y,注意不是0</span></span><br><span class="line">clear() <span class="comment">// 这个才是双双清0</span></span><br><span class="line">readerIndex(<span class="keyword">int</span>)</span><br><span class="line">writerIndex(<span class="keyword">int</span>)</span><br><span class="line"></span><br><span class="line"><span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> ByteBuf <span class="title">markReaderIndex</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        markedReaderIndex = readerIndex;</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">this</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> ByteBuf <span class="title">resetReaderIndex</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        readerIndex(markedReaderIndex);</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">this</span>;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
-<p>这些操作不改变数据，所以是O(1)的。</p>
-<h2 id="查找（类似于Scan-And-Filter操作"><a href="#查找（类似于Scan-And-Filter操作" class="headerlink" title="查找（类似于Scan And Filter操作)"></a>查找（类似于Scan And Filter操作)</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//1:</span></span><br><span class="line"><span class="keyword">int</span> index = byteBuf.indexOf(xxx)</span><br><span class="line"><span class="comment">//2.</span></span><br><span class="line"><span class="keyword">int</span> index = byteBuf.forEachByte(ByteBufProcessor.FIND_CR);</span><br><span class="line"><span class="comment">// ByteBufProcessor 4.1版本改为 io.netty.util.ByteProcessor</span></span><br></pre></td></tr></table></figure>
-
-<h2 id="派生缓冲区-类似于视图，可读写-浅拷贝"><a href="#派生缓冲区-类似于视图，可读写-浅拷贝" class="headerlink" title="派生缓冲区(类似于视图，可读写) // 浅拷贝"></a>派生缓冲区(类似于视图，可读写) // 浅拷贝</h2><p>创建的方法:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">duplicate()</span><br><span class="line">slice(<span class="keyword">int</span>,<span class="keyword">int</span>)</span><br><span class="line">Unpooled.unmodifiableBuffer(...)</span><br><span class="line">order(ByteOrder)</span><br><span class="line">readSlice(<span class="keyword">int</span>)</span><br></pre></td></tr></table></figure>
-<p>这些派生的<code>ByteBuf</code>实例，底层数据是和原来共享的，只是有自己的读写索引。</p>
-<h2 id="深拷贝"><a href="#深拷贝" class="headerlink" title="深拷贝"></a>深拷贝</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">copy(<span class="keyword">int</span>,<span class="keyword">int</span>)</span><br></pre></td></tr></table></figure>
-
-<h1 id="ByteBufHolder接口"><a href="#ByteBufHolder接口" class="headerlink" title="ByteBufHolder接口"></a>ByteBufHolder接口</h1><p><code>ByteBufHolder</code>接口就是把<code>ButeBuf</code>再封装一层，只暴露几个大的API:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">ByteBuf <span class="title">content</span><span class="params">()</span><span class="comment">// 返回持有的ByteBuf</span></span></span><br><span class="line"><span class="function"><span class="title">copy</span><span class="params">()</span></span></span><br><span class="line"><span class="function"><span class="title">duplicate</span><span class="params">()</span><span class="comment">// 浅拷贝</span></span></span><br></pre></td></tr></table></figure>
-<p>这样只需要声明实现这个接口，相当于宣布这个类内部有成员变量是<code>ByteBuf</code>，换言之就是一个承载数据的对象了。</p>
-<h1 id="ByteBuf分配"><a href="#ByteBuf分配" class="headerlink" title="ByteBuf分配"></a>ByteBuf分配</h1><h2 id="按需分配-ByteBufAllocator接口"><a href="#按需分配-ByteBufAllocator接口" class="headerlink" title="按需分配: ByteBufAllocator接口"></a>按需分配: ByteBufAllocator接口</h2><p>从<code>channel</code>或者<code>ctx</code>获得<code>ByteBufAllocator</code>，降低分配和释放内存的开销。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 1. 从channel:</span></span><br><span class="line">Channel channel = ...;</span><br><span class="line">ByteBufAllocator allocator = channel.alloc(); <span class="comment">//1</span></span><br><span class="line"><span class="comment">// 2. 从ctx:</span></span><br><span class="line">ChannelHandlerContext ctx = ...;</span><br><span class="line">ByteBufAllocator allocator2 = ctx.alloc(); <span class="comment">//2</span></span><br></pre></td></tr></table></figure>
-<p>拿到分配器以后，可以进行的操作:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Buffer()</span><br><span class="line">heapBuffer() </span><br><span class="line">directBuffer() </span><br><span class="line">compositeBuffer()</span><br><span class="line">...<span class="comment">// 总之就是各种创建ByteBuf的方法</span></span><br></pre></td></tr></table></figure>
-<p>netty的两个<code>ByteBufAllocator</code>的实现:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">PooledByteBufAllocator  <span class="comment">// 池化的,性能最高 </span></span><br><span class="line">UnpooledByteBufAllocator <span class="comment">// 非池化的</span></span><br></pre></td></tr></table></figure>
-<p><code>Channel</code>具体返回的分配器是池化还是非池化,可以通过<code>ChannelConfig</code>配置，或者设定<code>bootstrap</code>参数。</p>
-<h2 id="Unpooled缓冲区"><a href="#Unpooled缓冲区" class="headerlink" title="Unpooled缓冲区"></a>Unpooled缓冲区</h2><p>非网络项目时，或其他不能从<code>channel</code>,<code>ctx</code>获取<code>BufAllocator</code>时，可以用<code>Unpooled</code>工具类来创建未池化的<code>ByteBuf</code>实例。<br>它的方法与上述两个类似，只不过去掉了<code>heapBuf</code>,用<code>buffer()</code>方法代替，默认直接返回堆内存buf。</p>
-<h2 id="ByteBufUtil类"><a href="#ByteBufUtil类" class="headerlink" title="ByteBufUtil类"></a>ByteBufUtil类</h2><p>顾名思义，有一些用于<code>ByteBuf</code>的辅助方法，看起来比较有用包括:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">firstIndexof</span><br><span class="line">lastIndexof</span><br><span class="line">hexdump()<span class="comment">// 打印</span></span><br><span class="line">equals(buf1,buf2)</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
-
-<h2 id="引用计数-ReferenceCounted"><a href="#引用计数-ReferenceCounted" class="headerlink" title="引用计数 // ReferenceCounted"></a>引用计数 // ReferenceCounted</h2><p>由于<code>ByteBuf</code>一般比较大，所以实际数据一般只会存一份，引用却会有很多。<br>然后引用的生命周期一般很长，。<br>所以<code>netty</code>除了<code>gcroot</code>的方法管理，还用了原始的引用计数:<br><code>ReferenceCounted</code>接口。<br>上文中的<code>ByteBufHolder</code>接口就是它的子接口。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">ByteBufHolder =&gt; ReferenceCounted</span><br><span class="line"><span class="comment">// 引用计数:</span></span><br><span class="line">ByteBuf buf=allocator.directBuffer();</span><br><span class="line"><span class="keyword">assert</span> buffer.refCnt()==<span class="number">1</span>; </span><br><span class="line"><span class="comment">// 释放:</span></span><br><span class="line"><span class="keyword">boolean</span> released = buffer.release();</span><br></pre></td></tr></table></figure>
-
-<p>四种<code>ByteBuf</code>:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">UnpooledHeapByteBuf: 堆内存，可以被jvm gc；</span><br><span class="line">UnpooledDirectByteBuf:  堆外，可以被jvm gc，但最好自己回收;</span><br><span class="line">PooledHeapByteBuf: 不可以被jvm gc <span class="comment">// 因为在池子里头</span></span><br><span class="line">PooledDirectByteBuf: 不可以被jvm gc. <span class="comment">// 因为在池子里头</span></span><br></pre></td></tr></table></figure>
-<p>换言之：<br>池化的jvm不管；<br>非池化的jvm可以管。</p>
-<p>增加计数器的操作:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">retain()</span><br><span class="line"><span class="comment">//或者刚出生的时候会有1.</span></span><br></pre></td></tr></table></figure>
-<p>减少计数器的操作:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">release()</span><br></pre></td></tr></table></figure>
-
-<p>编程规范:</p>
-<blockquote>
-<ol>
-<li>pipeline里最后一个处理者要负责release()</li>
-<li>中间某一个抛异常了，不往下传了，也要负责release()。 </li>
-<li>中间某一个往下传了别的数据，要负责release传入的原来那个数据。</li>
-</ol>
-</blockquote>
-<p>内存泄露提示:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">LEAK: ByteBuf.release() was not called before it’s garbage-collected. Enable advanced leak reporting to find out where the leak occurred. To enable advanced leak reporting, specify the JVM option ‘-Dio.netty.leakDetectionLevel=advanced’ or call ResourceLeakDetector.setLevel()</span><br></pre></td></tr></table></figure>
-<p>出现了这个说明有地方没有<code>release()</code>.可以提高检测级别打印出具体泄露点。</p>
-<p>参考:<br><a href="http://chen-tao.github.io/2015/10/03/netty/" target="_blank" rel="noopener">http://chen-tao.github.io/2015/10/03/netty/</a><br><a href="http://calvin1978.blogcn.com/articles/directbytebuffer.html" target="_blank" rel="noopener">http://calvin1978.blogcn.com/articles/directbytebuffer.html</a></p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/09/01/2018-09/Netty-in-action%E7%AC%AC%E4%BA%94%E7%AB%A0-ByteBuf%E7%AC%94%E8%AE%B0/" data-id="ck96cxpoi00dbmaam4dug4m4k" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Netty/" rel="tag">Netty</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1459,6 +1406,10 @@ r3是关键的加密保护的随机数，r1,r2,r3一起生成key。<br>r1,r2的�
       <ul>
         
           <li>
+            <a href="/2022/09/25/2022-09/nc%E5%91%BD%E4%BB%A4%E7%AC%94%E8%AE%B0/">nc命令笔记</a>
+          </li>
+        
+          <li>
             <a href="/2022/09/25/2022-09/%E8%B0%83%E4%BC%98-%E8%A7%A3%E5%86%B3%E7%BA%BF%E7%A8%8B%E6%B1%A0%E9%80%A0%E6%88%90%E7%9A%84%E8%BF%9B%E7%A8%8B%E5%8D%A1%E9%A1%BF%E3%80%81cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-解决线程池造成的进程卡顿、cpu毛刺问题</a>
           </li>
         
@@ -1472,10 +1423,6 @@ r3是关键的加密保护的随机数，r1,r2,r3一起生成key。<br>r1,r2的�
         
           <li>
             <a href="/2022/03/25/2022-03/G1%E8%B0%83%E4%BC%98-%E5%A4%8D%E6%9D%82%E4%B8%9A%E5%8A%A1%E6%B2%BB%E7%90%86%E5%B0%8F%E8%AE%B0/">G1调优-复杂业务治理小记</a>
-          </li>
-        
-          <li>
-            <a href="/2022/03/16/2022-03/cms%E7%9A%84gc%E8%A7%A6%E5%8F%91%E6%9D%A1%E4%BB%B6/">cms的gc触发条件</a>
           </li>
         
       </ul>

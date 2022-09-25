@@ -72,6 +72,83 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-07/java中的代理" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/07/08/2018-07/java%E4%B8%AD%E7%9A%84%E4%BB%A3%E7%90%86/" class="article-date">
+  <time datetime="2018-07-08T12:24:16.000Z" itemprop="datePublished">2018-07-08</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/">设计模式</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/07/08/2018-07/java%E4%B8%AD%E7%9A%84%E4%BB%A3%E7%90%86/">java代理汇总</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="1-静态代理"><a href="#1-静态代理" class="headerlink" title="1. 静态代理"></a>1. 静态代理</h1><ol>
+<li>接口A;</li>
+<li>实现a1,实现A中的方法;</li>
+<li>代理a2,<br>(<code>AProxy implement A</code>),成员中有a1,这样实际干活的是a1,但是a2可以夹带一些私货,比如打上日志什么的。<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">AProxy</span> <span class="keyword">implements</span> <span class="title">AInterface</span> </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> A1 a1;</span><br><span class="line"> </span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">AProxy</span><span class="params">(A1 a1)</span> </span>&#123;<span class="comment">// 包裹一个实现</span></span><br><span class="line">        <span class="keyword">this</span>.a1 = a1;</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">doSomething</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        System.out.println(<span class="string">"代理类方法，进行了增强。。。"</span>);</span><br><span class="line">        System.out.println(<span class="string">"事务开始。。。"</span>);</span><br><span class="line">        <span class="comment">// 调用委托类的方法;</span></span><br><span class="line">        a1.doSomething();</span><br><span class="line">        System.out.println(<span class="string">"处理结束。。。"</span>);</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+</li>
+</ol>
+<h1 id="2-jdk动态代理"><a href="#2-jdk动态代理" class="headerlink" title="2. jdk动态代理"></a>2. jdk动态代理</h1><p>上述静态代理的特点是，如果有n个接口要代理，那么相应的静态代理a2也会有很多。<br>动态代理的方法就是用反射来动态生成一个代理。而不用每次写非常相似的代码。</p>
+<ol>
+<li>接口A;</li>
+<li>实现a1,实现A中的方法;</li>
+<li>动态代理,传入a1,通过反射创建一个与a1接口一样的类A2,并生成一个对象a2。<br>然后定义每次invoke的时候需要夹带的私货(打日志)。</li>
+</ol>
+<p>外界使用的时候,比静态代理多一步。<br>静态代理: 1.传入a1,得到一个代理a2.<br>动态代理: 2.传入a1,得到一个handler,再从handler中获取代理a2.（getProxy）</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> java.lang.reflect.InvocationHandler;</span><br><span class="line"><span class="keyword">import</span> java.lang.reflect.Method;</span><br><span class="line"><span class="keyword">import</span> java.lang.reflect.Proxy;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">DynamicProxyTest</span> </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">AHandler</span> <span class="keyword">implements</span> <span class="title">InvocationHandler</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 目标对象</span></span><br><span class="line">        <span class="keyword">private</span> Object a1Impl;</span><br><span class="line"></span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="title">AHandler</span><span class="params">(Object a1Impl)</span> </span>&#123;</span><br><span class="line">            <span class="keyword">super</span>();</span><br><span class="line">            <span class="keyword">this</span>.a1Impl = a1Impl;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">/**</span></span><br><span class="line"><span class="comment">         * 创建代理实例</span></span><br><span class="line"><span class="comment">         *</span></span><br><span class="line"><span class="comment">         * <span class="doctag">@return</span> proxy Object</span></span><br><span class="line"><span class="comment">         * <span class="doctag">@throws</span> Throwable e</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> Object <span class="title">getProxy</span><span class="params">()</span> <span class="keyword">throws</span> Throwable </span>&#123;</span><br><span class="line">            <span class="comment">// 实现1: 进行代理:</span></span><br><span class="line">            <span class="keyword">return</span> Proxy.newProxyInstance(Thread.currentThread()</span><br><span class="line">                    .getContextClassLoader(), <span class="keyword">this</span>.a1Impl.getClass()</span><br><span class="line">                    .getInterfaces(), <span class="keyword">this</span>);</span><br><span class="line">            <span class="comment">// 实现2: 不进行代理,依然使用默认实现:</span></span><br><span class="line">            <span class="comment">// 这样写只返回了目标对象，没有生成代理对象。</span></span><br><span class="line">            <span class="comment">// return a1Impl;</span></span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">/**</span></span><br><span class="line"><span class="comment">         * 实现InvocationHandler接口方法</span></span><br><span class="line"><span class="comment">         * 执行目标对象的方法，并进行增强</span></span><br><span class="line"><span class="comment">         */</span></span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> Object <span class="title">invoke</span><span class="params">(Object proxy, Method method, Object[] args)</span> <span class="keyword">throws</span> Throwable </span>&#123;</span><br><span class="line">            <span class="comment">// 使用代理proxy,调用方法method,参数为args</span></span><br><span class="line">            Object result;</span><br><span class="line">            System.out.println(<span class="string">"代理类方法，进行了增强。。。"</span>);</span><br><span class="line">            System.out.println(<span class="string">"事务开始。。。"</span>);</span><br><span class="line">            <span class="comment">// 执行目标方法对象</span></span><br><span class="line">            <span class="comment">// 调用a1Impl的method方法,参数为args</span></span><br><span class="line">            result = method.invoke(a1Impl, args);</span><br><span class="line">            System.out.println(<span class="string">"事务结束。。。"</span>);</span><br><span class="line">            <span class="keyword">return</span> result;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> <span class="keyword">throws</span> Throwable </span>&#123;</span><br><span class="line">        A a1 = <span class="keyword">new</span> A1();</span><br><span class="line">        AHandler handler = <span class="keyword">new</span> AHandler(a1);</span><br><span class="line">        <span class="comment">// 根据目标生成代理对象</span></span><br><span class="line">        A a2 = (A) handler.getProxy();</span><br><span class="line">        a2.doSomething();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<h1 id="3-cglib动态代理"><a href="#3-cglib动态代理" class="headerlink" title="3. cglib动态代理"></a>3. cglib动态代理</h1><p>上述jdk的静态代理和动态代理,本质上都是用接口指针存放实现的对象,然后偷偷用包装了a1的代理a2,替换指针里的对象。<br>初始化时,代理a2的接口声明和a1一样即可。</p>
+<blockquote>
+<p>因此jdk的静态代理和动态代理都要求被代理的实现对象声明实现了某一个接口。</p>
+</blockquote>
+<p>cglib代理则不同,用的是基类指针存放子类对象,因此并不要求一定要声明实现某一个接口,但必须要是一个可以被继承的类。对于java来说，也就是不能是final类。</p>
+<blockquote>
+<p>jdk代理: 接口引用存放代理对象; 要求实现某接口.<br>cglib代理: 原类的引用存放代理对象; 要求不是final,可以继承。</p>
+</blockquote>
+<p>具体cglib代理的写法:</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">&lt;!-- https://mvnrepository.com/artifact/cglib/cglib --&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>cglib<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>cglib<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">AImpl</span> </span>&#123;<span class="comment">// 并不继承接口,但不是final的(可以有子类)</span></span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">doSomething</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        System.out.println(<span class="string">"AImpl doSomething"</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> java.lang.reflect.Method;</span><br><span class="line"><span class="keyword">import</span> net.sf.cglib.proxy.Enhancer;</span><br><span class="line"><span class="keyword">import</span> net.sf.cglib.proxy.MethodInterceptor;</span><br><span class="line"><span class="keyword">import</span> net.sf.cglib.proxy.MethodProxy;</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@author</span> xiaoyue26</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">AInterceptor</span> <span class="keyword">implements</span> <span class="title">MethodInterceptor</span> </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> Object target;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 创建代理实例</span></span><br><span class="line"><span class="comment">     *</span></span><br><span class="line"><span class="comment">     * <span class="doctag">@param</span> target</span></span><br><span class="line"><span class="comment">     * <span class="doctag">@return</span></span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> Object <span class="title">getInstance</span><span class="params">(Object target)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.target = target;</span><br><span class="line">        Enhancer enhancer = <span class="keyword">new</span> Enhancer();</span><br><span class="line">        enhancer.setSuperclass(<span class="keyword">this</span>.target.getClass());<span class="comment">// 继承传入的对象</span></span><br><span class="line">        <span class="comment">// 设置回调方法</span></span><br><span class="line">        enhancer.setCallback(<span class="keyword">this</span>);</span><br><span class="line">        <span class="comment">// 创建代理对象</span></span><br><span class="line">        <span class="keyword">return</span> enhancer.create();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 实现MethodInterceptor接口要重写的方法。</span></span><br><span class="line"><span class="comment">     * 回调方法</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> Object <span class="title">intercept</span><span class="params">(Object obj, Method method</span></span></span><br><span class="line"><span class="function"><span class="params">            , Object[] args, MethodProxy proxy)</span> <span class="keyword">throws</span> Throwable </span>&#123;</span><br><span class="line">        System.out.println(<span class="string">"事务开始。。。"</span>);</span><br><span class="line">        Object result = proxy.invokeSuper(obj, args);<span class="comment">// 调用父类对象(调用原实现)</span></span><br><span class="line">        System.out.println(<span class="string">"事务结束。。。"</span>);</span><br><span class="line">        <span class="keyword">return</span> result;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> </span>&#123;</span><br><span class="line">        AInterceptor aInterceptor = <span class="keyword">new</span> AInterceptor();</span><br><span class="line">        AImpl a1 = (AImpl) aInterceptor.getInstance(<span class="keyword">new</span> AImpl());</span><br><span class="line">        a1.doSomething();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>与jdk动态代理很相似,只是概念术语换一下:<br>创建一个方法拦截器,传入实现a1,获取一个代理a2。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/07/08/2018-07/java%E4%B8%AD%E7%9A%84%E4%BB%A3%E7%90%86/" data-id="ck96cxpo800cbmaamfjo2dki5" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/" rel="tag">设计模式</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-06/java并发编程的艺术-Executor框架-第十章" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/06/24/2018-06/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-Executor%E6%A1%86%E6%9E%B6-%E7%AC%AC%E5%8D%81%E7%AB%A0/" class="article-date">
@@ -1341,197 +1418,6 @@
 
 
   
-    <article id="post-2018-03/高性能Mysql笔记-第六章-3" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/03/12/2018-03/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC%E5%85%AD%E7%AB%A0-3/" class="article-date">
-  <time datetime="2018-03-12T12:31:17.000Z" itemprop="datePublished">2018-03-12</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/mysql/">mysql</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/03/12/2018-03/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC%E5%85%AD%E7%AB%A0-3/">高性能Mysql笔记-第六章(3)</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <ul>
-<li>前情提要:<br>前面讲了一些场景下针对性的优化。</li>
-</ul>
-<h2 id="6-7-5-优化Limit分页"><a href="#6-7-5-优化Limit分页" class="headerlink" title="6.7.5 优化Limit分页"></a>6.7.5 优化Limit分页</h2><ul>
-<li>场景<br>偏移量非常大，数据量非常的时候。</li>
-</ul>
-<p>例如Limit 10000,20.</p>
-<ul>
-<li><p>工作原理：<br>Mysql查询10020条记录，然后返回最后20条。前面1W条都被丢弃。</p>
-</li>
-<li><p>解决方案：</p>
-</li>
-</ul>
-<ol>
-<li>限制分页的数量；(不让查这么大偏移量)</li>
-<li>使用覆盖索引优化性能。(延迟关联)</li>
-<li>记录上次分页的id。(利用索引)</li>
-</ol>
-<ul>
-<li>方案2（延迟关联）<br>其中方案2，使用覆盖索引优化的原理：</li>
-</ul>
-<ol>
-<li>使用覆盖索引，返回目标行的id；</li>
-<li>再使用关联查询，返回目标行的所有列。</li>
-</ol>
-<p>方案2在偏移量很大的时候，性能优化明显。</p>
-<ul>
-<li>方案3（记录上次分页id）<br>这个方案在多次顺序分页的时候性能很好。<br>比如上次分页查询到了id为10240的地方，记录这个值（可以在应用层），然后下次的查询就可以是:<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> t</span><br><span class="line"><span class="keyword">where</span> <span class="keyword">id</span>&gt;<span class="number">10240</span></span><br><span class="line"><span class="keyword">limit</span> <span class="number">20</span></span><br></pre></td></tr></table></figure>
-
-</li>
-</ul>
-<h2 id="6-7-6-SQL-CALC-FOUND-ROWS相关"><a href="#6-7-6-SQL-CALC-FOUND-ROWS相关" class="headerlink" title="6.7.6 SQL_CALC_FOUND_ROWS相关"></a>6.7.6 SQL_CALC_FOUND_ROWS相关</h2><p>使用limit的时候，如果加上hint:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">SQL_CALC_FOUND_ROWS</span><br></pre></td></tr></table></figure>
-<p>就可以获得limit之前结果集的行数。</p>
-<ul>
-<li>工作原理：<br>Mysql扫描整个结果集，获得行数。<br>如果不用这个hint，则Mysql只扫描limit的行数返回即可，因此这个hint的代价可能非常大。</li>
-</ul>
-<p>使用这个hint的可能原因及相关优化：</p>
-<ol>
-<li>想知道是否应该显示“下一页”的按钮；<br>解决方案：如果原来是limit 20,则改成limit 21即可，这样就知道需不需要“下一页”了。</li>
-<li>应用层进行缓存；</li>
-<li>使用Explain结果的行数估算。</li>
-</ol>
-<h2 id="6-7-7-优化UNION查询"><a href="#6-7-7-优化UNION查询" class="headerlink" title="6.7.7 优化UNION查询"></a>6.7.7 优化UNION查询</h2><ul>
-<li><p>UNION<br>去重后合并</p>
-</li>
-<li><p>UNION ALL<br>不去重，直接合并</p>
-</li>
-<li><p>Mysql执行UNION的原理：<br>创建临时表，UNION的过程逐步填充行。</p>
-</li>
-</ul>
-<p>优化方法：<br>将WHERE,limit,ORDER BY子句置入内部UNION的子句，以提前过滤。</p>
-<h2 id="6-7-9-用户自定义变量"><a href="#6-7-9-用户自定义变量" class="headerlink" title="6.7.9 用户自定义变量"></a>6.7.9 用户自定义变量</h2><ul>
-<li>示例:<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- 定义：</span></span><br><span class="line"><span class="keyword">set</span> @one :=<span class="number">1</span>;</span><br><span class="line"><span class="keyword">set</span> @min_actor := (<span class="keyword">select</span> <span class="keyword">min</span>(<span class="keyword">id</span>) <span class="keyword">from</span> actor); <span class="comment">-- 赋值运算优先级很低，所以右边一般都要括号。</span></span><br><span class="line"><span class="keyword">set</span> @last_week := <span class="keyword">current_date</span>-<span class="built_in">interval</span> <span class="number">1</span> <span class="keyword">week</span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">-- 使用：</span></span><br><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> t</span><br><span class="line"><span class="keyword">where</span> <span class="keyword">col</span> &lt;= @last_week;</span><br></pre></td></tr></table></figure>
-
-</li>
-</ul>
-<p><strong>缺点：</strong></p>
-<ol>
-<li>使用自定义变量后，无法使用查询缓存；</li>
-<li>表名，列名，Limit中无法使用；</li>
-<li>仅在当前连接中有用；（如果持久化连接、连接池，则会发生数据竞态，出BUG）</li>
-<li>不能定义变量的类型；</li>
-<li>优化器可能将变量优化掉，导致结果不可预期；</li>
-<li>赋值的顺序和时机不固定，导致结果不可预期；</li>
-<li>使用未定义的变量不会产生任何语法错误。（编译期无法判断错误）出错几率很大。</li>
-</ol>
-<ul>
-<li>优点：</li>
-</ul>
-<h3 id="优化排名语句"><a href="#优化排名语句" class="headerlink" title="优化排名语句"></a>优化排名语句</h3><p>实现行号功能:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">set</span> @<span class="keyword">rownum</span>:=<span class="number">0</span>;</span><br><span class="line"><span class="keyword">select</span> <span class="keyword">id</span>,@<span class="keyword">rownum</span> := @<span class="keyword">rownum</span>+<span class="number">1</span> <span class="keyword">as</span> <span class="keyword">rownum</span></span><br><span class="line"><span class="keyword">from</span> actor <span class="keyword">limit</span> <span class="number">3</span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">-- 结果：</span></span><br><span class="line">id： id1 id2 id3</span><br><span class="line">rownum: 1 2 3</span><br></pre></td></tr></table></figure>
-
-<h3 id="查询并且更新数据"><a href="#查询并且更新数据" class="headerlink" title="查询并且更新数据"></a>查询并且更新数据</h3><p>原查询：（2条语句）</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">update</span> t <span class="keyword">set</span> lastUpdated=<span class="keyword">now</span>() </span><br><span class="line"><span class="keyword">where</span> <span class="keyword">id</span>=<span class="number">1</span>;</span><br><span class="line"><span class="keyword">select</span> lastUpdated <span class="keyword">from</span> t <span class="keyword">where</span> <span class="keyword">id</span>=<span class="number">1</span>;</span><br></pre></td></tr></table></figure>
-<p>改写后：(2条语句)</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">update</span> t <span class="keyword">set</span> lastUpdated=<span class="keyword">now</span>() </span><br><span class="line"><span class="keyword">where</span> <span class="keyword">id</span>=<span class="number">1</span> <span class="keyword">and</span> @<span class="keyword">now</span>:= <span class="keyword">now</span>();</span><br><span class="line"></span><br><span class="line"><span class="keyword">select</span> @<span class="keyword">now</span>; <span class="comment">-- 无需访问数据表</span></span><br></pre></td></tr></table></figure>
-
-<h3 id="统计更新和插入的数量"><a href="#统计更新和插入的数量" class="headerlink" title="统计更新和插入的数量"></a>统计更新和插入的数量</h3><ul>
-<li>示例：<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">insert</span> <span class="keyword">into</span> t (c1,c2) <span class="keyword">values</span></span><br><span class="line">(<span class="number">4</span>,<span class="number">4</span>)</span><br><span class="line">,(<span class="number">2</span>,<span class="number">1</span>)</span><br><span class="line">,(<span class="number">3</span>,<span class="number">1</span>)</span><br><span class="line"><span class="keyword">on</span> <span class="keyword">duplicate</span> <span class="keyword">key</span> <span class="keyword">update</span></span><br><span class="line">c1=<span class="keyword">values</span>(c1)</span><br><span class="line">+( <span class="number">0</span>* (@x:= @x+<span class="number">1</span>));</span><br><span class="line"></span><br><span class="line"><span class="keyword">select</span> @x;</span><br></pre></td></tr></table></figure>
-第一句的返回值能知道更改了n1行；<br>第二句通过<code>@x</code>统计到更新了n2行；<br>因此：<br>更新的行数=n2;<br>插入的行数=n1-n2。</li>
-</ul>
-<h1 id="6-8-案例学习"><a href="#6-8-案例学习" class="headerlink" title="6.8 案例学习"></a>6.8 案例学习</h1><h2 id="6-8-1-使用MYSQL构建一个队列表"><a href="#6-8-1-使用MYSQL构建一个队列表" class="headerlink" title="6.8.1 使用MYSQL构建一个队列表"></a>6.8.1 使用MYSQL构建一个队列表</h2><ul>
-<li>tips:<br>无论什么时候，避免<code>Select .. For Update</code>这种用法。<br>原因：会造成事务阻塞。总是有更好的方法替代这个用法。<br>此外，对于索引列，它产生排他行锁；<br>对于非索引列，它产生排他表锁。</li>
-</ul>
-<p>相关函数：</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> connection_id();</span><br><span class="line"><span class="comment">-- 返回当前连接的id</span></span><br></pre></td></tr></table></figure>
-
-<p>案例：<br>表unsent_emails:</p>
-<ul>
-<li>id</li>
-<li>status (未发送，已发送，正在发送)</li>
-<li>owner （正在处理的连接id，默认是0）</li>
-<li>ts</li>
-</ul>
-<p>错误示例：</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">Begin</span>;</span><br><span class="line"><span class="keyword">select</span> <span class="keyword">id</span> <span class="keyword">from</span> unsent emails</span><br><span class="line"><span class="keyword">where</span> owner=<span class="number">0</span> <span class="keyword">and</span> <span class="keyword">status</span>=<span class="string">'未发送'</span></span><br><span class="line"><span class="keyword">limit</span> <span class="number">10</span> </span><br><span class="line"><span class="keyword">For</span> <span class="keyword">Update</span>;</span><br><span class="line"><span class="comment">-- 结果是1,2,3</span></span><br><span class="line"><span class="keyword">update</span> unset_emails</span><br><span class="line"><span class="keyword">set</span> <span class="keyword">status</span>=<span class="string">'正在发送'</span></span><br><span class="line">,owner=Connection_id()</span><br><span class="line"><span class="keyword">where</span> <span class="keyword">id</span> <span class="keyword">in</span> (<span class="number">1</span>,<span class="number">2</span>,<span class="number">3</span>);</span><br><span class="line"><span class="keyword">Commit</span>;</span><br></pre></td></tr></table></figure>
-<p>select和update之间的间隙时间内，所有相同的查询会阻塞。（所有线程全都在竞争1个排他锁）</p>
-<p>改进后：</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">set</span> autocommit=<span class="number">1</span>;</span><br><span class="line"><span class="keyword">commit</span>;</span><br><span class="line"><span class="keyword">update</span> unset_emails</span><br><span class="line"><span class="keyword">set</span> <span class="keyword">status</span>=<span class="string">'正在发送'</span></span><br><span class="line">,owner=connection_id()</span><br><span class="line"><span class="keyword">where</span> owner=<span class="number">0</span> <span class="keyword">and</span> <span class="keyword">status</span>=<span class="string">'unsent'</span></span><br><span class="line"><span class="keyword">limit</span> <span class="number">10</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">set</span> autocommit=<span class="number">0</span>;</span><br><span class="line"><span class="comment">-- 找出自己抢注的部分，进行处理：</span></span><br><span class="line"><span class="keyword">select</span> <span class="keyword">id</span> <span class="keyword">from</span> unsent_emails</span><br><span class="line"><span class="keyword">where</span> owner=connect_id() </span><br><span class="line"><span class="keyword">and</span> <span class="keyword">status</span>=<span class="string">'正在发送'</span>;</span><br><span class="line"><span class="comment">-- 处理....</span></span><br></pre></td></tr></table></figure>
-
-<p>改进后，不必使用<code>select ... for update</code>，避免了事务阻塞。<br>唯一需要注意的时，需要定期检查是否有线程挂了，需要把它原来抢注的任务重置为无人拥有。</p>
-<p>此外，消息队列还是别用Mysql实现了，用MQ,redis之类的吧。XD</p>
-<h2 id="6-8-2-计算两点之间的距离"><a href="#6-8-2-计算两点之间的距离" class="headerlink" title="6.8.2 计算两点之间的距离"></a>6.8.2 计算两点之间的距离</h2><ul>
-<li>Tip:<br>复杂地理信息计算建议使用PostgreSql.</li>
-</ul>
-<p>案例：<br>某个点附近所有可以出租的房子。<br>（一定半径内的所有点）<br>（或社交网站中匹配附近的用户）</p>
-<p>表Locations:</p>
-<ul>
-<li>id</li>
-<li>name</li>
-<li>lat: 经度</li>
-<li>lon：纬度</li>
-</ul>
-<p>A点和B点之间的距离计算公式<code>CAL</code>:</p>
-<figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Acos(</span><br><span class="line">    cos(latA)*cos(latB)*cos(lonA-lonB)</span><br><span class="line">  +sin(latA)*sin(latB)</span><br><span class="line">)* 地球的半径</span><br></pre></td></tr></table></figure>
-
-<p><strong>原查询：</strong></p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> locations</span><br><span class="line"><span class="keyword">where</span> 地球的半径* CAL &lt;= <span class="number">100</span>;</span><br></pre></td></tr></table></figure>
-<p>上述查询无法使用索引，且非常消耗CPU。</p>
-<p>优化方法：降低精度；修改上述的椭圆计算公式，近似成立方体公式。</p>
-<p><strong>- 优化后：</strong></p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> locations</span><br><span class="line"><span class="keyword">where</span> lat <span class="keyword">between</span> <span class="number">38.03</span>-<span class="keyword">degrees</span>(<span class="number">0.0253</span>) <span class="keyword">and</span> <span class="number">38.03</span> + degree(<span class="number">0.0253</span>)</span><br><span class="line"><span class="keyword">and</span> lon <span class="keyword">between</span> <span class="number">-78.48</span> - <span class="keyword">degrees</span>(<span class="number">0.0253</span>) <span class="keyword">and</span> <span class="number">-78.48</span> + <span class="keyword">degrees</span>(<span class="number">0.0253</span>);</span><br></pre></td></tr></table></figure>
-<p>上述查询可以利用索引(lat)或(lon)，但由于都是范围查询，无法利用联合索引。</p>
-<p>为了进一步优化范围查询，可以使用枚举优化（使用IN列表）。<br>由于lat和lon列其实不是离散值，可以手动创建离散列：<br>新增两列存储坐标的近似值Floor()，然后在查询中使用IN将所有点的整数值放在列表中：</p>
-<ul>
-<li>Lat_floor: floor(lat)</li>
-<li>Lon_floor: floor(lon)</li>
-<li>Key(Lon_floor,Lat_floor)</li>
-</ul>
-<p><strong>- 进一步优化：</strong></p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> locations</span><br><span class="line"><span class="keyword">where</span> lat <span class="keyword">between</span> <span class="number">38.03</span>-<span class="keyword">degrees</span>(<span class="number">0.0253</span>) <span class="keyword">and</span> <span class="number">38.03</span> + degree(<span class="number">0.0253</span>)</span><br><span class="line"><span class="keyword">and</span> lon <span class="keyword">between</span> <span class="number">-78.48</span> - <span class="keyword">degrees</span>(<span class="number">0.0253</span>) <span class="keyword">and</span> <span class="number">-78.48</span> + <span class="keyword">degrees</span>(<span class="number">0.0253</span>)</span><br><span class="line"><span class="comment">-- 增加对于索引的利用：</span></span><br><span class="line"><span class="keyword">and</span> lat_floor <span class="keyword">in</span> (<span class="number">36</span>,<span class="number">37</span>,<span class="number">38</span>,<span class="number">39</span>,<span class="number">40</span>)</span><br><span class="line"><span class="keyword">and</span> lon_floor <span class="keyword">in</span> (<span class="number">-80</span>,<span class="number">-79</span>,<span class="number">-78</span>,<span class="number">-77</span>);</span><br></pre></td></tr></table></figure>
-<p>上述优化可以利用索引(lat_floor,lon_floor)，因此比前面更快。</p>
-<ul>
-<li>精度恢复：<br>上述优化只是滤掉不适合的点，可以进一步使用原来的公式进行过滤。由于此时剩下的点不多，因此即使原来的公式很复杂，性能也能够接受。</li>
-</ul>
-<h2 id="6-8-3-用户自定义函数-UDF"><a href="#6-8-3-用户自定义函数-UDF" class="headerlink" title="6.8.3 用户自定义函数(UDF)"></a>6.8.3 用户自定义函数(UDF)</h2><p>书里说的比较含糊，总之是写一个C/C++程序作为后台程序，接受某种网络通信协议。<br>(TODO,进一步搜索别人的实际案例。)</p>
-<h1 id="6-9-总结"><a href="#6-9-总结" class="headerlink" title="6.9 总结"></a>6.9 总结</h1><p>查询优化的思路：</p>
-<ol>
-<li>检查执行的时间消耗；</li>
-<li>检查Schema设计；</li>
-<li>检查索引设计；(三星系统)</li>
-<li>检查Explain计划（是否利用到索引，范围索引转化为枚举）</li>
-<li>其他的各种优化：<br>(1) limit优化；<br>(2) 覆盖索引+延迟关联；<br>(3) 复杂查询分解；<br>(4) 执行计划搜索提前终止；<br>(5) 排序优化（1次传输，2次传输），Order By的列提取到第一张表；<br>(6) UNION优化：手动下推谓词；<br>(7) Count优化：反向过滤， 利用MyISam的统计信息；<br>(8) Delayed优化：日志系统异步写入；<br>(9) 排他锁优化：避免使用<code>Select ... for update</code>，尽早释放锁（先抢注，释放锁，后处理）。</li>
-</ol>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/03/12/2018-03/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC%E5%85%AD%E7%AB%A0-3/" data-id="ck96cxpo300bkmaamawa58t9s" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1558,6 +1444,10 @@
       <ul>
         
           <li>
+            <a href="/2022/09/25/2022-09/nc%E5%91%BD%E4%BB%A4%E7%AC%94%E8%AE%B0/">nc命令笔记</a>
+          </li>
+        
+          <li>
             <a href="/2022/09/25/2022-09/%E8%B0%83%E4%BC%98-%E8%A7%A3%E5%86%B3%E7%BA%BF%E7%A8%8B%E6%B1%A0%E9%80%A0%E6%88%90%E7%9A%84%E8%BF%9B%E7%A8%8B%E5%8D%A1%E9%A1%BF%E3%80%81cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-解决线程池造成的进程卡顿、cpu毛刺问题</a>
           </li>
         
@@ -1571,10 +1461,6 @@
         
           <li>
             <a href="/2022/03/25/2022-03/G1%E8%B0%83%E4%BC%98-%E5%A4%8D%E6%9D%82%E4%B8%9A%E5%8A%A1%E6%B2%BB%E7%90%86%E5%B0%8F%E8%AE%B0/">G1调优-复杂业务治理小记</a>
-          </li>
-        
-          <li>
-            <a href="/2022/03/16/2022-03/cms%E7%9A%84gc%E8%A7%A6%E5%8F%91%E6%9D%A1%E4%BB%B6/">cms的gc触发条件</a>
           </li>
         
       </ul>
