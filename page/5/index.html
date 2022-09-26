@@ -72,6 +72,248 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-11/java8笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/11/03/2019-11/java8%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2019-11-03T12:56:11.000Z" itemprop="datePublished">2019-11-03</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/11/03/2019-11/java8%E7%AC%94%E8%AE%B0/">java8笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="lambda语法"><a href="#lambda语法" class="headerlink" title="lambda语法"></a>lambda语法</h1><p><code>i-&gt;{return &quot;xxx&quot;;}</code><br>本质上是借用匿名类来实现,并没有超脱原来的java的解题思路。</p>
+<p>这种类似于传一个函数指针的模式，底层是<code>@FunctionalInterface</code>注解的接口，因此我们可以自己声明一个接口作为方法的行参:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@FunctionalInterface</span></span><br><span class="line">   <span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">GetIdataFunction</span> </span>&#123;</span><br><span class="line">       <span class="function"><span class="keyword">int</span> <span class="title">getI</span><span class="params">(<span class="keyword">int</span> i)</span></span>;</span><br><span class="line"></span><br><span class="line">       <span class="function"><span class="keyword">default</span> String <span class="title">getInfo</span><span class="params">()</span> </span>&#123;</span><br><span class="line">           <span class="keyword">return</span> <span class="string">"找下标为i的数据"</span>;</span><br><span class="line">       &#125;</span><br><span class="line"></span><br><span class="line">   &#125;</span><br><span class="line"></span><br><span class="line">   <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">searchMatrix</span><span class="params">(<span class="keyword">int</span>[][] matrix, <span class="keyword">int</span> target)</span> </span>&#123;</span><br><span class="line">       <span class="keyword">if</span> (matrix == <span class="keyword">null</span> || matrix.length == <span class="number">0</span> || matrix[<span class="number">0</span>].length == <span class="number">0</span> || target &lt; matrix[<span class="number">0</span>][<span class="number">0</span>]) &#123;</span><br><span class="line">           <span class="keyword">return</span> <span class="keyword">false</span>;</span><br><span class="line">       &#125;</span><br><span class="line"></span><br><span class="line">       <span class="keyword">int</span> lowerBound = getLowerBound(target, <span class="number">0</span>, matrix.length - <span class="number">1</span>, i -&gt; matrix[i][<span class="number">0</span>]);</span><br><span class="line">       <span class="keyword">if</span> (lowerBound &gt;= <span class="number">0</span>) &#123;</span><br><span class="line">           <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line">       &#125;</span><br><span class="line">       <span class="keyword">final</span> <span class="keyword">int</span> finalLowerBound = -lowerBound - <span class="number">2</span>;</span><br><span class="line">       <span class="keyword">int</span> x = getLowerBound(target, <span class="number">0</span>, matrix[<span class="number">0</span>].length - <span class="number">1</span>, i -&gt; matrix[finalLowerBound][i]);</span><br><span class="line">       <span class="keyword">return</span> x &gt;= <span class="number">0</span>;</span><br><span class="line">   &#125;</span><br><span class="line"></span><br><span class="line">   <span class="function"><span class="keyword">private</span> <span class="keyword">int</span> <span class="title">getLowerBound</span><span class="params">(<span class="keyword">int</span> target, <span class="keyword">int</span> left, <span class="keyword">int</span> right, GetIdataFunction helper)</span> </span>&#123;</span><br><span class="line">       <span class="keyword">int</span> mid;</span><br><span class="line">       <span class="keyword">while</span> (left &lt;= right) &#123;</span><br><span class="line">           mid = (left + right) &gt;&gt;&gt; <span class="number">1</span>;</span><br><span class="line">           <span class="keyword">int</span> midVal = helper.getI(mid);</span><br><span class="line">           <span class="keyword">if</span> (target &lt; midVal) &#123;</span><br><span class="line">               right = mid - <span class="number">1</span>;</span><br><span class="line">           &#125; <span class="keyword">else</span> <span class="keyword">if</span> (target &gt; midVal) &#123;</span><br><span class="line">               left = mid + <span class="number">1</span>;</span><br><span class="line">           &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">               <span class="keyword">return</span> mid;</span><br><span class="line">           &#125;</span><br><span class="line">       &#125;</span><br><span class="line">       <span class="keyword">return</span> -left - <span class="number">1</span>;</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
+
+<h1 id="现成的Function声明汇总"><a href="#现成的Function声明汇总" class="headerlink" title="现成的Function声明汇总"></a>现成的Function声明汇总</h1><p>java8给了一些统一的描述术语(DSL)来分类这些函数接口:</p>
+<table>
+<thead>
+<tr>
+<th>接口</th>
+<th>lambda</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Predicate&lt; T&gt;</td>
+<td>T-&gt;boolean</td>
+<td>类似于filter，接收T类型返回boolean</td>
+</tr>
+<tr>
+<td>Consumer&lt; T&gt;</td>
+<td>T-&gt;void</td>
+<td>类似于foreach，接收T类型返回void</td>
+</tr>
+<tr>
+<td>Function&lt; T,R&gt;</td>
+<td>T-&gt;R</td>
+<td>类似于Map，接收T类型返回R类型</td>
+</tr>
+<tr>
+<td>Supplier&lt; T&gt;</td>
+<td>()-&gt;T</td>
+<td></td>
+</tr>
+<tr>
+<td>UnaryOperator&lt; T&gt;</td>
+<td>T-&gt;T</td>
+<td></td>
+</tr>
+<tr>
+<td>BinaryOperator&lt; T&gt;</td>
+<td>(T,T)-&gt;T</td>
+<td></td>
+</tr>
+<tr>
+<td>BiPredicate&lt; L,R&gt;</td>
+<td>(L,R)-&gt;boolean</td>
+<td></td>
+</tr>
+<tr>
+<td>BiConsumer&lt; T,U&gt;</td>
+<td>(T,U)-&gt;void</td>
+<td></td>
+</tr>
+<tr>
+<td>BiFunction&lt; T,U,R&gt;</td>
+<td>(T,U)-&gt;R</td>
+<td></td>
+</tr>
+</tbody></table>
+<p>常见的几种函数指针都可以用这些现成的声明，如果要抛异常，或者比较特殊的入参、出参，就自己用<code>@FunctionalInterface</code>注解声明个接口和相应方法即可。</p>
+<p>此外，上述接口的T,R泛型都需要类、引用，因此如果要节省装箱开销，可以用相应的原始类型声明，比如一个<code>int-&gt;int</code>的变换，相应的接口就是<code>IntUnaryOperator</code>。<br>因此上一节中的代码可以简化成:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">searchMatrix</span><span class="params">(<span class="keyword">int</span>[][] matrix, <span class="keyword">int</span> target)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (matrix == <span class="keyword">null</span> || matrix.length == <span class="number">0</span> || matrix[<span class="number">0</span>].length == <span class="number">0</span> || target &lt; matrix[<span class="number">0</span>][<span class="number">0</span>]) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="keyword">false</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">int</span> lowerBound = getLowerBound(target, <span class="number">0</span>, matrix.length - <span class="number">1</span>, i -&gt; matrix[i][<span class="number">0</span>]);<span class="comment">// 闭包捕获matrix</span></span><br><span class="line">        <span class="keyword">if</span> (lowerBound &gt;= <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">final</span> <span class="keyword">int</span> finalLowerBound = -lowerBound - <span class="number">2</span>;</span><br><span class="line">        <span class="keyword">int</span> x = getLowerBound(target, <span class="number">0</span>, matrix[<span class="number">0</span>].length - <span class="number">1</span>, i -&gt; matrix[finalLowerBound][i]);<span class="comment">// 闭包捕获matrix和finalLowerBound</span></span><br><span class="line">        <span class="keyword">return</span> x &gt;= <span class="number">0</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">private</span> <span class="keyword">int</span> <span class="title">getLowerBound</span><span class="params">(<span class="keyword">int</span> target, <span class="keyword">int</span> left, <span class="keyword">int</span> right, IntUnaryOperator helper)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">int</span> mid;</span><br><span class="line">        <span class="keyword">while</span> (left &lt;= right) &#123;</span><br><span class="line">            mid = (left + right) &gt;&gt;&gt; <span class="number">1</span>;</span><br><span class="line">            <span class="keyword">int</span> midVal = helper.applyAsInt(mid);</span><br><span class="line">            <span class="keyword">if</span> (target &lt; midVal) &#123;</span><br><span class="line">                right = mid - <span class="number">1</span>;</span><br><span class="line">            &#125; <span class="keyword">else</span> <span class="keyword">if</span> (target &gt; midVal) &#123;</span><br><span class="line">                left = mid + <span class="number">1</span>;</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                <span class="keyword">return</span> mid;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> -left - <span class="number">1</span>;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+
+<p>其他的原始类型(免装箱)的现成有的声明如下:（要用的时候可以查表）</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 1. Predicate&lt;T&gt; T-&gt;boolean :</span></span><br><span class="line">IntPredicate,LongPredicate, DoublePredicate</span><br><span class="line"><span class="comment">// 2. Consumer&lt;T&gt; T-&gt;void :</span></span><br><span class="line">IntConsumer,LongConsumer, DoubleConsumer</span><br><span class="line"><span class="comment">// 3. Function&lt;T,R&gt; T-&gt;R :</span></span><br><span class="line">IntFunction&lt;R&gt;,</span><br><span class="line">IntToDoubleFunction,</span><br><span class="line">IntToLongFunction,</span><br><span class="line">LongFunction&lt;R&gt;,</span><br><span class="line">LongToDoubleFunction,</span><br><span class="line">LongToIntFunction,</span><br><span class="line">DoubleFunction&lt;R&gt;,</span><br><span class="line">ToIntFunction&lt;T&gt;,</span><br><span class="line">ToDoubleFunction&lt;T&gt;,</span><br><span class="line">ToLongFunction&lt;T&gt; </span><br><span class="line"><span class="comment">// 4. Supplier&lt;T&gt; ()-&gt;T :</span></span><br><span class="line">BooleanSupplier,IntSupplier,LongSupplier,DoubleSupplier</span><br><span class="line"><span class="comment">// 5. UnaryOperator&lt;T&gt; T-&gt;T :</span></span><br><span class="line">IntUnaryOperator,</span><br><span class="line">LongUnaryOperator,</span><br><span class="line">DoubleUnaryOperator</span><br><span class="line"><span class="comment">// 6. BinaryOperator&lt;T&gt; (T,T)-&gt;T :</span></span><br><span class="line">IntBinaryOperator,</span><br><span class="line">LongBinaryOperator,</span><br><span class="line">DoubleBinaryOperator</span><br><span class="line"><span class="comment">// 7. BiConsumer&lt;T,U&gt; (T,U)-&gt;void :</span></span><br><span class="line">ObjIntConsumer&lt;T&gt;,</span><br><span class="line">ObjLongConsumer&lt;T&gt;,</span><br><span class="line">ObjDoubleConsumer&lt;T&gt;</span><br><span class="line"><span class="comment">// 8. BiFunction&lt;T,U,R&gt; (T,U)-&gt;R :</span></span><br><span class="line">ToIntBiFunction&lt;T,U&gt;,</span><br><span class="line">ToLongBiFunction&lt;T,U&gt;,</span><br><span class="line">ToDoubleBiFunction&lt;T,U&gt;</span><br></pre></td></tr></table></figure>
+
+<h1 id="无状态"><a href="#无状态" class="headerlink" title="无状态"></a>无状态</h1><p>默认无状态的操作:  map,filter,collect; // 假如不使用外部变量(闭包)<br>有状态的操作: reduce,sum,max,sorted,distinct,skip,limit; // 有内部状态、初始值</p>
+<p>// flatmap? </p>
+<h1 id="原始类型流"><a href="#原始类型流" class="headerlink" title="原始类型流"></a>原始类型流</h1><p>原始类型流如: <code>IntStream</code></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">IntStream intStream = menu.stream().mapToInt(Dish::getCalories);</span><br><span class="line">Stream&lt; Integer&gt; stream = intStream.boxed();</span><br></pre></td></tr></table></figure>
+
+<p>原始类型的Optional:<code>OptionalInt</code></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">OptionalInt maxCalories = menu.stream().mapToInt(Dish::getCalories).max();</span><br></pre></td></tr></table></figure>
+
+<h1 id="java中的蜂巢结构"><a href="#java中的蜂巢结构" class="headerlink" title="java中的蜂巢结构"></a>java中的蜂巢结构</h1><p>d3中有个蜂巢结构,java8中也可以有:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">Map&lt;Dish.Type, Map&lt;CaloricLevel, List&lt;Dish&gt;&gt;&gt; dishesByTypeCaloricLevel = menu.stream().collect(</span><br><span class="line">groupingBy(Dish::getType,</span><br><span class="line">   groupingBy(dish -&gt; &#123;</span><br><span class="line">        <span class="keyword">if</span> (dish.getCalories() &lt;= <span class="number">400</span>) <span class="keyword">return</span> CaloricLevel.DIET;</span><br><span class="line">        <span class="keyword">else</span> <span class="keyword">if</span> (dish.getCalories() &lt;= <span class="number">700</span>) <span class="keyword">return</span> CaloricLevel.NORMAL;</span><br><span class="line">        <span class="keyword">else</span> <span class="keyword">return</span> CaloricLevel.FAT;</span><br><span class="line">    &#125;);</span><br><span class="line">));</span><br></pre></td></tr></table></figure>
+
+<p>还可以分组计数:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Map&lt;Dish.Type, Long&gt; typesCount = menu.stream().collect(</span><br><span class="line">                    groupingBy(Dish::getType, counting()));</span><br></pre></td></tr></table></figure>
+
+
+<h1 id="collectors中的characteristics"><a href="#collectors中的characteristics" class="headerlink" title="collectors中的characteristics"></a>collectors中的characteristics</h1><p>返回枚举值的list:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">UNORDERED: 结果不受顺序影响;</span><br><span class="line">CONCURRENT: 可以并行运行;</span><br><span class="line">IDENTITY_FINISH: 累加器和最后的结果类型是一样的,不需要再转换。</span><br></pre></td></tr></table></figure>
+<p>一般是是返回后两者,因为一般都会希望维持顺序(如<code>toList</code>):</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> Set&lt;Characteristics&gt; <span class="title">characteristics</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> Collections.unmodifiableSet(EnumSet.of(</span><br><span class="line">    IDENTITY_FINISH, CONCURRENT));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>如果是生成质数这种,实现上依赖之前已经生成的质数,有状态,则不能并行。只返回一个<code>IDENTITY_FINISH</code>.</p>
+<h1 id="Spliterator"><a href="#Spliterator" class="headerlink" title="Spliterator"></a>Spliterator</h1><p>Spliterator的特性:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">ORDERED 元素有既定的顺序（例如List），因此Spliterator在遍历和划分时也会遵循这一顺序</span><br><span class="line">DISTINCT 对于任意一对遍历过的元素x和y，x.equals(y)返回false</span><br><span class="line">SORTED 遍历的元素按照一个预定义的顺序排序</span><br><span class="line">SIZED 该Spliterator由一个已知大小的源建立（例如Set），因此estimatedSize()返回的是准确值</span><br><span class="line">NONNULL 保证遍历的元素不会为null</span><br><span class="line">IMMUTABLE Spliterator的数据源不能修改。这意味着在遍历时不能添加、删除或修改任何元素</span><br><span class="line">CONCURRENT 该Spliterator的数据源可以被其他线程同时修改而无需同步</span><br><span class="line">SUBSIZED 该Spliterator和所有从它拆分出来的Spliterator都是SIZED</span><br></pre></td></tr></table></figure>
+<p>DISTINCT和SORTED比较难达到;<br>一般是:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">int</span> <span class="title">characteristics</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> ORDERED + SIZED + SUBSIZED + NONNULL + IMMUTABLE;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h1 id="设计模式"><a href="#设计模式" class="headerlink" title="设计模式"></a>设计模式</h1><p>策略模式: 策略发生变化，只修改用到的函数。(例如输入校验策略)<br>模版方法: 修改一大段代码中其中一个函数的调用实现。(传入函数指针)<br>观察者模式: 例如GUI场景下，注册一大堆监听事件。(传入函数指针)</p>
+<h2 id="责任链模式"><a href="#责任链模式" class="headerlink" title="责任链模式:"></a>责任链模式:</h2><p>每个处理者可以增加后继处理节点,形成一个链表，每次处理的时候，调用下一个处理者。用lamda中的addThen的话:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">UnaryOperator&lt;String&gt; headerProcessing =</span><br><span class="line"> (String text) -&gt; <span class="string">"From Raoul, Mario and Alan: "</span> + text;</span><br><span class="line">UnaryOperator&lt;String&gt; spellCheckerProcessing =</span><br><span class="line"> (String text) -&gt; text.replaceAll(<span class="string">"labda"</span>, <span class="string">"lambda"</span>);</span><br><span class="line">Function&lt;String, String&gt; pipeline =</span><br><span class="line"> headerProcessing.andThen(spellCheckerProcessing);</span><br><span class="line">String result = pipeline.apply(<span class="string">"Aren't labdas really sexy?!!"</span>)</span><br></pre></td></tr></table></figure>
+<h2 id="工厂模式"><a href="#工厂模式" class="headerlink" title="工厂模式"></a>工厂模式</h2><p>可以把构造函数放map里:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">final</span> <span class="keyword">static</span> Map&lt;String, Supplier&lt;Product&gt;&gt; map = <span class="keyword">new</span> HashMap&lt;&gt;();</span><br><span class="line"><span class="keyword">static</span> &#123;</span><br><span class="line"> map.put(<span class="string">"loan"</span>, Loan::<span class="keyword">new</span>);</span><br><span class="line"> map.put(<span class="string">"stock"</span>, Stock::<span class="keyword">new</span>);</span><br><span class="line"> map.put(<span class="string">"bond"</span>, Bond::<span class="keyword">new</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h1 id="lamda方法的单元测试"><a href="#lamda方法的单元测试" class="headerlink" title="lamda方法的单元测试"></a>lamda方法的单元测试</h1><ol>
+<li>存成成员变量(函数指针);</li>
+<li>匿名方法粒度太小了，应该测试上层方法;</li>
+</ol>
+<h1 id="lambda的副作用"><a href="#lambda的副作用" class="headerlink" title="lambda的副作用"></a>lambda的副作用</h1><ol>
+<li>出错信息模糊: 错误栈缺失准确的信息；</li>
+</ol>
+<h2 id="调试技巧"><a href="#调试技巧" class="headerlink" title="调试技巧"></a>调试技巧</h2><p>使用peek函数。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">List&lt;Integer&gt; result =</span><br><span class="line"> numbers.stream()</span><br><span class="line"> .peek(x -&gt; System.out.println(<span class="string">"from stream: "</span> + x))</span><br><span class="line"> .map(x -&gt; x + <span class="number">17</span>)</span><br><span class="line"> .peek(x -&gt; System.out.println(<span class="string">"after map: "</span> + x))</span><br><span class="line"> .filter(x -&gt; x % <span class="number">2</span> == <span class="number">0</span>)</span><br><span class="line"> .peek(x -&gt; System.out.println(<span class="string">"after filter: "</span> + x))</span><br><span class="line"> .limit(<span class="number">3</span>) <span class="comment">// 只取3个. </span></span><br><span class="line"> .peek(x -&gt; System.out.println(<span class="string">"after limit: "</span> + x))</span><br><span class="line"> .collect(toList());</span><br></pre></td></tr></table></figure>
+
+<h1 id="3种兼容性"><a href="#3种兼容性" class="headerlink" title="3种兼容性"></a>3种兼容性</h1><p>二进制级兼容： 现有二进制执行文件能无缝链接；<br>源码级兼容：   现有程序能够成功编译通过；<br>函数行为级兼容：程序接受同样的输入能得到同样的结果。</p>
+<p>接口中加入新的方法：<br>二进制级兼容：兼容;(不会被调用)<br>源码级兼容：不兼容;(不符合语法)<br>函数行为级兼容: 兼容;(不影响原有函数)</p>
+<p>抽象类和有默认方法的接口区别：抽象类可以有成员、不能多继承。</p>
+<p>默认方法的接口多继承优先级问题：</p>
+<ol>
+<li>类中的实现&gt; 接口中的;</li>
+<li>子接口中实现&gt;父接口中的;</li>
+<li>上述两种无法判断时,必须显式调用,声明调用的是哪个实现:<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// class C implement B,A</span></span><br><span class="line">B.<span class="keyword">super</span>.hello(); <span class="comment">// 显式调用B接口中的方法;</span></span><br></pre></td></tr></table></figure>
+
+</li>
+</ol>
+<h1 id="Option"><a href="#Option" class="headerlink" title="Option"></a>Option</h1><p>每次新建一个类的时候，所有引用类成员都尽量搞成<code>Option</code>.<br>如果可能为null,就搞成<code>Option</code>;<br>如果不可能为null,就维持朴素类型。// 比如构造时就自动填充确定值的final</p>
+<p>相当于领域中将是否可选这个属性也封装了进去，而不是靠注释来弱约束。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 初始化可以这样:</span></span><br><span class="line">Optional&lt;Car&gt; optCar = Optional.empty();</span><br><span class="line"><span class="comment">// 根据空或非空值创建: </span></span><br><span class="line">Optional&lt;Car&gt; optCar = Optional.ofNullable(car); <span class="comment">// 推荐初始化方式</span></span><br></pre></td></tr></table></figure>
+
+<p>用了Optional以后,后续用Stream api处理(疯狂调用<code>flatMap</code>),整个过程就变成函数式,再也不需要null关键字。</p>
+<p>对于可选成员(<code>Option&lt;T&gt;</code>): 调用<code>flatMap</code>;<br>对于必选成员(<code>final String</code>): 调用<code>map</code>;</p>
+<p>Option的缺点: 无法序列化。<br>如果需要可以序列化的类,只能隐藏Option变量:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> Optional&lt;Car&gt; <span class="title">getCarAsOptional</span><span class="params">()</span> </span>&#123;</span><br><span class="line">             <span class="keyword">return</span> Optional.ofNullable(car);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>Optional不能滥用(不能序列化):(java Lambda（JSR-335）专家组考虑并拒绝了它)</p>
+<blockquote>
+<p>尽量避免将Optional用于类属性、方法参数及集合元素中，因为以上三种情况，完全可以使用null值来代替Optional，没有必要必须使用Optional，另外Optional本身为引用类型，大量使用Optional会出现类似(这样描述不完全准确)封箱、拆箱的操作，在一定程度上会影响JVM的堆内存及内存回收。<br>相关tip:<br><a href="https://segmentfault.com/a/1190000018936877?utm_source=tag-newest" target="_blank" rel="noopener">https://segmentfault.com/a/1190000018936877?utm_source=tag-newest</a></p>
+</blockquote>
+<ul>
+<li>不要放进Map里，因为Optional不是作为值类型设计的，它的<code>equals、hashcode、==</code>方法都不能保证正确性(和唯一性有关的方法)。</li>
+</ul>
+<p>最后: POJO还是保持纯粹，这样也有向前先后兼容性。</p>
+<h1 id="异步编程"><a href="#异步编程" class="headerlink" title="异步编程"></a>异步编程</h1><p>无法从线程失败中恢复的版本:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> Future&lt;Double&gt; <span class="title">getPriceAsync</span><span class="params">(String product)</span> </span>&#123;     </span><br><span class="line">        CompletableFuture&lt;Double&gt; futurePrice = <span class="keyword">new</span> CompletableFuture&lt;&gt;();          </span><br><span class="line">        <span class="keyword">new</span> Thread( () -&gt; &#123;</span><br><span class="line">           <span class="keyword">double</span> price = calculatePrice(product);</span><br><span class="line">           futurePrice.complete(price);<span class="comment">// here</span></span><br><span class="line">        &#125;).start();</span><br><span class="line">       <span class="keyword">return</span> futurePrice;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>加上try catch:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">try</span> &#123;</span><br><span class="line">    <span class="keyword">double</span> price = calculatePrice(product);</span><br><span class="line">    futurePrice.complete(price);</span><br><span class="line">&#125; <span class="keyword">catch</span> (Exception ex) &#123;</span><br><span class="line">    futurePrice.completeExceptionally(ex);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>精简后:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> Future&lt;Double&gt; <span class="title">getPriceAsync</span><span class="params">(String product)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> CompletableFuture.supplyAsync(() -&gt; calculatePrice(product));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="并行查询-无状态"><a href="#并行查询-无状态" class="headerlink" title="并行查询(无状态)"></a>并行查询(无状态)</h2><p>无状态:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">shops.parallelStream().map(shop-&gt;String.format(<span class="string">"%s price is %.2f"</span></span><br><span class="line">,shop.getName(), shop.getPrice(product)))).collect(ToList());</span><br></pre></td></tr></table></figure>
+
+<p>定制Executor:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> Executor executor =</span><br><span class="line">Executors.newFixedThreadPool(Math.min(shops.size(), <span class="number">100</span>),</span><br><span class="line">    <span class="keyword">new</span> ThreadFactory() &#123;</span><br><span class="line">     <span class="function"><span class="keyword">public</span> Thread <span class="title">newThread</span><span class="params">(Runnable r)</span> </span>&#123;</span><br><span class="line">       Thread t = <span class="keyword">new</span> Thread(r);</span><br><span class="line">        t.setDaemon(<span class="keyword">true</span>);<span class="comment">// 守护线程,主线程结束后关闭</span></span><br><span class="line">        <span class="keyword">return</span> t;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+
+
+<p>计算密集,无IO: 使用Stream接口; // 不加线程数<br>IO密集,计算简单: 使用<code>CompletableFuture</code>,自定义线程池; // 可以疯狂加线程</p>
+<h1 id="时间api"><a href="#时间api" class="headerlink" title="时间api"></a>时间api</h1><h2 id="LocalDate和LocalTime"><a href="#LocalDate和LocalTime" class="headerlink" title="LocalDate和LocalTime"></a>LocalDate和LocalTime</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">LocalDate date = LocalDate.of(<span class="number">2014</span>, <span class="number">3</span>, <span class="number">18</span>);</span><br><span class="line">LocalDate today = LocalDate.now();</span><br><span class="line">LocalTime time = LocalTime.of(<span class="number">13</span>, <span class="number">45</span>, <span class="number">20</span>);</span><br><span class="line"><span class="comment">// 字符串:</span></span><br><span class="line">LocalDate date = LocalDate.parse(<span class="string">"2014-03-18"</span>);</span><br><span class="line">LocalTime time = LocalTime.parse(<span class="string">"13:45:20"</span>);</span><br></pre></td></tr></table></figure>
+<h2 id="复合后-LocalDateTime"><a href="#复合后-LocalDateTime" class="headerlink" title="复合后: LocalDateTime"></a>复合后: LocalDateTime</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">LocalDateTime dt1 = LocalDateTime.of(<span class="number">2014</span>, Month.MARCH, <span class="number">18</span>, <span class="number">13</span>, <span class="number">45</span>, <span class="number">20</span>); LocalDateTime dt2 = LocalDateTime.of(date, time);<span class="comment">// 复合localDate和localTime</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="unix时间-java-time-Instant"><a href="#unix时间-java-time-Instant" class="headerlink" title="unix时间: java.time.Instant"></a>unix时间: <code>java.time.Instant</code></h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Instant.ofEpochSecond(<span class="number">3</span>);<span class="comment">// 3</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="时间间隔-Duration"><a href="#时间间隔-Duration" class="headerlink" title="时间间隔: Duration"></a>时间间隔: Duration</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Duration d1 = Duration.between(time1, time2);</span><br><span class="line">Duration d1 = Duration.between(dateTime1, dateTime2);</span><br><span class="line">Duration d2 = Duration.between(instant1, instant2);</span><br><span class="line">Duration threeMinutes = Duration.ofMinutes(<span class="number">3</span>);</span><br></pre></td></tr></table></figure>
+
+<h2 id="天间隔-Period"><a href="#天间隔-Period" class="headerlink" title="天间隔: Period"></a>天间隔: Period</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Period tenDays = Period.between(LocalDate.of(<span class="number">2014</span>, <span class="number">3</span>, <span class="number">8</span>),</span><br><span class="line">                        LocalDate.of(<span class="number">2014</span>, <span class="number">3</span>, <span class="number">18</span>));</span><br><span class="line">Period tenDays = Period.ofDays(<span class="number">10</span>);</span><br></pre></td></tr></table></figure>
+
+<p>上述类都是不可变的。// 线程安全</p>
+<p>修改直接返回新变量:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">LocalDate date2 = date1.withYear(<span class="number">2011</span>);</span><br><span class="line">LocalDate date2 = date1.plusWeeks(<span class="number">1</span>);</span><br></pre></td></tr></table></figure>
+
+<h2 id="个性化操作-TemporalAdjuster"><a href="#个性化操作-TemporalAdjuster" class="headerlink" title="个性化操作: TemporalAdjuster"></a>个性化操作: TemporalAdjuster</h2><p>下个周日、下个工作日、本月最后一天:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> <span class="keyword">static</span> java.time.temporal.TemporalAdjusters.*;</span><br><span class="line">LocalDate date1 = LocalDate.of(<span class="number">2014</span>, <span class="number">3</span>, <span class="number">18</span>);</span><br><span class="line">LocalDate date2 = date1.with(nextOrSame(DayOfWeek.SUNDAY));</span><br><span class="line">LocalDate date3 = date2.with(lastDayOfMonth());</span><br></pre></td></tr></table></figure>
+
+<h2 id="格式化、格式转换"><a href="#格式化、格式转换" class="headerlink" title="格式化、格式转换"></a>格式化、格式转换</h2><h3 id="localData-lt-gt-String"><a href="#localData-lt-gt-String" class="headerlink" title="localData&lt;=&gt;String"></a>localData&lt;=&gt;String</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">LocalDate date = LocalDate.of(<span class="number">2014</span>, <span class="number">3</span>, <span class="number">18</span>);</span><br><span class="line">String s1 = date.format(DateTimeFormatter.BASIC_ISO_DATE); <span class="comment">// 20140318</span></span><br><span class="line">String s2 = date.format(DateTimeFormatter.ISO_LOCAL_DATE); <span class="comment">// 2014-03-18</span></span><br><span class="line"></span><br><span class="line">LocalDate date1 = LocalDate.parse(<span class="string">"20140318"</span>,</span><br><span class="line">                                 DateTimeFormatter.BASIC_ISO_DATE);</span><br><span class="line">LocalDate date2 = LocalDate.parse(<span class="string">"2014-03-18"</span>,</span><br><span class="line">                                 DateTimeFormatter.ISO_LOCAL_DATE);</span><br></pre></td></tr></table></figure>
+
+<p>定制格式:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">DateTimeFormatter formatter = DateTimeFormatter.ofPattern(<span class="string">"dd/MM/yyyy"</span>);</span><br><span class="line">LocalDate date1 = LocalDate.of(<span class="number">2014</span>, <span class="number">3</span>, <span class="number">18</span>);</span><br><span class="line">String formattedDate = date1.format(formatter);</span><br><span class="line">LocalDate date2 = LocalDate.parse(formattedDate, formatter);</span><br></pre></td></tr></table></figure>
+
+<h2 id="时区"><a href="#时区" class="headerlink" title="时区"></a>时区</h2><p><code>java.time.ZoneId</code>和<code>ZonedDateTime</code>:<br>从LocalData转换到ZonedDateTime:(其他几个也一样)</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">ZoneId romeZone = ZoneId.of(<span class="string">"Europe/Rome"</span>);</span><br><span class="line"><span class="comment">// 或者: ZoneId zoneId = TimeZone.getDefault().toZoneId();</span></span><br><span class="line">LocalDate date = LocalDate.of(<span class="number">2014</span>, Month.MARCH, <span class="number">18</span>); <span class="number">6</span></span><br><span class="line">ZonedDateTime zdt1 = date.atStartOfDay(romeZone);</span><br></pre></td></tr></table></figure>
+
+<img src="/images/2019-11/zonedDateTime.png" class="" width="800" height="1200" title="zonedDateTime">
+
+<p>时区差: <code>ZoneOffset</code></p>
+<p>其他日历系统: <code>ThaiBuddhistDate</code>,<code>MinguoDate</code>,<code>JapaneseDate</code>,<code>HijrahDate</code></p>
+<h1 id="其他tips"><a href="#其他tips" class="headerlink" title="其他tips"></a>其他tips</h1><p>ConcurrentHashMap类：<br>用<code>mappingCount</code>方法代替<code>size</code>方法;<br><code>mappingCount</code>: 返回long;<br><code>size</code>: 返回int; (实际大小超过int时无效)</p>
+<p>重复遍历流: 可以使用StreamForker,缺点本质上是存了内存。</p>
+<h1 id="lambda底层实现"><a href="#lambda底层实现" class="headerlink" title="lambda底层实现"></a>lambda底层实现</h1><h2 id="匿名类的实现"><a href="#匿名类的实现" class="headerlink" title="匿名类的实现"></a>匿名类的实现</h2><p>匿名内部类底层是生成一个<code>class$1</code>的类。(外层类名+数字)<br>缺点： 每个类都需要加载、验证的操作，如果类太多，开销太大；</p>
+<h2 id="查看字节码和常量池"><a href="#查看字节码和常量池" class="headerlink" title="查看字节码和常量池"></a>查看字节码和常量池</h2><p>使用命令:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">javap -c -v ClassName</span><br></pre></td></tr></table></figure>
+
+
+<h2 id="lambda的实现：-InvokeDynamic"><a href="#lambda的实现：-InvokeDynamic" class="headerlink" title="lambda的实现： InvokeDynamic"></a>lambda的实现： InvokeDynamic</h2><p>本质上是在所在类里新增了一个方法。将Lambda表达式的代码体填入到运行时动态创建的<code>静态方法</code>，就完成了Lambda表达式的字节码转换。<br>动态链接方法，然后用<code>InvokeDynamic</code>调用:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">Lambda</span> </span>&#123;</span><br><span class="line">    Function&lt;Object, String&gt; f = [dynamic invocation of lambda$<span class="number">1</span>]</span><br><span class="line">     <span class="keyword">static</span> String lambda$<span class="number">1</span>(Object obj) &#123;</span><br><span class="line">        <span class="keyword">return</span> obj.toString();</span><br><span class="line">     &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>优点:</p>
+<ol>
+<li>lamda相关字节码的生成推迟到使用的时候; (懒加载)</li>
+<li>如果不是闭包：有类似于static final变量的缓存效果;(闭包的话,因为可能捕获不同的局部变量，不可以缓存)</li>
+<li>没有额外的开销;<br>如果lambda是个闭包，也就是捕获了其他作用域内的变量(当然编译时会要求是final或者实质上是final)，也很简单，就是给这个函数加一个参数即可。</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/11/03/2019-11/java8%E7%AC%94%E8%AE%B0/" data-id="ck96cxpqb00kcmaam9w6ucaoz" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2019-10/rust入门笔记-2" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/10/06/2019-10/rust%E5%85%A5%E9%97%A8%E7%AC%94%E8%AE%B0-2/" class="article-date">
@@ -1070,76 +1312,6 @@
 
 
   
-    <article id="post-2019-08/神秘的monad——函数式编程" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/08/23/2019-08/%E7%A5%9E%E7%A7%98%E7%9A%84monad%E2%80%94%E2%80%94%E5%87%BD%E6%95%B0%E5%BC%8F%E7%BC%96%E7%A8%8B/" class="article-date">
-  <time datetime="2019-08-23T01:20:21.000Z" itemprop="datePublished">2019-08-23</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/">设计模式</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/08/23/2019-08/%E7%A5%9E%E7%A7%98%E7%9A%84monad%E2%80%94%E2%80%94%E5%87%BD%E6%95%B0%E5%BC%8F%E7%BC%96%E7%A8%8B/">神秘的monad——函数式编程</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>monad确实比较难理解，我认真翻了一个星期资料才理解。</p>
-<p>讲得比较好的参考资料：<br><a href="http://josephguan.github.io/2016/06/25/monad-in-scala/" target="_blank" rel="noopener">http://josephguan.github.io/2016/06/25/monad-in-scala/</a><br>比较形象的、有图的：<br><a href="http://blog.forec.cn/2017/03/02/translation-adit-faamip/" target="_blank" rel="noopener">http://blog.forec.cn/2017/03/02/translation-adit-faamip/</a><br>数学上讲得比较多的：(scala版代码可用)<br><a href="https://segmentfault.com/a/1190000008000905" target="_blank" rel="noopener">https://segmentfault.com/a/1190000008000905</a></p>
-<p>参考资料3中的scala版代码:</p>
-<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 1. 半群:</span></span><br><span class="line"><span class="class"><span class="keyword">trait</span> <span class="title">SemiGroup</span>[<span class="type">A</span>] </span>&#123;</span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">op</span></span>(a1: <span class="type">A</span>, a2: <span class="type">A</span>): <span class="type">A</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 2. monoid: (还不是monad) 比半群多一个零元</span></span><br><span class="line"><span class="class"><span class="keyword">trait</span> <span class="title">Monoid</span>[<span class="type">A</span>] <span class="keyword">extends</span> <span class="title">SemiGroup</span>[<span class="type">A</span>] </span>&#123;</span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">zero</span></span>: <span class="type">A</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 函子: (有map函数就是Functor)</span></span><br><span class="line"><span class="class"><span class="keyword">trait</span> <span class="title">Functor</span>[<span class="type">F</span>[_]] </span>&#123;</span><br><span class="line">  <span class="comment">// 输入一个A的容器F[A],输入一个A类型=&gt;B类型的变化</span></span><br><span class="line">  <span class="comment">// 输出B类型的容器F[B]</span></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">map</span></span>[<span class="type">A</span>, <span class="type">B</span>](a: <span class="type">F</span>[<span class="type">A</span>])(f: <span class="type">A</span> =&gt; <span class="type">B</span>): <span class="type">F</span>[<span class="type">B</span>]</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">object</span> <span class="title">MonadTest</span> </span>&#123;</span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">main</span></span>(args: <span class="type">Array</span>[<span class="type">String</span>]): <span class="type">Unit</span> = &#123;</span><br><span class="line">    <span class="keyword">val</span> stringMonoid = <span class="keyword">new</span> <span class="type">Monoid</span>[<span class="type">String</span>] &#123;</span><br><span class="line">      <span class="function"><span class="keyword">def</span> <span class="title">op</span></span>(a1: <span class="type">String</span>, a2: <span class="type">String</span>) = a1 + a2</span><br><span class="line"></span><br><span class="line">      <span class="function"><span class="keyword">def</span> <span class="title">zero</span> </span>= <span class="string">""</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">listMonoid</span></span>[<span class="type">A</span>] = <span class="keyword">new</span> <span class="type">Monoid</span>[<span class="type">List</span>[<span class="type">A</span>]] &#123;</span><br><span class="line">      <span class="function"><span class="keyword">def</span> <span class="title">op</span></span>(a1: <span class="type">List</span>[<span class="type">A</span>], a2: <span class="type">List</span>[<span class="type">A</span>]) = a1 ++ a2</span><br><span class="line"></span><br><span class="line">      <span class="function"><span class="keyword">def</span> <span class="title">zero</span> </span>= <span class="type">Nil</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">optionMonoid</span></span>[<span class="type">A</span>] = <span class="keyword">new</span> <span class="type">Monoid</span>[<span class="type">Option</span>[<span class="type">A</span>]] &#123;</span><br><span class="line">      <span class="function"><span class="keyword">def</span> <span class="title">op</span></span>(a1: <span class="type">Option</span>[<span class="type">A</span>], a2: <span class="type">Option</span>[<span class="type">A</span>]) = a1 orElse a2</span><br><span class="line"></span><br><span class="line">      <span class="function"><span class="keyword">def</span> <span class="title">zero</span> </span>= <span class="type">None</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">listFunctor</span> </span>= <span class="keyword">new</span> <span class="type">Functor</span>[<span class="type">List</span>] &#123;</span><br><span class="line">      <span class="function"><span class="keyword">def</span> <span class="title">map</span></span>[<span class="type">A</span>, <span class="type">B</span>](a: <span class="type">List</span>[<span class="type">A</span>])(f: (<span class="type">A</span>) =&gt; <span class="type">B</span>) = a.map(f)</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment">/*trait Monad[M[_]] &#123;</span></span><br><span class="line"><span class="comment">  def unit[A](a: A): M[A]   //identity</span></span><br><span class="line"><span class="comment">  def join[A](mma: M[M[A]]): M[A]</span></span><br><span class="line"><span class="comment">&#125;*/</span></span><br><span class="line"><span class="comment">// Monad: (有unit和flatmap就是monad)</span></span><br><span class="line"><span class="class"><span class="keyword">trait</span> <span class="title">Monad</span>[<span class="type">M</span>[_]] </span>&#123;</span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">unit</span></span>[<span class="type">A</span>](a: <span class="type">A</span>): <span class="type">M</span>[<span class="type">A</span>]</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">flatMap</span></span>[<span class="type">A</span>, <span class="type">B</span>](fa: <span class="type">M</span>[<span class="type">A</span>])(f: <span class="type">A</span> =&gt; <span class="type">M</span>[<span class="type">B</span>]): <span class="type">M</span>[<span class="type">B</span>]</span><br><span class="line"></span><br><span class="line">  <span class="comment">// def join[A](mma: M[M[A]]): M[A] = flatMap(mma)(ma =&gt; ma)</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-<p>附抄scala版的monad(参考资料1):</p>
-<figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">trait</span> <span class="title">Monad</span>[+<span class="type">T</span>] </span>&#123;</span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">flatMap</span></span>[<span class="type">U</span>]( f : (<span class="type">T</span>) =&gt; <span class="type">Monad</span>[<span class="type">U</span>] ) : <span class="type">Monad</span>[<span class="type">U</span>]</span><br><span class="line">  <span class="function"><span class="keyword">def</span> <span class="title">unit</span></span>(value : <span class="type">B</span>) : <span class="type">Monad</span>[<span class="type">B</span>]</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// map可以理解为flatmap的特化:</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">map</span></span>[<span class="type">U</span>](f : (<span class="type">T</span>) =&gt; <span class="type">U</span>) : <span class="type">Monad</span>[<span class="type">U</span>] = flatMap(v =&gt; unit(f(v)))</span><br><span class="line"></span><br><span class="line"><span class="comment">// Try类型monad:</span></span><br><span class="line"><span class="keyword">val</span> result:<span class="type">Try</span>[<span class="type">Int</span>] = <span class="type">Try</span>(<span class="string">"5"</span>.toInt).flatMap&#123;a =&gt;</span><br><span class="line">                      <span class="type">Try</span>(<span class="string">"6a"</span>.toInt).flatMap&#123;b =&gt;</span><br><span class="line">                      <span class="type">Try</span>(<span class="string">"9"</span>.toInt).flatMap&#123;c =&gt; <span class="type">Try</span>(a + b +c )&#125;&#125;&#125;</span><br><span class="line"><span class="comment">// for是flatmap的语法糖:</span></span><br><span class="line"><span class="keyword">val</span> result: <span class="type">Try</span>[<span class="type">Int</span>] = <span class="keyword">for</span> (</span><br><span class="line">    a &lt;- <span class="type">Try</span>(<span class="string">"5"</span>.toInt);</span><br><span class="line">    b &lt;- <span class="type">Try</span>(<span class="string">"6a"</span>.toInt);</span><br><span class="line">    c &lt;- <span class="type">Try</span>(<span class="string">"9"</span>.toInt)</span><br><span class="line">  ) <span class="keyword">yield</span>( a + b + c)</span><br><span class="line"></span><br><span class="line"><span class="comment">// 1.1含幺半群G: </span></span><br><span class="line"><span class="class"><span class="keyword">trait</span> <span class="title">Monad</span>[+<span class="type">T</span>]</span></span><br><span class="line"><span class="class"><span class="title">//</span> 1.2<span class="title">二元封闭、结合运算</span></span>:</span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">flatMap</span></span>[<span class="type">U</span>]( f : (<span class="type">T</span>) =&gt; <span class="type">Monad</span>[<span class="type">U</span>] ) : <span class="type">Monad</span>[<span class="type">U</span>]</span><br><span class="line"><span class="comment">// 1.3幺元:</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">unit</span></span>(value : <span class="type">B</span>) : <span class="type">Monad</span>[<span class="type">B</span>] </span><br><span class="line"><span class="comment">// 2.1结合律/封闭:</span></span><br><span class="line">monad.flatMap(f).flatMap(g) == monad.flatMap(v =&gt; f(v).flatMap(g)) <span class="comment">// associativity</span></span><br><span class="line"><span class="comment">// 案例:</span></span><br><span class="line"><span class="keyword">val</span> multiplier : <span class="type">Int</span> =&gt; <span class="type">Option</span>[<span class="type">Int</span>] = v =&gt; <span class="type">Some</span>(v * v)</span><br><span class="line"><span class="keyword">val</span> divider : <span class="type">Int</span> =&gt; <span class="type">Option</span>[<span class="type">Int</span>] = v =&gt; <span class="type">Some</span>(v/<span class="number">2</span>)</span><br><span class="line"><span class="keyword">val</span> original = <span class="type">Some</span>(<span class="number">10</span>)</span><br><span class="line"></span><br><span class="line">original.flatMap(multiplier).flatMap(divider) ===</span><br><span class="line">original.flatMap(v =&gt; multiplier(v).flatMap(divider))</span><br><span class="line">    </span><br><span class="line"><span class="comment">// 2.2 左幺元</span></span><br><span class="line">unit(x).flatMap(f) == f(x)</span><br><span class="line"><span class="comment">// 案例:</span></span><br><span class="line"><span class="keyword">val</span> multiplier : <span class="type">Int</span> =&gt; <span class="type">Option</span>[<span class="type">Int</span>] = v =&gt; <span class="type">Some</span>(v * v)</span><br><span class="line"><span class="keyword">val</span> item = <span class="type">Some</span>(<span class="number">10</span>).flatMap(multiplier)</span><br><span class="line">item === multiplier(<span class="number">10</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment">// 2.3 右幺元</span></span><br><span class="line">monad.flatMap(unit) == monad</span><br><span class="line"><span class="comment">// 案例:</span></span><br><span class="line"><span class="keyword">val</span> value = <span class="type">Some</span>(<span class="number">50</span>).flatMap(v =&gt; <span class="type">Some</span>(v))</span><br><span class="line">value === <span class="type">Some</span>(<span class="number">50</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment">// 3. 范畴</span></span><br><span class="line">高阶类型（如<span class="type">List</span>[<span class="type">T</span>+]）</span><br><span class="line"></span><br><span class="line"><span class="comment">// 4. 函子(Functor)</span></span><br><span class="line"><span class="comment">// 函数， Int =&gt; String</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">foo</span></span>(i:<span class="type">Int</span>): <span class="type">String</span> = i.toString</span><br><span class="line"><span class="comment">// 函子， List[T] =&gt; Set[T]</span></span><br><span class="line">scala&gt; <span class="function"><span class="keyword">def</span> <span class="title">baz</span></span>[<span class="type">T</span>](l:<span class="type">List</span>[<span class="type">T</span>]): <span class="type">Set</span>[<span class="type">T</span>] = l.toSet</span><br><span class="line"></span><br><span class="line"><span class="comment">// 5. 自函子(Endofunctor)：</span></span><br><span class="line">把一个类型映射到自身类型，比如<span class="type">Int</span>=&gt;<span class="type">Int</span>, <span class="type">String</span>=&gt;<span class="type">String</span> </span><br><span class="line">例如flatmap:</span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">flatMap</span></span>[<span class="type">U</span>]( f : (<span class="type">T</span>) =&gt; <span class="type">Monad</span>[<span class="type">U</span>] ) : <span class="type">Monad</span>[<span class="type">U</span>]</span><br></pre></td></tr></table></figure>
-
-
-
-<blockquote>
-<p>下面开始是我个人的理解</p>
-</blockquote>
-<h2 id="函数式语言"><a href="#函数式语言" class="headerlink" title="函数式语言"></a>函数式语言</h2><blockquote>
-<p>函数是一等公民。<br>无函数副作用。</p>
-</blockquote>
-<p>（学校里教的）<br>函数可以像普通变量一样使用。（比c里的函数指针更进一步）</p>
-<h3 id="更函数式一点"><a href="#更函数式一点" class="headerlink" title="更函数式一点"></a>更函数式一点</h3><p>尽量无状态，最好都像lambda演算一样，有很深的递归。<br>用递归代替循环。</p>
-<p>Monad就是这个思想的一个具体实现。</p>
-<h2 id="代码层面理解"><a href="#代码层面理解" class="headerlink" title="代码层面理解"></a>代码层面理解</h2><p>Monad在scala中就是一个有flatmap的容器，可以把函数fmap的输出收集起来打平回原来的Monad类型。<br>比较好理解的Monad类型是容器类型：List,Option. </p>
-<h2 id="形象上理解"><a href="#形象上理解" class="headerlink" title="形象上理解"></a>形象上理解</h2><p>Monad形象上理解类似于有管道操作的容器，可以把函数fmap的输出适配回Monad类型，方便投入下一个函数中。</p>
-<h2 id="比较严密的定义上理解："><a href="#比较严密的定义上理解：" class="headerlink" title="比较严密的定义上理解："></a>比较严密的定义上理解：</h2><p>（去掉范畴学的数学术语，简化理解）<br>Monad是一个我们定义的集合，它上面有零元（如Option中的None\List中的nil），它上面还有一种二元操作op，op(A,B)的结果依然属于Monad(封闭性)，并且运算满足结合律(可以随意加括号)。<br>所以如果有unit函数(生成零元)，flatmap函数（把二元操作打平回集合元素类型，满足封闭性），就可以成为一个Monad了。至于结合律，由于函数都满足结合律，因此可以忽略。</p>
-<p>总结:<br>有map函数: Functor、函子<br>有ap函数（参数为函数的map）: Applicative、应用<br>有flatmap函数: Monad</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/08/23/2019-08/%E7%A5%9E%E7%A7%98%E7%9A%84monad%E2%80%94%E2%80%94%E5%87%BD%E6%95%B0%E5%BC%8F%E7%BC%96%E7%A8%8B/" data-id="ck96cxpq200jdmaamd4kn4fpv" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/monad/" rel="tag">monad</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/scala/" rel="tag">scala</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%87%BD%E6%95%B0%E5%BC%8F/" rel="tag">函数式</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1166,6 +1338,10 @@
       <ul>
         
           <li>
+            <a href="/2022/09/26/2022-09/%E5%B7%B2%E7%9F%A5%E6%98%8E%E6%96%87%E7%A0%B4%E8%A7%A3zip/">已知明文破解zip</a>
+          </li>
+        
+          <li>
             <a href="/2022/09/26/2022-09/jwt%E7%A0%B4%E8%A7%A3/">jwt破解</a>
           </li>
         
@@ -1179,10 +1355,6 @@
         
           <li>
             <a href="/2022/08/30/2022-08/%E8%B0%83%E4%BC%98-cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-cpu毛刺问题</a>
-          </li>
-        
-          <li>
-            <a href="/2022/05/31/2022-05/w-tinylfu%E7%BC%93%E5%AD%98%E7%AE%97%E6%B3%95/">w-tinylfu缓存算法</a>
           </li>
         
       </ul>

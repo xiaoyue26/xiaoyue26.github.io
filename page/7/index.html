@@ -72,6 +72,84 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-04/spark中RDD，Dataframe，DataSet区别对比" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/04/29/2019-04/spark%E4%B8%ADRDD%EF%BC%8CDataframe%EF%BC%8CDataSet%E5%8C%BA%E5%88%AB%E5%AF%B9%E6%AF%94/" class="article-date">
+  <time datetime="2019-04-29T02:16:54.000Z" itemprop="datePublished">2019-04-29</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/spark/">spark</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/04/29/2019-04/spark%E4%B8%ADRDD%EF%BC%8CDataframe%EF%BC%8CDataSet%E5%8C%BA%E5%88%AB%E5%AF%B9%E6%AF%94/">spark中RDD，Dataframe，DataSet区别对比</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="RDD，Dataframe，DataSet的定义"><a href="#RDD，Dataframe，DataSet的定义" class="headerlink" title="RDD，Dataframe，DataSet的定义"></a>RDD，Dataframe，DataSet的定义</h1><p><code>RDD</code>: immutable、spark的基础数据集。底层api； 1.0+, 存放java/scala对象;<br><code>Dataframe</code>: immutable、多了列名、Catalyst优化。高级api;  1.3+, 存放row对象;(有列名)<br><code>Dataset</code>: 比Dataframe多类型安全。高级api。 1.6+, 存放java/scala对象(暴露更多信息给编译期)<br>可以理解成DataSet每行存一个大对象。（比如样例中的<code>DataSet[Person]</code>）</p>
+<p>DataSet一般比DataFrame慢一点点，多了类型安全的开销（<code>Row</code>=&gt;<code>Java类型</code>）</p>
+<h2 id="这里说的类型安全是什么？"><a href="#这里说的类型安全是什么？" class="headerlink" title="这里说的类型安全是什么？"></a>这里说的类型安全是什么？</h2><blockquote>
+<p>是编译期类型安全</p>
+</blockquote>
+<p>Dataframe: 访问不存在的列名=&gt;运行时报错; （非类型安全）<br>DataSet:   访问不存在的列名=&gt;编译时报错。 （类型安全）</p>
+<p>DataSet的中每个元素都是case class之类的,完全定义类型的,因此编译时就能确定schema合法性。</p>
+<p><code>Dataset[Row]</code> = <code>DataFrame</code><br>因此Row可以看做非编译期类型安全的对象。</p>
+<h2 id="java-scala对象-lt-gt-DataFrame的row对象-DataSet的元素"><a href="#java-scala对象-lt-gt-DataFrame的row对象-DataSet的元素" class="headerlink" title="java/scala对象 &lt;=&gt; DataFrame的row对象/DataSet的元素:"></a>java/scala对象 &lt;=&gt; DataFrame的row对象/DataSet的元素:</h2><ol>
+<li>对于dataframe: 传入StructType;</li>
+<li>对于dataSet:  使用Encoder。 </li>
+</ol>
+<p>类似于hive的反序列化:</p>
+<h3 id="hive反序列化原理"><a href="#hive反序列化原理" class="headerlink" title="hive反序列化原理:"></a>hive反序列化原理:</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">HDFS files –&gt; InputFileFormat –&gt; &lt;key, value&gt; –&gt; Deserializer –&gt; Row object</span><br></pre></td></tr></table></figure>
+<h3 id="hive序列化原理-Serialize"><a href="#hive序列化原理-Serialize" class="headerlink" title="hive序列化原理(Serialize):"></a>hive序列化原理(<code>Serialize</code>):</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Row object –&gt; Serializer –&gt; &lt;key, value&gt; –&gt; OutputFileFormat –&gt; HDFS files</span><br></pre></td></tr></table></figure>
+
+<p><code>Encoder</code>: <code>Dataset[Row]</code> -&gt; <code>Dataset[T]</code><br>JVM对象和非堆自定义内存二进制数据<br>Encoders生成二进制代码来跟非堆数据交互，并且提供有需访问给独立的参数而不是对整个对象反序列化。</p>
+<h1 id="优化"><a href="#优化" class="headerlink" title="优化"></a>优化</h1><p>RDD: 没有优化, 程序员自己保证RDD运算是最优的;<br>DataFrame: 走catalyst编译优化,类似于Sql的优化。根据成本模型，逻辑执行计划优化成物理执行计划。<br>DataSet: 同DataFrame. </p>
+<p>强调一点,DataFrame底层也是用的RDD实现，因此如果程序员足够牛逼，理论上执行计划能写得比DataFrame的计划好。</p>
+<h1 id="序列化"><a href="#序列化" class="headerlink" title="序列化"></a>序列化</h1><p>shuffle的时候、或者cache写内存、磁盘的时候，需要序列化。</p>
+<p><code>RDD</code>: 使用java序列化(或者kryo)成二进制; (成本高)<br><code>DataFrame</code>: Tungsten计划优化。序列化到堆外内存，然后无须反序列化，直接根据schema操作二进制运算。(因为DataFrame比RDD多一个schema信息)<br><a href="https://github.com/hustnn/TungstenSecret" target="_blank" rel="noopener">https://github.com/hustnn/TungstenSecret</a><br><code>DataSet</code>: 基本同DataFrame，多了Encoder的概念。访问某列的时候，可以只反序列化那个局部的二进制。</p>
+<h2 id="Tungsten-binary-format"><a href="#Tungsten-binary-format" class="headerlink" title="Tungsten binary format"></a>Tungsten binary format</h2><p>钨丝计划使用的二进制格式</p>
+<h1 id="垃圾收集"><a href="#垃圾收集" class="headerlink" title="垃圾收集"></a>垃圾收集</h1><p>RDD: 由于上一节中的序列化，gc压力较大；<br>DataFrame: 放堆外内存，无需jvm对象头开销，无gc；<br>DataSet: 同df.</p>
+<h1 id="钨丝计划的秘密："><a href="#钨丝计划的秘密：" class="headerlink" title="钨丝计划的秘密："></a>钨丝计划的秘密：</h1><p><a href="https://github.com/hustnn/TungstenSecret" target="_blank" rel="noopener">https://github.com/hustnn/TungstenSecret</a></p>
+<p>总结一下钨丝计划的3大优化：</p>
+<ol>
+<li>内存管理、直接操作二进制数据：放堆外内存(避免gc开销)，不用jvm对象(减少对象头开销)。</li>
+<li>缓存友好的计算: 考虑存储体系;(flink也有) 对指针排序，根据schema访问key的二进制。(估计key只能是原生类型，其他类就得反序列化了)</li>
+<li>code generation：充分利用最新的编译期和cpu性能：把jvm对象转到堆外unsafeRow，以便利用第一点。</li>
+</ol>
+<p>比如8B的String的对象头有40B开销。<br>UnsafeShuffleManager： 直接在serialized binary data上sort而不是java objects</p>
+<h2 id="wholeStageCodeGen"><a href="#wholeStageCodeGen" class="headerlink" title="wholeStageCodeGen"></a>wholeStageCodeGen</h2><p>把transform的很多步骤，合并成一个步骤，使用字符串插值生成一份重写后的代码(逼近于手写最优解)，然后用Janino(微型运行时嵌入式java编译器)编译成字节码。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/04/29/2019-04/spark%E4%B8%ADRDD%EF%BC%8CDataframe%EF%BC%8CDataSet%E5%8C%BA%E5%88%AB%E5%AF%B9%E6%AF%94/" data-id="ck96cxppo00i6maam8bk2eis5" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spark/" rel="tag">spark</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2019-04/spark中的encoder" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/04/27/2019-04/spark%E4%B8%AD%E7%9A%84encoder/" class="article-date">
@@ -903,68 +981,6 @@
 
 
   
-    <article id="post-2019-02/nginx笔记-编译安装" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E7%BC%96%E8%AF%91%E5%AE%89%E8%A3%85/" class="article-date">
-  <time datetime="2019-02-28T07:08:23.000Z" itemprop="datePublished">2019-02-28</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/nginx/">nginx</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E7%BC%96%E8%AF%91%E5%AE%89%E8%A3%85/">nginx笔记-编译安装</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>参考资料：<br><a href="https://www.jianshu.com/p/5eab0f83e3b4" target="_blank" rel="noopener">https://www.jianshu.com/p/5eab0f83e3b4</a></p>
-<h1 id="架构"><a href="#架构" class="headerlink" title="架构"></a>架构</h1><img src="/images/2019-02/master-worker.png" class="" width="800" height="1200" title="master-worker">
-<p>master+worker架构。</p>
-<p>master: 管理<code>nginx.conf</code>,同步到worker;<br>worker: 单线程绑定cpu，实际处理/转发请求;</p>
-<p>master咋同步配置到worker呢？<br>直接用新conf起新worker,旧worker处理完手头的活就kill掉。</p>
-<h1 id="常用命令"><a href="#常用命令" class="headerlink" title="常用命令"></a>常用命令</h1><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 启动:</span></span><br><span class="line">nginx -c nginx配置文件地址   </span><br><span class="line"><span class="meta">#</span><span class="bash"> 重新载入配置:</span></span><br><span class="line">nginx -s reload</span><br><span class="line"><span class="meta">#</span><span class="bash"> 检查配置（或查看配置地址）：</span></span><br><span class="line">nginx -t</span><br><span class="line"><span class="meta">#</span><span class="bash"> 停止：</span></span><br><span class="line">nginx -s stop</span><br></pre></td></tr></table></figure>
-<p>比如如果想知道当前nginx的配置文件在哪里，可以运行<code>nginx -t</code>,就能看到了。</p>
-<h1 id="编译安装"><a href="#编译安装" class="headerlink" title="编译安装"></a>编译安装</h1><p>下载解压缩:<br><a href="http://nginx.org/en/download.html" target="_blank" rel="noopener">http://nginx.org/en/download.html</a><br><strong>配置</strong></p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> KERNEL_BITS=64</span><br><span class="line">./configure --user=mengqifeng \</span><br><span class="line">--group=staff \</span><br><span class="line">--prefix=/usr/<span class="built_in">local</span>/nginx \</span><br><span class="line">--pid-path=/var/run/nginx.pid \</span><br><span class="line">--lock-path=/var/lock/nginx.lock \</span><br><span class="line">--with-http_ssl_module \</span><br><span class="line">--with-http_dav_module \</span><br><span class="line">--with-http_flv_module \</span><br><span class="line">--with-http_realip_module \</span><br><span class="line">--with-http_gzip_static_module \</span><br><span class="line">--with-http_stub_status_module \</span><br><span class="line">--with-mail --with-mail_ssl_module \</span><br><span class="line">--with-debug \</span><br><span class="line">--with-http_auth_request_module \</span><br><span class="line">--http-client-body-temp-path=/var/tmp/nginx/client \</span><br><span class="line">--http-proxy-temp-path=/var/tmp/nginx/proxy \</span><br><span class="line">--http-fastcgi-temp-path=/var/tmp/nginx/fastcgi \</span><br><span class="line">--http-uwsgi-temp-path=/var/tmp/nginx/uwsgi \</span><br><span class="line">--http-scgi-temp-path=/var/tmp/nginx/scgi \</span><br><span class="line">--with-pcre=/Users/mengqifeng/Public/build_home/pcre-8.42 \</span><br><span class="line">--with-openssl=/Users/mengqifeng/Public/build_home/openssl \</span><br><span class="line">--with-zlib=/Users/mengqifeng/Public/build_home/zlib-1.2.11</span><br></pre></td></tr></table></figure>
-<p>其中最后3行要看情况,先不加。<br>报错以后下载pcre和openssl,加上参数提供给nginx.<br><strong>编译</strong></p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">make</span><br></pre></td></tr></table></figure>
-<p><strong>安装</strong></p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo make install</span><br></pre></td></tr></table></figure>
-
-<p>最后设置一下环境变量: (<code>/etc/profile.d/nginx.sh</code>)</p>
-<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> NGINX_HOME=/usr/<span class="built_in">local</span>/nginx</span><br><span class="line"><span class="built_in">export</span> PATH=<span class="variable">$PATH</span>:<span class="variable">$NGINX_HOME</span>/sbin</span><br></pre></td></tr></table></figure>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E7%BC%96%E8%AF%91%E5%AE%89%E8%A3%85/" data-id="ck96cxpp400ftmaamg67s4hg3" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/nginx/" rel="tag">nginx</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -991,6 +1007,10 @@
       <ul>
         
           <li>
+            <a href="/2022/09/26/2022-09/%E5%B7%B2%E7%9F%A5%E6%98%8E%E6%96%87%E7%A0%B4%E8%A7%A3zip/">已知明文破解zip</a>
+          </li>
+        
+          <li>
             <a href="/2022/09/26/2022-09/jwt%E7%A0%B4%E8%A7%A3/">jwt破解</a>
           </li>
         
@@ -1004,10 +1024,6 @@
         
           <li>
             <a href="/2022/08/30/2022-08/%E8%B0%83%E4%BC%98-cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-cpu毛刺问题</a>
-          </li>
-        
-          <li>
-            <a href="/2022/05/31/2022-05/w-tinylfu%E7%BC%93%E5%AD%98%E7%AE%97%E6%B3%95/">w-tinylfu缓存算法</a>
           </li>
         
       </ul>

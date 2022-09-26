@@ -72,6 +72,134 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-02/高性能mysql第九-十章-笔记-选硬件-主备复制" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/11/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC%E4%B9%9D-%E5%8D%81%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E9%80%89%E7%A1%AC%E4%BB%B6-%E4%B8%BB%E5%A4%87%E5%A4%8D%E5%88%B6/" class="article-date">
+  <time datetime="2019-02-11T14:41:01.000Z" itemprop="datePublished">2019-02-11</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/02/11/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC%E4%B9%9D-%E5%8D%81%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E9%80%89%E7%A1%AC%E4%BB%B6-%E4%B8%BB%E5%A4%87%E5%A4%8D%E5%88%B6/">高性能mysql第九/十章-笔记-选硬件/主备复制</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>这章主要讲怎么挑mysql的硬件。</p>
+<h1 id="CPU"><a href="#CPU" class="headerlink" title="CPU"></a>CPU</h1><p>多核的</p>
+<h1 id="磁盘"><a href="#磁盘" class="headerlink" title="磁盘"></a>磁盘</h1><p>raid卡，带电，防断电的</p>
+<h2 id="iostat和vmstat用法"><a href="#iostat和vmstat用法" class="headerlink" title="iostat和vmstat用法"></a>iostat和vmstat用法</h2><p>略</p>
+<h1 id="高性能mysql第十章-笔记-复制"><a href="#高性能mysql第十章-笔记-复制" class="headerlink" title="高性能mysql第十章-笔记-复制"></a>高性能mysql第十章-笔记-复制</h1><p>使用场景：</p>
+<ol>
+<li>数据分布；</li>
+<li>负载均衡（从库可以读）；</li>
+<li>备份；</li>
+<li>高可用/故障切换；</li>
+<li>升级测试。 <img src="/images/2019-02/relay_log.png" class="" width="800" height="1200" title="relay_log">
+主库备库同步流程：</li>
+<li>主库: 生成binlog;(binlog dump线程)</li>
+<li>备库: 读取binlong放入中继日志relay log;（通过TCP/IP协议,IO线程）</li>
+<li>备库: 重放relay log。(单线程,SQL线程)</li>
+</ol>
+<h2 id="配置复制"><a href="#配置复制" class="headerlink" title="配置复制"></a>配置复制</h2><ol>
+<li>每台服务器上创建账号;</li>
+<li>配置主库和备库；</li>
+<li>通知备库连接到主库，并从主库复制数据。</li>
+</ol>
+<h3 id="第一步创建账号"><a href="#第一步创建账号" class="headerlink" title="第一步创建账号"></a>第一步创建账号</h3><p>主库、备库：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">grant</span> <span class="keyword">replication</span> <span class="keyword">slave</span>, <span class="keyword">replication</span> <span class="keyword">client</span> <span class="keyword">on</span> *.*</span><br><span class="line"><span class="keyword">to</span> repl@<span class="string">'192.168.0.%'</span> indentified <span class="keyword">by</span> <span class="string">'p4ssword'</span>,;</span><br></pre></td></tr></table></figure>
+
+<h3 id="第二步设置主库和备库"><a href="#第二步设置主库和备库" class="headerlink" title="第二步设置主库和备库"></a>第二步设置主库和备库</h3><p>主库:<br><code>[my.conf]</code>:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">log_bin &#x3D; mysql-bin</span><br><span class="line">server_id &#x3D; 10</span><br></pre></td></tr></table></figure>
+<p>重启主库。<br>检查主库完成配置:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">master</span> <span class="keyword">status</span>;</span><br><span class="line"></span><br><span class="line">+<span class="comment">------------------+-----------+--------------+------------------+-------------------+</span></span><br><span class="line">| File             | Position  | Binlog_Do_DB | Binlog_Ignore_DB | Executed_Gtid_Set |</span><br><span class="line">+<span class="comment">------------------+-----------+--------------+------------------+-------------------+</span></span><br><span class="line">| mysql-bin.000611 | 618598987 |              |                  |                   |</span><br><span class="line">+<span class="comment">------------------+-----------+--------------+------------------+-------------------+</span></span><br></pre></td></tr></table></figure>
+
+
+<p>备库配置：<br><code>[my.conf]</code></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">log_bin &#x3D; mysql-bin</span><br><span class="line">server_id &#x3D; 2 </span><br><span class="line">relay_log &#x3D; &#x2F;var&#x2F;lib&#x2F;mysql&#x2F;mysql-relay-bin</span><br><span class="line">log_slave_updates &#x3D; 1 # 备库自身的重放事件也记录到binlog中</span><br><span class="line">read_only &#x3D; 1</span><br></pre></td></tr></table></figure>
+
+<h3 id="第三步：启动复制"><a href="#第三步：启动复制" class="headerlink" title="第三步：启动复制"></a>第三步：启动复制</h3><p>备库执行sql:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">change</span> <span class="keyword">master</span> <span class="keyword">to</span> MASTER_HOST= <span class="string">'server1'</span></span><br><span class="line">,MASTER_USER=<span class="string">'reply'</span></span><br><span class="line">,MASTER_PASSWORD=<span class="string">'p4ssword'</span></span><br><span class="line">,MASTER_LOG_FILE=<span class="string">'mysql-bin.000001'</span></span><br><span class="line">,MASTER_LOG_POS=<span class="number">0</span>;</span><br></pre></td></tr></table></figure>
+<p>检查备库配置:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">slave</span> <span class="keyword">status</span> \G</span><br></pre></td></tr></table></figure>
+
+<p>让备库开始复制:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">start</span> <span class="keyword">slave</span>;</span><br></pre></td></tr></table></figure>
+
+
+
+<h2 id="binlog配置"><a href="#binlog配置" class="headerlink" title="binlog配置"></a>binlog配置</h2><h3 id="主库配置"><a href="#主库配置" class="headerlink" title="主库配置"></a>主库配置</h3><p><code>sync_binlog</code>=1: 事务提交前把binlog存到磁盘上。</p>
+<h2 id="复制的原理"><a href="#复制的原理" class="headerlink" title="复制的原理"></a>复制的原理</h2><p><code>binlog_format</code>:</p>
+<ol>
+<li>基于语句的复制(逻辑): 出错机率大,开销小;</li>
+<li>基于行的复制(物理): 几乎不出错,开销一般更大。(5.1以后开始有)</li>
+</ol>
+<p>基于语句的复制的<strong>缺点</strong>:</p>
+<ol>
+<li>不支持触发器或者存储过程：有bug;</li>
+<li>只能串行重放。</li>
+</ol>
+<p>基于行的<strong>缺点</strong>:</p>
+<ol>
+<li>可读性差，无法直接知道执行了什么SQL。<br>解决方案: <figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- 1:</span></span><br><span class="line"><span class="keyword">show</span> <span class="keyword">master</span> <span class="keyword">logs</span>;</span><br><span class="line"><span class="comment">-- 2:</span></span><br><span class="line"><span class="keyword">show</span> <span class="keyword">binlog</span> <span class="keyword">events</span> <span class="keyword">in</span> <span class="string">'mysql-bin.000643'</span> <span class="keyword">from</span> <span class="number">1073742091</span>;</span><br></pre></td></tr></table></figure>
+
+
+</li>
+</ol>
+<h2 id="复制的过滤器"><a href="#复制的过滤器" class="headerlink" title="复制的过滤器"></a>复制的过滤器</h2><p>不建议使用。</p>
+<h2 id="复制的拓扑"><a href="#复制的拓扑" class="headerlink" title="复制的拓扑"></a>复制的拓扑</h2><h3 id="1-一主多备-星形模型"><a href="#1-一主多备-星形模型" class="headerlink" title="1. 一主多备(星形模型)"></a>1. 一主多备(星形模型)</h3><h3 id="2-双主"><a href="#2-双主" class="headerlink" title="2. 双主"></a>2. 双主</h3><p>不建议使用,两个主库都可写会有很多问题</p>
+<h3 id="3-HA模式-类似于双主-但只有一个可写"><a href="#3-HA模式-类似于双主-但只有一个可写" class="headerlink" title="3. HA模式(类似于双主,但只有一个可写)"></a>3. HA模式(类似于双主,但只有一个可写)</h3><img src="/images/2019-02/HA.png" class="" width="800" height="1200" title="HA">
+<p>两个库的配置基本相同，只是其中一个库是只读的。<br>如果有Alter table等耗时操作，可以在备库上执行，然后互换两个库。<br>优点：<br>故障恢复很简单。</p>
+<p>具体设置情况:</p>
+<ol>
+<li>两个库数据相同;</li>
+<li>创建复制账号，选择不同serverid；</li>
+<li>两者启用binlog,互相跟踪;</li>
+<li>备库设置成只读，主库设置成可写。</li>
+</ol>
+<p>由于serverid，主库不会重复消费自己的变更。（忽略自己的日志）</p>
+<h3 id="确定备库追上了主库"><a href="#确定备库追上了主库" class="headerlink" title="确定备库追上了主库"></a>确定备库追上了主库</h3><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- 主库:</span></span><br><span class="line"><span class="keyword">show</span> <span class="keyword">master</span> <span class="keyword">status</span>;<span class="comment">-- 记录一下文件名和偏移量</span></span><br><span class="line"><span class="comment">-- 备库:</span></span><br><span class="line"><span class="keyword">select</span> <span class="keyword">master_pos_wait</span>(<span class="keyword">file</span>, pos[, <span class="keyword">timeout</span>])</span><br></pre></td></tr></table></figure>
+
+<h3 id="4-环形-gt-3的库成环"><a href="#4-环形-gt-3的库成环" class="headerlink" title="4. 环形(&gt;=3的库成环)"></a>4. 环形(&gt;=3的库成环)</h3><p>不建议使用，太脆弱容易死循环。</p>
+<h3 id="5-分发主库"><a href="#5-分发主库" class="headerlink" title="5. 分发主库"></a>5. 分发主库</h3><img src="/images/2019-02/fenfa_mysql.png" class="" width="800" height="1200" title="fenfa_mysql">
+<p>一主多备对于备的数量有上限，可以用分发主库来进行扩展。<br>为了避免在分发主库上执行查询，可以将它的表修改为blackhole引擎。<br>（storage_engine=blackhole）</p>
+<h3 id="6-模拟多主库"><a href="#6-模拟多主库" class="headerlink" title="6. 模拟多主库"></a>6. 模拟多主库</h3><img src="/images/2019-02/moni_multi.png" class="" width="800" height="1200" title="moni_multi">
+<p>备库可以轮流读两个主库，俩主库带blackhole即可。</p>
+<h2 id="tips"><a href="#tips" class="headerlink" title="tips"></a>tips</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">insert ...</span><br><span class="line">select ...</span><br><span class="line">-- 转换成:</span><br><span class="line">select into outfile .. </span><br><span class="line">load data infile  ...</span><br></pre></td></tr></table></figure>
+<p>这样更快(不需要加锁)</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/11/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC%E4%B9%9D-%E5%8D%81%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E9%80%89%E7%A1%AC%E4%BB%B6-%E4%B8%BB%E5%A4%87%E5%A4%8D%E5%88%B6/" data-id="ck96cxppg00h7maam081s1f7j" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2019-02/高性能mysql第八章-笔记-优化服务器配置" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/02/11/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC%E5%85%AB%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E4%BC%98%E5%8C%96%E6%9C%8D%E5%8A%A1%E5%99%A8%E9%85%8D%E7%BD%AE/" class="article-date">
@@ -1102,58 +1230,6 @@
 
 
   
-    <article id="post-2018-12/mysql意向锁" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/12/24/2018-12/mysql%E6%84%8F%E5%90%91%E9%94%81/" class="article-date">
-  <time datetime="2018-12-24T01:50:47.000Z" itemprop="datePublished">2018-12-24</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/mysql/">mysql</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/12/24/2018-12/mysql%E6%84%8F%E5%90%91%E9%94%81/">mysql意向锁</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>意向锁: 对表内现有锁的概括，可以看作一种状态信息，很有用但并不必要，用于优化性能。</p>
-<p>意向锁特点: 均为表级(因为是信息概括)，意向锁分为读意向锁和写意向锁，但意向锁之间不互斥。</p>
-<h2 id="场景1：（如果没有意向锁）"><a href="#场景1：（如果没有意向锁）" class="headerlink" title="场景1：（如果没有意向锁）"></a>场景1：（如果没有意向锁）</h2><p>事务A: 对表的某一行加了行锁（互斥锁）;<br>事务B: 希望对整表加锁，需要知道是否已经有表锁，并且需要知道表中任意一样是否有行锁（因为锁定范围有重合，而且是互斥锁），这个时候如果没有意向锁，事务B就只能扫全表了。</p>
-<h2 id="场景2：（引入意向锁后）"><a href="#场景2：（引入意向锁后）" class="headerlink" title="场景2：（引入意向锁后）"></a>场景2：（引入意向锁后）</h2><p>事务A: 先申请表的意向锁，然后申请行锁；<br>事务B：先申请表的意向锁（成功），然后申请表锁，这个时候由于上一步，立即能知道表中存在别的行锁，因此阻塞。</p>
-<p>意向锁的兼容互斥关系：</p>
-<img src="/images/2018-12/ix.jpg" class="" width="800" height="1200" title="ix">
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/12/24/2018-12/mysql%E6%84%8F%E5%90%91%E9%94%81/" data-id="ck96cxpov00eumaam3enb183m" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1180,6 +1256,10 @@
       <ul>
         
           <li>
+            <a href="/2022/09/26/2022-09/%E5%B7%B2%E7%9F%A5%E6%98%8E%E6%96%87%E7%A0%B4%E8%A7%A3zip/">已知明文破解zip</a>
+          </li>
+        
+          <li>
             <a href="/2022/09/26/2022-09/jwt%E7%A0%B4%E8%A7%A3/">jwt破解</a>
           </li>
         
@@ -1193,10 +1273,6 @@
         
           <li>
             <a href="/2022/08/30/2022-08/%E8%B0%83%E4%BC%98-cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-cpu毛刺问题</a>
-          </li>
-        
-          <li>
-            <a href="/2022/05/31/2022-05/w-tinylfu%E7%BC%93%E5%AD%98%E7%AE%97%E6%B3%95/">w-tinylfu缓存算法</a>
           </li>
         
       </ul>
