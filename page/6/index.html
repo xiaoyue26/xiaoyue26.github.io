@@ -72,6 +72,90 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-07/disruptor笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/07/27/2019-07/disruptor%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2019-07-27T07:49:48.000Z" itemprop="datePublished">2019-07-27</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/">消息队列</a>►<a class="article-category-link" href="/categories/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/disruptor/">disruptor</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/07/27/2019-07/disruptor%E7%AC%94%E8%AE%B0/">disruptor笔记——代替blockingQueue和java9flowAPI</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h1><p>blockingQueue缺点:</p>
+<ol>
+<li>竞态严重: producer\consumer;</li>
+<li>cache不友好: 线程a结束后，线程b的所有缓存都污染。</li>
+</ol>
+<h1 id="discruptor方案"><a href="#discruptor方案" class="headerlink" title="discruptor方案"></a>discruptor方案</h1><p>理想适用场景：<br>1个producer,多个consumer.</p>
+<p>循环队列：<br>producer: 存储自己的游标(cursor);<br>consumer: 存储自己的消费offset。 </p>
+<ol>
+<li>循环队列: 降低竞态,分离了多个游标;(当然还是有竞态，用内存屏障)</li>
+<li>cursor中加入padding: 避免cursor缓存污染;（填充上7个long）</li>
+<li>用CAS和忙等(busy spin)代替锁。(资源换性能)</li>
+<li>预先申请了一大片内存：避免gc干扰。</li>
+</ol>
+<ul>
+<li>优化</li>
+</ul>
+<ol>
+<li>batch commit; // 避免竞态次数 比如消费者不是每次只读1个，它直接询问生产进度seqK，保存下来，然后一直消费到seqK之前都不用再询问cursor. （询问需要穿过consumer barrier）</li>
+<li>多个producer时: CAS写入; </li>
+<li>支持复杂dag优化。</li>
+</ol>
+<p>附:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// padding:</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">final</span> <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">VolatileLong</span></span></span><br><span class="line"><span class="class">    </span>&#123;</span><br><span class="line">        <span class="keyword">public</span> <span class="keyword">volatile</span> <span class="keyword">long</span> value = <span class="number">0L</span>;</span><br><span class="line">        <span class="keyword">public</span> <span class="keyword">long</span> p1, p2, p3, p4, p5, p6; <span class="comment">// comment out</span></span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="信息交流"><a href="#信息交流" class="headerlink" title="信息交流"></a>信息交流</h2><h3 id="consumer获取producer信息"><a href="#consumer获取producer信息" class="headerlink" title="consumer获取producer信息"></a>consumer获取producer信息</h3><img src="/images/2019-07/consumer_barrier.png" class="" width="400" height="600" title="consumer_barrier">
+<p>通过consumer barrier从获取cursor信息： 最新生产sequence number;<br>这种策略下，消费者不需要知道其他消费者的情况(独立offset)</p>
+<h2 id="producer获取信息"><a href="#producer获取信息" class="headerlink" title="producer获取信息"></a>producer获取信息</h2><img src="/images/2019-07/producer_barrier.png" class="" width="400" height="600" title="producer_barrier">
+<p>通过producer barrier获取ring buffer和消费者信息。<br>等待最慢的消费者释放空间：获取最慢的消费者的offset。以便获得更多可读的节点空间。（这里也可以批处理，同时获得多个空间，同时写）</p>
+<p>两阶段提交：</p>
+<ol>
+<li>数据写入节点;</li>
+<li>commit. </li>
+</ol>
+<h1 id="复杂dag支持"><a href="#复杂dag支持" class="headerlink" title="复杂dag支持"></a>复杂dag支持</h1><img src="/images/2019-07/disruptor_dag.png" class="" width="400" height="600" title="disruptor_dag">
+<p>如上图所示的菱形结构可能在实际业务中会出现。<br>producer进度: 22<br>c1进度: 21<br>c2进度: 18<br>c3进度: 15<br>此时producer想要继续写的时候卡住，因为15的位置还不可用。<br>也就是生产者的速度受制于叶子节点的消费者。</p>
+<p>c1,c2的处理结果一般是原地写入entry的不同字段，避免冲突。<br>(entry节点的定义可以有多个值字段)</p>
+<p>更多详情直接参见：<br><a href="http://wiki.jikexueyuan.com/project/disruptor-getting-started/write-ringbuffer.html" target="_blank" rel="noopener">http://wiki.jikexueyuan.com/project/disruptor-getting-started/write-ringbuffer.html</a></p>
+<p>maven依赖：<br><a href="https://mvnrepository.com/artifact/com.lmax/disruptor/3.4.2" target="_blank" rel="noopener">https://mvnrepository.com/artifact/com.lmax/disruptor/3.4.2</a></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/07/27/2019-07/disruptor%E7%AC%94%E8%AE%B0/" data-id="ck96cxppv00iqmaamalhkb5aj" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/disruptor/" rel="tag">disruptor</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/" rel="tag">消息队列</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2019-07/领域驱动设计-第7-17章笔记" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/07/22/2019-07/%E9%A2%86%E5%9F%9F%E9%A9%B1%E5%8A%A8%E8%AE%BE%E8%AE%A1-%E7%AC%AC7-17%E7%AB%A0%E7%AC%94%E8%AE%B0/" class="article-date">
@@ -1253,94 +1337,6 @@
 
 
   
-    <article id="post-2019-04/spark中的encoder" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/04/27/2019-04/spark%E4%B8%AD%E7%9A%84encoder/" class="article-date">
-  <time datetime="2019-04-27T03:23:26.000Z" itemprop="datePublished">2019-04-27</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/spark/">spark</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/04/27/2019-04/spark%E4%B8%AD%E7%9A%84encoder/">spark中的encoder</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>参考资料:<br><a href="https://stackoverflow.com/questions/53949497/why-a-encoder-is-needed-for-creating-dataset-in-spark" target="_blank" rel="noopener">https://stackoverflow.com/questions/53949497/why-a-encoder-is-needed-for-creating-dataset-in-spark</a><br><code>It also uses less memory than Kryo/Java serialization.</code></p>
-<h1 id="What-Encoder是啥"><a href="#What-Encoder是啥" class="headerlink" title="What: Encoder是啥?"></a>What: Encoder是啥?</h1><p>所有<code>DataSet</code>都需要<code>Encoder</code>。</p>
-<p><code>Encoder</code>是spark-sql用来序列化/反序列化的一个类。主要用于<code>DataSet</code>。<br>本质上每次调用<code>toDS()</code>函数的时候都调用了<code>Encoder</code>，不过有时候我们察觉不到，因为用了隐式调用(<code>import spark.implicits._</code>)。<br>可以直接看<code>Encoder</code>源码注释中的样例:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">import spark.implicits._</span><br><span class="line">val ds &#x3D; Seq(1, 2, 3).toDS() &#x2F;&#x2F; implicitly provided (spark.implicits.newIntEncoder)</span><br><span class="line">&#x2F;&#x2F; 将数字(JVM对象)转换为DataSet中的元素</span><br><span class="line">&#x2F;&#x2F; 这里由于是常见的原始类型，所以spark提供了隐式encoder的调用，隐藏了这些细节。</span><br></pre></td></tr></table></figure>
-<p>Encoder将jvm转换为堆外内存二进制，使用成员位置信息，降低反序列化的范围（反序列化需要的列即可）。<br>// (类似于Hive中的反序列化,把kv转换为row)</p>
-<p>Encoder不要求线程安全。</p>
-<h1 id="Why-为啥用Encoder"><a href="#Why-为啥用Encoder" class="headerlink" title="Why: 为啥用Encoder?"></a>Why: 为啥用Encoder?</h1><p>stackoverflow上说encoder消耗更少的内存。因为kryo把<code>dataSet</code>中的所有行都变成了一个打平的二进制对象。<br><code>10x faster than Kryo serialization (Java serialization orders of magnitude slower)</code><br>DataFrame本质上是DataSet[Row]，用的固定是RowEncoder，所以不需要传Encoder。<br>Encoder底层是钨丝计划的堆外内存优化，节省了jvm对象头、反序列化、gc的开销。</p>
-<h1 id="When-啥时候使用Encoder"><a href="#When-啥时候使用Encoder" class="headerlink" title="When: 啥时候使用Encoder"></a>When: 啥时候使用Encoder</h1><p><code>Encoder</code>适用于原始类型、case class对象(因为有默认的apply/unapply方法)、spark-sql类型。</p>
-<p>Encoder支持的类型非常多，不支持的情况：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. 如果类型是javabean，类的成员如果是容器，只能是List，不能是其他容器（还没有实现）;</span><br><span class="line">2. 不支持大于5的Tuple；</span><br><span class="line">3. 不支持&#96;Option&#96;；</span><br><span class="line">4. 不支持&#96;null&#96;值的&#96;case class&#96;。</span><br></pre></td></tr></table></figure>
-<p>不支持的时候，可以把不支持的部分用kyro-Encoder，相当于不支持的部分直接当做一个二进制，不享受优化，但其他不支持部分可以享受优化。</p>
-<h1 id="How-怎么使用Encoder"><a href="#How-怎么使用Encoder" class="headerlink" title="How: 怎么使用Encoder:"></a>How: 怎么使用Encoder:</h1><p>显式： 使用<code>Encoders</code>类(类似于utils)的静态工厂方法;<br>隐式：<code>import spark.implicits._</code>: 原始类型和<code>Product</code>类型(也就是<code>case class</code>)可以直接隐式支持。</p>
-<h2 id="1-创建DataSet时显式使用"><a href="#1-创建DataSet时显式使用" class="headerlink" title="1. 创建DataSet时显式使用:"></a>1. 创建DataSet时显式使用:</h2><p>源码注释中的样例:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// eg1: String:</span></span><br><span class="line">List&lt;String&gt; data = Arrays.asList(<span class="string">"abc"</span>, <span class="string">"abc"</span>, <span class="string">"xyz"</span>);</span><br><span class="line">Dataset&lt;String&gt; ds = context.createDataset(data, Encoders.STRING());</span><br><span class="line"><span class="comment">// eg2: 复合Tuple:</span></span><br><span class="line">Encoder&lt;Tuple2&lt;Integer, String&gt;&gt; encoder2 = Encoders.tuple(Encoders.INT(), Encoders.STRING());</span><br><span class="line">List&lt;Tuple2&lt;Integer, String&gt;&gt; data2 = Arrays.asList(<span class="keyword">new</span> scala.Tuple2(<span class="number">1</span>, <span class="string">"a"</span>);</span><br><span class="line">Dataset&lt;Tuple2&lt;Integer, String&gt;&gt; ds2 = context.createDataset(data2, encoder2);</span><br></pre></td></tr></table></figure>
-<h2 id="2-创建DataSet时隐式使用"><a href="#2-创建DataSet时隐式使用" class="headerlink" title="2. 创建DataSet时隐式使用:"></a>2. 创建DataSet时隐式使用:</h2><p>看createDataset的签名:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">def createDataset[T](data: RDD[T])(implicit arg0: Encoder[T]): Dataset[T]</span><br><span class="line">&#x2F;&#x2F; Creates a Dataset from an RDD of a given type.</span><br></pre></td></tr></table></figure>
-<p>所以Encoder其实可以隐式传:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">import spark.implicits._</span><br><span class="line">val ds &#x3D; Seq(1, 2, 3).toDS() &#x2F;&#x2F; implicitly provided</span><br></pre></td></tr></table></figure>
-<h2 id="3-UDAF中使用"><a href="#3-UDAF中使用" class="headerlink" title="3. UDAF中使用:"></a>3. UDAF中使用:</h2><p><a href="https://github.com/apache/spark/blob/master/examples/src/main/scala/org/apache/spark/examples/sql/UserDefinedTypedAggregation.scala" target="_blank" rel="noopener">https://github.com/apache/spark/blob/master/examples/src/main/scala/org/apache/spark/examples/sql/UserDefinedTypedAggregation.scala</a></p>
-<p>当我们为<code>DataSet</code>定义<code>UDAF</code>的使用。<br>语义上: 因为涉及到数据转换，不可避免地会需要使用<code>Encoder</code>，这个时候是显式使用。<br>语法上: 由于继承了<code>Aggregator</code>也必须使用<code>Encoder</code>。</p>
-<h2 id="源码阅读"><a href="#源码阅读" class="headerlink" title="源码阅读"></a>源码阅读</h2><h3 id="Encoder"><a href="#Encoder" class="headerlink" title="Encoder"></a>Encoder</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">trait Encoder[T] extends Serializable &#123;</span><br><span class="line">  &#x2F;** Returns the schema of encoding this type of object as a Row. *&#x2F;</span><br><span class="line">  def schema: StructType</span><br><span class="line">  &#x2F;**</span><br><span class="line">   * A ClassTag that can be used to construct and Array to contain a collection of &#96;T&#96;.*&#x2F;</span><br><span class="line">  def clsTag: ClassTag[T]</span><br><span class="line">  &#x2F;&#x2F; 存了ClassTag的话，就能在运行时构建泛型的数组了。</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p><code>TypeTag</code>: 相当于scala以前的<code>Manifest</code>,用于存储泛型参数的实际类型。(泛型参数的实际类型运行时会被JVM擦除，有了<code>TypeTag</code>就能在运行时获得实际类型了)<br><code>ClassTag</code>: 相当于scala以前的<code>ClassManifest</code>,功能大致同上，但存得少些，比如如果是泛型的泛型，参数是泛型数组<code>List[T]</code>,<code>TypeTag</code>能全部存下，<code>ClassTag</code>就存一个<code>List</code>。</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">classTag[List[Int]]</span><br><span class="line">&#x2F;&#x2F;scala.reflect.ClassTag[List[Int]] &#x3D;↩</span><br><span class="line">&#x2F;&#x2F;        ClassTag[class scala.collection.immutable.List]</span><br><span class="line">typeTag[List[Int]]</span><br><span class="line">&#x2F;&#x2F;</span><br><span class="line">&#x2F;&#x2F; reflect.runtime.universe.TypeTag[List[Int]] &#x3D; TypeTag[scala.List[Int]]</span><br></pre></td></tr></table></figure>
-
-
-<h2 id="ExpressionEncoder"><a href="#ExpressionEncoder" class="headerlink" title="ExpressionEncoder"></a>ExpressionEncoder</h2><p>Encoder的内置唯一实现类。<br><code>jvm对象&lt;=&gt;内部行格式</code>: 钨丝计划unsafeRow、expressions提取case class的变量名。<br>可以支持Tupple但不支持<code>Option</code>和<code>和null</code>值的<code>case class</code>。</p>
-<p>它会生成变量名name和位置的绑定，以便钨丝计划的<code>code gen</code>使用<code>unsafe row</code>.<br>Tupple最多到5.</p>
-<p><code>Serializer</code>: raw object=&gt;InternalRow, 用expression解析提取对象值；<br><code>Deserializer</code>: InternalRow=&gt;raw object,用expression构造对象。<br>因为unsafeRow是二进制存放在堆外，所以转换成row看做序列化。</p>
-<h3 id="Encoders"><a href="#Encoders" class="headerlink" title="Encoders"></a>Encoders</h3><p>(注意比Encoder多一个s)<br>提供了很多静态工厂方法获得Encoder(实际上目前获得的都是<code>ExpressionEncoder</code>)<br>大致可以分为几类:</p>
-<ol>
-<li>java原始类型:  <code>Encoders.BOOLEAN</code>等</li>
-<li>scala原始类型: <code>Encoders.scalaBoolean</code>等.(多一个scala前缀)</li>
-<li>javaBean类型: <code>bean[T](beanClass: Class[T])</code>。但目前成员只支持List容器，不支持其他的容器。支持原始类型或嵌套javaBean。</li>
-<li>kryo序列化类型: <code>kryo[T: ClassTag]</code>；</li>
-<li>java序列化类型: <code>javaSerialization[T: ClassTag]</code>；</li>
-<li>Tuple类型: 从Tuple2到Tuple5.</li>
-<li>Product类型: 也就是<code>case class</code>.</li>
-</ol>
-<p>其中前三种是直接调用<code>ExpressionEncoder</code>，第四第五种本质上是间接调用了<code>ExpressionEncoder</code>:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">ExpressionEncoder[T](</span><br><span class="line">      schema &#x3D; new StructType().add(&quot;value&quot;, BinaryType),</span><br><span class="line">      flat &#x3D; true,</span><br><span class="line">      serializer &#x3D; Seq(</span><br><span class="line">        EncodeUsingSerializer(</span><br><span class="line">          BoundReference(0, ObjectType(classOf[AnyRef]), nullable &#x3D; true), kryo &#x3D; useKryo)),</span><br><span class="line">      deserializer &#x3D;</span><br><span class="line">        DecodeUsingSerializer[T](</span><br><span class="line">          Cast(GetColumnByOrdinal(0, BinaryType), BinaryType),</span><br><span class="line">          classTag[T],</span><br><span class="line">          kryo &#x3D; useKryo),</span><br><span class="line">      clsTag &#x3D; classTag[T]</span><br><span class="line">    )</span><br></pre></td></tr></table></figure>
-<p>因此第四第五后两种序列化本质上是把整个对象看做一个二进制类型，不利于后续优化和减少反序列化。</p>
-<p>原始类型还包括:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">java的:</span><br><span class="line">byte,short,int,long,float,double,java.math.BigDecimal,java.sql.Date,java.sql.Timestamp</span><br><span class="line">scala的:</span><br><span class="line">Array[Byte],byte,short,int,long,float,double</span><br></pre></td></tr></table></figure>
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/04/27/2019-04/spark%E4%B8%AD%E7%9A%84encoder/" data-id="ck96cxppp00i9maam5qixbnbe" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spark/" rel="tag">spark</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1367,6 +1363,10 @@
       <ul>
         
           <li>
+            <a href="/2022/09/26/2022-09/jwt%E7%A0%B4%E8%A7%A3/">jwt破解</a>
+          </li>
+        
+          <li>
             <a href="/2022/09/25/2022-09/nc%E5%91%BD%E4%BB%A4%E7%AC%94%E8%AE%B0/">nc命令笔记</a>
           </li>
         
@@ -1380,10 +1380,6 @@
         
           <li>
             <a href="/2022/05/31/2022-05/w-tinylfu%E7%BC%93%E5%AD%98%E7%AE%97%E6%B3%95/">w-tinylfu缓存算法</a>
-          </li>
-        
-          <li>
-            <a href="/2022/03/25/2022-03/G1%E8%B0%83%E4%BC%98-%E5%A4%8D%E6%9D%82%E4%B8%9A%E5%8A%A1%E6%B2%BB%E7%90%86%E5%B0%8F%E8%AE%B0/">G1调优-复杂业务治理小记</a>
           </li>
         
       </ul>

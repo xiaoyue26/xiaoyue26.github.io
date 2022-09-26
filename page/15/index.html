@@ -72,6 +72,146 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-01/Decimal类型存储实验" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/01/28/2018-01/Decimal%E7%B1%BB%E5%9E%8B%E5%AD%98%E5%82%A8%E5%AE%9E%E9%AA%8C/" class="article-date">
+  <time datetime="2018-01-28T02:45:02.000Z" itemprop="datePublished">2018-01-28</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/01/28/2018-01/Decimal%E7%B1%BB%E5%9E%8B%E5%AD%98%E5%82%A8%E5%AE%9E%E9%AA%8C/">Decimal类型存储实验</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <ul>
+<li>为啥要实验:<br>&lt;高性能mysql&gt;第四章中提到<code>decimal</code>类型的存储空间时,用<code>decimal(18,9)</code>举例,说前9个数字占4B,后9个数字占4B,小数点占1B,总共9B.<br>我觉得小数点也要占1B实在诡异,查了mysql官方文档和其他网上资料也没看到说小数点也占一个字节的说法,于是实验一番.</li>
+</ul>
+<h2 id="步骤1-准备数据"><a href="#步骤1-准备数据" class="headerlink" title="步骤1: 准备数据"></a>步骤1: 准备数据</h2><ul>
+<li>建表语句:<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">CREATE TABLE &#96;du_decimal&#96; (</span><br><span class="line">  &#96;id&#96; int(11) NOT NULL AUTO_INCREMENT,</span><br><span class="line">  &#96;dump_data&#96; varchar(45) DEFAULT NULL,</span><br><span class="line">  PRIMARY KEY (&#96;id&#96;)</span><br><span class="line">) ENGINE&#x3D;MyISAM AUTO_INCREMENT&#x3D;34 DEFAULT CHARSET&#x3D;utf8</span><br></pre></td></tr></table></figure>
+
+</li>
+</ul>
+<p>由于<code>Innodb</code>把数据和索引都存在了一个文件<code>.idb</code>里,为了只关注数据的存储空间占用,这里使用<code>MyIsam</code>引擎,只关注<code>.MYD</code>文件即可.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">插入数据17行后容量:</span><br><span class="line">$ ll du_decimal.MYD</span><br><span class="line">-rw-rw---- 1 maintain maintain 340 Jan 29 09:10 du_decimal.MYD</span><br></pre></td></tr></table></figure>
+<p>之所以是17行,主要是想选个质数.XD</p>
+<h1 id="步骤2-插入Decimal列"><a href="#步骤2-插入Decimal列" class="headerlink" title="步骤2: 插入Decimal列"></a>步骤2: 插入Decimal列</h1><p>下表为新增不同Decimal列后数据文件的大小:</p>
+<table>
+<thead>
+<tr>
+<th align="center">Decimal列</th>
+<th align="center"><code>.MYD</code>大小(B)</th>
+<th align="center">列新增大小(B)(每行)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">无</td>
+<td align="center">340</td>
+<td align="center">0</td>
+</tr>
+<tr>
+<td align="center">Decimal(1,0)</td>
+<td align="center">408</td>
+<td align="center">4</td>
+</tr>
+<tr>
+<td align="center">Decimal(2,0)</td>
+<td align="center">408</td>
+<td align="center">4</td>
+</tr>
+<tr>
+<td align="center">Decimal(2,1)</td>
+<td align="center">408</td>
+<td align="center">4</td>
+</tr>
+<tr>
+<td align="center">Decimal(3,0)</td>
+<td align="center">408</td>
+<td align="center">4</td>
+</tr>
+<tr>
+<td align="center">Decimal(4,0)</td>
+<td align="center">408</td>
+<td align="center">4</td>
+</tr>
+<tr>
+<td align="center">Decimal(4,1)</td>
+<td align="center">408</td>
+<td align="center">4</td>
+</tr>
+<tr>
+<td align="center">Decimal(5,0)</td>
+<td align="center">408</td>
+<td align="center">4</td>
+</tr>
+<tr>
+<td align="center">Decimal(6,0)</td>
+<td align="center">408</td>
+<td align="center">4</td>
+</tr>
+<tr>
+<td align="center">Decimal(7,0)</td>
+<td align="center">408</td>
+<td align="center">4</td>
+</tr>
+<tr>
+<td align="center">Decimal(8,0)</td>
+<td align="center">408</td>
+<td align="center">4</td>
+</tr>
+<tr>
+<td align="center">Decimal(9,0)</td>
+<td align="center">408</td>
+<td align="center">4</td>
+</tr>
+<tr>
+<td align="center">Decimal(18,9)</td>
+<td align="center">476</td>
+<td align="center">8</td>
+</tr>
+<tr>
+<td align="center">Decimal(20,6)</td>
+<td align="center">544</td>
+<td align="center">12</td>
+</tr>
+</tbody></table>
+<p>由此可以看出Decimal(18,9)占了8B,而不是书上说的9B.(小数点不需要1B)<br>但因为操作系统最小分配4B,所以9位数字以内的存储占用都是4B. </p>
+<h2 id="Tips"><a href="#Tips" class="headerlink" title="Tips"></a>Tips</h2><p>此外,如果没有登录数据库那台机器的权限,可以使用sql进行数据文件大小查询:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">SELECT TABLE_SCHEMA as db</span><br><span class="line">      ,table_name</span><br><span class="line">      ,data_length</span><br><span class="line">FROM information_schema.TABLES</span><br><span class="line">where  TABLE_NAME&#x3D;&#39;du_decimal&#39;</span><br></pre></td></tr></table></figure>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/01/28/2018-01/Decimal%E7%B1%BB%E5%9E%8B%E5%AD%98%E5%82%A8%E5%AE%9E%E9%AA%8C/" data-id="ck96cxpno009kmaam5vh19qgp" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-01/高性能Mysql笔记-第4章" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/01/27/2018-01/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC4%E7%AB%A0/" class="article-date">
@@ -1488,113 +1628,6 @@
 
 
   
-    <article id="post-2018-01/java并发编程实战笔记-10-11章" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/01/04/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-10-11%E7%AB%A0/" class="article-date">
-  <time datetime="2018-01-04T14:28:55.000Z" itemprop="datePublished">2018-01-04</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/01/04/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-10-11%E7%AB%A0/">java并发编程实战笔记-10-11章</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>第十章主要介绍活跃性危险,也就是安全性和活跃性的权衡.锁不多不少.<br>安全性: 就是正确性.锁要够多,不然数据并发访问就错了.<br>活跃性: 就是性能.  锁不能太多,死锁了,或者太卡了.  </p>
-<h1 id="10-1-死锁"><a href="#10-1-死锁" class="headerlink" title="10.1 死锁"></a>10.1 死锁</h1><p>哲学家问题: 循环等待死锁.<br>数据库服务器如何解决事务死锁:</p>
-<blockquote>
-<ol>
-<li>检测到等待关系有向图有环;</li>
-<li>选一个牺牲者kill了. </li>
-<li>应用程序自己重试被kill的事务.</li>
-</ol>
-</blockquote>
-<h2 id="10-1-1-锁顺序死锁"><a href="#10-1-1-锁顺序死锁" class="headerlink" title="10.1.1 锁顺序死锁"></a>10.1.1 锁顺序死锁</h2><p>避免死锁的手段1:</p>
-<blockquote>
-<p>控制获取锁的顺序.</p>
-</blockquote>
-<p>如果所有线程获取锁(资源)的顺序一样,就不会死锁. </p>
-<h2 id="10-1-2-动态的锁顺序死锁"><a href="#10-1-2-动态的锁顺序死锁" class="headerlink" title="10.1.2 动态的锁顺序死锁"></a>10.1.2 动态的锁顺序死锁</h2><p>锁顺序很难处理. 比如两个账户转账.<br>一种方法是使用俩账户的hash码,比较顺序.<br>当遇到hash码冲突的时候,使用加时赛:</p>
-<blockquote>
-<ol>
-<li>定义一个新的锁;</li>
-<li>冲突的线程轮流申请这个锁,然后再申请账户锁.</li>
-</ol>
-</blockquote>
-<p>相当于冲突的线程串行执行.</p>
-<p>(其实我觉得对于这个问题,账户肯定有唯一id,用id排序就好了.)</p>
-<h2 id="10-1-3-协作对象之间的死锁"><a href="#10-1-3-协作对象之间的死锁" class="headerlink" title="10.1.3 协作对象之间的死锁"></a>10.1.3 协作对象之间的死锁</h2><p>如果获取多个锁的操作不在唯一的同一个方法里, 问题变得麻烦.<br>成因:<br>方法1: 持有锁时调用外部方法,而外部方法请求了另一个锁.<br>方法2: 同上.</p>
-<p>方法1,方法2获取锁的顺序相反时,可能死锁.</p>
-<p>解决方法:<br>收缩<code>synchronized</code>的范围从方法级缩小到块级.</p>
-<h2 id="10-1-4-开放调用"><a href="#10-1-4-开放调用" class="headerlink" title="10.1.4 开放调用"></a>10.1.4 开放调用</h2><p>开放调用: 调用方法时不需要持有锁.<br>也就是方法上没有加<code>synchronized</code>,而是在里头某一个块里用了.</p>
-<h2 id="10-1-5-资源死锁"><a href="#10-1-5-资源死锁" class="headerlink" title="10.1.5 资源死锁"></a>10.1.5 资源死锁</h2><p>资源不够死锁. 如线程资源\数据库连接资源.</p>
-<ul>
-<li>解决方案:<br>书里没写, 我觉得可以考虑前文说的”选取牺牲者”方法.</li>
-</ul>
-<h1 id="10-2-死锁的避免与诊断"><a href="#10-2-死锁的避免与诊断" class="headerlink" title="10.2 死锁的避免与诊断"></a>10.2 死锁的避免与诊断</h1><ol>
-<li>每个线程只获取一个锁. //比较不现实,涉及原子性的实现.</li>
-<li>顺序获取.</li>
-<li>支持定时的锁. // 代替内置锁</li>
-</ol>
-<h2 id="10-2-2-死锁的诊断"><a href="#10-2-2-死锁的诊断" class="headerlink" title="10.2.2 死锁的诊断"></a>10.2.2 死锁的诊断</h2><p>通过Thread Dump信息.<br>方法: 向JVM发送SIGQUIT信号.<br>命令行:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kill -3 [id]</span><br></pre></td></tr></table></figure>
-<p>jdk1.5: 有内置锁信息, 无显式锁信息;<br>jdk1.6: 有内置锁信息, 少量显式锁信息.<br>(?那岂不是意味着尽量不要使用显式锁?)</p>
-<h1 id="10-3-其他活跃性危险"><a href="#10-3-其他活跃性危险" class="headerlink" title="10.3 其他活跃性危险"></a>10.3 其他活跃性危险</h1><p>活跃性危险: 太卡<br>包括: 死锁,饥饿,丢失信号,活锁.</p>
-<h2 id="10-3-1-饥饿"><a href="#10-3-1-饥饿" class="headerlink" title="10.3.1 饥饿"></a>10.3.1 饥饿</h2><p>如短作业优先调度的时候,长作业就会饥饿.</p>
-<h2 id="10-3-2-糟糕的响应性"><a href="#10-3-2-糟糕的响应性" class="headerlink" title="10.3.2 糟糕的响应性"></a>10.3.2 糟糕的响应性</h2><p>GUI线程优先级太低, 响应性就会差.</p>
-<h2 id="10-3-3-活锁"><a href="#10-3-3-活锁" class="headerlink" title="10.3.3 活锁"></a>10.3.3 活锁</h2><p>重复的失败.<br>如线程不停得获取锁,释放锁,似乎能完成,但其实总也完成不了,无间地狱,死循环.</p>
-<ul>
-<li>案例1: 华龙道<br>发数据包碰撞. 重试算法一样,总是在相同的路口再碰撞.<br>解决方法:<br>增加随机性. 重试时间加一个随机参数.</li>
-</ul>
-<ul>
-<li>案例2:<br>过度的错误恢复.<br>解决方法:<br>不过度.</li>
-</ul>
-<h1 id="第十一章-性能与可伸缩性"><a href="#第十一章-性能与可伸缩性" class="headerlink" title="第十一章 性能与可伸缩性"></a>第十一章 性能与可伸缩性</h1><p>线程的使用<br>目的: 提高性能.<br>缺陷: 提高复杂性.<br>场景: 多cpu系统,任务不是cpu密集的.<br>衡量手段: 看cpu使用情况图.</p>
-<h2 id="11-1-1-可伸缩性"><a href="#11-1-1-可伸缩性" class="headerlink" title="11.1.1 可伸缩性"></a>11.1.1 可伸缩性</h2><p>可伸缩性: 当增加资源时(cpu,内存等等),程序吞吐量/处理能力增加比例适中.</p>
-<p>可伸缩性与性能往往矛盾.<br>单线程的性能优化方法 往往导致=&gt; 可伸缩性下降. </p>
-<h2 id="11-2-Amdahl定律"><a href="#11-2-Amdahl定律" class="headerlink" title="11.2 Amdahl定律"></a>11.2 Amdahl定律</h2><p>增加计算资源时,程序理论上能实现的最高加速比.</p>
-<p>Speedup &lt;= 1/ ( F + (1-F)/N )<br>N: N个处理器<br>F: 必须串行的任务比例. </p>
-<p>N趋近于无穷大时,加速比为 1/F.<br>(F为50%时,加速比最大为2.)</p>
-<p>提高可伸缩性方法总结:</p>
-<ol>
-<li>缩小锁的粒度;</li>
-<li>减少锁的持有时间(好像和上一条差不多);</li>
-<li>尽量使用非独占锁. </li>
-</ol>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/01/04/2018-01/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-10-11%E7%AB%A0/" data-id="ck96cxpnr009wmaam63sqf43c" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1621,6 +1654,10 @@
       <ul>
         
           <li>
+            <a href="/2022/09/26/2022-09/jwt%E7%A0%B4%E8%A7%A3/">jwt破解</a>
+          </li>
+        
+          <li>
             <a href="/2022/09/25/2022-09/nc%E5%91%BD%E4%BB%A4%E7%AC%94%E8%AE%B0/">nc命令笔记</a>
           </li>
         
@@ -1634,10 +1671,6 @@
         
           <li>
             <a href="/2022/05/31/2022-05/w-tinylfu%E7%BC%93%E5%AD%98%E7%AE%97%E6%B3%95/">w-tinylfu缓存算法</a>
-          </li>
-        
-          <li>
-            <a href="/2022/03/25/2022-03/G1%E8%B0%83%E4%BC%98-%E5%A4%8D%E6%9D%82%E4%B8%9A%E5%8A%A1%E6%B2%BB%E7%90%86%E5%B0%8F%E8%AE%B0/">G1调优-复杂业务治理小记</a>
           </li>
         
       </ul>

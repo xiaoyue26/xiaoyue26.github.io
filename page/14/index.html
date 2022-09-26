@@ -72,6 +72,145 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-03/Mysql调优手段总结-持续更新" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/03/17/2018-03/Mysql%E8%B0%83%E4%BC%98%E6%89%8B%E6%AE%B5%E6%80%BB%E7%BB%93-%E6%8C%81%E7%BB%AD%E6%9B%B4%E6%96%B0/" class="article-date">
+  <time datetime="2018-03-16T20:38:02.000Z" itemprop="datePublished">2018-03-17</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/03/17/2018-03/Mysql%E8%B0%83%E4%BC%98%E6%89%8B%E6%AE%B5%E6%80%BB%E7%BB%93-%E6%8C%81%E7%BB%AD%E6%9B%B4%E6%96%B0/">Mysql调优手段总结(持续更新)</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="考虑优化的层面"><a href="#考虑优化的层面" class="headerlink" title="考虑优化的层面"></a>考虑优化的层面</h1><ol>
+<li>服务器层(优化器,缓存)</li>
+<li>存储引擎</li>
+<li>schema设计(索引/表)</li>
+<li>查询优化</li>
+</ol>
+<h2 id="服务器层"><a href="#服务器层" class="headerlink" title="服务器层"></a>服务器层</h2><ol>
+<li>待续…</li>
+</ol>
+<h2 id="存储引擎-（详见第二章笔记）"><a href="#存储引擎-（详见第二章笔记）" class="headerlink" title="存储引擎 （详见第二章笔记）"></a>存储引擎 （详见第二章笔记）</h2><ol>
+<li>尽量使用innodb，以便使用它的行级锁；Myisam是表级锁，锁竞争更频繁。</li>
+<li>根据场景选择：<br>场景:<br>全文索引: InnoDB + Sphinx<br>在线热备份: InnoDB<br>记录日志: MyISAM,Archive<br>10TB以下: InnoDB<br>10TB以上: InfoBright.<br>大部分情况优先考虑: Innodb</li>
+<li>待续…</li>
+</ol>
+<h2 id="schema设计"><a href="#schema设计" class="headerlink" title="schema设计"></a>schema设计</h2><h3 id="表设计-详见第四章笔记"><a href="#表设计-详见第四章笔记" class="headerlink" title="表设计(详见第四章笔记)"></a>表设计(详见第四章笔记)</h3><ol>
+<li>数据类型：<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">(1) 更小的通常更好,</span><br><span class="line">int 好于 char (如可以用int存储ip);</span><br><span class="line">date&#x2F;time&#x2F;datetime 好于 char.</span><br><span class="line">(2) 尽量Not Null; &#x2F;&#x2F; 因为NULL导致索引需要额外字节.&#x2F;&#x2F; 不过这个影响不大</span><br></pre></td></tr></table></figure></li>
+<li>考虑使用缓存表，汇总表，计数器表；</li>
+<li>表设计原则:<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">1. 避免太多的列; 服务器层需要缓冲存储引擎层的行,变长的行会引入转换开销.</span><br><span class="line">2. 避免太多关联;</span><br><span class="line">3. 恰当使用NULL. 大多数时候避免NULL列,有时候可以使用.(当异常值不好定义时)</span><br></pre></td></tr></table></figure></li>
+<li>适当程度使用范式,不迷信三范式.<br>特定需求可以单独定制相应的缓存表和汇总表,而不改变原有的设计结构.</li>
+<li>待续…</li>
+</ol>
+<h3 id="索引设计（详见第五章笔记）"><a href="#索引设计（详见第五章笔记）" class="headerlink" title="索引设计（详见第五章笔记）"></a>索引设计（详见第五章笔记）</h3><ol>
+<li>不同类型索引适用场景：<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. 哈希索引：（全键值查询，Memory引擎）</span><br><span class="line">数据仓库的查找表。（精确匹配O(1)复杂度，星形,多表连接）</span><br><span class="line">2. B-Tree索引：</span><br><span class="line">大部分场景。</span><br></pre></td></tr></table></figure>
+
+</li>
+</ol>
+<p><strong>三星系统</strong><br>索引与查询匹配程度的评价：三星系统：</p>
+<ol>
+<li>一星： 将查询相关记录放在了一起；（顺序IO,范围查询能利用到索引） </li>
+<li>二星： 数据顺序与查找顺序一致；（避免排序,让排序也能利用到索引）</li>
+<li>三星： 索引列包含查询的所有列。(避免二次访问磁盘)</li>
+</ol>
+<p>上述评价的对象是(索引,某种查询). 因此并没有一个索引能够完美适应所有查询.只能说尽量适应当前场景下的高频查询.</p>
+<p>索引适用场景：</p>
+<ol>
+<li>小表： 直接扫全表即可；</li>
+<li>中表： 索引；</li>
+<li>大表： 分区。索引开销太大。</li>
+</ol>
+<p>作为过滤条件的列需要考察的3个属性，按重要性如下：</p>
+<ol>
+<li>查询频率；</li>
+<li>相关查询是否是范围查询，或者列的取值是否可枚举。</li>
+<li>选择性。</li>
+</ol>
+<p><strong>设计索引的原则：</strong></p>
+<ol>
+<li>查询频率高，则应该加入索引；</li>
+<li>如果是范围查询，则如果作为联合索引的一列，应该放在后面；（因为最左前缀无法利用范围查询后的列）<br>如果是可枚举列，则查询语句中可以使用In (‘male’,’female’)绕过列顺序限制，让Mysql始终能够应用相关索引；</li>
+<li>满足前两个条件后，应该把选择性高的列放在联合索引的前面。</li>
+</ol>
+<h2 id="查询优化-详见第六章"><a href="#查询优化-详见第六章" class="headerlink" title="查询优化(详见第六章)"></a>查询优化(详见第六章)</h2><h3 id="优化思路"><a href="#优化思路" class="headerlink" title="优化思路"></a>优化思路</h3><ol>
+<li>尽量减少数据量(提前使用limit);</li>
+<li>检查响应时间组成;</li>
+<li>索引相关优化; </li>
+<li>重写分解复杂查询;</li>
+<li>如果是日志系统，开启异步写入数据的参数；</li>
+<li>检查关联表的顺序;</li>
+</ol>
+<ul>
+<li>相关命令<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">explain</span> <span class="keyword">extended</span> &lt;<span class="keyword">sql</span>&gt;;</span><br><span class="line"><span class="keyword">show</span> <span class="keyword">warnings</span>;</span><br><span class="line"><span class="comment">-- 可以得到重构出的查询。</span></span><br></pre></td></tr></table></figure></li>
+</ul>
+<ol start="7">
+<li><p>检查是内排还是外排(<code>max_length_for_sort_data</code>控制);</p>
+</li>
+<li><p>排序优化:<br>关联查询排序时候，尽量把Order by的列提到第一张表中。<br>( 如果Order by的所有列都来自关联的第1个表，Mysql在关联处理第一个表的时候就会进行排序。)</p>
+</li>
+<li><p>网络传输;<br>（1）缓冲区大小(<code>SQL_BUFFER_RESULT</code>);<br>（2）先释放表锁，再发送结果：<code>SQL_BUFFER_RESULT</code>。</p>
+</li>
+<li><p>待续…</p>
+</li>
+</ol>
+<h3 id="索引相关"><a href="#索引相关" class="headerlink" title="索引相关"></a>索引相关</h3><ol>
+<li><p>范围查询转化成枚举，充分利用索引；<br>如索引为(dt,city)，查询为：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> dt,city <span class="keyword">from</span> t</span><br><span class="line"><span class="keyword">where</span> dt&gt;=<span class="string">'2018-01-01'</span> <span class="keyword">and</span> dt&lt;=<span class="string">'2018-01-02'</span></span><br><span class="line"><span class="keyword">and</span> city=<span class="string">'beijing'</span></span><br><span class="line"><span class="comment">-- 转化为=&gt;</span></span><br><span class="line"><span class="keyword">select</span> dt,city <span class="keyword">from</span> t</span><br><span class="line"><span class="keyword">where</span> dt <span class="keyword">in</span> (<span class="string">'2018-01-01'</span>,<span class="string">'2018-01-02'</span>）</span><br><span class="line"><span class="keyword">and</span> city=<span class="string">'beijing'</span></span><br></pre></td></tr></table></figure>
+</li>
+<li><p>延迟关联+覆盖索引；</p>
+</li>
+<li><p>检查explain的type:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">const(system): 根据PRI或Unique key,只取出确定的(一行)数据,常量优化. </span><br><span class="line"></span><br><span class="line">eq_ref: JOIN条件包括了所有索引,并且索引是Unique key. </span><br><span class="line">ref: JOIN条件包括部分索引或不是Unique key.</span><br><span class="line">ref_or_null: WHERE col&#x3D;exp or col is null</span><br><span class="line"></span><br><span class="line">index_merge: Where id&#x3D;xx or userid&#x3D;xxx. 索引合并优化.</span><br><span class="line"></span><br><span class="line">unique_subquery: where col in( select id from xxx). 这里id唯一.</span><br><span class="line">index_subquery: 同上,只是id不唯一.</span><br><span class="line"></span><br><span class="line">range: 索引在某个范围内.</span><br><span class="line">all: 扫全表</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>检查索引字段是否正确转换了类型:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">dt = date_format(date_sub(current_date, interval 1 day), '%Y-%m-%d')</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>待续…</p>
+</li>
+</ol>
+<h3 id="查询中锁的使用"><a href="#查询中锁的使用" class="headerlink" title="查询中锁的使用"></a>查询中锁的使用</h3><ol>
+<li>尽量使用读锁，避免使用写锁；</li>
+<li>降低写锁使用时间（先抢注后处理+定时清理占用标志），消除<code>select ... for update</code>的使用；(避免显式加锁,优先考虑隐式加锁)</li>
+<li>Innodb不同索引对应的锁：<br>(1) 主键索引： 排他锁（写锁）；<br>(2) 二级索引： 共享锁（读锁）。</li>
+<li>待续…</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/03/17/2018-03/Mysql%E8%B0%83%E4%BC%98%E6%89%8B%E6%AE%B5%E6%80%BB%E7%BB%93-%E6%8C%81%E7%BB%AD%E6%9B%B4%E6%96%B0/" data-id="ck96cxpny00aymaama4x72yuu" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-03/高性能Mysql笔记-第六章-3" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/03/12/2018-03/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC%E5%85%AD%E7%AB%A0-3/" class="article-date">
@@ -1714,146 +1853,6 @@
 
 
   
-    <article id="post-2018-01/Decimal类型存储实验" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/01/28/2018-01/Decimal%E7%B1%BB%E5%9E%8B%E5%AD%98%E5%82%A8%E5%AE%9E%E9%AA%8C/" class="article-date">
-  <time datetime="2018-01-28T02:45:02.000Z" itemprop="datePublished">2018-01-28</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/mysql/">mysql</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/01/28/2018-01/Decimal%E7%B1%BB%E5%9E%8B%E5%AD%98%E5%82%A8%E5%AE%9E%E9%AA%8C/">Decimal类型存储实验</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <ul>
-<li>为啥要实验:<br>&lt;高性能mysql&gt;第四章中提到<code>decimal</code>类型的存储空间时,用<code>decimal(18,9)</code>举例,说前9个数字占4B,后9个数字占4B,小数点占1B,总共9B.<br>我觉得小数点也要占1B实在诡异,查了mysql官方文档和其他网上资料也没看到说小数点也占一个字节的说法,于是实验一番.</li>
-</ul>
-<h2 id="步骤1-准备数据"><a href="#步骤1-准备数据" class="headerlink" title="步骤1: 准备数据"></a>步骤1: 准备数据</h2><ul>
-<li>建表语句:<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">CREATE TABLE &#96;du_decimal&#96; (</span><br><span class="line">  &#96;id&#96; int(11) NOT NULL AUTO_INCREMENT,</span><br><span class="line">  &#96;dump_data&#96; varchar(45) DEFAULT NULL,</span><br><span class="line">  PRIMARY KEY (&#96;id&#96;)</span><br><span class="line">) ENGINE&#x3D;MyISAM AUTO_INCREMENT&#x3D;34 DEFAULT CHARSET&#x3D;utf8</span><br></pre></td></tr></table></figure>
-
-</li>
-</ul>
-<p>由于<code>Innodb</code>把数据和索引都存在了一个文件<code>.idb</code>里,为了只关注数据的存储空间占用,这里使用<code>MyIsam</code>引擎,只关注<code>.MYD</code>文件即可.</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">插入数据17行后容量:</span><br><span class="line">$ ll du_decimal.MYD</span><br><span class="line">-rw-rw---- 1 maintain maintain 340 Jan 29 09:10 du_decimal.MYD</span><br></pre></td></tr></table></figure>
-<p>之所以是17行,主要是想选个质数.XD</p>
-<h1 id="步骤2-插入Decimal列"><a href="#步骤2-插入Decimal列" class="headerlink" title="步骤2: 插入Decimal列"></a>步骤2: 插入Decimal列</h1><p>下表为新增不同Decimal列后数据文件的大小:</p>
-<table>
-<thead>
-<tr>
-<th align="center">Decimal列</th>
-<th align="center"><code>.MYD</code>大小(B)</th>
-<th align="center">列新增大小(B)(每行)</th>
-</tr>
-</thead>
-<tbody><tr>
-<td align="center">无</td>
-<td align="center">340</td>
-<td align="center">0</td>
-</tr>
-<tr>
-<td align="center">Decimal(1,0)</td>
-<td align="center">408</td>
-<td align="center">4</td>
-</tr>
-<tr>
-<td align="center">Decimal(2,0)</td>
-<td align="center">408</td>
-<td align="center">4</td>
-</tr>
-<tr>
-<td align="center">Decimal(2,1)</td>
-<td align="center">408</td>
-<td align="center">4</td>
-</tr>
-<tr>
-<td align="center">Decimal(3,0)</td>
-<td align="center">408</td>
-<td align="center">4</td>
-</tr>
-<tr>
-<td align="center">Decimal(4,0)</td>
-<td align="center">408</td>
-<td align="center">4</td>
-</tr>
-<tr>
-<td align="center">Decimal(4,1)</td>
-<td align="center">408</td>
-<td align="center">4</td>
-</tr>
-<tr>
-<td align="center">Decimal(5,0)</td>
-<td align="center">408</td>
-<td align="center">4</td>
-</tr>
-<tr>
-<td align="center">Decimal(6,0)</td>
-<td align="center">408</td>
-<td align="center">4</td>
-</tr>
-<tr>
-<td align="center">Decimal(7,0)</td>
-<td align="center">408</td>
-<td align="center">4</td>
-</tr>
-<tr>
-<td align="center">Decimal(8,0)</td>
-<td align="center">408</td>
-<td align="center">4</td>
-</tr>
-<tr>
-<td align="center">Decimal(9,0)</td>
-<td align="center">408</td>
-<td align="center">4</td>
-</tr>
-<tr>
-<td align="center">Decimal(18,9)</td>
-<td align="center">476</td>
-<td align="center">8</td>
-</tr>
-<tr>
-<td align="center">Decimal(20,6)</td>
-<td align="center">544</td>
-<td align="center">12</td>
-</tr>
-</tbody></table>
-<p>由此可以看出Decimal(18,9)占了8B,而不是书上说的9B.(小数点不需要1B)<br>但因为操作系统最小分配4B,所以9位数字以内的存储占用都是4B. </p>
-<h2 id="Tips"><a href="#Tips" class="headerlink" title="Tips"></a>Tips</h2><p>此外,如果没有登录数据库那台机器的权限,可以使用sql进行数据文件大小查询:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">SELECT TABLE_SCHEMA as db</span><br><span class="line">      ,table_name</span><br><span class="line">      ,data_length</span><br><span class="line">FROM information_schema.TABLES</span><br><span class="line">where  TABLE_NAME&#x3D;&#39;du_decimal&#39;</span><br></pre></td></tr></table></figure>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/01/28/2018-01/Decimal%E7%B1%BB%E5%9E%8B%E5%AD%98%E5%82%A8%E5%AE%9E%E9%AA%8C/" data-id="ck96cxpno009kmaam5vh19qgp" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1880,6 +1879,10 @@
       <ul>
         
           <li>
+            <a href="/2022/09/26/2022-09/jwt%E7%A0%B4%E8%A7%A3/">jwt破解</a>
+          </li>
+        
+          <li>
             <a href="/2022/09/25/2022-09/nc%E5%91%BD%E4%BB%A4%E7%AC%94%E8%AE%B0/">nc命令笔记</a>
           </li>
         
@@ -1893,10 +1896,6 @@
         
           <li>
             <a href="/2022/05/31/2022-05/w-tinylfu%E7%BC%93%E5%AD%98%E7%AE%97%E6%B3%95/">w-tinylfu缓存算法</a>
-          </li>
-        
-          <li>
-            <a href="/2022/03/25/2022-03/G1%E8%B0%83%E4%BC%98-%E5%A4%8D%E6%9D%82%E4%B8%9A%E5%8A%A1%E6%B2%BB%E7%90%86%E5%B0%8F%E8%AE%B0/">G1调优-复杂业务治理小记</a>
           </li>
         
       </ul>

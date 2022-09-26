@@ -72,6 +72,86 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-10/Java并发编程的艺术-第6章3-DelayQueue" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/10/27/2018-10/Java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC6%E7%AB%A03-DelayQueue/" class="article-date">
+  <time datetime="2018-10-27T04:06:10.000Z" itemprop="datePublished">2018-10-27</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/10/27/2018-10/Java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC6%E7%AB%A03-DelayQueue/">Java并发编程的艺术-第6章3-DelayQueue</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p><code>DelayQueue</code>: JDK提供的延迟获取元素的无界阻塞队列。<br><strong>应用场景</strong>:</p>
+<ol>
+<li>缓存有效期: 能取到的时候过期.</li>
+<li>定时任务: 能取到的时候执行。</li>
+</ol>
+<p><code>DelayQueue</code>的两个特性:<br><strong>无界</strong>: 说明底层至少使用了链表。<br><strong>阻塞</strong>: 为底层实现时，利用访问线程干活埋下伏笔(<code>leader</code>)。 </p>
+<h2 id="底层实现机制"><a href="#底层实现机制" class="headerlink" title="底层实现机制"></a>底层实现机制</h2><p>底层用一个优先级队列存储<code>delay</code>元素(比如定时任务),排序依据是延迟的时长。<br>可以看出，这里用的是一个支持无界阻塞的优先级队列实现(例如<code>PriorityBlockingQueue</code>)。</p>
+<p><strong>时间复杂度</strong>: <code>O(logN)</code>。由于使用的是优先级队列(最小堆),插入新元素(任务)的时间复杂度是<code>O(logN)</code>。</p>
+<p><code>take</code>流程: </p>
+<ol>
+<li><code>lock.lockInterruptibly()</code>;</li>
+<li>delay =  队首元素延时;</li>
+<li>delay&lt;=0: 取出该元素;</li>
+<li>delay&gt;0: 尝试设置自己线程为<code>leader</code>，然后等待delay时间。</li>
+<li><code>finnally: lock.unlock()</code>;</li>
+</ol>
+<p>这里<code>leader</code>的职责是等待<code>delay</code>时间，以及唤醒其他等待线程。<br>注意第四步里, 由于<code>leader</code>只能有一个,所以如果尝试成为<code>leader</code>失败，就直接<code>await</code>就好,会被<code>leader</code>叫醒的。</p>
+<p><code>offer</code>: offer就是简单地把元素插入堆中。如果正好是延迟最小，则此时之前的<code>leader</code>等待时间太长了，因此需要叫醒所有等待线程。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p><code>DelayQueue</code><br><strong>优点</strong>:<br>资源开销小: 本质上只需一个线程负责等待;每次等待间隔都是delay时间,cpu空转少。<br><strong>缺点</strong><br>插入删除延时元素时间复杂度为<strong>O(logN)</strong>，对于成千上万的延时任务时间开销大,有待优化。</p>
+<p>优化思路:<br>如果要比<code>O(logN)</code>更好,很自然的思路就是使用哈希表<code>O(1)</code>，空间换时间。</p>
+<h2 id="优化方案"><a href="#优化方案" class="headerlink" title="优化方案"></a>优化方案</h2><p>需求: 降低插入删除延时元素的时间复杂度。<br>方案:</p>
+<ol>
+<li>保留优先级队列,但里面的元素改成链表引用(比如从<code>Task</code>到<code>List&lt;Task&gt;</code>);</li>
+<li>引入辅助哈希表,保存的也是链表引用(<code>List&lt;Task&gt;</code>)，hash函数的输入为延时时长。</li>
+</ol>
+<p>这里即使<code>List&lt;Task&gt;</code>长期只有1个元素也没有关系,这里只是为了起到C++中指针的效果，方便从哈希表里直接修改(插入删除)优先级队里的数据。</p>
+<p><strong><code>take</code>/<code>offer</code>流程</strong>: 与之前相似,唯一不同就是取到<code>List&lt;Task&gt;</code>后，遍历其中所有<code>Task</code>。</p>
+<p><strong>插入延时元素(任务)</strong>：（删除也类似）</p>
+<ol>
+<li>根据延时,通过哈希函数找到哈希表中的槽位;</li>
+<li>如果以前有过相同延时: 直接插入List;</li>
+<li>如果以前没有相同延时: 新建List，并且插入优先级队列。</li>
+</ol>
+<p>可以看出这里优化的重要条件是能合并多个Task到List。<br>为了达到这个条件，可以使用进一步的优化方案: 时间轮。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/10/27/2018-10/Java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC6%E7%AB%A03-DelayQueue/" data-id="ck96cxpon00dumaam35pv69ma" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%B9%B6%E5%8F%91/" rel="tag">并发</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-10/flask多线程下，连接泄露的bug" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/10/23/2018-10/flask%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%8B%EF%BC%8C%E8%BF%9E%E6%8E%A5%E6%B3%84%E9%9C%B2%E7%9A%84bug/" class="article-date">
@@ -1207,179 +1287,6 @@ r3是关键的加密保护的随机数，r1,r2,r3一起生成key。<br>r1,r2的�
 
 
   
-    <article id="post-2018-09/Netty-in-action第六章-ChannelHandler和pipeline-笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/09/08/2018-09/Netty-in-action%E7%AC%AC%E5%85%AD%E7%AB%A0-ChannelHandler%E5%92%8Cpipeline-%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2018-09-08T12:16:07.000Z" itemprop="datePublished">2018-09-08</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/Netty/">Netty</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/09/08/2018-09/Netty-in-action%E7%AC%AC%E5%85%AD%E7%AB%A0-ChannelHandler%E5%92%8Cpipeline-%E7%AC%94%E8%AE%B0/">Netty in action第六章-ChannelHandler和pipeline-笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="ChannelHandler和ChannelPipeline"><a href="#ChannelHandler和ChannelPipeline" class="headerlink" title="ChannelHandler和ChannelPipeline"></a>ChannelHandler和ChannelPipeline</h1><h2 id="Channel生命周期-状态自动机"><a href="#Channel生命周期-状态自动机" class="headerlink" title="Channel生命周期 / 状态自动机"></a>Channel生命周期 / 状态自动机</h2><p><code>ChannelUnregisterd</code>=&gt;<code>ChannelRegistered</code> =&gt; <code>ChannelActive</code> =&gt; <code>ChannelInactive</code> =&gt; <code>ChannelUnregisterd</code><br>每一个状态转化都会产生相应事件。</p>
-<blockquote>
-<p>ChannelUnregistered：刚创建;<br>ChannelRegistered: (创建以后),已注册到EventLoop;<br>ChannelActive: 已经连接到远程节点;<br>ChannelInactive: 没有连接到远程节点。</p>
-</blockquote>
-<h2 id="ChannelHeadler-生命周期"><a href="#ChannelHeadler-生命周期" class="headerlink" title="ChannelHeadler 生命周期"></a>ChannelHeadler 生命周期</h2><blockquote>
-<p>handlerAdded: ChannelHeadler添加到pipeline时调用;<br>handlerRemoved: 移除时;<br>exceptionCaught: 发生错误时。</p>
-</blockquote>
-<h2 id="ChannelInboundHandler接口-入站事件"><a href="#ChannelInboundHandler接口-入站事件" class="headerlink" title="ChannelInboundHandler接口 (入站事件)"></a>ChannelInboundHandler接口 (入站事件)</h2><p><strong>省略别的常见事件:</strong></p>
-<blockquote>
-<p>ChannelWritabilityChanged: 可写状态发生改变事件<br>userEventTriggered: 调用ChannelInboundHandler.fireUserEventTriggered()时触发。用于用户自定义事件。</p>
-</blockquote>
-<h3 id="可写状态与高低水位"><a href="#可写状态与高低水位" class="headerlink" title="可写状态与高低水位:"></a>可写状态与高低水位:</h3><p><code>high watermark</code>机制: 写太快时达到高水位线时，转变为不可写;<br>// is_full()是根据当前是否大于等于high water mark来判断，如果full会wait。<br><code>low watermark</code>机制: 达到低水位线时，转变为可写。</p>
-<p>// 其他地方<code>low watermark</code>的含义: 设定最小时间戳，低于低水位线的数据不再接收。</p>
-<h3 id="高低水位设置"><a href="#高低水位设置" class="headerlink" title="高低水位设置:"></a>高低水位设置:</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Channel.config.setWriteHighWaterMark();</span><br><span class="line">Channel.config.setWriteLowWaterMark();</span><br></pre></td></tr></table></figure>
-
-<p><code>ChannelConfig</code>默认的水位配置为低水位32K，高水位64K。</p>
-<h3 id="资源释放"><a href="#资源释放" class="headerlink" title="资源释放"></a>资源释放</h3><p>第五章里提到了<code>bufferBuf</code>的释放问题:<br><code>pipeline</code>里最后一个<code>Handler</code>要负责释放收到的数据:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">bufferBuf.release();</span><br></pre></td></tr></table></figure>
-
-<p>落实到入站事件中, 如果重写了<code>ChannelRead()</code>事件,这个方法需要负责释放池化的<code>ByteBuf</code>:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">channelRead</span><span class="params">(ChannelHandlerContext ctx, Object msg)</span> </span>&#123;</span><br><span class="line">    <span class="comment">//通过调用 ReferenceCountUtil.release()方法释放资源</span></span><br><span class="line">    ReferenceCountUtil.release(msg);</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// 底层调的是这个:</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">boolean</span> <span class="title">release</span><span class="params">(Object msg)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (msg <span class="keyword">instanceof</span> ReferenceCounted) &#123;</span><br><span class="line">            <span class="keyword">return</span> ((ReferenceCounted) msg).release();</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">false</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-
-<h2 id="SimpleChannelInboundHandler的自动释放"><a href="#SimpleChannelInboundHandler的自动释放" class="headerlink" title="SimpleChannelInboundHandler的自动释放"></a>SimpleChannelInboundHandler的自动释放</h2><p>如果不想每次在<code>ChannelRead()</code>方法里释放消息,可以直接使用<code>SimpleChannelInboundHandler</code>,它会自动释放收到的消息。<br>相对的，由于有了自动释放,后续就无法再访问到了,因此使用<code>SimpleChannelInboundHandler</code>的时候消息引用会失效。</p>
-<p>小结:</p>
-<blockquote>
-<ol>
-<li>不使用SimpleChannelInboundHandler: 记得在一个ChannelRead释放消息数据;</li>
-<li>使用SimpleChannelInboundHandler: 注意会被自动释放，引用会失效。</li>
-</ol>
-</blockquote>
-<h2 id="ChannelOutboundHandler接口-出站事件"><a href="#ChannelOutboundHandler接口-出站事件" class="headerlink" title="ChannelOutboundHandler接口(出站事件)"></a>ChannelOutboundHandler接口(出站事件)</h2><p>类似的，出站事件也有很多，省略一些常见，列出几个特别的:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">flush: 将数据冲刷到远程节点时被调用;</span><br><span class="line">write: 将数据写到远程节点时被调用;</span><br><span class="line">&#x2F;&#x2F; 一旦ByteBuf 被写入到远程端， 它立即自动地放回原来的buffer池中.</span><br></pre></td></tr></table></figure>
-
-<p>与入站事件相对的,需要在<code>write</code>方法中释放消息:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">write</span><span class="params">(ChannelHandlerContext ctx,</span></span></span><br><span class="line"><span class="function"><span class="params">    Object msg, ChannelPromise promise)</span> </span>&#123;</span><br><span class="line">    ReferenceCountUtil.release(msg);</span><br><span class="line">    <span class="comment">//通知 ChannelPromise数据已经被处理了</span></span><br><span class="line">    promise.setSuccess();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>注意到<code>write</code>方法比<code>channelRead</code>多一个<code>ChannelPromise</code>参数:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ChannelPromise(子接口) -&gt; ChannelFuture(父接口)</span><br></pre></td></tr></table></figure>
-
-<h2 id="ChannelPromise与ChannelFuture"><a href="#ChannelPromise与ChannelFuture" class="headerlink" title="ChannelPromise与ChannelFuture"></a>ChannelPromise与ChannelFuture</h2><p><code>设计模式</code>:<br>实际上出站事件基本都多了这个<code>ChannelPromise</code>参数。<br>为了避免程序员写<code>bug</code>，netty4用<code>ChannelPromise</code>接口来更改任务完成状态,<br>而在那些只需要读/查询的场景，返回<code>ChannelFuture</code>接口。</p>
-<p>此外,<code>ChannelFuture</code>中比jdk的普通<code>Future</code>多了一些信息,状态有4种:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Uncompleted =&gt; success/fail/cancelled</span><br></pre></td></tr></table></figure>
-<p>每种状态的判定:(其实就是字面上的意思,猜也知道)</p>
-<table>
-<thead>
-<tr>
-<th align="center">状态</th>
-<th align="left">判定条件</th>
-</tr>
-</thead>
-<tbody><tr>
-<td align="center">Uncompleted</td>
-<td align="left">isDone():false,isSuccess():false,isCancelled():false,cause():null</td>
-</tr>
-<tr>
-<td align="center">success</td>
-<td align="left">isDone():ture,isSuccess():ture</td>
-</tr>
-<tr>
-<td align="center">fail</td>
-<td align="left">isDone():ture,isSuccess():false,cause():non-null</td>
-</tr>
-<tr>
-<td align="center">cancelled</td>
-<td align="left">isDone():ture,isCancelled():true</td>
-</tr>
-</tbody></table>
-<h1 id="入站事件和出站事件的区别"><a href="#入站事件和出站事件的区别" class="headerlink" title="入站事件和出站事件的区别"></a>入站事件和出站事件的区别</h1><p>再次强调一件事: </p>
-<blockquote>
-<p>出站事件基本比入站事件都多了1个<code>ChannelPromise</code>参数。</p>
-</blockquote>
-<p>本质上也就是出站事件要多一个通知机制:<br><code>ChannelPromise</code>,<code>ChannelFuture</code>与<code>ChannelFutureListener</code>。</p>
-<ul>
-<li>那么为什么两者要这样区别呢?<br>根本原因是出站中有<code>write</code>,<code>flush</code>这样的<code>io</code>操作，比较费时而且依赖于复杂因素，需要设计成异步的。<br>而入站事件基本都是在自己的内存里搞定，同步就够用了。</li>
-</ul>
-<p>理解了这一点，我们就能心平气和地接受出站事件的通知机制了。</p>
-<h2 id="通知机制"><a href="#通知机制" class="headerlink" title="通知机制"></a>通知机制</h2><blockquote>
-<ol>
-<li>每个出站操作返回一个<code>ChannelFuture</code>，注册到它的<code>ChannelFutureListener</code>将在操作完成的时候被通知成功还是失败；</li>
-<li>出站操作传入一个<code>ChannelPromise</code>,可以进行立即通知(更改状态): <code>setSuccess</code>/<code>setFailure</code>。</li>
-</ol>
-</blockquote>
-<p>注册<code>ChannelFutureListener</code>的两种姿势:</p>
-<ol>
-<li>对channel进行操作,获取<code>ChannelFuture</code>,然后注册<code>Listener</code>; // 可以用于某一次写的定制化操作;</li>
-<li>出站事件中,在传入的<code>ChannelPromise</code>上注册<code>Listener</code>。 // 应用于某类型的所有操作。</li>
-</ol>
-<p>相应的代码如下:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 方法1:</span></span><br><span class="line">io.netty.channel.ChannelFuture future = channel.write(someMessage);</span><br><span class="line">        future.addListener(<span class="keyword">new</span> ChannelFutureListener() &#123;</span><br><span class="line">            <span class="meta">@Override</span></span><br><span class="line">            <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">operationComplete</span><span class="params">(io.netty.channel.ChannelFuture f)</span> </span>&#123;</span><br><span class="line">                <span class="keyword">if</span> (!f.isSuccess()) &#123;</span><br><span class="line">                    f.cause().printStackTrace();</span><br><span class="line">                    f.channel().close();</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;);</span><br><span class="line"><span class="comment">// 方法2:</span></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">OutboundExceptionHandler</span> <span class="keyword">extends</span> <span class="title">ChannelOutboundHandlerAdapter</span> </span>&#123;</span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">write</span><span class="params">(ChannelHandlerContext ctx, Object msg,</span></span></span><br><span class="line"><span class="function"><span class="params">        ChannelPromise promise)</span> </span>&#123;</span><br><span class="line">        promise.addListener(<span class="keyword">new</span> ChannelFutureListener() &#123;</span><br><span class="line">            <span class="meta">@Override</span></span><br><span class="line">            <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">operationComplete</span><span class="params">(ChannelFuture f)</span> </span>&#123;</span><br><span class="line">                <span class="keyword">if</span> (!f.isSuccess()) &#123;</span><br><span class="line">                    f.cause().printStackTrace();</span><br><span class="line">                    f.channel().close();</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h2 id="ChannelHandler适配器"><a href="#ChannelHandler适配器" class="headerlink" title="ChannelHandler适配器"></a>ChannelHandler适配器</h2><p>netty提供了<code>handler</code>的基本实现:<code>ChannelInboundHandlerAdapter</code>和<code>ChannelOutboundHandlerAdapter。</code>（入站和出站）</p>
-<h1 id="ChannelPipeline接口"><a href="#ChannelPipeline接口" class="headerlink" title="ChannelPipeline接口"></a>ChannelPipeline接口</h1><blockquote>
-<p>1个Channel &lt;=&gt; 对应1个固定的ChannelPipeline</p>
-</blockquote>
-<p>在一个<code>ChannelHandler</code>中如何访问<code>pipeline</code>?:</p>
-<blockquote>
-<p>通过context获取到pipeline即可。</p>
-</blockquote>
-<h3 id="传播事件"><a href="#传播事件" class="headerlink" title="传播事件"></a>传播事件</h3><p>测试下一个<code>ChannelHandler</code>的类型是否与方向一致。</p>
-<h3 id="pipeline编排"><a href="#pipeline编排" class="headerlink" title="pipeline编排"></a>pipeline编排</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">modifyPipeline</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    ChannelPipeline pipeline = CHANNEL_PIPELINE_FROM_SOMEWHERE; <span class="comment">// get reference to pipeline;</span></span><br><span class="line">    <span class="comment">//创建一个 FirstHandler 的实例</span></span><br><span class="line">    FirstHandler firstHandler = <span class="keyword">new</span> FirstHandler();</span><br><span class="line">    <span class="comment">//将该实例作为"handler1"添加到ChannelPipeline 中</span></span><br><span class="line">    pipeline.addLast(<span class="string">"handler1"</span>, firstHandler);</span><br><span class="line">    <span class="comment">//将一个 SecondHandler的实例作为"handler2"添加到 ChannelPipeline的第一个槽中。这意味着它将被放置在已有的"handler1"之前</span></span><br><span class="line">    pipeline.addFirst(<span class="string">"handler2"</span>, <span class="keyword">new</span> SecondHandler());</span><br><span class="line">    <span class="comment">//将一个 ThirdHandler 的实例作为"handler3"添加到 ChannelPipeline 的最后一个槽中</span></span><br><span class="line">    pipeline.addLast(<span class="string">"handler3"</span>, <span class="keyword">new</span> ThirdHandler());</span><br><span class="line">    <span class="comment">//...</span></span><br><span class="line">    <span class="comment">//通过名称移除"handler3"</span></span><br><span class="line">    pipeline.remove(<span class="string">"handler3"</span>);</span><br><span class="line">    <span class="comment">//通过引用移除FirstHandler（它是唯一的，所以不需要它的名称）</span></span><br><span class="line">    pipeline.remove(firstHandler);</span><br><span class="line">    <span class="comment">//将 SecondHandler("handler2")替换为 FourthHandler:"handler4"</span></span><br><span class="line">    pipeline.replace(<span class="string">"handler2"</span>, <span class="string">"handler4"</span>, <span class="keyword">new</span> FourthHandler());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h2 id="pipeline的事件API"><a href="#pipeline的事件API" class="headerlink" title="pipeline的事件API"></a>pipeline的事件API</h2><p>主要用于触发下一个<code>handler</code>的事件,触发下一个入站事件一般带个前缀<code>fire</code>，触发出站事件则没有这个前缀。<br>例如:<br><code>fireChannelRegistered</code>: 触发pipeline中下一个channelInboundHandler的<code>channelRegistered</code>事件。(注意是<code>Inbound</code>)<br><code>connect</code>: 将channel连接到一个远程地址，将调用下一个<code>channelOutboundHandler</code>的connect方法。(注意是<code>outbound</code>)</p>
-<h1 id="ChannelHandlerContext接口"><a href="#ChannelHandlerContext接口" class="headerlink" title="ChannelHandlerContext接口"></a>ChannelHandlerContext接口</h1><p><code>ChannelHandlerContext</code>记录<code>channelHandler</code>和<code>channel</code>的联系，类似于一个弱实体。<br>它也有很多事件API，含义与其他类的不同，是基于当前上下文的，也就是说:<br>从当前关联的<code>ChannelHandler</code>开始，传播给<strong>下一个</strong>。</p>
-<p><code>ChannelHandlerContext</code>部分API:<br>// Channel相关:<br><code>alloc</code>: 返回<code>Channel</code>的<code>ByteBufAllocator</code>;<br><code>executor</code>: 返回调度事件的<code>EventExecutor</code>;<br>// handler相关:<br><code>fireChannelRead</code>: 触发下一个<code>InboundHanlder</code>的<code>ChannelRead</code>方法;(入站)<br><code>write</code>: 通过当前实例写入消息,并经过pipeline。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">ChannelHandlerContext</span> <span class="keyword">extends</span> <span class="title">AttributeMap</span>, <span class="title">ChannelInboundInvoker</span>, <span class="title">ChannelOutboundInvoker</span></span></span><br></pre></td></tr></table></figure>
-<p>如上所示,这个接口其实继承了inbound和outbound,所以出站方法也有。</p>
-<img src="/images/2018-09/6.5.jpg" class="" width="400" height="600" title="事件传递">
-<p>综上所述，如果要从某一个<code>ChannelHandler</code>A开始传递事件，要先获得它的上一个handler的context。如上图所示，调用<code>pipeline</code>或者<code>channel</code>上的事件的话，事件就会从1号位置开始流动,调用<code>channelContext</code>上的事件则会从2,3号位置(也就是下一个)开始流动。</p>
-<p>优势:</p>
-<ol>
-<li>减少事件传播开销;</li>
-<li>避开一些<code>handler</code>的处理。</li>
-</ol>
-<p>上述API可能的具体用途:</p>
-<ol>
-<li>动态切换协议. </li>
-<li>其他用途(暂时不知道还有啥)</li>
-</ol>
-<h2 id="Sharable"><a href="#Sharable" class="headerlink" title="Sharable"></a>Sharable</h2><p>可以将一个<code>ChannelHandler</code>绑定到多个<code>pipeline</code>(此时会产生多个<code>ChannelHandlerContext</code>)。这样做的场景: 比如需要收集跨越多个<code>Channel</code>的统计信息时。</p>
-<p>加上<code>@Sharable</code>注解的<code>ChannelHandler</code>(语法上)可以绑定到多个<code>pipeline</code>上，但程序员需要注意解决线程安全的问题。// 要么无状态不可变，要么加锁，要么CAS，要么threadlocal。</p>
-<h1 id="异常处理"><a href="#异常处理" class="headerlink" title="异常处理"></a>异常处理</h1><p>参考前文中出站事件的通知机制，因此出站事件中的异常也是封装在<code>ChannelFuture</code>中的，而不是像入站事件用<code>exceptionCaught</code>。<br>// 换言之, <code>ChannelOutboundHandler</code>没有<code>exceptionCaught</code>API。</p>
-<p>入站事件异常:// 消费完异常才不会向尾端传播</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">exceptionCaught</span><span class="params">(ChannelHandlerContext ctx,</span></span></span><br><span class="line"><span class="function"><span class="params">        Throwable cause)</span> </span>&#123;</span><br><span class="line">        cause.printStackTrace();</span><br><span class="line">        ctx.close();</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
-
-<p>出站事件异常:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">operationComplete</span><span class="params">(io.netty.channel.ChannelFuture f)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (!f.isSuccess()) &#123;</span><br><span class="line">        f.cause().printStackTrace();</span><br><span class="line">        f.channel().close();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/09/08/2018-09/Netty-in-action%E7%AC%AC%E5%85%AD%E7%AB%A0-ChannelHandler%E5%92%8Cpipeline-%E7%AC%94%E8%AE%B0/" data-id="ck96cxpok00dhmaamad304ln4" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Netty/" rel="tag">Netty</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1406,6 +1313,10 @@ r3是关键的加密保护的随机数，r1,r2,r3一起生成key。<br>r1,r2的�
       <ul>
         
           <li>
+            <a href="/2022/09/26/2022-09/jwt%E7%A0%B4%E8%A7%A3/">jwt破解</a>
+          </li>
+        
+          <li>
             <a href="/2022/09/25/2022-09/nc%E5%91%BD%E4%BB%A4%E7%AC%94%E8%AE%B0/">nc命令笔记</a>
           </li>
         
@@ -1419,10 +1330,6 @@ r3是关键的加密保护的随机数，r1,r2,r3一起生成key。<br>r1,r2的�
         
           <li>
             <a href="/2022/05/31/2022-05/w-tinylfu%E7%BC%93%E5%AD%98%E7%AE%97%E6%B3%95/">w-tinylfu缓存算法</a>
-          </li>
-        
-          <li>
-            <a href="/2022/03/25/2022-03/G1%E8%B0%83%E4%BC%98-%E5%A4%8D%E6%9D%82%E4%B8%9A%E5%8A%A1%E6%B2%BB%E7%90%86%E5%B0%8F%E8%AE%B0/">G1调优-复杂业务治理小记</a>
           </li>
         
       </ul>

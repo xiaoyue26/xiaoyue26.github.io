@@ -72,6 +72,63 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-使用JMX轮询发现死锁" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2015/10/30/%E4%BD%BF%E7%94%A8JMX%E8%BD%AE%E8%AF%A2%E5%8F%91%E7%8E%B0%E6%AD%BB%E9%94%81/" class="article-date">
+  <time datetime="2015-10-30T02:15:48.000Z" itemprop="datePublished">2015-10-30</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2015/10/30/%E4%BD%BF%E7%94%A8JMX%E8%BD%AE%E8%AF%A2%E5%8F%91%E7%8E%B0%E6%AD%BB%E9%94%81/">使用JMX轮询发现死锁</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p><a href="http://download.oracle.com/technetwork/java/javase/6/docs/zh/api/java/lang/management/ThreadMXBean.html" target="_blank" rel="noopener">ThreadMXBean</a>是Java虚拟机线程系统的管理接口，可以使用其中的<code>findDeadlockedThreads</code>方法自动发现死锁的线程，jdk1.6下包括:</p>
+<blockquote>
+<ol>
+<li><code>owner locks(java.util.concurrent)</code>引起的死锁；</li>
+<li><code>monitor locks</code>（例如，同步块）引起的死锁。</li>
+</ol>
+</blockquote>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">DeadLockDetector</span> <span class="keyword">extends</span> <span class="title">Thread</span> </span>&#123;</span><br><span class="line">  <span class="meta">@Override</span></span><br><span class="line">  <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">while</span>(<span class="keyword">true</span>) &#123;</span><br><span class="line">        ThreadMXBean threadMXBean = ManagementFactory.getThreadMXBean();</span><br><span class="line">        <span class="keyword">long</span>[] ids = threadMXBean.findDeadlockedThreads();</span><br><span class="line">        <span class="keyword">if</span> (ids != <span class="keyword">null</span>) &#123;</span><br><span class="line">          System.exit(<span class="number">127</span>);</span><br><span class="line">      &#125;</span><br><span class="line">      <span class="keyword">try</span> &#123;</span><br><span class="line">        Thread.sleep(<span class="number">1000</span>);<span class="comment">//定期轮询</span></span><br><span class="line">      &#125; <span class="keyword">catch</span> (InterruptedException e) &#123; &#125;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> <span class="keyword">throws</span> Exception </span>&#123;</span><br><span class="line">  Process process = <span class="keyword">null</span>;</span><br><span class="line">  <span class="keyword">int</span> exitcode = <span class="number">0</span>;</span><br><span class="line">  <span class="keyword">try</span> &#123;</span><br><span class="line">    <span class="keyword">while</span> (<span class="keyword">true</span>) &#123;</span><br><span class="line">        process = Runtime.getRuntime().exec(<span class="string">"java -cp . DeadlockedApp"</span>);</span><br><span class="line">        exitcode = process.waitFor();</span><br><span class="line">        System.out.println(<span class="string">"exit code: "</span> + exitcode);</span><br><span class="line">        <span class="keyword">if</span> (exitcode == <span class="number">0</span>)</span><br><span class="line">          <span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">    <span class="keyword">if</span> (process != <span class="keyword">null</span>) &#123;</span><br><span class="line">       process.destroy();</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>然而轮询和检测死锁显然都是相当耗费资源的操作，尽量还是自己做好线程的管理。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2015/10/30/%E4%BD%BF%E7%94%A8JMX%E8%BD%AE%E8%AF%A2%E5%8F%91%E7%8E%B0%E6%AD%BB%E9%94%81/" data-id="ck96cxpm90067maam83kmf1uj" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/JMX/" rel="tag">JMX</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E7%BA%BF%E7%A8%8B/" rel="tag">线程</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-mybatis批量插入和更新" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2015/10/19/mybatis%E6%89%B9%E9%87%8F%E6%8F%92%E5%85%A5%E5%92%8C%E6%9B%B4%E6%96%B0/" class="article-date">
@@ -693,59 +750,6 @@
 
 
   
-    <article id="post-maven3笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2015/10/02/maven3%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2015-10-02T09:44:48.000Z" itemprop="datePublished">2015-10-02</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/%E9%85%8D%E7%BD%AE/">配置</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2015/10/02/maven3%E7%AC%94%E8%AE%B0/">maven3笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <ol>
-<li>从maven官网下载maven压缩包，解压缩，配置<code>MAVEN_HOME</code>；</li>
-<li>最新版的eclipse(mars) j2ee版本直接集成了maven插件m2e；</li>
-<li><code>[ERROR] No plugin found for prefix &#39;archetype&#39; in the current project and ..</code><br>在<code>conf/setting</code>中加入镜像地址：<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">&lt;mirror&gt; </span><br><span class="line">       &lt;id&gt;ibiblio.org&lt;&#x2F;id&gt; </span><br><span class="line">       &lt;name&gt;ibiblio Mirror of http:&#x2F;&#x2F;repo1.maven.org&#x2F;maven2&#x2F;&lt;&#x2F;name&gt; </span><br><span class="line">       &lt;url&gt;http:&#x2F;&#x2F;mirrors.ibiblio.org&#x2F;pub&#x2F;mirrors&#x2F;maven2&lt;&#x2F;url&gt; </span><br><span class="line">       &lt;mirrorOf&gt;central&lt;&#x2F;mirrorOf&gt; </span><br><span class="line">       &lt;!-- United States, North Carolina --&gt; </span><br><span class="line">&lt;&#x2F;mirror&gt;</span><br><span class="line">&lt;mirror&gt;  </span><br><span class="line">     &lt;id&gt;jboss-public-repository-group&lt;&#x2F;id&gt;  </span><br><span class="line">     &lt;mirrorOf&gt;central&lt;&#x2F;mirrorOf&gt;  </span><br><span class="line">     &lt;name&gt;JBoss Public Repository Group&lt;&#x2F;name&gt;  </span><br><span class="line">     &lt;url&gt;http:&#x2F;&#x2F;repository.jboss.org&#x2F;nexus&#x2F;content&#x2F;groups&#x2F;public&lt;&#x2F;url&gt;  </span><br><span class="line">&lt;&#x2F;mirror&gt;</span><br></pre></td></tr></table></figure></li>
-<li>若maven的conf下<code>setting.xml</code>文件中修改了本地仓库reposity的路径，则在eclipse中也要在<code>windows-&gt;prefrence-&gt;maven-&gt;user settings</code>中相应修改路径。</li>
-</ol>
-<p>参考链接:<br><a href="http://www.cnblogs.com/leiOOlei/p/3376155.html" target="_blank" rel="noopener">http://www.cnblogs.com/leiOOlei/p/3376155.html</a><br><a href="http://blog.csdn.net/hay24/article/details/8246203" target="_blank" rel="noopener">http://blog.csdn.net/hay24/article/details/8246203</a><br><a href="http://mvnrepository.com/artifact/org.springframework/spring-context" target="_blank" rel="noopener">http://mvnrepository.com/artifact/org.springframework/spring-context</a></p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2015/10/02/maven3%E7%AC%94%E8%AE%B0/" data-id="ck96cxplm003tmaam32wgc20z" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E9%85%8D%E7%BD%AE/" rel="tag">配置</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -772,6 +776,10 @@
       <ul>
         
           <li>
+            <a href="/2022/09/26/2022-09/jwt%E7%A0%B4%E8%A7%A3/">jwt破解</a>
+          </li>
+        
+          <li>
             <a href="/2022/09/25/2022-09/nc%E5%91%BD%E4%BB%A4%E7%AC%94%E8%AE%B0/">nc命令笔记</a>
           </li>
         
@@ -785,10 +793,6 @@
         
           <li>
             <a href="/2022/05/31/2022-05/w-tinylfu%E7%BC%93%E5%AD%98%E7%AE%97%E6%B3%95/">w-tinylfu缓存算法</a>
-          </li>
-        
-          <li>
-            <a href="/2022/03/25/2022-03/G1%E8%B0%83%E4%BC%98-%E5%A4%8D%E6%9D%82%E4%B8%9A%E5%8A%A1%E6%B2%BB%E7%90%86%E5%B0%8F%E8%AE%B0/">G1调优-复杂业务治理小记</a>
           </li>
         
       </ul>

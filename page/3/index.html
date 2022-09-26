@@ -72,6 +72,69 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2020-12/跨域相关" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/12/27/2020-12/%E8%B7%A8%E5%9F%9F%E7%9B%B8%E5%85%B3/" class="article-date">
+  <time datetime="2020-12-27T12:46:01.000Z" itemprop="datePublished">2020-12-27</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/http/">http</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2020/12/27/2020-12/%E8%B7%A8%E5%9F%9F%E7%9B%B8%E5%85%B3/">跨域相关</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="目标"><a href="#目标" class="headerlink" title="目标"></a>目标</h1><p>部分url:<br>1.接受公司旗下域名跨域请求;<br>2.post请求+json返回值;</p>
+<h1 id="设计"><a href="#设计" class="headerlink" title="设计"></a>设计</h1><h2 id="可选方案"><a href="#可选方案" class="headerlink" title="可选方案"></a>可选方案</h2><p>1.jsonp: 只支持GET, 否决；</p>
+<p>2.nginx配置: 需要改配置上线，备选；</p>
+<p>3.java配置注解<code>@CrossOrigin</code>: 经测试可行，新域名或新<code>url</code>需要重新打包上线，备选;</p>
+<p>4.使用<code>filter</code>/<code>interceptor</code>统一配置，可方便得使用配置中心上线新域名、<code>url</code>，备选；</p>
+<p>对于目标1，理想情况是使用配置中心来快速增加支持的域名，因此优先考虑方案4；</p>
+<p>由于目标2，我们基本上用的都是post+json的接口，因此浏览器跨域前会用Options命令询问服务器的跨域权限配置。</p>
+<p>这里需要注意的问题：</p>
+<p>Options命令不带cookie，因此过不了鉴权，需要考虑放行或者不加鉴权;<br>1.多一次网络请求，考虑转化为简单请求避免Options命令。（如<code>text/plain</code>）<br>2.<code>Options</code>命令通过的结果缓存在浏览器的时间由<code>Access-Control-Max-Age</code>控制（秒）。</p>
+<img src="/images/2020-12/cors.png" class="" width="800" height="1200" title="cors">
+
+
+<h1 id="日志相关"><a href="#日志相关" class="headerlink" title="日志相关"></a>日志相关</h1><p>如果设置 <code>Access-Control-Allow-Credentials</code>：<code>true</code>;<br>则可以在日志打印cookie信息。（除options请求外的）</p>
+<p>但如果没有鉴权需求这里应该不允许携带cookie，避免提权攻击。<br>比如后端有执行代码的漏洞，又允许别人带着cookie过来，就造成CSRF攻击。<br>参考: <a href="https://zhuanlan.zhihu.com/p/86626693" target="_blank" rel="noopener">https://zhuanlan.zhihu.com/p/86626693</a><br>所以将allowCredentials设置成false。</p>
+<h1 id="可能的坑"><a href="#可能的坑" class="headerlink" title="可能的坑"></a>可能的坑</h1><p>本质上是浏览器进行的同源控制提高安全性，需要服务器告诉浏览器哪些跨域是安全的，<br>因此最重要的是与浏览器相连的第一跳返回的header情况。<br>如果前面几跳(如SSR,nginx)都是直接透传Header的话，才能确保我们的后端配置生效。</p>
+<p>chrome浏览器查看options请求可能需要修改配置，不属于XHR请求；<br>wireshard可以抓到不加密(vpn往往加密了)的options请求。</p>
+<h1 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h1><p><a href="http://www.ruanyifeng.com/blog/2016/04/cors.html" target="_blank" rel="noopener">http://www.ruanyifeng.com/blog/2016/04/cors.html</a></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2020/12/27/2020-12/%E8%B7%A8%E5%9F%9F%E7%9B%B8%E5%85%B3/" data-id="cklkmfo8t0000pdamd7knbv1s" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/http/" rel="tag">http</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/nginx/" rel="tag">nginx</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2020-12/线上性能优化-查看方法级耗时" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2020/12/20/2020-12/%E7%BA%BF%E4%B8%8A%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-%E6%9F%A5%E7%9C%8B%E6%96%B9%E6%B3%95%E7%BA%A7%E8%80%97%E6%97%B6/" class="article-date">
@@ -1193,68 +1256,6 @@
 
 
   
-    <article id="post-2020-03/linux自连接" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2020/03/24/2020-03/linux%E8%87%AA%E8%BF%9E%E6%8E%A5/" class="article-date">
-  <time datetime="2020-03-24T02:02:26.000Z" itemprop="datePublished">2020-03-24</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/%E7%BD%91%E7%BB%9C/">网络</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2020/03/24/2020-03/linux%E8%87%AA%E8%BF%9E%E6%8E%A5/">linux自连接</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>linux支持自连接，也就是同一个ip，同一个机器，自己起一个server、client互相连接。<br>例如使用命令:</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">nc localhost $port -p $port</span><br></pre></td></tr></table></figure>
-<p>对应TCP协议中的合法设定，同时打开:</p>
-<img src="/images/2020-03/open_now.png" class="" width="800" height="1200" title="open_now">
-
-<h2 id="误触可能"><a href="#误触可能" class="headerlink" title="误触可能"></a>误触可能</h2><p>虽然这是linux的一个feature，但是我们平时遇到这种情况一般是因为bug，也就是误触。</p>
-<p>一种可能：<br>进程1: listen端口A，然后挂掉，释放端口A；<br>进程2: 源端口A, 连接端口A。</p>
-<h2 id="触发bug条件"><a href="#触发bug条件" class="headerlink" title="触发bug条件"></a>触发bug条件</h2><p>listen端口选择了<code>net.ipv4.ip_local_port_range</code>范围；</p>
-<p><code>net.ipv4.ip_local_port_range</code>范围里的端口是linux连接目标端口时，选择源端口的范围。可以通过修改<code>/etc/sysctl.conf</code>调整。（如果要调大connect并发度）</p>
-<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">// 查看:</span><br><span class="line">cat /proc/sys/net/ipv4/ip_local_port_range</span><br><span class="line">// 生效:</span><br><span class="line">sysctl -p /etc/sysctl.conf</span><br></pre></td></tr></table></figure>
-<p>因为connect使用的端口会从这个范围取，所以如果listen也用了这个范围，就很可能冲突，形成自连接。</p>
-<h3 id="并发度"><a href="#并发度" class="headerlink" title="并发度"></a>并发度</h3><p>内核3.2以前:  需保证<code>源ip,源端口</code>2元组不同,并发度更低; (随机选择端口)<br>内核3.2以后:  需保证<code>源ip,源端口,目标ip,目标端口</code>4元组不同即可,并发度更大； (顺序选择端口)</p>
-<h3 id="恶化bug条件"><a href="#恶化bug条件" class="headerlink" title="恶化bug条件"></a>恶化bug条件</h3><ol>
-<li>使用连接池，自连接无法释放；</li>
-<li>Linux内核&gt;=3.10: 2.6是随机选择端口,3.10是顺序递增选择；</li>
-</ol>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2020/03/24/2020-03/linux%E8%87%AA%E8%BF%9E%E6%8E%A5/" data-id="ck96cxpqj00l4maamg8c9cfx2" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/tcp/" rel="tag">tcp</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1281,6 +1282,10 @@
       <ul>
         
           <li>
+            <a href="/2022/09/26/2022-09/jwt%E7%A0%B4%E8%A7%A3/">jwt破解</a>
+          </li>
+        
+          <li>
             <a href="/2022/09/25/2022-09/nc%E5%91%BD%E4%BB%A4%E7%AC%94%E8%AE%B0/">nc命令笔记</a>
           </li>
         
@@ -1294,10 +1299,6 @@
         
           <li>
             <a href="/2022/05/31/2022-05/w-tinylfu%E7%BC%93%E5%AD%98%E7%AE%97%E6%B3%95/">w-tinylfu缓存算法</a>
-          </li>
-        
-          <li>
-            <a href="/2022/03/25/2022-03/G1%E8%B0%83%E4%BC%98-%E5%A4%8D%E6%9D%82%E4%B8%9A%E5%8A%A1%E6%B2%BB%E7%90%86%E5%B0%8F%E8%AE%B0/">G1调优-复杂业务治理小记</a>
           </li>
         
       </ul>

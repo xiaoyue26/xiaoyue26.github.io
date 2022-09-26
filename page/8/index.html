@@ -72,6 +72,118 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-02/redis设计与实现笔记8-sentinel哨兵模式" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/24/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B08-sentinel%E5%93%A8%E5%85%B5%E6%A8%A1%E5%BC%8F/" class="article-date">
+  <time datetime="2019-02-24T12:46:55.000Z" itemprop="datePublished">2019-02-24</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/02/24/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B08-sentinel%E5%93%A8%E5%85%B5%E6%A8%A1%E5%BC%8F/">redis设计与实现笔记8-sentinel哨兵模式</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h2 id="使用场景"><a href="#使用场景" class="headerlink" title="使用场景:"></a>使用场景:</h2><p>用几个节点开启sentinel组成一个哨兵集群，负责监控另外一些redis的master/slave集群的健康状态，协助进行故障恢复(master挂了的时候，升级某个slave为新master)。</p>
+<h2 id="思考"><a href="#思考" class="headerlink" title="思考:"></a>思考:</h2><p>如果有1个master,10个slave，数据均已经完全同步。<br>这个时候，连续挂两次master，是不是所有数据就都没了？<br>第1次: 除新master以外的节点，执行新slaveof命令，清空数据准备同步新master;<br>第2次: 新master挂了，其他节点是空的。</p>
+<h2 id="答案："><a href="#答案：" class="headerlink" title="答案："></a>答案：</h2><p>不会这么脆弱。<br>两个机制提升了这个过程的可靠性：<br>(1)确认接受到完整rdb后，从库才清空旧数据库;<br>(2)确认所有从库完成同步后，才更新master的地址和端口，完成故障恢复流程。（master/slave换代操作会在故障恢复完全完成后进行。）</p>
+<p>第1次： 除候选master以外的节点，执行slaveof命令，但清空数据会在确认接收到完整rdb文件后进行。（详见代码<a href="https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/replication.c的1036行。）" target="_blank" rel="noopener">https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/replication.c的1036行。）</a><br>第2次：候选master挂了，重新推举候选master，换代没有完全完成，则不会更新master字段，因此其他slave都还在候选集中。</p>
+<p>相关参数: </p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 执行故障转移操作时，可以同时对新master进行同步的从库数量:</span></span><br><span class="line">SENTINEL parallel-syncs &lt;master-name&gt; &lt;number&gt;</span><br></pre></td></tr></table></figure>
+
+<h1 id="哨兵模式-Sentinel"><a href="#哨兵模式-Sentinel" class="headerlink" title="哨兵模式:Sentinel"></a>哨兵模式:Sentinel</h1><img src="/images/2019-02/sentinel.png" class="" width="800" height="1200" title="sentinel">
+<p>redis的高可用模式，一主多从+sentinel集群进行监控和故障恢复，主挂的时间达到设置，则选取一个从库升级为主库。</p>
+<h2 id="sentinel启动命令"><a href="#sentinel启动命令" class="headerlink" title="sentinel启动命令"></a>sentinel启动命令</h2><p>一个节点用redis代码可以用3种身份(模式)启动：</p>
+<ol>
+<li>master: 负责写命令；</li>
+<li>slave: 负责同步、从库，可以执行读命令；</li>
+<li>sentinel：负责监控上述两者，进行故障恢复。<br>使用哨兵模式：<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">redis-sentinel sentinel.conf</span><br><span class="line"><span class="comment"># 或:</span></span><br><span class="line">redis-server sentinel.conf --sentinel</span><br></pre></td></tr></table></figure>
+之后发生的事情:</li>
+<li>初始化服务器：不载入rdb,aof;（因为不需要负责实际数据）</li>
+<li>redis服务器切换成Sentinel专用代码;（默认端口26379，只载入部分命令表,客户端只能执行7个命令: <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">PING</span><br><span class="line">SENTINEL</span><br><span class="line">INFO</span><br><span class="line">Subscribe</span><br><span class="line">unSubscribe</span><br><span class="line">PSubscribe</span><br><span class="line">PUnSubscribe</span><br></pre></td></tr></table></figure></li>
+<li>初始化sentinel状态；</li>
+<li>根据配置文件，初始化Sentinel的主库列表；</li>
+<li>创建与主库的网络连接。</li>
+</ol>
+<h2 id="sentinel相关的网络连接图"><a href="#sentinel相关的网络连接图" class="headerlink" title="sentinel相关的网络连接图"></a>sentinel相关的网络连接图</h2><p>引入sentinel后的redis主从架构网络连接较多：</p>
+<ol>
+<li>sentinel节点与master: 命令连接+订阅连接;</li>
+<li>sentinel节点与slave:  命令连接+订阅连接;</li>
+<li>sentinel节点与sentinel: 命令连接。<br>相关的连接图如下:<img src="/images/2019-02/sentinel-master.png" class="" width="800" height="1200" title="sentinel-master"></li>
+</ol>
+<p><strong>master地址与端口</strong>：<code>需要配置</code><br>sentinel需要订阅master的心跳，同时在需要的时候向master发送命令，因此需要两种连接：订阅连接+命令连接。</p>
+<img src="/images/2019-02/sentinel-slave.png" class="" width="800" height="1200" title="sentinel-slave">
+<p><strong>slave地址与端口</strong>：<code>不需要配置</code><br>sentinel通过master获取到slave的地址与端口，因此不需要给sentinel配置slavel信息了。<br>sentinel需要订阅slave的心跳，同时在需要的时候向slave发送命令，因此需要两种连接：订阅连接+命令连接。（同master类似）</p>
+<img src="/images/2019-02/sentinel-sentinel.png" class="" width="800" height="1200" title="sentinel-sentinel">
+<p><strong>其他sentinel的地址与端口</strong>: <code>不需要配置</code><br>sentinel通过master获取到其他sentinel的地址与端口，因此不需要给sentinel配置信息了。sentinel订阅频道的信息里有连接到同一个master的sentinel信息。</p>
+<p>由于心跳消息由master帮sentinel完成了，不需要再订阅其他sentinel的心跳了。<br>每两个sentinel之间都有双向的命令连接（完全图），方便互相发送命令。（客观下线、主观下线、选举leader等命令）</p>
+<h2 id="一份可能的sentinel配置文件"><a href="#一份可能的sentinel配置文件" class="headerlink" title="一份可能的sentinel配置文件"></a>一份可能的sentinel配置文件</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">## master1 conf:</span><br><span class="line">sentinel monitor master1 127.0.0.1 6379 2 # 需要2票(quorum)才能客观下线</span><br><span class="line">sentinel down-after-milliseconds master1 30000 # 30秒才算主观下线(包括master&#x2F;slave和其他sentinel)</span><br><span class="line">sentinel parallel-syncs master1 1  # 同时可以有1个从库进行同步</span><br><span class="line">sentinel failover-timeout master1 90000 # 刷新故障迁移状态的最大时限</span><br><span class="line">## master2 conf:</span><br><span class="line">sentinel monitor master2 127.0.0.1 12345 5 # 需要5票才能客观下线</span><br><span class="line">sentinel down-after-milliseconds master2 50000</span><br><span class="line">sentinel parallel-syncs master2 5 </span><br><span class="line">sentinel failover-timeout master2 450000</span><br></pre></td></tr></table></figure>
+
+<h3 id="初始化sentinel状态"><a href="#初始化sentinel状态" class="headerlink" title="初始化sentinel状态"></a>初始化sentinel状态</h3><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">sentinelState</span>&#123;</span></span><br><span class="line">    <span class="comment">// 当前纪元</span></span><br><span class="line">    <span class="keyword">uint64_t</span> current_epoch;</span><br><span class="line">    <span class="comment">// 保存所有被这个sentinel监视的master:</span></span><br><span class="line">    dict *master;<span class="comment">// &lt;master_name,sentinelRedisInstance&gt;</span></span><br><span class="line">&#125;sentinel;</span><br></pre></td></tr></table></figure>
+<p>其中master值<code>sentinelRedisInstance</code>的结构如下:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">sentinelRedisInstance</span>&#123;</span></span><br><span class="line">    <span class="comment">// 实例类型、状态:</span></span><br><span class="line">    <span class="keyword">int</span> flags;</span><br><span class="line">    <span class="keyword">char</span> * name; <span class="comment">// "127.0.0.1:26379"</span></span><br><span class="line">    <span class="keyword">char</span> * runid; </span><br><span class="line">    <span class="keyword">uint64_t</span> config_epoch;</span><br><span class="line">    <span class="comment">// 实例的地址:</span></span><br><span class="line">    sentinelAddr *addr;<span class="comment">// ip,port</span></span><br><span class="line">    <span class="comment">// 无响应多少毫秒后判断为主观下线:</span></span><br><span class="line">    <span class="keyword">mstime_t</span> down_after_period;</span><br><span class="line">    <span class="comment">// 判断客观下线所需的支持票数:</span></span><br><span class="line">    <span class="keyword">int</span> quorum;</span><br><span class="line">    <span class="comment">// 故障转移时,可以同时对新主服务器进行同步的从服务器数量:</span></span><br><span class="line">    <span class="keyword">int</span> parallel_syncs;</span><br><span class="line">    <span class="comment">// 刷新故障迁移状态的最大时限:</span></span><br><span class="line">    <span class="keyword">mstime_t</span> failover_timeout;</span><br><span class="line">&#125;sentinelRedisInstance;</span><br></pre></td></tr></table></figure>
+
+<h3 id="创建网络连接"><a href="#创建网络连接" class="headerlink" title="创建网络连接"></a>创建网络连接</h3><p>sentinel向<strong>每个</strong>监视的master创建两个连接:</p>
+<ol>
+<li>命令连接: 用于向master发送、接受命令;</li>
+<li>订阅连接: 订阅master的<strong>sentinel</strong>:hello消息。</li>
+</ol>
+<h2 id="命令连接与订阅连接"><a href="#命令连接与订阅连接" class="headerlink" title="命令连接与订阅连接"></a>命令连接与订阅连接</h2><h3 id="连向master-slave的命令连接：-4种命令："><a href="#连向master-slave的命令连接：-4种命令：" class="headerlink" title="连向master/slave的命令连接： 4种命令："></a>连向master/slave的命令连接： 4种命令：</h3><ol>
+<li>每10秒一次的INFO命令：获取master和slave的最新配置信息；</li>
+<li>每2秒一次的订阅命令: 获取<strong>sentinel</strong>:hello频道信息，得到其他sentinel的信息。</li>
+<li>每1秒一次的PING命令:<br>获取master/slave/sentinel的心跳信息。</li>
+<li>故障恢复的时候的slaveof命令。</li>
+</ol>
+<h3 id="订阅连接"><a href="#订阅连接" class="headerlink" title="订阅连接:"></a>订阅连接:</h3><p>master/slave向所有sentinel发送它们订阅的<strong>sentinel</strong>:hello频道信息。</p>
+<h3 id="sentinel之间的命令连接"><a href="#sentinel之间的命令连接" class="headerlink" title="sentinel之间的命令连接"></a>sentinel之间的命令连接</h3><p>用于检查客观下线、选举leader、故障恢复。<br>故障恢复流程：</p>
+<ol>
+<li><code>主观下线</code>: 某个sentinel用ping命令检查master: 超过<code>down-after-milliseconds</code>配置没有回复，该sentinel主观地认为：这个master挂了——它把这个master标记为主观下线状态；</li>
+<li><code>客观下线</code>: 这个sentinel通过<code>is-master-down-by-addr</code>命令询问其他sentinel的意见。超过<code>quorum</code>数量sentinel同意，则进入客观下线状态；</li>
+<li><code>选举leader</code>: leader负责接下来的故障恢复。每次选举结束后(无论成败)，<code>epoch</code>纪元都会+1。进入客观下线分支的sentinel会要求其他人选自己，同时它会投第一个向自己要求选票的sentinel一票。所有sentinel会回复其他sentinel自己的选择，因此大家都能确定有谁的票数过半，或者都没有过半，也就是leader选举的成败是确定可知的。（奇数个sentinel的raft算法）</li>
+<li><code>leader</code>选取新候选master:<br>（1）下线原master；（但master结构中依然记录旧地址、端口，不急着更新）<br>（2）断开候选者slaveof;<br>（3）其他slave执行slaveof候选者；（同步并行度由参数决定）<br>（4）当其他slave完成同步，正式任命候选者为master，更新信息到内存。见代码<a href="https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/sentinel.c中`sentinelHandleDictOfRedisInstances`函数和`sentinelFailoverSwitchToPromotedSlave`函数。" target="_blank" rel="noopener">https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/sentinel.c中`sentinelHandleDictOfRedisInstances`函数和`sentinelFailoverSwitchToPromotedSlave`函数。</a><br>这个过程中如果候选者挂了，会重新选一个候选者。</li>
+</ol>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">sentinelHandleDictOfRedisInstances</span><span class="params">(dict *instances)</span> </span>&#123;</span><br><span class="line">    dictIterator *di;</span><br><span class="line">    dictEntry *de;</span><br><span class="line">    sentinelRedisInstance *switch_to_promoted = <span class="literal">NULL</span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/* There are a number of things we need to perform against every master. */</span></span><br><span class="line">    <span class="comment">// 遍历多个实例，这些实例可以是多个主服务器、多个从服务器或者多个 sentinel</span></span><br><span class="line">    di = dictGetIterator(instances);</span><br><span class="line">    <span class="keyword">while</span>((de = dictNext(di)) != <span class="literal">NULL</span>) &#123;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 取出实例对应的实例结构</span></span><br><span class="line">        sentinelRedisInstance *ri = dictGetVal(de);</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 执行调度操作</span></span><br><span class="line">        sentinelHandleRedisInstance(ri);</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 如果被遍历的是主服务器，那么递归地遍历该主服务器的所有从服务器</span></span><br><span class="line">        <span class="comment">// 以及所有 sentinel</span></span><br><span class="line">        <span class="keyword">if</span> (ri-&gt;flags &amp; SRI_MASTER) &#123;</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 所有从服务器</span></span><br><span class="line">            sentinelHandleDictOfRedisInstances(ri-&gt;slaves);</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 所有 sentinel</span></span><br><span class="line">            sentinelHandleDictOfRedisInstances(ri-&gt;sentinels);</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 对已下线主服务器（ri）的故障迁移已经完成</span></span><br><span class="line">            <span class="comment">// ri 的所有从服务器都已经同步到新主服务器</span></span><br><span class="line">            <span class="keyword">if</span> (ri-&gt;failover_state == SENTINEL_FAILOVER_STATE_UPDATE_CONFIG) &#123;</span><br><span class="line">                <span class="comment">// 已选出新的主服务器</span></span><br><span class="line">                switch_to_promoted = ri;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 将原主服务器（已下线）从主服务器表格中移除，并使用新主服务器代替它</span></span><br><span class="line">    <span class="keyword">if</span> (switch_to_promoted)</span><br><span class="line">        sentinelFailoverSwitchToPromotedSlave(switch_to_promoted);</span><br><span class="line"></span><br><span class="line">    dictReleaseIterator(di);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<p>选取候选者的大致逻辑：</p>
+<ol>
+<li>删除网络条件差的；</li>
+<li>考虑因素的顺序：优先级、复制偏移量、运行ID小的。<br>详见<a href="https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/sentinel.c代码中的`sentinelSelectSlave`函数。" target="_blank" rel="noopener">https://github.com/huangz1990/redis-3.0-annotated/blob/unstable/src/sentinel.c代码中的`sentinelSelectSlave`函数。</a></li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/24/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B08-sentinel%E5%93%A8%E5%85%B5%E6%A8%A1%E5%BC%8F/" data-id="ck96cxppc00gsmaam508b80xs" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2019-02/redis设计与实现笔记7-复制" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/02/24/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B07-%E5%A4%8D%E5%88%B6/" class="article-date">
@@ -1126,213 +1238,6 @@
 
 
   
-    <article id="post-2019-02/高性能mysql第八章-笔记-优化服务器配置" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/02/11/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC%E5%85%AB%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E4%BC%98%E5%8C%96%E6%9C%8D%E5%8A%A1%E5%99%A8%E9%85%8D%E7%BD%AE/" class="article-date">
-  <time datetime="2019-02-11T14:37:32.000Z" itemprop="datePublished">2019-02-11</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/mysql/">mysql</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/02/11/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC%E5%85%AB%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E4%BC%98%E5%8C%96%E6%9C%8D%E5%8A%A1%E5%99%A8%E9%85%8D%E7%BD%AE/">高性能mysql第八章-笔记-优化服务器配置</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <blockquote>
-<p>错误配置不如维持默认配置。</p>
-</blockquote>
-<h1 id="优化服务器配置"><a href="#优化服务器配置" class="headerlink" title="优化服务器配置"></a>优化服务器配置</h1><h2 id="配置文件"><a href="#配置文件" class="headerlink" title="配置文件"></a>配置文件</h2><p>服务端读取<code>mysqld</code>分段<br>客户端可能会读取客户端分段。</p>
-<h2 id="配置级别"><a href="#配置级别" class="headerlink" title="配置级别"></a>配置级别</h2><p>全局、连接级、会话级<br><code>sort_buffer_size</code>: 每个线程都可以设置<br><code>join_buffer_size</code>: 可以为每个关联都设置一个关联缓冲。</p>
-<h2 id="tips"><a href="#tips" class="headerlink" title="tips"></a>tips</h2><p>用git管理配置文件</p>
-<h2 id="最优配置"><a href="#最优配置" class="headerlink" title="最优配置"></a>最优配置</h2><p>书上也不知道怎么配出最优配置。</p>
-<ol>
-<li>用benchmark：穷举配置成本太高；</li>
-<li>用比较低的值慢慢试探，较低的内存配置对性能影响不大（百分之几），但较高的内存配置会造成较大的性能抖动，因此尽量以较低的配置。</li>
-</ol>
-<h2 id="Buffer-pool（Innodb）"><a href="#Buffer-pool（Innodb）" class="headerlink" title="Buffer pool（Innodb）"></a>Buffer pool（Innodb）</h2><p>缓存内容:</p>
-<ol>
-<li>缓存索引;</li>
-<li>缓存行数据；</li>
-<li>缓存自适应哈希索引；</li>
-<li>插入缓冲；（延迟合并写入）</li>
-<li>锁。</li>
-</ol>
-<h2 id="Key-caches-MyIsam"><a href="#Key-caches-MyIsam" class="headerlink" title="Key caches(MyIsam)"></a>Key caches(MyIsam)</h2><p>键缓冲(键缓存)。<br>MyIsam只缓存索引，不缓存数据。</p>
-<p>查看MyIsam的索引总大小:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> <span class="keyword">sum</span>(index_length) </span><br><span class="line"><span class="keyword">from</span> information_schema.tables</span><br><span class="line"><span class="keyword">where</span> <span class="keyword">engine</span>=<span class="string">'MYISAM'</span>;</span><br><span class="line"><span class="comment">-- 也可以看看分布:</span></span><br><span class="line"><span class="keyword">select</span> <span class="keyword">engine</span>,<span class="keyword">sum</span>(index_length) </span><br><span class="line"><span class="keyword">from</span> information_schema.tables</span><br><span class="line"><span class="keyword">GROUP</span> <span class="keyword">BY</span> <span class="keyword">engine</span>;</span><br><span class="line"></span><br><span class="line">+<span class="comment">--------------------+-------------------+</span></span><br><span class="line">| engine             | sum(index_length) |</span><br><span class="line">+<span class="comment">--------------------+-------------------+</span></span><br><span class="line">| CSV                |                 0 |</span><br><span class="line">| InnoDB             |       68176035840 |</span><br><span class="line">| MEMORY             |                 0 |</span><br><span class="line">| MyISAM             |            124928 |</span><br><span class="line">| PERFORMANCE_SCHEMA |                 0 |</span><br><span class="line">+<span class="comment">--------------------+-------------------+</span></span><br></pre></td></tr></table></figure>
-<p>key cache的大小不要超过MYISAM索引总大小。</p>
-<h2 id="线程缓存"><a href="#线程缓存" class="headerlink" title="线程缓存"></a>线程缓存</h2><p><code>thread_cache_size</code>:  缓存线程数量。</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">variables</span> <span class="keyword">like</span> <span class="string">'%thread_cache_size%'</span>;</span><br><span class="line"><span class="keyword">show</span> <span class="keyword">variables</span> <span class="keyword">like</span> <span class="string">'%thread%'</span>;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">+<span class="comment">-----------------------------------------+---------------------------+</span></span><br><span class="line">| Variable_name                           | Value                     |</span><br><span class="line">+<span class="comment">-----------------------------------------+---------------------------+</span></span><br><span class="line">| innodb_purge_threads                    | 1                         |</span><br><span class="line">| innodb_read_io_threads                  | 12                        |</span><br><span class="line">| innodb_thread_concurrency               | 0                         |</span><br><span class="line">| innodb_thread_sleep_delay               | 10000                     |</span><br><span class="line">| innodb_write_io_threads                 | 12                        |</span><br><span class="line">| max_delayed_threads                     | 20                        |</span><br><span class="line">| max_insert_delayed_threads              | 20                        |</span><br><span class="line">| myisam_repair_threads                   | 1                         |</span><br><span class="line">| performance_schema_max_thread_classes   | 50                        |</span><br><span class="line">| performance_schema_max_thread_instances | -1                        |</span><br><span class="line">| pseudo_thread_id                        | 4804578                   |</span><br><span class="line">| thread_cache_size                       | 512                       |</span><br><span class="line">| thread_concurrency                      | 4                         |</span><br><span class="line">| thread_handling                         | one-thread-per-connection |</span><br><span class="line">| thread_stack                            | 524288                    |</span><br><span class="line">+<span class="comment">-----------------------------------------+---------------------------+</span></span><br></pre></td></tr></table></figure>
-
-<h2 id="表缓存"><a href="#表缓存" class="headerlink" title="表缓存"></a>表缓存</h2><p>对myisam有用，innodb用处不大。<br>算是一个已经过时的配置。</p>
-<h2 id="Buffer-Pool相关架构"><a href="#Buffer-Pool相关架构" class="headerlink" title="Buffer Pool相关架构"></a>Buffer Pool相关架构</h2><img src="/images/2019-02/buffer_pool.png" class="" width="800" height="1200" title="buffer_pool">
-<p>图中的undo日志是方便事务回滚的。<br>(redo日志是类似WAL，防断电的，利用顺序IO优化性能)</p>
-<p>事务日志(redo log)使用类似环形数组的数据结构，可以环形写入到flush过的头部，节省存储空间。</p>
-<h3 id="Log-Buffer（Redo-log-事务日志）"><a href="#Log-Buffer（Redo-log-事务日志）" class="headerlink" title="Log Buffer（Redo log/事务日志）"></a>Log Buffer（Redo log/事务日志）</h3><p>每次变更: 记录到Log Buffer(Buffer Pool =&gt; Log Buffer)</p>
-<p>Log Buffer刷盘到磁盘日志文件的时机(或者说触发事件):</p>
-<ol>
-<li>每一秒钟(定时器tick事件);</li>
-<li>或事务提交事件;</li>
-<li>或缓冲区满。</li>
-</ol>
-<p>以上是默认的三个事件，调节参数为<code>innodb_flush_log_at_trx_commit</code>,3种取值:<br>0: 事务提交:不触发;<br>1: 事务提交:刷盘到磁盘;(默认值，3种事件皆触发刷盘)<br>2: 事务提交:刷新到操作系统缓存。（能扛mysql进程挂掉，不能扛断电，断电的话会丢一秒数据。）</p>
-<p>如果缓冲区满的太频繁(1s满了很多次)，可以考虑增大缓冲区大小来减少IO次数。<br>参数:<br><code>innodb_log_buffer_size</code>: 默认1M，推荐1~8M。</p>
-<p>调节这个参数需要命令:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">engine</span> <span class="keyword">innodb</span> <span class="keyword">status</span></span><br></pre></td></tr></table></figure>
-
-<h2 id="Innodb读写日志、数据文件配置"><a href="#Innodb读写日志、数据文件配置" class="headerlink" title="Innodb读写日志、数据文件配置"></a>Innodb读写日志、数据文件配置</h2><p>这是一个风险很高的选项，认真学习以后有必要再修改。</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">global</span> <span class="keyword">variables</span> <span class="keyword">like</span> <span class="string">'%flush_method%'</span>;</span><br><span class="line"></span><br><span class="line">+<span class="comment">---------------------+----------+</span></span><br><span class="line">| Variable_name       | Value    |</span><br><span class="line">+<span class="comment">---------------------+----------+</span></span><br><span class="line">| innodb_flush_method | O_DIRECT |</span><br><span class="line">+<span class="comment">---------------------+----------+</span></span><br></pre></td></tr></table></figure>
-<p>windows用的选项:<br>async_unbuffered,unbuffered,normal.</p>
-<p>linux：</p>
-<ul>
-<li><p><code>fdatasync</code>: 默认值。用<code>fsync()</code>刷新数据和日志文件。<br><code>fdatasync()</code>函数只刷新文件的数据；<br><code>fsync()</code>函数刷新数据和日志文件。<br>配置为<code>fdatasync</code>时其实会调用<code>fsync()</code>函数。默认会合并多个文件的fsync()操作，合并IO操作。可以通过<code>innodb_file_per_table</code>选项为每个文件独立fsync()，但也会增多IO操作。</p>
-</li>
-<li><p><code>O_DIRECT</code>: 数据文件: 用<code>O_DIRECT</code>标记或<code>directio()</code>函数。<br>（不影响日志文件）<br>区别: 使用fsync()函数刷盘，但会通知操作系统不要缓存数据，也不要预读。<br>相当于关闭了操作系统缓存（读写）。<br>特例： 不影响raid卡的预读、写缓存。</p>
-</li>
-<li><p><code>ALL_O_DIRECT</code>: 影响数据和日志文件。</p>
-</li>
-<li><p><code>O_DSYNC</code>: 日志文件: 用<code>O_SYNC</code>标记，写同步（日志写到磁盘才返回）<br>（不影响数据文件）<br>区别：不禁用操作系统的缓存。</p>
-</li>
-</ul>
-<table>
-<thead>
-<tr>
-<th align="center">配置值</th>
-<th align="center">实际调用函数</th>
-<th align="center">概述</th>
-</tr>
-</thead>
-<tbody><tr>
-<td align="center">fdatasync</td>
-<td align="center">fsync(含义相反)</td>
-<td align="center">刷新数据和日志，有操作系统缓存</td>
-</tr>
-<tr>
-<td align="center">O_DIRECT</td>
-<td align="center"></td>
-<td align="center">刷新数据，关闭缓存</td>
-</tr>
-<tr>
-<td align="center">ALL_O_DIRECT</td>
-<td align="center"></td>
-<td align="center">刷新数据和日志，关闭缓存</td>
-</tr>
-<tr>
-<td align="center">O_DSYNC</td>
-<td align="center">O_SYNC</td>
-<td align="center">刷新日志，有操作系统缓存</td>
-</tr>
-</tbody></table>
-<p>O_DSYNC和fdatasync的区别:<br>（实际是O_SYNC和fsync的区别）fsync允许写操作累积在缓存，然后一次性刷新。<br>O_SYNC是每次都是同步IO，每次都刷盘。</p>
-<h3 id="tips-1"><a href="#tips-1" class="headerlink" title="tips"></a>tips</h3><p>如果使用raid卡带电: O_DIRECT;<br>否则: O_DIRECT或fdatasync都有可能，看业务需求。</p>
-<h2 id="Innodb表空间"><a href="#Innodb表空间" class="headerlink" title="Innodb表空间"></a>Innodb表空间</h2><p>位于<code>innodb_data_home_dir</code>目录:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">表、索引、回滚日志(undo log)、插入缓冲(Insert Buffer)、双写缓冲(DoubleWrite Buffer)。</span><br></pre></td></tr></table></figure>
-
-<p>目录下可以挂载多个设备，但不会自动做负载均衡，只有写满第一个才会写第二个，因此需要底层用raid自己做负载均衡。<br>挂载多个目录:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">innodb_data_file_path &#x3D; &#x2F;disk1&#x2F;ibdata1:1G;&#x2F;disk2&#x2F;ibdata2:1G;&#x2F;disk3&#x2F;ibdata3:1G:autoextended:max:2G</span><br></pre></td></tr></table></figure>
-
-<p>建议使用<code>innodb_file_per_table</code>选项，每个表的表空间一个文件。<br>缺点：DROP Table慢。<br>原因: </p>
-<ol>
-<li>删除文件慢；</li>
-<li>移除表空间需要Innodb锁定和扫描缓冲区，查找属于这个表空间的页。</li>
-</ol>
-<h4 id="运行时间长的事务"><a href="#运行时间长的事务" class="headerlink" title="运行时间长的事务"></a>运行时间长的事务</h4><p>缺点: undo log增长到打爆表空间、磁盘。</p>
-<h3 id="双写缓冲-Doublewrite-Buffer"><a href="#双写缓冲-Doublewrite-Buffer" class="headerlink" title="双写缓冲(Doublewrite Buffer)"></a>双写缓冲(Doublewrite Buffer)</h3><p>功能: 避免页没写完整导致的数据损坏。<br>buffer pool =&gt; Doublewrite Buffer =&gt; 磁盘</p>
-<p>写两次，但由于有<code>fsync()</code>，而且这个过程时间顺序上比较紧密，可以一次性刷到磁盘，写两次的性能损耗也就多了百分之记。</p>
-<h3 id="binlog-IO配置"><a href="#binlog-IO配置" class="headerlink" title="binlog IO配置"></a>binlog IO配置</h3><p><code>sync_binlog</code>: binlog配置。<br>N=0(默认值): 不干预，让操作系统自己决定。<br>N&gt;0: N次写以后，刷新到磁盘。（一般不会大于1)</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">show global variables like &#39;%log%&#39;;</span><br></pre></td></tr></table></figure>
-
-<p>innodb的6种日志:</p>
-<ol>
-<li>redo log(物理/WAL): 事务开始后写入缓冲区innodb_log_buffer;（存储引擎层）</li>
-<li>undo log(逻辑/版本): 事务开始后为了事务回滚准备的日志，从buffer pool=&gt;表空间;</li>
-<li>bin log(逻辑/SQL): 主从复制。或者基于时间点的还原。(类似于存了sql)。（事务提交前产生，数据库层）</li>
-<li>slow query log: 慢查询;</li>
-<li>general log: 一般日志;</li>
-<li>relay log: 中继日志。</li>
-</ol>
-<p>undo log（在表空间）: 修改前的值/版本号;<br>undo log可以配置从表空间中分离出来。</p>
-<p>redo log（在log buffer）: 类似于WAL，记录buffer pool和disk的不同。</p>
-<h3 id="回滚事务的crash恢复"><a href="#回滚事务的crash恢复" class="headerlink" title="回滚事务的crash恢复"></a>回滚事务的crash恢复</h3><ul>
-<li>redo log: 只追加写，提交到磁盘以后标记为可以被新日志覆盖。</li>
-<li>基于这个特性，即使事务已经回滚了，它的redo log依然是存在的。</li>
-<li>再基于以上这点，db crash以后，可以恢复已经回滚的事务。</li>
-</ul>
-<p>回滚事务的crash恢复,有两种策略:</p>
-<ol>
-<li>读redo log,挑已经提交的事务进行恢复;</li>
-<li>读redo log,恢复所有事务，再用undo log解决回滚的事务。</li>
-</ol>
-<p><code>innodb</code>使用的是策略2，也就是先redo,再undo。</p>
-<p>使用策略2的难点:</p>
-<ul>
-<li><p>需要redo log相应的undo log是健全的，否则就漏回滚了。<br>(1)解决方案1:确保undo log落盘早于redo log；（很麻烦，不用）<br>(2)解决方案2:将undo log也视为数据，记录到redo log中。（innodb采用）</p>
-</li>
-<li><p>总结</p>
-<blockquote>
-<p>crash恢复: 先读取执行redo log，再执行undo log，这样可以恢复未提交事务和回滚事务。<br>undo log和redo log的数据一致性: 把undo log也视为数据，写入redo log。</p>
-</blockquote>
-</li>
-</ul>
-<h3 id="日志与事务提交速度"><a href="#日志与事务提交速度" class="headerlink" title="日志与事务提交速度:"></a>日志与事务提交速度:</h3><p>redo log: 不影响事务提交速度。因为是事务进行中就产生、而且每秒刷盘了；<br>binlog: 影响事务提交速度。因为事务提交前才产生binlog、刷盘，因此如果开启了binlog，长时间的事务提交很慢。</p>
-<p>三种重要日志的写顺序:</p>
-<ol>
-<li>undo log;</li>
-<li>redo log;</li>
-<li>binlog.</li>
-</ol>
-<h2 id="MYISAM的IO配置"><a href="#MYISAM的IO配置" class="headerlink" title="MYISAM的IO配置"></a>MYISAM的IO配置</h2><p><code>delay_key_write</code>:<br>OFF: 不延迟。每次写操作后刷新键缓存;<br>ON: 延迟。对使用该选项创建的表生效;<br>ALL: 延迟。对所有表生效。<br>该选项对性能提升不大,缺点:</p>
-<ol>
-<li>索引可能损坏;</li>
-<li>关闭表时间变长;</li>
-<li>占用空间变大。</li>
-</ol>
-<p><code>myisam_use_mmap</code>: 使用内存映射，减少系统调用开销。</p>
-<h2 id="Innodb并发"><a href="#Innodb并发" class="headerlink" title="Innodb并发"></a>Innodb并发</h2><p><code>innodb_thread_concurrency</code>:<br>N=0: 不限制有多少线程进入内核;<br>N&gt;0: 同时可以有N个线程进入内核。<br>N的推荐值&lt; 2<em>cpu数</em>disk数</p>
-<p><code>innodb_commit_concurrency</code>:<br>同时可以有多少个线程提交。</p>
-<h2 id="Myisam并发"><a href="#Myisam并发" class="headerlink" title="Myisam并发"></a>Myisam并发</h2><p><code>concurrent_insert</code>:<br>0: 不允许并发插入;<br>1: 默认值。只要表中没有空洞，就允许并发插入。<br>2: 强制并发插入到Myisam表末尾，即使有空洞。（碎片会更多）</p>
-<h2 id="基于工作负载的配置"><a href="#基于工作负载的配置" class="headerlink" title="基于工作负载的配置"></a>基于工作负载的配置</h2><ol>
-<li>blob,text的表，临时表都会变成磁盘表。<br>解决方案: 使用substr。</li>
-</ol>
-<p><code>tmp_table_size</code>,<code>max_heap_table_size</code>: 临时表大小上限。<br><code>max_connections</code>: 最大连接数。<br><code>thread_cache_size</code>: 缓存线程数。</p>
-<p> 查看配置和状态:<br> <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">show variables like &#39;%thread%&#39;;</span><br><span class="line">show status like &#39;%thread%&#39;;</span><br></pre></td></tr></table></figure></p>
-<p> <code>innodb_autoinc_lock_mode</code><br> 0: 每次都锁；<br> 1: 确定需要分配多少自增值的话，可以立即释放锁；<br> 2: 每次都不锁，空洞很多。</p>
-<h2 id="两个最重要的配置"><a href="#两个最重要的配置" class="headerlink" title="两个最重要的配置"></a>两个最重要的配置</h2><p> <code>innodb_log_file_size</code>: redo log的缓冲区，如果调大了<code>innodb_buffer_pool_size</code>就要相应调大它。<br>(一种可能的值是512<em>1024</em>1024,512M,搭配2G的<code>innodb_buffer_pool_size</code>)<br>可以通过<code>show engine innodb status\G select sleep(60); show engine innodb status\G</code>,查看<code>Log sequence number</code>差，计算1个小时的redo日志写入量，大致可以设置为这个缓冲区的大小。</p>
-<p><code>innodb_buffer_pool_size</code>的大小设置就比较简单了，按服务器可用内存75%设定即可。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/02/11/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E7%AC%AC%E5%85%AB%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E4%BC%98%E5%8C%96%E6%9C%8D%E5%8A%A1%E5%99%A8%E9%85%8D%E7%BD%AE/" data-id="ck96cxppf00h3maamgo769a0c" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1359,6 +1264,10 @@
       <ul>
         
           <li>
+            <a href="/2022/09/26/2022-09/jwt%E7%A0%B4%E8%A7%A3/">jwt破解</a>
+          </li>
+        
+          <li>
             <a href="/2022/09/25/2022-09/nc%E5%91%BD%E4%BB%A4%E7%AC%94%E8%AE%B0/">nc命令笔记</a>
           </li>
         
@@ -1372,10 +1281,6 @@
         
           <li>
             <a href="/2022/05/31/2022-05/w-tinylfu%E7%BC%93%E5%AD%98%E7%AE%97%E6%B3%95/">w-tinylfu缓存算法</a>
-          </li>
-        
-          <li>
-            <a href="/2022/03/25/2022-03/G1%E8%B0%83%E4%BC%98-%E5%A4%8D%E6%9D%82%E4%B8%9A%E5%8A%A1%E6%B2%BB%E7%90%86%E5%B0%8F%E8%AE%B0/">G1调优-复杂业务治理小记</a>
           </li>
         
       </ul>
