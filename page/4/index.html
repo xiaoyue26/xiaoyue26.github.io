@@ -72,6 +72,126 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2020-04/spring拾遗" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/04/19/2020-04/spring%E6%8B%BE%E9%81%97/" class="article-date">
+  <time datetime="2020-04-19T00:58:37.000Z" itemprop="datePublished">2020-04-19</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/spring/">spring</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2020/04/19/2020-04/spring%E6%8B%BE%E9%81%97/">spring拾遗</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h2 id="初始化顺序"><a href="#初始化顺序" class="headerlink" title="初始化顺序"></a>初始化顺序</h2><p>如果有多个init方法,执行顺序:</p>
+<ol>
+<li><code>@PostContrust</code>注解标注的方法; </li>
+<li>继承<code>InitialBean</code>后自己实现的<code>afterPropertiesSet</code>方法;</li>
+<li><code>@Bean(initMethod=&quot;xxx&quot;)</code>注解标注的方法;</li>
+</ol>
+<h2 id="销毁顺序"><a href="#销毁顺序" class="headerlink" title="销毁顺序"></a>销毁顺序</h2><p>如果有多个销毁方法,执行顺序:(与上面类似)</p>
+<ol>
+<li><code>@PreDestory</code>注解标注的方法; </li>
+<li>继承<code>DisposableBean</code>后自己实现的<code>destory</code>方法;</li>
+<li><code>@Bean(destoryMethod=&quot;xxx&quot;)</code>注解标注的方法;</li>
+</ol>
+<h2 id="spring异常风格"><a href="#spring异常风格" class="headerlink" title="spring异常风格"></a>spring异常风格</h2><p>全都用非受检(<code>runtimeException</code>),代码变得简洁,不需要到处声明异常、或<code>try catch</code>;<br>副作用: 使用者需要自己意识到会抛各种<code>BeanException</code>。</p>
+<h2 id="spring偏向锁"><a href="#spring偏向锁" class="headerlink" title="spring偏向锁"></a>spring偏向锁</h2><p>由于需要使用兼容java5,使用了<code>synchronized</code>；<br>因此有偏向锁;<br>因此最好在main线程中初始化<code>applicationContext</code>，避免锁竞争，提高性能。</p>
+<h2 id="依赖注入"><a href="#依赖注入" class="headerlink" title="依赖注入"></a>依赖注入</h2><p><code>@Autowired</code> 忽略静态字段;<br>接口回调注入: <code>implement xxxAware接口后</code>,会获得一个方法，可以从中得到、保存注入的对象。</p>
+<p>强制的依赖: 构造器注入;<br>可选的依赖: setter注入; 字段注入; （时机、顺序不定、可循环）<br>配置类(声明类): 方法注入; <code>@Bean</code></p>
+<p><code>@Autowired</code>的三个步骤:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">1. 元信息解析: dependencyDescription;</span><br><span class="line">2. 依赖查找: beanFactory</span><br><span class="line">3. 依赖注入: 通过反射，注入到原字段。(所以很多都要求有setter)</span><br></pre></td></tr></table></figure>
+
+<h2 id="提前注入"><a href="#提前注入" class="headerlink" title="提前注入"></a>提前注入</h2><p><code>@Bean</code>注解<code>static</code>方法时，会提前注入、加载。</p>
+<h2 id="依赖注入和依赖查找来源区别"><a href="#依赖注入和依赖查找来源区别" class="headerlink" title="依赖注入和依赖查找来源区别"></a>依赖注入和依赖查找来源区别</h2><p>依赖注入的来源默认会多4个，多4个spring自己默认注册的:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">beanFactory</span><br><span class="line">applicationContext</span><br><span class="line">applicationEvenListener</span><br><span class="line">ResourceLoader</span><br></pre></td></tr></table></figure>
+<p>这4个可以注入，但不能用<code>getBean</code>查找。<br>(只注册，不存到concurrentHashMap`)</p>
+<p>大方向上，依赖注入4个来源：</p>
+<ol>
+<li>托管的bean; <code>definitionBean</code>, 启动以后不能注册; </li>
+<li>单例对象; 启动以后还能注册;</li>
+<li>手动注册的<code>resolvedDependency</code>;</li>
+<li>外部化配置;</li>
+</ol>
+<h1 id="prototype"><a href="#prototype" class="headerlink" title="prototype"></a>prototype</h1><p>spring不完全管<code>prototype</code>生命周期;<br>只管单例;<br><code>prototype</code>销毁回调不执行,官方提到可以用<code>BeanPostProcessor</code>，但其实只能加初始化完成后的操作(此时大概率不需要销毁)，所以更合理的方式是用一个单例对象管理所有<code>prototype</code>(类似于领域里的<code>agg root</code>),在单例销毁时(实现<code>disposableBean</code>接口)，回调prototype的销毁;</p>
+<p>单例和<code>prototype</code>均执行初始化回调。</p>
+<h1 id="scope-request"><a href="#scope-request" class="headerlink" title="scope request"></a>scope request</h1><p><code>@RequestScope</code>：<br>request scope对象: Ioc里是单例，但是返回给前端时是不同的。(快速销毁)<br><code>@SessionScope</code>:<br>比request多一个锁。(避免同一个会话的并发)<br>同cookie时（同sessionid），返回前端的对象是相同的。(很长时间以后才销毁)<br>//tomcat默认session超时时间为30分钟，会序列化</p>
+<p>jsp搜索范围：page-&gt; request -&gt; session -&gt; servletContext</p>
+<p>可以<code>implements Scope</code>自定义scope.</p>
+<h1 id="IocBean初始化"><a href="#IocBean初始化" class="headerlink" title="IocBean初始化"></a>IocBean初始化</h1><ol>
+<li>beanDefinition加载;</li>
+<li>合并父类元信息;</li>
+<li>加载类; classLoader;</li>
+<li>实例化; <code>instantiation</code> , 赋值: <code>populate</code></li>
+<li>返回前可以拦截替换代理对象;</li>
+<li>初始化</li>
+</ol>
+<p>赋值前可以通过<code>postProcessProperties</code>增加需要赋值的字段。虽然名字是<code>post</code>但其实是<code>before</code>.</p>
+<h2 id="Aware接口回调顺序"><a href="#Aware接口回调顺序" class="headerlink" title="Aware接口回调顺序"></a>Aware接口回调顺序</h2><ol>
+<li>beanNameAware</li>
+<li>beanClassLoaderAware</li>
+<li>beanfactoryAware</li>
+<li>environmentAware</li>
+<li>EmbeddedValueResolveAware</li>
+<li>ResourceLoaderAware</li>
+<li>ApplicationEventPublisherAware</li>
+<li>MessageSourceAware</li>
+<li>ApplicationcontextAware</li>
+</ol>
+<p>4-9是applicationContext有的。</p>
+<h1 id="bean销毁"><a href="#bean销毁" class="headerlink" title="bean销毁"></a>bean销毁</h1><p>只是容器内销毁，并不意味着gc；</p>
+<h1 id="beanPostProcesser"><a href="#beanPostProcesser" class="headerlink" title="beanPostProcesser"></a>beanPostProcesser</h1><p>可以有多个，spring用list存储，所以先添加的先执行(FIFO)。</p>
+<h1 id="生命周期末期"><a href="#生命周期末期" class="headerlink" title="生命周期末期"></a>生命周期末期</h1><p>applicationContext关闭<br>gc<br>调用finalized方法</p>
+<h1 id="生命周期完整"><a href="#生命周期完整" class="headerlink" title="生命周期完整"></a>生命周期完整</h1><p>注册<br>合并<br>实例化 前中后<br>赋值   前中后<br>aware回调<br>初始化 前中后<br>销毁  前中后<br>gc<br>finalize</p>
+<h2 id="工具类"><a href="#工具类" class="headerlink" title="工具类"></a>工具类</h2><p><code>ObjectUtils.nullsafeEquals</code><br><code>StringUtils.xxx</code><br><code>NamedThreadLocal</code></p>
+<h2 id="debug技巧"><a href="#debug技巧" class="headerlink" title="debug技巧"></a>debug技巧</h2><p>在底层打断点后，可以看方法调用栈。</p>
+<h2 id="spring事务回滚"><a href="#spring事务回滚" class="headerlink" title="spring事务回滚"></a>spring事务回滚</h2><p>受检异常：不回滚；<br>非受检：例如<code>RuntimeException</code>回滚。</p>
+<p>类内调用: 无事务(因为不经过代理加强)<br>类外调用：有事务</p>
+<p>事务中新开线程： 新线程不能复用原连接(查不到未提交的数据)<br>解决方案：使用事务同步管理器:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">TransactionSynchronizationManager.registerSynchronization(<span class="keyword">new</span> TransactionSynchronizationAdapter() &#123;</span><br></pre></td></tr></table></figure>
+
+
+<h2 id="mysql中立刻触发事务提交的语句"><a href="#mysql中立刻触发事务提交的语句" class="headerlink" title="mysql中立刻触发事务提交的语句"></a>mysql中立刻触发事务提交的语句</h2><p>除了一些元数据操作，得注意新开一个事务也会触发原来的事务立即提交。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">ALTER</span> <span class="keyword">FUNCTION</span>    </span><br><span class="line"><span class="keyword">ALTER</span> <span class="keyword">PROCEDURE</span>    </span><br><span class="line"><span class="keyword">ALTER</span> <span class="keyword">TABLE</span>    </span><br><span class="line"><span class="keyword">BEGIN</span>    </span><br><span class="line"><span class="keyword">CREATE</span> <span class="keyword">DATABASE</span>    </span><br><span class="line"><span class="keyword">CREATE</span> <span class="keyword">FUNCTION</span>    </span><br><span class="line"><span class="keyword">CREATE</span> <span class="keyword">INDEX</span>    </span><br><span class="line"><span class="keyword">CREATE</span> <span class="keyword">PROCEDURE</span>    </span><br><span class="line"><span class="keyword">CREATE</span> <span class="keyword">TABLE</span>    </span><br><span class="line"><span class="keyword">DROP</span> <span class="keyword">DATABASE</span>    </span><br><span class="line"><span class="keyword">DROP</span> <span class="keyword">FUNCTION</span>    </span><br><span class="line"><span class="keyword">DROP</span> <span class="keyword">INDEX</span>    </span><br><span class="line"><span class="keyword">DROP</span> <span class="keyword">PROCEDURE</span>    </span><br><span class="line"><span class="keyword">DROP</span> <span class="keyword">TABLE</span>    </span><br><span class="line"><span class="keyword">UNLOCK</span> <span class="keyword">TABLES</span>    </span><br><span class="line"><span class="keyword">LOAD</span> <span class="keyword">MASTER</span> <span class="keyword">DATA</span>    </span><br><span class="line"><span class="keyword">LOCK</span> <span class="keyword">TABLES</span>    </span><br><span class="line"><span class="keyword">RENAME</span> <span class="keyword">TABLE</span>    </span><br><span class="line"><span class="keyword">TRUNCATE</span> <span class="keyword">TABLE</span>    </span><br><span class="line"><span class="keyword">SET</span> AUTOCOMMIT=<span class="number">1</span>    </span><br><span class="line"><span class="keyword">START</span> <span class="keyword">TRANSACTION</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="BeanFactory初始化"><a href="#BeanFactory初始化" class="headerlink" title="BeanFactory初始化"></a>BeanFactory初始化</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">ResouceLoader加载配置信息</span><br><span class="line">BeanDefintionReader解析配置信息，生成一个一个的BeanDefintion</span><br><span class="line">BeanDefintion由BeanDefintionRegistry管理起来</span><br><span class="line">BeanFactoryPostProcessor对配置信息进行加工(也就是处理配置的信息，一般通过PropertyPlaceholderConfigurer来实现)</span><br><span class="line">实例化Bean</span><br><span class="line">如果该Bean配置&#x2F;实现了InstantiationAwareBean，则调用对应的方法</span><br><span class="line">使用BeanWarpper来完成对象之间的属性配置(依赖)</span><br><span class="line">如果该Bean配置&#x2F;实现了Aware接口，则调用对应的方法</span><br><span class="line">如果该Bean配置了BeanPostProcessor的before方法，则调用</span><br><span class="line">如果该Bean配置了init-method或者实现InstantiationBean，则调用对应的方法</span><br><span class="line">如果该Bean配置了BeanPostProcessor的after方法，则调用</span><br><span class="line">将对象放入到HashMap中</span><br><span class="line">最后如果配置了destroy或者DisposableBean的方法，则执行销毁操作</span><br></pre></td></tr></table></figure>
+
+
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2020/04/19/2020-04/spring%E6%8B%BE%E9%81%97/" data-id="ck96cxpqm00ljmaam3dze2ck1" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spring/" rel="tag">spring</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2020-03/利用UTF-8编码的特性进行优化" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2020/03/26/2020-03/%E5%88%A9%E7%94%A8UTF-8%E7%BC%96%E7%A0%81%E7%9A%84%E7%89%B9%E6%80%A7%E8%BF%9B%E8%A1%8C%E4%BC%98%E5%8C%96/" class="article-date">
@@ -716,172 +836,6 @@
 
 
   
-    <article id="post-2019-11/论文梗概-在线服务的实验评估面临的挑战" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/11/13/2019-11/%E8%AE%BA%E6%96%87%E6%A2%97%E6%A6%82-%E5%9C%A8%E7%BA%BF%E6%9C%8D%E5%8A%A1%E7%9A%84%E5%AE%9E%E9%AA%8C%E8%AF%84%E4%BC%B0%E9%9D%A2%E4%B8%B4%E7%9A%84%E6%8C%91%E6%88%98/" class="article-date">
-  <time datetime="2019-11-13T02:37:58.000Z" itemprop="datePublished">2019-11-13</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/%E8%AE%BA%E6%96%87/">论文</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/11/13/2019-11/%E8%AE%BA%E6%96%87%E6%A2%97%E6%A6%82-%E5%9C%A8%E7%BA%BF%E6%9C%8D%E5%8A%A1%E7%9A%84%E5%AE%9E%E9%AA%8C%E8%AF%84%E4%BC%B0%E9%9D%A2%E4%B8%B4%E7%9A%84%E6%8C%91%E6%88%98/">[论文梗概]在线服务的实验评估面临的挑战</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <blockquote>
-<p>论文原文: <a href="https://exp-platform.com/Documents/2019-FirstPracticalOnlineControlledExperimentsSummit_SIGKDDExplorations.pdf" target="_blank" rel="noopener">https://exp-platform.com/Documents/2019-FirstPracticalOnlineControlledExperimentsSummit_SIGKDDExplorations.pdf</a> </p>
-</blockquote>
-<h1 id="概念"><a href="#概念" class="headerlink" title="概念"></a>概念</h1><p><code>OEC</code>: Overall Evaluation Criterion/总体评价标准<br><code>OCEs</code>: Online controlled experiments/在线受控实验=A/B Tests</p>
-<h1 id="挑战汇总"><a href="#挑战汇总" class="headerlink" title="挑战汇总"></a>挑战汇总</h1><ol>
-<li>如何评估长期效应;</li>
-<li>如何解决社交网络对实验的影响;</li>
-<li>如何解决多次实验间的影响;</li>
-<li>如何寻找OEC指标;</li>
-<li>如何进行细分人群的实验(HTE模型);</li>
-<li>如何确保数据质量、进行数据治理;</li>
-<li>如何建立实验文化;</li>
-<li>如何处理配置文件膨胀问题;</li>
-</ol>
-<h1 id="如何评估长期效应"><a href="#如何评估长期效应" class="headerlink" title="如何评估长期效应"></a>如何评估长期效应</h1><h2 id="问题"><a href="#问题" class="headerlink" title="问题"></a>问题</h2><ol>
-<li>大部分abtest持续两周内；</li>
-<li>我们真正关心的是比两周更长的长期效应；</li>
-</ol>
-<p><strong>如何确保上述两者吻合？</strong></p>
-<h2 id="长期效应：常见解决方案"><a href="#长期效应：常见解决方案" class="headerlink" title="长期效应：常见解决方案"></a>长期效应：常见解决方案</h2><h3 id="长期实验；"><a href="#长期实验；" class="headerlink" title="长期实验；"></a>长期实验；</h3><p>Twitter: 实验通常持续4周，从最后两周的数据开始统计。</p>
-<h3 id="保留反向桶；-holdout"><a href="#保留反向桶；-holdout" class="headerlink" title="保留反向桶；(holdout)"></a>保留反向桶；(holdout)</h3><h3 id="代理指标"><a href="#代理指标" class="headerlink" title="代理指标"></a>代理指标</h3><p>Netflix: 使用logistic回归，寻找反映留存指标的代理指标。<br>LinkedIn: lifetime value模型；<br>Uber : macro-economic模型;<br>facebook: 分位数回归、GBDT</p>
-<p><code>缺点</code>: 相关性!=因果关系<br><code>可能的歧路</code>：代理指标涨、长期指标不动。</p>
-<p>bing/google: 心理学模型,从因果关系出发</p>
-<h3 id="对用户学习效应进行建模"><a href="#对用户学习效应进行建模" class="headerlink" title="对用户学习效应进行建模"></a>对用户学习效应进行建模</h3><p>google: 用长期实验，观察用户学习的效应(参见原文论文[38])<br><strong>实验流程:</strong></p>
-<ol>
-<li>第一组：立刻使用B配置;</li>
-<li>第二组：滞后一段时间后使用B配置;</li>
-<li>第N组：依次类推。</li>
-<li>随机组: 随机滞后。</li>
-</ol>
-<p>比较不同学习阶段的用户。</p>
-<p><strong>结果:</strong> 得出指数曲线，预测长期的情况。</p>
-<h1 id="如何解决社交网络对实验的影响"><a href="#如何解决社交网络对实验的影响" class="headerlink" title="如何解决社交网络对实验的影响"></a>如何解决社交网络对实验的影响</h1><h2 id="问题-1"><a href="#问题-1" class="headerlink" title="问题"></a>问题</h2><p>传统A/B test的假设： 实验间不相互影响；</p>
-<p>假设不成立：</p>
-<ol>
-<li>社交网络影响；</li>
-<li>多次反复实验残留效应影响。<br>对照组的用户可能与实验组认识/有交互，因此也受实验影响。</li>
-</ol>
-<p>问题：</p>
-<ol>
-<li>如何避免这个问题？（无法避免）</li>
-<li>如何检测这个问题？（评估影响）</li>
-</ol>
-<h2 id="常见解决方案"><a href="#常见解决方案" class="headerlink" title="常见解决方案"></a>常见解决方案</h2><h3 id="生产者消费者模型"><a href="#生产者消费者模型" class="headerlink" title="生产者消费者模型"></a>生产者消费者模型</h3><p>LinkedIn： 生产者消费者模型<br>实验：<br>生产者：允许在帖子上打标签;<br>消费者：允许看到帖子的标签; </p>
-<p>当95%的生产者可以打标签：可以测试50%的消费者是否允许看到标签的影响；<br>当95%的消费者可以看到标签: 可以测试50%的生产者是否打标签的影响。</p>
-<p>类似的模型可以用于@功能。</p>
-<h3 id="已知影响力模型"><a href="#已知影响力模型" class="headerlink" title="已知影响力模型"></a>已知影响力模型</h3><p>Link/facebook/谷歌： 用户影响力已知，将用户聚类成子网络。<br>实验在各个子网络进行。</p>
-<p>相关论文： [20, 26, 9].<br><code>[20]</code>:<br><a href="http://www.unofficialgoogledatascience.com/2018/01/designing-ab-tests-in-collaboration.html" target="_blank" rel="noopener">http://www.unofficialgoogledatascience.com/2018/01/designing-ab-tests-in-collaboration.html</a></p>
-<h3 id="一对一通信"><a href="#一对一通信" class="headerlink" title="一对一通信"></a>一对一通信</h3><p>对于1对1通信相关的feature:<br><strong>Linkin</strong>: 数据统计时分为4类:<br>1.实验组=&gt;实验组;<br>2.对照组=&gt;对照组;<br>3.实验组=&gt;对照组;<br>4.对照组=&gt;实验组;</p>
-<p>Skype: 以会话为维度实验。每个用户都可能随机位于实验、对照组。</p>
-<h3 id="市场影响"><a href="#市场影响" class="headerlink" title="市场影响"></a>市场影响</h3><p>实验结果受供求关系影响。(如打车)<br>忽视供求关系随机分组，可能会导致一些Bias。<br>Lyft： 构造小规模近似供求关系的市场，进行实验。</p>
-<p>广告领域：预算窃取<br>实验组：窃取对照组预算(对照组的广告预算也花在了实验组)<br>当放量时，整体收入并没有达到预期幅度。<br>解决方案：按预算比例投放到实验组。</p>
-<h1 id="挑战：多个实验之间的影响"><a href="#挑战：多个实验之间的影响" class="headerlink" title="挑战：多个实验之间的影响"></a>挑战：多个实验之间的影响</h1><h2 id="问题-2"><a href="#问题-2" class="headerlink" title="问题"></a>问题</h2><p>如果两个实验之间不是完全独立。<br>(例1个实验改变背景，1个实验改变字体颜色)</p>
-<h2 id="解决方案"><a href="#解决方案" class="headerlink" title="解决方案"></a>解决方案</h2><p>微软、谷歌：相互影响(互斥)的实验放在同一层内，这一个层由一个团队负责(相关特性)；<br>微软：每天跑任务检测层间影响；</p>
-<h1 id="挑战：如何寻找OEC指标"><a href="#挑战：如何寻找OEC指标" class="headerlink" title="挑战：如何寻找OEC指标"></a>挑战：如何寻找OEC指标</h1><h2 id="问题-3"><a href="#问题-3" class="headerlink" title="问题"></a>问题</h2><p>HiPPO: 工资最高的人说了算。<br>OEC: 数据驱动，核心指标说了算。</p>
-<p>指标=OEC指标+其他护栏、诊断指标;<br>OEC指标: 决策;(KPI)<br>诊断指标: OEC指标为啥变化。</p>
-<h2 id="解决方案-1"><a href="#解决方案-1" class="headerlink" title="解决方案"></a>解决方案</h2><h3 id="OEC指标满足的条件"><a href="#OEC指标满足的条件" class="headerlink" title="OEC指标满足的条件"></a>OEC指标满足的条件</h3><ol>
-<li>反映KPI;</li>
-<li>难以作弊;</li>
-<li>必须敏感;</li>
-<li>计算的成本不能太高(可行性)、每天都要给至少上百个实验计算;(不能是只能打电话确认的指标)</li>
-<li>考虑到影响KPI的各种场景;</li>
-<li>能顾及到新的场景。</li>
-</ol>
-<h3 id="自己发现OEC"><a href="#自己发现OEC" class="headerlink" title="自己发现OEC"></a>自己发现OEC</h3><p>对于搜索引擎: 查询量不是好的OEC，查询量大可能是因为不准。<br>好的OEC: 每个用户的会话数。（不准的话，单次会话查询量很大、会话数少。）</p>
-<p>一般来说：<br><strong>OEC指标属性</strong>:<br><code>HEART</code>: </p>
-<blockquote>
-<p>Happiness, Engagement, Adoption, Retention, and Task success</p>
-</blockquote>
-<p><strong>护栏指标</strong>：pv、vv、时长、延迟、七日用户数。</p>
-<p>对于浏览类场景，找到HEART指标仍是挑战。<br>挑战：识别用户的目的。<br>目的1：快速找到特定东西；<br>目的2：不想找特定东西，只是想探索新东西；</p>
-<p>对于目的1：点击次数越多越不好；<br>对于目的2：点击次数越多越好。<br>两者矛盾，因此存在挑战。</p>
-<h3 id="权衡产品目标"><a href="#权衡产品目标" class="headerlink" title="权衡产品目标"></a>权衡产品目标</h3><p>我们潜意识假定产品目标是确定不变的、统一的。<br>然而这不是小问题。因此假定不一定总是成立。</p>
-<ol>
-<li>团队可能调整战略(例如每个阶段的盈利策略)；</li>
-<li>每个局部的实际方向可能和总体不符。</li>
-<li>多目标(指标)冲突。(收入与体验)</li>
-</ol>
-<h3 id="机器学习建立OEC"><a href="#机器学习建立OEC" class="headerlink" title="机器学习建立OEC"></a>机器学习建立OEC</h3><ol>
-<li>基于用户行为，打分预测满意度；</li>
-<li>组合多个指标，创造敏感又准确的OEC指标；</li>
-</ol>
-<p>缺点: 不可解释、难以发现误判。</p>
-<h1 id="如何进行细分人群的实验"><a href="#如何进行细分人群的实验" class="headerlink" title="如何进行细分人群的实验"></a>如何进行细分人群的实验</h1><p>细分人群可能可以有更多洞察。</p>
-<h2 id="常见的分类方法"><a href="#常见的分类方法" class="headerlink" title="常见的分类方法"></a>常见的分类方法</h2><ol>
-<li>国家、使用语言；</li>
-<li>活跃度;</li>
-<li>设备和平台；</li>
-<li>周中周末、新奇效应；</li>
-<li>产品特定分类：<br>(1)linked: 招聘者、应聘者；<br>(2)Netflix: 不同网速；<br>(3)Airbnb: 是否曾经预定、渠道来源；</li>
-</ol>
-<h2 id="相关挑战和解决方案"><a href="#相关挑战和解决方案" class="headerlink" title="相关挑战和解决方案"></a>相关挑战和解决方案</h2><ol>
-<li>计算规模变大; =&gt;按需分析: 某些需求可以用更高成本的分析方法；</li>
-<li>样本变少; =&gt; 使用稀疏模型</li>
-<li>分层的正交性依赖大样本; </li>
-<li>实验者不是统计学专家,实验结果必须明确易懂； =&gt;用回归和聚类来简化结果。(Fused Lasso、Total Variation Regularization)</li>
-<li>相关性!=因果关系: 细分人群的结果不同，但相应分类属性可能不是导致结果不同的原因，可能只是共线。<br>解决方案：可以从历史数据中寻求更多信息。</li>
-</ol>
-<h1 id="数据质量与数据治理"><a href="#数据质量与数据治理" class="headerlink" title="数据质量与数据治理"></a>数据质量与数据治理</h1><h2 id="问题-4"><a href="#问题-4" class="headerlink" title="问题"></a>问题</h2><p>实验可信度依赖数据质量。如何确保数据质量?</p>
-<h2 id="解决方案-2"><a href="#解决方案-2" class="headerlink" title="解决方案"></a>解决方案</h2><h3 id="工业界测试"><a href="#工业界测试" class="headerlink" title="工业界测试"></a>工业界测试</h3><p>工业界测试： Ratio Mismatch test (见原文引用[13, 22, 23, 45])<br>抽样校验告警。</p>
-<h3 id="数据规范"><a href="#数据规范" class="headerlink" title="数据规范"></a>数据规范</h3><p>Netflix\MSN\Bing：json<br>优点：拓展性好；<br>缺点: 格式变化很快；</p>
-<p>Airbnb/facebook：每个实验自己设定格式、打点。(bring-your-own-data)<br>Microsoft Office: 事件日志；<br>其他: 固定部分列，预留json列。</p>
-<h3 id="及时可靠的指标"><a href="#及时可靠的指标" class="headerlink" title="及时可靠的指标"></a>及时可靠的指标</h3><p>不断新增指标对实验平台的挑战。</p>
-<p>LinkedIn/Facebook/Airbnb: 实验平台与指标框架分离，各个业务对自己的指标负责。实验平台仅负责从统计结果进行评估。<br>Microsoft/Google/Booking.com/Lyft:指标由实验团队从日志中统计。</p>
-<p>LinkedIn:<br>指标委员会：批准新增、修改指标，确保指标质量；<br>某些公司：<br>指标必须经过验证敏感性、精确性，确定和实验结果有有意义的区别。<br>Booking.com：<br>自动检测比较两组独立数据。</p>
-<h3 id="指标的ownership"><a href="#指标的ownership" class="headerlink" title="指标的ownership"></a>指标的ownership</h3><p>指标通常有特定的关注者和归属者。<br>微软：特定指标下降=&gt;通知指标归属者(含相关实验信息)。</p>
-<p>其他公司：提供工具搜索：影响特定指标的实验。</p>
-<h3 id="新分析方法"><a href="#新分析方法" class="headerlink" title="新分析方法"></a>新分析方法</h3><p>需要考虑:</p>
-<ol>
-<li>新方法适用场景;</li>
-<li>新方法的计算、复杂性成本 &lt; 收益;</li>
-<li>不同方法冲突时，相信哪一种；</li>
-<li>保证正确解释结果；</li>
-</ol>
-<h1 id="如何建立实验文化"><a href="#如何建立实验文化" class="headerlink" title="如何建立实验文化"></a>如何建立实验文化</h1><p>日志、实验、实验记录、实验评估的文化。<br>原则:<br>谦逊: 直觉判断是贫瘠的(HIPPO)；<br>微软：只有1/3的创意在数据上有显著结果。</p>
-<p>能接受实验效果不好。</p>
-<h2 id="解决方案-建立规范的实验平台。"><a href="#解决方案-建立规范的实验平台。" class="headerlink" title="解决方案: 建立规范的实验平台。"></a>解决方案: 建立规范的实验平台。</h2><p>Booking.com： 将实验平台变得像游戏。</p>
-<p>Yandex： 中央实验小组：由各个组的专家组成<br>Amazon： 类似，酒吧专家；（酒吧是Amazon的实验平台）<br>Twitter：实验牧羊人：50个牧羊人，一个星期值班时间，<br>Booking.com： 实验大使制度、同行评议制度（按钮：随机选择一个实验来评议）<br>微软：1~2个数据科学家跟着一个业务团队。随着业务团队接受培训、能力提高，数据科学家回到中心、转跟另一个业务团队。定期分享。<br>谷歌： checklist。每次实验填写：假设、指标、变化幅度。</p>
-<h1 id="配置文件膨胀的挑战"><a href="#配置文件膨胀的挑战" class="headerlink" title="配置文件膨胀的挑战"></a>配置文件膨胀的挑战</h1><h2 id="问题-5"><a href="#问题-5" class="headerlink" title="问题"></a>问题</h2><p>随着实验越来越多，客户端要拉的配置文件越来越大。</p>
-<h2 id="解决方案-3"><a href="#解决方案-3" class="headerlink" title="解决方案"></a>解决方案</h2><p>定期合代码，固化一些feature;</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/11/13/2019-11/%E8%AE%BA%E6%96%87%E6%A2%97%E6%A6%82-%E5%9C%A8%E7%BA%BF%E6%9C%8D%E5%8A%A1%E7%9A%84%E5%AE%9E%E9%AA%8C%E8%AF%84%E4%BC%B0%E9%9D%A2%E4%B8%B4%E7%9A%84%E6%8C%91%E6%88%98/" data-id="ck96cxpqe00kkmaam2jzt1b6i" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E8%AE%BA%E6%96%87/" rel="tag">论文</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -908,6 +862,10 @@
       <ul>
         
           <li>
+            <a href="/2022/09/27/2022-09/sql%E6%B3%A8%E5%85%A5%E6%94%BB%E5%87%BB/">sql注入攻击</a>
+          </li>
+        
+          <li>
             <a href="/2022/09/26/2022-09/%E5%B7%B2%E7%9F%A5%E6%98%8E%E6%96%87%E7%A0%B4%E8%A7%A3zip/">已知明文破解zip</a>
           </li>
         
@@ -921,10 +879,6 @@
         
           <li>
             <a href="/2022/09/25/2022-09/%E8%B0%83%E4%BC%98-%E8%A7%A3%E5%86%B3%E7%BA%BF%E7%A8%8B%E6%B1%A0%E9%80%A0%E6%88%90%E7%9A%84%E8%BF%9B%E7%A8%8B%E5%8D%A1%E9%A1%BF%E3%80%81cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-解决线程池造成的进程卡顿、cpu毛刺问题</a>
-          </li>
-        
-          <li>
-            <a href="/2022/08/30/2022-08/%E8%B0%83%E4%BC%98-cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-cpu毛刺问题</a>
           </li>
         
       </ul>

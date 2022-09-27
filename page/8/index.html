@@ -72,6 +72,79 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-02/nginx笔记-鉴权及转发配置" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E9%89%B4%E6%9D%83%E5%8F%8A%E8%BD%AC%E5%8F%91%E9%85%8D%E7%BD%AE/" class="article-date">
+  <time datetime="2019-02-28T07:10:31.000Z" itemprop="datePublished">2019-02-28</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/nginx/">nginx</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E9%89%B4%E6%9D%83%E5%8F%8A%E8%BD%AC%E5%8F%91%E9%85%8D%E7%BD%AE/">nginx笔记-鉴权及转发配置</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>学习资料:<br><a href="http://blog.jobbole.com/tag/nginx/" target="_blank" rel="noopener">http://blog.jobbole.com/tag/nginx/</a><br><a href="https://segmentfault.com/a/1190000013267839#articleHeader0" target="_blank" rel="noopener">https://segmentfault.com/a/1190000013267839#articleHeader0</a></p>
+<p>鉴权模块的官方文档:<br><a href="http://nginx.org/en/docs/http/ngx_http_auth_request_module.html" target="_blank" rel="noopener">http://nginx.org/en/docs/http/ngx_http_auth_request_module.html</a></p>
+<h2 id="易混淆点"><a href="#易混淆点" class="headerlink" title="易混淆点"></a>易混淆点</h2><p><strong>URL尾部的<code>/</code>区别</strong><br>url分为<code>location</code>配置中的<code>url</code>和实际用户访问的<code>url</code>：</p>
+<h3 id="1-location中的url"><a href="#1-location中的url" class="headerlink" title="1. location中的url"></a>1. location中的url</h3><p>无区别。末尾是否有<code>/</code>,含义一样。</p>
+<h3 id="2-实际用户访问的url"><a href="#2-实际用户访问的url" class="headerlink" title="2. 实际用户访问的url"></a>2. 实际用户访问的url</h3><p>也就是浏览器地址栏中的。</p>
+<p>首先实际访问url的话：<br>(1)末尾有<code>/</code>: 表示目录，如<code>localhost/dir/</code>，服务器就会匹配目录下的默认文件（比如<code>index.html</code>）;<br>(2)末尾无<code>/</code>: 表示文件，如<code>localhost/file</code>.</p>
+<p><strong>特殊情况:</strong><br>根目录。<br>直接访问域名，如访问<a href="http://www.xxx.com" target="_blank" rel="noopener">http://www.xxx.com</a><br>，这个时候浏览器知道用户访问的肯定不是文件，而且服务器一般会配置<code>location /</code>这个配置项，所以访问根目录有没有<code>/</code>都一样。<br><strong>也就是以下两种访问url等效:</strong> </p>
+<ol>
+<li>访问<a href="http://www.xxx.com" target="_blank" rel="noopener">http://www.xxx.com</a></li>
+<li>访问<a href="http://www.xxx.com/" target="_blank" rel="noopener">http://www.xxx.com/</a><br>浏览器请求的时候自动给第1种加上<code>/</code>变成第2种。</li>
+</ol>
+<h2 id="nginx配置的逻辑"><a href="#nginx配置的逻辑" class="headerlink" title="nginx配置的逻辑"></a>nginx配置的逻辑</h2><ul>
+<li>特点:</li>
+</ul>
+<ol>
+<li><p>声明式<br>nginx的配置文件是声明式的,因此不能用过程式语言来理解它。<br>换句话说:<br>并不是写在前面的就先执行.</p>
+</li>
+<li><p>第三方模块<br>nginx有核心模块和第三方模块（插件）。<br>不同模块的配置可能写在一块儿,但执行顺序可能无关联,甚至互相影响。</p>
+</li>
+</ol>
+<p>举例一些模块的功能：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">--with-http_dav_module: http文件管理;</span><br><span class="line">--with-http_flv_module: flv流媒体支持;</span><br><span class="line">--with-mail: 邮件支持;</span><br><span class="line">--with-mail_ssl_module: 邮件加密;</span><br><span class="line">--with-debug: debug日志支持;</span><br><span class="line">--with-http_auth_request_module: 鉴权转发支持。</span><br></pre></td></tr></table></figure>
+
+<h2 id="一种可能的鉴权转发配置："><a href="#一种可能的鉴权转发配置：" class="headerlink" title="一种可能的鉴权转发配置："></a>一种可能的鉴权转发配置：</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br></pre></td><td class="code"><pre><span class="line">#user  nobody;</span><br><span class="line">worker_processes  3;</span><br><span class="line"></span><br><span class="line">error_log  logs&#x2F;error.log;</span><br><span class="line">#error_log  logs&#x2F;error.log  notice;</span><br><span class="line">#error_log  logs&#x2F;error.log  info;</span><br><span class="line"></span><br><span class="line"># pid        logs&#x2F;nginx.pid; # 这个必须停服改</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">events &#123;</span><br><span class="line">    worker_connections  2048;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">http &#123;</span><br><span class="line">    include       mime.types;</span><br><span class="line">    default_type  application&#x2F;octet-stream;</span><br><span class="line"></span><br><span class="line">    log_format  main  &#39;$remote_addr - $remote_user [$time_local] &quot;$request&quot; &#39;</span><br><span class="line">                      &#39;$status $body_bytes_sent &quot;$http_referer&quot; &#39;</span><br><span class="line">                      &#39;&quot;$http_user_agent&quot; &quot;$http_x_forwarded_for&quot;&#39;;</span><br><span class="line"></span><br><span class="line">    access_log  logs&#x2F;access.log  main;</span><br><span class="line"></span><br><span class="line">    sendfile        on;</span><br><span class="line">    #tcp_nopush     on;</span><br><span class="line"></span><br><span class="line">    #keepalive_timeout  0;</span><br><span class="line">    keepalive_timeout  65;</span><br><span class="line"></span><br><span class="line">    #gzip  on;</span><br><span class="line">    gzip  on;</span><br><span class="line">    gzip_min_length 1k;</span><br><span class="line">    gzip_buffers    4 16k;</span><br><span class="line">    gzip_http_version 1.0;</span><br><span class="line">    gzip_comp_level 6;</span><br><span class="line">    gzip_types text&#x2F;plain text&#x2F;css text&#x2F;javascript application&#x2F;json application&#x2F;javascript application&#x2F;x-javascript application&#x2F;xml;</span><br><span class="line">    gzip_vary on;</span><br><span class="line"></span><br><span class="line">    # http_proxy 设置</span><br><span class="line">    client_max_body_size   10m;</span><br><span class="line">    client_body_buffer_size   128k;</span><br><span class="line">    proxy_connect_timeout   75;</span><br><span class="line">    proxy_send_timeout   75;</span><br><span class="line">    proxy_read_timeout   75;</span><br><span class="line">    proxy_buffer_size   4k;</span><br><span class="line">    proxy_buffers   4 32k;</span><br><span class="line">    proxy_busy_buffers_size   64k;</span><br><span class="line">    proxy_temp_file_write_size  64k;</span><br><span class="line">    proxy_temp_path   &#x2F;usr&#x2F;local&#x2F;nginx&#x2F;proxy_temp 1 2;</span><br><span class="line"></span><br><span class="line">    upstream backend_hexo &#123;</span><br><span class="line">	    server localhost:8081 max_fails&#x3D;2 fail_timeout&#x3D;30s ;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    server &#123;</span><br><span class="line">        listen       80;</span><br><span class="line">        server_name  localhost;</span><br><span class="line"></span><br><span class="line">        #charset koi8-r;</span><br><span class="line"></span><br><span class="line">        access_log  logs&#x2F;host.access.log  main;</span><br><span class="line"></span><br><span class="line">        location &#x2F; &#123;</span><br><span class="line">            auth_request &#x2F;auth;</span><br><span class="line">            add_header Cache-Control no-store;</span><br><span class="line">            proxy_set_header Host $host;</span><br><span class="line"></span><br><span class="line">            proxy_pass        http:&#x2F;&#x2F;backend_hexo;</span><br><span class="line">            proxy_redirect off;</span><br><span class="line">            # 后端的Web服务器可以通过X-Forwarded-For获取用户真实IP</span><br><span class="line">            proxy_set_header  Host  $host;</span><br><span class="line">            proxy_set_header  X-Real-IP  $remote_addr;</span><br><span class="line">            proxy_set_header  X-Forwarded-For  $proxy_add_x_forwarded_for;</span><br><span class="line">            proxy_next_upstream error timeout invalid_header http_500 http_502 http_503 http_504;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        location &#x3D; &#x2F;auth &#123;</span><br><span class="line">            proxy_pass http:&#x2F;&#x2F;auth_server:8080&#x2F;api&#x2F;hexo_permission;</span><br><span class="line">            proxy_pass_request_body off;</span><br><span class="line">            proxy_set_header Content-Length &quot;&quot;;</span><br><span class="line">            proxy_set_header X-Original-URI $request_uri;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">        #error_page  404              &#x2F;404.html;</span><br><span class="line"></span><br><span class="line">        # redirect server error pages to the static page &#x2F;50x.html</span><br><span class="line">        #</span><br><span class="line">        error_page   500 502 503 504  &#x2F;50x.html;</span><br><span class="line">        location &#x3D; &#x2F;50x.html &#123;</span><br><span class="line">            root   html;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E9%89%B4%E6%9D%83%E5%8F%8A%E8%BD%AC%E5%8F%91%E9%85%8D%E7%BD%AE/" data-id="ck96cxpp500fxmaamdk5a4jns" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/nginx/" rel="tag">nginx</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2019-02/nginx笔记-编译安装" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/02/28/2019-02/nginx%E7%AC%94%E8%AE%B0-%E7%BC%96%E8%AF%91%E5%AE%89%E8%A3%85/" class="article-date">
@@ -1058,120 +1131,6 @@
 
 
   
-    <article id="post-2019-02/高性能mysql-第十一章-笔记-可扩展" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/02/12/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql-%E7%AC%AC%E5%8D%81%E4%B8%80%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E5%8F%AF%E6%89%A9%E5%B1%95/" class="article-date">
-  <time datetime="2019-02-12T03:03:52.000Z" itemprop="datePublished">2019-02-12</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/mysql/">mysql</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/02/12/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql-%E7%AC%AC%E5%8D%81%E4%B8%80%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E5%8F%AF%E6%89%A9%E5%B1%95/">高性能mysql-第十一章-笔记-可扩展</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h2 id="可扩展"><a href="#可扩展" class="headerlink" title="可扩展"></a>可扩展</h2><ol>
-<li>数据量；</li>
-<li>用户量: 并发量。</li>
-<li>负载。</li>
-</ol>
-<h2 id="可扩展性的描述"><a href="#可扩展性的描述" class="headerlink" title="可扩展性的描述"></a>可扩展性的描述</h2><img src="/images/2019-02/usl_ext.png" class="" width="400" height="600" title="usl_ext">
-<ul>
-<li><p>线性扩展: 加1倍资源=&gt;加1倍性能。(理想最优情况，一般达不到)</p>
-</li>
-<li><p>Amdahl定律: </p>
-</li>
-</ul>
-<ol>
-<li>存在无法并发的工作;</li>
-<li>存在需要交互的工作;<br>因此吞吐量达不到线性增长，会趋于平缓。</li>
-</ol>
-<ul>
-<li>USL扩展:(通用可扩展定律)</li>
-</ul>
-<ol>
-<li>存在无法并发的工作;</li>
-<li>存在需要交互的工作;</li>
-<li>存在内部系统通信开销。</li>
-</ol>
-<p>从3种扩展性的描述看，我们的目标是趋近于线性扩展，因此应该尽量削减USL扩展中的三个方面: 减少串行、减少交互、减少内部通信。</p>
-<h2 id="垂直扩展-纵向扩展、向上扩展"><a href="#垂直扩展-纵向扩展、向上扩展" class="headerlink" title="垂直扩展(纵向扩展、向上扩展)"></a>垂直扩展(纵向扩展、向上扩展)</h2><p>升级硬件。价格更高，性能比低。<br>mysql利用极限:<br>CPU: 24<br>内存: 128<br>更多的时候提升趋于平缓。</p>
-<h2 id="向内扩展"><a href="#向内扩展" class="headerlink" title="向内扩展"></a>向内扩展</h2><p>优化查询、索引，压缩数据。</p>
-<h2 id="水平扩展-横向扩展，向外扩展"><a href="#水平扩展-横向扩展，向外扩展" class="headerlink" title="水平扩展(横向扩展，向外扩展)"></a>水平扩展(横向扩展，向外扩展)</h2><ol>
-<li>复制</li>
-<li>拆分</li>
-<li>分片(sharding)</li>
-</ol>
-<p>拆分: 按功能拆分（微服务），划分的表之间不会进行关联操作</p>
-<h3 id="数据分片-sharding"><a href="#数据分片-sharding" class="headerlink" title="数据分片(sharding)"></a>数据分片(sharding)</h3><p>用userid分片。<br>id+hash。</p>
-<img src="/images/2019-02/star_model.png" class="" width="400" height="600" title="star_model">
-<p>星形/雪花模型: 容易分片。<br>网状模型:      难以分片。 </p>
-<p>因此早期设计应该避免网状模型。</p>
-<p>分片方式:</p>
-<ol>
-<li>固定分配，硬编码; 缺点: 无法处理热点。优点: 简单。</li>
-<li>动态分配：缺点：实现复杂。</li>
-</ol>
-<p>热点解决方案：随机数+哈希；<br>扩展性： 预分配32个分片，用DNS单点，把4个库放在一个实例(IP)上。</p>
-<p>小猿(CP): 库名_32.表名; DNS作为单点。<br>网易(CP): 类似codis，引入中间件单点。</p>
-<h3 id="全局唯一ID"><a href="#全局唯一ID" class="headerlink" title="全局唯一ID"></a>全局唯一ID</h3><ol>
-<li>autoinc: 利用自增幅度和初始偏移;</li>
-<li>创建一个全局表，进行autoinc id分配;</li>
-<li>使用memcached/redis，生成全局自增id;(没有持久性)</li>
-</ol>
-<p>其中2，3可以批量生成一批，减少调用次数。</p>
-<h3 id="冷热数据分表"><a href="#冷热数据分表" class="headerlink" title="冷热数据分表"></a>冷热数据分表</h3><p>归档、冷数据分离到另一张表、或者将冷数据分离到较差的节点。</p>
-<h3 id="负载均衡的目的"><a href="#负载均衡的目的" class="headerlink" title="负载均衡的目的"></a>负载均衡的目的</h3><img src="/images/2019-02/balance.png" class="" width="400" height="600" title="balance">
-<ol>
-<li>可扩展性；（读写分离）</li>
-<li>高效性；</li>
-<li>可用性；</li>
-<li>透明性；</li>
-<li>一致性。</li>
-</ol>
-<h3 id="负载均衡算法"><a href="#负载均衡算法" class="headerlink" title="负载均衡算法"></a>负载均衡算法</h3><ol>
-<li>随机</li>
-<li>轮询</li>
-<li>最少连接数: 有缺点，新加入的机器还没有预热缓存，却立即分配了最多的连接；</li>
-<li>最快响应；</li>
-<li>哈希：通过源IP进行哈希（会话局部性）；</li>
-<li>权重：结合上述算法，根据底层机器的性能差异进行权重。</li>
-</ol>
-<p>具体采用哪个算法，取决于工作负载类型。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/02/12/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql-%E7%AC%AC%E5%8D%81%E4%B8%80%E7%AB%A0-%E7%AC%94%E8%AE%B0-%E5%8F%AF%E6%89%A9%E5%B1%95/" data-id="ck96cxppd00gvmaamfl3ydges" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1198,6 +1157,10 @@
       <ul>
         
           <li>
+            <a href="/2022/09/27/2022-09/sql%E6%B3%A8%E5%85%A5%E6%94%BB%E5%87%BB/">sql注入攻击</a>
+          </li>
+        
+          <li>
             <a href="/2022/09/26/2022-09/%E5%B7%B2%E7%9F%A5%E6%98%8E%E6%96%87%E7%A0%B4%E8%A7%A3zip/">已知明文破解zip</a>
           </li>
         
@@ -1211,10 +1174,6 @@
         
           <li>
             <a href="/2022/09/25/2022-09/%E8%B0%83%E4%BC%98-%E8%A7%A3%E5%86%B3%E7%BA%BF%E7%A8%8B%E6%B1%A0%E9%80%A0%E6%88%90%E7%9A%84%E8%BF%9B%E7%A8%8B%E5%8D%A1%E9%A1%BF%E3%80%81cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-解决线程池造成的进程卡顿、cpu毛刺问题</a>
-          </li>
-        
-          <li>
-            <a href="/2022/08/30/2022-08/%E8%B0%83%E4%BC%98-cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-cpu毛刺问题</a>
           </li>
         
       </ul>

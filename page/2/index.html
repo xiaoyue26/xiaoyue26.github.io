@@ -72,6 +72,71 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2022-03/mp4格式" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2022/03/13/2022-03/mp4%E6%A0%BC%E5%BC%8F/" class="article-date">
+  <time datetime="2022-03-13T09:45:02.000Z" itemprop="datePublished">2022-03-13</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E9%9F%B3%E8%A7%86%E9%A2%91/">音视频</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2022/03/13/2022-03/mp4%E6%A0%BC%E5%BC%8F/">mp4格式</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="WHAT-MP4"><a href="#WHAT-MP4" class="headerlink" title="WHAT: MP4"></a>WHAT: MP4</h1><p>一种封装格式(容器格式)，封装视频和音频、还有海报、字幕和元数据等；</p>
+<p>常见的封装格式: MKV,AVI,MP4</p>
+<p>MP4文件格式又被称为 MPEG-4 Part 14，出自 MPEG-4 标准第 14 部分。</p>
+<h1 id="MP4格式"><a href="#MP4格式" class="headerlink" title="MP4格式"></a>MP4格式</h1><p>协议分为两阶段:<br>(1)<code>MPEG-4 Part 12</code>: 定义ISO基础媒体文件格式，存储基于时间的媒体内容；<br>(2)<code>MPEG-4 Part 14</code>: 在<code>MPEG-4 Part 12</code>基础上拓展，实际定义了MP4；<br>实际格式:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[</span><br><span class="line">    Box</span><br><span class="line">    ,Box:[Box,Box:[Box]]</span><br><span class="line">]</span><br></pre></td></tr></table></figure>
+<p>多个box组成，box可嵌套；</p>
+<h2 id="Box"><a href="#Box" class="headerlink" title="Box"></a>Box</h2><p>不同的Box类型:<br>(1)<code>ftyp</code>: <code>File Type Box</code>; 描述MP4规范与版本；最好用什么版本来解析、兼容哪些版本的解析；<br>(2)<code>moov</code>: <code>Movie Box</code>; 媒体的<code>metadata</code>信息；1个；<br>    next_track_ID: 下一个轨道的id;(如果要新增)<br>    volume: 播放音量;<br>单轨属性:<br>    layer: 视频轨道的叠加顺序，数字越小越靠近观看者;<br>    alternate_group：track的分组ID，同个分组里的track，只能有一个track处于播放状态;<br>    width、height：视频的宽高<br>(3)<code>mdat</code>: Media Data Box；实际媒体数据；多个；<br>(4)…其他box类型；</p>
+<h3 id="moov"><a href="#moov" class="headerlink" title="moov"></a>moov</h3><p><code>ffmpeg</code>默认情况下生成<code>moov</code>是在<code>mdat</code>写完成之后再写入，所以moov是在mdat的后面，使用faststart参数可以将moov移到mdat前面。<br>(moov在前面的话，首帧渲染速度会更快一点)</p>
+<figure class="highlight shell"><figcaption><span>script</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ffmpeg -i out.flv -c copy -movflags faststart out2.mp4</span><br></pre></td></tr></table></figure>
+
+<h3 id="媒体数据结构划分"><a href="#媒体数据结构划分" class="headerlink" title="媒体数据结构划分"></a>媒体数据结构划分</h3><p>MP4媒体数据 -&gt; <code>chunk</code> -&gt; <code>sample</code> -&gt; 帧</p>
+<h5 id="H264编码中的帧"><a href="#H264编码中的帧" class="headerlink" title="H264编码中的帧:"></a>H264编码中的帧:</h5><p>I帧: 关键帧；存的是完整的JPEG数据；<br>P帧: 前向预测编码帧；存的是与之前帧的差别；（参考别的帧）<br>B帧: 双向预测内插编码帧；双向差别，存的是和前帧、后帧的差别；（所以压缩率比P帧高，cpu占用高）</p>
+<p>对于B帧，视频帧的解码顺序和渲染顺序不一致。（先解前后，才解中间；而渲染是顺序来的）</p>
+<p>// H.265是一种视频压缩标准，仅需H.264的一半带宽即可播放相同质量的视频。</p>
+<h5 id="H264流格式"><a href="#H264流格式" class="headerlink" title="H264流格式"></a>H264流格式</h5><p>1。<code>Annex-B</code><br>用<code>0x00000001</code>分割；<br>2。<code>RTP</code><br>长度+数据的格式；</p>
+<h1 id="fmp4"><a href="#fmp4" class="headerlink" title="fmp4"></a>fmp4</h1><p>mp4: 点播<br>fmp4: 直播</p>
+<p>时长: mp4固定,fmp4不固定（边生成边播）；<br>元数据: <code>mp4</code>-&gt;<code>moov box</code>;<br>       <code>fmp4</code>-&gt;<code>moof box</code>,和<code>mdat</code>通常结对出现；（流式）</p>
+<h1 id="mp4相关工具"><a href="#mp4相关工具" class="headerlink" title="mp4相关工具"></a>mp4相关工具</h1><p>在线解析mp4的工具: <a href="https://gpac.github.io/mp4box.js/test/filereader.html" target="_blank" rel="noopener">https://gpac.github.io/mp4box.js/test/filereader.html</a><br>mp4dump、mp4edit、mp4encrypt等工具: <a href="http://www.bento4.com/" target="_blank" rel="noopener">http://www.bento4.com/</a><br><a href="https://github.com/gpac/gpac/wiki/MP4Box" target="_blank" rel="noopener">https://github.com/gpac/gpac/wiki/MP4Box</a><br>gpac：开源的多媒体工具包，包括用于MP4打包的mp4box等。<a href="https://github.com/gpac/gpac" target="_blank" rel="noopener">https://github.com/gpac/gpac</a><br>mp4v2：提供了API来创建和修改mp4文件。<a href="https://code.google.com/archive/p/mp4v2/" target="_blank" rel="noopener">https://code.google.com/archive/p/mp4v2/</a></p>
+<h1 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h1><p><a href="https://segmentfault.com/a/1190000039270533" target="_blank" rel="noopener">https://segmentfault.com/a/1190000039270533</a></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2022/03/13/2022-03/mp4%E6%A0%BC%E5%BC%8F/" data-id="cl0p3ck6y00006xjk2nw2cuhy" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/h264/" rel="tag">h264</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mp4/" rel="tag">mp4</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E7%82%B9%E6%92%AD/" rel="tag">点播</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E7%9B%B4%E6%92%AD/" rel="tag">直播</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2022-03/ss命令" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2022/03/13/2022-03/ss%E5%91%BD%E4%BB%A4/" class="article-date">
@@ -711,63 +776,6 @@
 
 
   
-    <article id="post-2021-06/网络安全笔记-1" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2021/06/01/2021-06/%E7%BD%91%E7%BB%9C%E5%AE%89%E5%85%A8%E7%AC%94%E8%AE%B0-1/" class="article-date">
-  <time datetime="2021-06-01T03:29:57.000Z" itemprop="datePublished">2021-06-01</time>
-</a>
-    
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2021/06/01/2021-06/%E7%BD%91%E7%BB%9C%E5%AE%89%E5%85%A8%E7%AC%94%E8%AE%B0-1/">网络安全笔记-1</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="黑客一般如何行动"><a href="#黑客一般如何行动" class="headerlink" title="黑客一般如何行动"></a>黑客一般如何行动</h1><p>知己知彼百战百胜，正如我们安全人员试图了解黑客，黑客也试图了解我们安全人员是如何防守的。<br>所以大方向上，黑客一般是先观察再行动、整个过程中隐藏自己（确保了解了对方，但不被对方了解）。细化以后就是：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">1.踩点(Footprinting): 确定目标地址范围、查询名字空间，收集所有细节</span><br><span class="line">2.扫描(Scaning): 评估目标、识别监听服务，集中于最有希望攻克的</span><br><span class="line">3.查点(Enumeration): 识别合法用户账号、保护力度不够的共享资源</span><br><span class="line">4.访问(Gaining Access): 发送木马或链接</span><br><span class="line">5.提权(Escalating Privilege): 从普通用户提到特权用户(比如ROOT)</span><br><span class="line">6.窃取(Pilfering): 数据和文件，收集入侵机制和途径；</span><br><span class="line">7.灭迹(Covering tracks): 掩盖来访痕迹;(显然这个是最重要的，别的失败了都没关系)</span><br><span class="line">8.创建后门(create backdoor): 为下次入侵准备便利</span><br></pre></td></tr></table></figure>
-<p>其中步骤6窃取了其他账号的话，可以跳到步骤4重新访问，从而以更高权限用户进行后续步骤。</p>
-<p>此外还有一招就是拒绝服务(DDOS),步骤4访问失败的话可能会采用。（强行让目标系统无法正常提供服务）</p>
-<h1 id="上述步骤的具体技术手段实现"><a href="#上述步骤的具体技术手段实现" class="headerlink" title="上述步骤的具体技术手段实现"></a>上述步骤的具体技术手段实现</h1><h2 id="1-踩点"><a href="#1-踩点" class="headerlink" title="1. 踩点"></a>1. 踩点</h2><p>打开源查询: Usenet,搜索引擎,Edgar,GooScan,FingerGoogle<br>whois: dig,nslookup ls -d,Sam spade,dnsmap<br>whois的web接口: <a href="http://www.networksolutions.com/whois" target="_blank" rel="noopener">www.networksolutions.com/whois</a><br>ARIN whois: <a href="http://www.arin.net/whois" target="_blank" rel="noopener">www.arin.net/whois</a></p>
-<p>其他思路扩展：<br>1.谷歌搜索返回值为”it worked!”的网站，就能找到初始配置apache的服务；<br>// intitle:Test.Page.for.Apache “it worked!” “this Web site!”<br>2.从目标公司的招聘要求（比如5年xxx防火墙经验，使用过xxx安全系统）就能猜到目标公司的现有安全软件是什么(甚至是几年前的版本)；<br>3.从地理位置，翻垃圾桶；<br>4.从有目标公司工作经历的简历库，能收集相应信息；</p>
-<p>如何防范踩点：<br>可以参考RFC2196(公众信息安全对策)</p>
-<h1 id="2-扫描"><a href="#2-扫描" class="headerlink" title="2.扫描"></a>2.扫描</h1><p>Ping系列工具：fping,hping,nmap<br>TCP/UDP端口扫描: SuperScan,AutoScan,Scanline<br>OS检测: nmap,amap,SinFP,xprobe2</p>
-<h1 id="3-查点-Enumeration"><a href="#3-查点-Enumeration" class="headerlink" title="3.查点(Enumeration)"></a>3.查点(Enumeration)</h1><p>列出用户账号：空会话、DumpSec,PSTools<br>列出共享文件: showmount,SMB-NAT,nmbscan<br>识别应用程序: telnet/netcat抓取旗标<br>SNMP: rpcinfo,amap,nmap,Cisco Torch</p>
-<h1 id="4-访问"><a href="#4-访问" class="headerlink" title="4.访问"></a>4.访问</h1><p>密码嗅探: airsnarf,dsniff,Cain and Abel,phoss<br>蛮力攻击: hydra,medusa<br>渗透工具: SIPcrack, Metasploit Framework,Canvas</p>
-<h1 id="5-提权"><a href="#5-提权" class="headerlink" title="5.提权"></a>5.提权</h1><p>破解密码: John The Ripper,L0phtcrack,rcr<br>利用漏洞: Metasploit Framework</p>
-<h1 id="6-窃取"><a href="#6-窃取" class="headerlink" title="6.窃取"></a>6.窃取</h1><p>评估可信系统: rhots,LAS Secrets<br>搜索明文密码: 用户数据,配置文件,WINDOWS R</p>
-<h1 id="7-灭迹"><a href="#7-灭迹" class="headerlink" title="7.灭迹"></a>7.灭迹</h1><p>清除日志记录: logclean-ng,wtmpclean<br>掩藏工具: rootkits,文件流</p>
-<h1 id="8-创建后门"><a href="#8-创建后门" class="headerlink" title="8.创建后门"></a>8.创建后门</h1><p>创建流氓用户账号: members of wheel,Administrators<br>安排批处理作业: cron, AT<br>感染启动文件: rc,启动文件夹，注册表键<br>植入远程控制服务: netcat, psexec, VNC<br>安装监控机制: 键击记录器<br>用木马替换真实应用: login, fpnwclnt.dll,patched SSH version</p>
-<h1 id="9-DDOS"><a href="#9-DDOS" class="headerlink" title="9. DDOS"></a>9. DDOS</h1><p>Syn泛洪: synk4<br>ICMP技术: ping of death, smurf, ICMP nuke<br>Overlapping fragment/offset bugs: teardrop,bonk,newtear<br>Out of bounds TCP options: supernuke.ext<br>(OOB)DDOS: trincoo/TFN/stacheldraht</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2021/06/01/2021-06/%E7%BD%91%E7%BB%9C%E5%AE%89%E5%85%A8%E7%AC%94%E8%AE%B0-1/" data-id="ckpdhht4e0000tnam77yth2yk" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%AE%89%E5%85%A8/" rel="tag">安全</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -794,6 +802,10 @@
       <ul>
         
           <li>
+            <a href="/2022/09/27/2022-09/sql%E6%B3%A8%E5%85%A5%E6%94%BB%E5%87%BB/">sql注入攻击</a>
+          </li>
+        
+          <li>
             <a href="/2022/09/26/2022-09/%E5%B7%B2%E7%9F%A5%E6%98%8E%E6%96%87%E7%A0%B4%E8%A7%A3zip/">已知明文破解zip</a>
           </li>
         
@@ -807,10 +819,6 @@
         
           <li>
             <a href="/2022/09/25/2022-09/%E8%B0%83%E4%BC%98-%E8%A7%A3%E5%86%B3%E7%BA%BF%E7%A8%8B%E6%B1%A0%E9%80%A0%E6%88%90%E7%9A%84%E8%BF%9B%E7%A8%8B%E5%8D%A1%E9%A1%BF%E3%80%81cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-解决线程池造成的进程卡顿、cpu毛刺问题</a>
-          </li>
-        
-          <li>
-            <a href="/2022/08/30/2022-08/%E8%B0%83%E4%BC%98-cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-cpu毛刺问题</a>
           </li>
         
       </ul>

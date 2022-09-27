@@ -72,6 +72,259 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-02/java并发编程的艺术-第四章" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/02/03/2018-02/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC%E5%9B%9B%E7%AB%A0/" class="article-date">
+  <time datetime="2018-02-03T13:55:23.000Z" itemprop="datePublished">2018-02-03</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/02/03/2018-02/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC%E5%9B%9B%E7%AB%A0/">java并发编程的艺术-第四章</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="第四章-JAVA并发编程基础"><a href="#第四章-JAVA并发编程基础" class="headerlink" title="第四章 JAVA并发编程基础"></a>第四章 JAVA并发编程基础</h1><h2 id="4-1-线程简介"><a href="#4-1-线程简介" class="headerlink" title="4.1 线程简介"></a>4.1 线程简介</h2><p>线程(轻量级进程): 现代操作系统调度的最小单位.<br>线程共享的存储: 堆<br>线程独占的存储: 栈(局部变量,方法参数),PC,堆的<code>ThreadLocal</code>区</p>
+<p>JAVA程序天生多线程: 执行<code>main</code>方法的是一个名字为<code>main</code>的线程.<br>天生的线程:</p>
+<ol>
+<li><code>Signal Dispatcher</code>: 分发处理发送给JVM信号的线程;</li>
+<li><code>Finalizer</code>: 调用对象<code>finallize</code>方法的线程;</li>
+<li><code>Reference Handler</code>: 清除<code>Reference</code>的线程;</li>
+<li><code>main</code>: <code>main</code>线程,用户程序入口.</li>
+</ol>
+<p>要查看上述线程,可以用JMX打印出来:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">ThreadMXBean threadMXBean = ManagementFactory.getThreadMXBean();</span><br><span class="line">ThreadInfo[] threadInfos = threadMXBean.dumpAllThreads(<span class="keyword">false</span>, <span class="keyword">false</span>);</span><br><span class="line"><span class="keyword">for</span> (ThreadInfo ti : threadInfos) &#123;</span><br><span class="line">    System.out.println(ti.getThreadId()+<span class="string">":"</span>+ti.getThreadName());</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment">5:Monitor Ctrl-Break</span></span><br><span class="line"><span class="comment">4:Signal Dispatcher</span></span><br><span class="line"><span class="comment">3:Finalizer</span></span><br><span class="line"><span class="comment">2:Reference Handler</span></span><br><span class="line"><span class="comment">1:main</span></span><br><span class="line"><span class="comment">*/</span></span><br></pre></td></tr></table></figure>
+
+<p>如果懒得写上述代码,也可以使用IDE的debug功能,例如在<code>Intellij idea</code>中打个断点,就直接可以在<code>debug</code>标签页看到1-4号线程的栈帧了.(5号看不见,原因未知.TODO)</p>
+<img src="/images/ide-thread.png" class="" width="400" height="600" title="ide-thread">
+
+<h3 id="4-1-3-线程优先级-很可能被操作系统忽略"><a href="#4-1-3-线程优先级-很可能被操作系统忽略" class="headerlink" title="4.1.3 线程优先级(很可能被操作系统忽略)"></a>4.1.3 线程优先级(很可能被操作系统忽略)</h3><p>线程优先级: 整型变量<code>priority</code><br>优先级范围: 1~10<br>默认优先级: 5<br>设定策略:</p>
+<ol>
+<li>cpu密集线程=&gt;设定较低优先级;(需要cpu时间长,防止它独占太久)</li>
+<li>io密集线程=&gt;设定较高优先级(相当于cpu占用时间不长的线程,反而可以优先给它,一种短作业优先的逻辑).<br>// 短作业优先可能导致长作业饿死,因此上述策略下,如果IO密集线程特别多,就不好了.</li>
+</ol>
+<h3 id="4-1-4-线程的状态"><a href="#4-1-4-线程的状态" class="headerlink" title="4.1.4 线程的状态"></a>4.1.4 线程的状态</h3><ul>
+<li><code>Runnable</code><br>Java把操作系统中的<code>就绪</code>和<code>运行中</code>统称为<code>Runnable</code>.</li>
+</ul>
+<p>线程状态转化大致如下:</p>
+<ol>
+<li><code>New</code>=&gt;<code>Runnable</code>=&gt;<code>Terminated</code> // 理想状态</li>
+<li><code>Runnable</code> =&gt; <code>Blocked</code>/<code>Waiting</code>/<code>Time_Waited</code>=&gt;<code>Runnable</code> // 可能误入的歧途</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>状态</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>New</td>
+<td>创建线程后,调用<code>start()</code>前.</td>
+</tr>
+<tr>
+<td>Runnable</td>
+<td>就绪和运行中.</td>
+</tr>
+<tr>
+<td>Terminated</td>
+<td>终止. 执行完毕</td>
+</tr>
+<tr>
+<td>Blocked</td>
+<td>阻塞.  阻塞于锁. (<code>synchronized</code>)</td>
+</tr>
+<tr>
+<td>Waiting</td>
+<td>等待.  等待其他线程的中断或者通知.(<code>Lock</code>类)</td>
+</tr>
+<tr>
+<td>Time_Waiting</td>
+<td>超时等待. 比Waiting多一个超时返回功能.(<code>Lock</code>类)</td>
+</tr>
+</tbody></table>
+<p><strong>查看某个java程序目前各线程状态:</strong></p>
+<ol>
+<li>先用jps查看该进程的进程id;</li>
+<li>运行命令jstack <id>即可.</li>
+</ol>
+<p>或者用<code>kill -3 &lt;id&gt;</code>命令让进程把<code>threadDump</code>信息输出到标准输出.(可以之前让进程把标准输出重定向到日志文件中)<br>或者用IDE的<code>threadDump</code>按钮也可以. </p>
+<h3 id="Runnable与其他状态的转化"><a href="#Runnable与其他状态的转化" class="headerlink" title="Runnable与其他状态的转化"></a>Runnable与其他状态的转化</h3><p><strong>1.Waiting</strong><br><code>Runnable</code>=&gt;<code>Waiting</code>: // 主动等待某个对象</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">obj.wait()</span><br><span class="line">obj.join()</span><br><span class="line">LockSupport.park()</span><br></pre></td></tr></table></figure>
+
+<p><code>Waiting</code>=&gt;<code>Runnable</code>: // 被别人中断或通知</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">obj.notify() <span class="comment">// 必须在wait之后调用才有效</span></span><br><span class="line">obj.notifyAll()</span><br><span class="line">LockSupport.unpark(Thread) <span class="comment">// 在park之前调用也有效.(会累计1个,但不会累计2个)</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>2.Time_Waiting</strong><br><code>Runnable</code>=&gt;<code>Time_Waiting</code>: // 基本就是比Waiting多个时长</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">obj.wait(<span class="keyword">long</span>)</span><br><span class="line">Thread.join(<span class="keyword">long</span>)</span><br><span class="line">LockSupport.parkNanos(<span class="keyword">long</span>)</span><br><span class="line">LockSupport.parkUntil(<span class="keyword">long</span>)</span><br><span class="line">Thread.sleep(<span class="keyword">long</span>)</span><br></pre></td></tr></table></figure>
+
+<p><code>Time_Waiting</code>=&gt;<code>Runnable</code>: // 与Waiting完全一样</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">obj.notify()</span><br><span class="line">obj.notifyAll()</span><br><span class="line">LockSupport.unpark(Thread)</span><br></pre></td></tr></table></figure>
+
+<p><strong>3.Blocked</strong><br><code>Runnable</code>=&gt;<code>Blocked</code>:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">synchronized</span>(xx)<span class="comment">// 没获取到锁</span></span><br></pre></td></tr></table></figure>
+<p><code>Runnable</code>=&gt;<code>Blocked</code>:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">synchronized</span>(xx)<span class="comment">// 获取到了锁</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="4-1-4-Daemon线程"><a href="#4-1-4-Daemon线程" class="headerlink" title="4.1.4 Daemon线程"></a>4.1.4 Daemon线程</h3><p>守护线程,用作后台调度以及支持性工作.<br>换句话说,是为普通线程服务的,如果普通线程不存在了(运行结束了),<code>Daemon</code>线程也就没有存在的意义了,因此会被立即终止.</p>
+<blockquote>
+<p>立即终止发生得非常突然,以至于Daemon线程的<code>finally</code>方法都可能来不及执行.</p>
+</blockquote>
+<p>设定线程为<code>Daemon</code>的方法:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">thread.setDaemon(<span class="keyword">true</span>);</span><br></pre></td></tr></table></figure>
+
+
+<h2 id="4-2-启动和终止线程"><a href="#4-2-启动和终止线程" class="headerlink" title="4.2 启动和终止线程"></a>4.2 启动和终止线程</h2><h3 id="4-2-1-构造线程"><a href="#4-2-1-构造线程" class="headerlink" title="4.2.1 构造线程"></a>4.2.1 构造线程</h3><p>线程的构造内容包括:</p>
+<ol>
+<li>父线程; (创建它的线程) // 下面的属性默认值均与父线程一致: </li>
+<li>线程组;</li>
+<li>是否守护线程;</li>
+<li>名字;</li>
+<li>ThreadLocal内容. (复制一份父线程的可继承部分)</li>
+</ol>
+<p>构造完成后,在堆内存中等待运行.</p>
+<h3 id="4-2-2-启动线程"><a href="#4-2-2-启动线程" class="headerlink" title="4.2.2 启动线程"></a>4.2.2 启动线程</h3><ul>
+<li>start方法的含义:<br>当前线程(父线程)同步通知JVM虚拟机,在线程规划期空闲时,启动线程.</li>
+</ul>
+<h3 id="4-2-3-中断"><a href="#4-2-3-中断" class="headerlink" title="4.2.3 中断"></a>4.2.3 中断</h3><p>每个线程的中断标识位:</p>
+<ul>
+<li><code>true</code>: 被中断. (收到了中断信号) </li>
+<li><code>false</code>(初始值): 没中断,或已经运行结束.</li>
+</ul>
+<p>容易混淆的几个方法:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">obj.interrupt();<span class="comment">// 中断某线程.把它的中断标志改为`true`.</span></span><br><span class="line">obj.isInterrupted(); <span class="comment">// 查询是否中断</span></span><br><span class="line">Thread.interrupted();<span class="comment">// 把当前线程的中断标志重置为`false`.</span></span><br></pre></td></tr></table></figure>
+
+<p>除了<code>Thread.interrupted()</code>,还有一些方法抛出<code>interruptedException</code>前也会清除中断标志(置为<code>false</code>),以表示自己已经处理了这个中断.(如<code>sleep</code>方法.)</p>
+<h3 id="4-2-4-废弃方法-suspend-resume-stop"><a href="#4-2-4-废弃方法-suspend-resume-stop" class="headerlink" title="4.2.4 废弃方法: suspend(),resume(),stop()"></a>4.2.4 废弃方法: suspend(),resume(),stop()</h3><ul>
+<li>suspend(): 挂起(暂停), 不释放锁.</li>
+<li>resume(): 恢复(继续)</li>
+<li>stop(): 停止,太突然,可能没释放资源.</li>
+</ul>
+<h3 id="4-2-5-安全的终止-暂停的方法"><a href="#4-2-5-安全的终止-暂停的方法" class="headerlink" title="4.2.5 安全的终止/暂停的方法"></a>4.2.5 安全的终止/暂停的方法</h3><p>使用中断.<br>例如:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">TestCancel2</span> </span>&#123;</span><br><span class="line">    <span class="class"><span class="keyword">class</span> <span class="title">PrimeProducer</span> <span class="keyword">extends</span> <span class="title">Thread</span> </span>&#123;</span><br><span class="line">        <span class="keyword">private</span> <span class="keyword">final</span> BlockingQueue&lt;BigInteger&gt; queue;</span><br><span class="line"></span><br><span class="line">        PrimeProducer(BlockingQueue&lt;BigInteger&gt; queue) &#123;</span><br><span class="line">            <span class="keyword">this</span>.queue = queue;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                BigInteger p = BigInteger.ONE;</span><br><span class="line">                <span class="keyword">while</span> (!Thread.currentThread().isInterrupted()) &#123;<span class="comment">// 检查是否中断.</span></span><br><span class="line">                    queue.put(p = p.nextProbablePrime());</span><br><span class="line">                &#125;</span><br><span class="line">            &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                e.printStackTrace();</span><br><span class="line">                <span class="comment">/*</span></span><br><span class="line"><span class="comment">                 * 一般处理策略:</span></span><br><span class="line"><span class="comment">                 * 1. 捕获;</span></span><br><span class="line"><span class="comment">                 * 2. do 自定义存盘工作;</span></span><br><span class="line"><span class="comment">                 * 3. 接着往外抛,提醒调用者.</span></span><br><span class="line"><span class="comment">                 * ( Thread.currentThread().interrupt();</span></span><br><span class="line"><span class="comment">                 * )</span></span><br><span class="line"><span class="comment">                 *</span></span><br><span class="line"><span class="comment">                 * 本代码中由于不需要提醒调用者,因此没有接着往外抛.</span></span><br><span class="line"><span class="comment">                * */</span></span><br><span class="line">            &#125;</span><br><span class="line"></span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">cancel</span><span class="params">()</span> </span>&#123;</span><br><span class="line">            interrupt();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这部分在&lt;并发编程实战&gt;第七章有详细讨论.<br>根据具体情况的不同,有多种解决方案.</p>
+<ol>
+<li>简单情况: 直接轮询标志位;</li>
+<li>while中操作可能阻塞: (1)检查while中每一行;(2)while中只提交任务,起另外的线程执行任务;</li>
+<li>能中断但不能取消的任务: 保持中断状态,直到收到继续信号;</li>
+<li>其他….<br>详见:<br><a href="https://github.com/xiaoyue26/scala-gradle-demo/tree/master/src/main/java/practice/chapter7" target="_blank" rel="noopener">https://github.com/xiaoyue26/scala-gradle-demo/tree/master/src/main/java/practice/chapter7</a></li>
+</ol>
+<h2 id="4-3-线程间通信"><a href="#4-3-线程间通信" class="headerlink" title="4.3 线程间通信"></a>4.3 线程间通信</h2><h3 id="4-3-1-使用volatile和synchronized"><a href="#4-3-1-使用volatile和synchronized" class="headerlink" title="4.3.1 使用volatile和synchronized"></a>4.3.1 使用volatile和synchronized</h3><p>首先，本质上是使用共享内存进行通信，同步则是使用<code>volatile</code>附带的内存屏障和<code>sychronized</code>带来的内置锁。（排他锁）<br>下面分别介绍<code>volatile</code>和<code>synchronized</code>：</p>
+<h3 id="volatile"><a href="#volatile" class="headerlink" title="volatile"></a>volatile</h3><p><code>volatile</code>主要作用就是让写入能够尽快从cpu缓存刷新到内存；<br>而读则尽量读内存。（最新数据）</p>
+<p>应用场景：<br>一个线程写，其他线程只读的场景。</p>
+<p>出错场景：（这种场景应改用<code>AtomicInteger</code>等原子类）<br>多个线程写：</p>
+<ol>
+<li>线程A进行自增操作，从1增加到2；</li>
+<li>线程B进行自增操作，从1增加到2；</li>
+<li>A,B分别先读后写，最后都写入2，因此出错。（还有其他次序及结果）</li>
+</ol>
+<p>底层内存屏障：</p>
+<ol>
+<li>volatile写：<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">StoreStore屏障</span><br><span class="line">volatile写</span><br><span class="line">StoreLoad屏障</span><br></pre></td></tr></table></figure></li>
+<li>volatile读：<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">volatile读</span><br><span class="line">LoadLoad屏障</span><br><span class="line">LoadStore屏障</span><br></pre></td></tr></table></figure>
+
+</li>
+</ol>
+<p>用<code>volatile</code>模拟锁,辅助线程同步(通信)：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">volatile</span> <span class="keyword">boolean</span> flag=<span class="keyword">false</span>;</span><br><span class="line"><span class="comment">//线程A:</span></span><br><span class="line">a=<span class="number">10</span>;</span><br><span class="line">flag=<span class="keyword">true</span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">//线程B:</span></span><br><span class="line"><span class="keyword">int</span> i;</span><br><span class="line"><span class="keyword">while</span>(<span class="keyword">true</span>)&#123;</span><br><span class="line"><span class="keyword">if</span>(flag)&#123;</span><br><span class="line">i=a;<span class="comment">// 保证获取到了A里的10</span></span><br><span class="line"><span class="keyword">break</span>;</span><br><span class="line">&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>还有其他库里的同步类，原子类也是在<code>volatile</code>的基础上，加上CAS操作实现的。</p>
+<h3 id="Synchronized"><a href="#Synchronized" class="headerlink" title="Synchronized"></a>Synchronized</h3><p><code>synchronized</code>用于线程同步时，使用的是对象的内置锁。</p>
+<ol>
+<li>Java代码层面： <code>synchronized</code></li>
+<li>class字节码层面： <code>monitorenter</code>,<code>monitorexit</code>,<code>ACC_SYNCHRONIZED</code>指令</li>
+<li>执行层面：多个线程竞争某个对象的内置锁，这个内置锁是排他的，一次只有一个线程能够成功获得内置锁。<br>线程获取内置锁有成功失败两种情况:<br>（1） Thread==<code>Monitor enter</code>=&gt;失败=&gt;进入同步队列(<code>Blocked</code>状态);<br>（2）Thread==<code>Monitor enter</code>=&gt;成功=&gt;结束后释放锁,唤醒同步队列的线程.</li>
+</ol>
+<p>相关字节码实验：</p>
+<ol>
+<li><p>源代码：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">SynchronizedTest</span></span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[]args)</span></span>&#123;</span><br><span class="line">        <span class="keyword">synchronized</span>(SynchronizedTest<span class="class">.<span class="keyword">class</span>)</span>&#123;</span><br><span class="line">            <span class="comment">// do something</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">synchronized</span> <span class="keyword">void</span> <span class="title">m</span><span class="params">()</span></span>&#123;</span><br><span class="line">            <span class="comment">// do something</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p><strong>反编译class文件</strong></p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">javap -v &lt;xxx.class&gt;</span><br></pre></td></tr></table></figure>
+<p>结果大致如下:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 省略几行</span></span><br><span class="line">Constant pool:</span><br><span class="line">   <span class="comment">// 省略此处的#1~#27常量.(包括符号引用)</span></span><br><span class="line">&#123;</span><br><span class="line"> <span class="comment">// 省略一些</span></span><br><span class="line">  <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(java.lang.String[])</span></span>;</span><br><span class="line">    descriptor: ([Ljava/lang/String;)V</span><br><span class="line">    flags: ACC_PUBLIC, ACC_STATIC <span class="comment">// 访问修饰符</span></span><br><span class="line">    Code:</span><br><span class="line">      stack=<span class="number">2</span>, locals=<span class="number">3</span>, args_size=<span class="number">1</span></span><br><span class="line">         0: ldc           #2// class practice/art/chapter4/SynchronizedTest</span><br><span class="line">         <span class="number">2</span>: dup</span><br><span class="line">         <span class="number">3</span>: astore_1</span><br><span class="line">         <span class="number">4</span>: monitorenter <span class="comment">// 获取锁</span></span><br><span class="line">         <span class="number">5</span>: aload_1</span><br><span class="line">         <span class="number">6</span>: monitorexit  <span class="comment">// 释放锁</span></span><br><span class="line">         <span class="number">7</span>: goto          <span class="number">15</span></span><br><span class="line">        <span class="number">10</span>: astore_2</span><br><span class="line">        <span class="number">11</span>: aload_1</span><br><span class="line">        <span class="number">12</span>: monitorexit</span><br><span class="line">        <span class="number">13</span>: aload_2</span><br><span class="line">        <span class="number">14</span>: athrow</span><br><span class="line">        15: invokestatic  #3                  // Method m:()V</span><br><span class="line">        <span class="number">18</span>: <span class="keyword">return</span></span><br><span class="line">      <span class="comment">// 省略很多</span></span><br><span class="line">  <span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">synchronized</span> <span class="keyword">void</span> <span class="title">m</span><span class="params">()</span></span>;</span><br><span class="line">    descriptor: ()V</span><br><span class="line">    flags: ACC_PUBLIC, ACC_STATIC, ACC_SYNCHRONIZED         </span><br><span class="line">                     <span class="comment">//注意这里的ACC_SYNCHRONIZED</span></span><br><span class="line">    Code:</span><br><span class="line">      stack=<span class="number">0</span>, locals=<span class="number">0</span>, args_size=<span class="number">0</span></span><br><span class="line">         <span class="number">0</span>: <span class="keyword">return</span></span><br><span class="line">      LineNumberTable:</span><br><span class="line">        line <span class="number">16</span>: <span class="number">0</span></span><br><span class="line">&#125;</span><br><span class="line">SourceFile: <span class="string">"SynchronizedTest.java"</span></span><br></pre></td></tr></table></figure>
+
+</li>
+</ol>
+<h3 id="4-3-2-等待-通知机制"><a href="#4-3-2-等待-通知机制" class="headerlink" title="4.3.2 等待/通知机制"></a>4.3.2 等待/通知机制</h3><p>相关Java方法：</p>
+<table>
+<thead>
+<tr>
+<th align="center">方法</th>
+<th align="left">描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">obj.wait()</td>
+<td align="left">在某个对象上等待</td>
+</tr>
+<tr>
+<td align="center">obj.notify()</td>
+<td align="left">通知1个在该对象上等待的线程，使其从wait()方法返回。</td>
+</tr>
+<tr>
+<td align="center">obj.notifyAll()</td>
+<td align="left">通知所有在该对象上等待的线程。</td>
+</tr>
+</tbody></table>
+<p>示例代码:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">static</span> Object obj=<span class="keyword">new</span> Object();</span><br><span class="line"><span class="comment">// A:</span></span><br><span class="line"><span class="keyword">synchronized</span>(obj)&#123;</span><br><span class="line">    obj.wait();</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// B:</span></span><br><span class="line"><span class="keyword">synchronized</span>(obj)&#123;</span><br><span class="line">    obj.notify();</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// 注意A得先启动，不然B发送的通知A可能收不到，就永远没人唤醒A了。</span></span><br><span class="line"><span class="comment">// 使用park,unpark可以避免这种情况。</span></span><br></pre></td></tr></table></figure>
+
+
+<h3 id="4-3-4-管道输入-输出流"><a href="#4-3-4-管道输入-输出流" class="headerlink" title="4.3.4 管道输入/输出流"></a>4.3.4 管道输入/输出流</h3><p>依然是使用共享内存进行通信的一种方法。具体实现有2种：</p>
+<ol>
+<li>面向字节：<code>PipedOutputStream</code>/<code>PipedInputStream</code>；</li>
+<li>面向字符：<code>PipedReader</code>/<code>PipedWriter</code>。</li>
+</ol>
+<p>示例代码：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">PipedWriter out=<span class="keyword">new</span> PipedWriter();</span><br><span class="line">PipedReader in=<span class="keyword">new</span> PipedReader();</span><br><span class="line">out.connect(in);<span class="comment">// 注意这里，需要连接，否则出错</span></span><br><span class="line"><span class="comment">// 写：</span></span><br><span class="line">out.write(xxx);</span><br><span class="line"><span class="comment">// 读：</span></span><br><span class="line"><span class="keyword">while</span>(receive=in.read()!=-<span class="number">1</span>)&#123;</span><br><span class="line">    System.out.print((<span class="keyword">char</span>)receive);</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// 事后XD：</span></span><br><span class="line"><span class="keyword">finally</span>&#123;</span><br><span class="line">    out.close();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="threadA-join-用于线程同步"><a href="#threadA-join-用于线程同步" class="headerlink" title="threadA.join()用于线程同步"></a>threadA.join()用于线程同步</h3><p>假如threadB中调用<code>threadA.join()</code>，意思就是等待<code>threadA</code>线程对象退出。<br>本质上<code>join</code>是一个<code>sychronized</code>方法，调用了线程对象的<code>wait</code>方法：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">final</span> <span class="keyword">synchronized</span> <span class="keyword">void</span> <span class="title">join</span><span class="params">(<span class="keyword">long</span> millis)</span></span></span><br><span class="line"><span class="function">    <span class="keyword">throws</span> InterruptedException </span>&#123;</span><br><span class="line">        <span class="keyword">long</span> base = System.currentTimeMillis();</span><br><span class="line">        <span class="keyword">long</span> now = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (millis &lt; <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> IllegalArgumentException(<span class="string">"timeout value is negative"</span>);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (millis == <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="keyword">while</span> (isAlive()) &#123;</span><br><span class="line">                wait(<span class="number">0</span>);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="keyword">while</span> (isAlive()) &#123;</span><br><span class="line">                <span class="keyword">long</span> delay = millis - now;</span><br><span class="line">                <span class="keyword">if</span> (delay &lt;= <span class="number">0</span>) &#123;</span><br><span class="line">                    <span class="keyword">break</span>;</span><br><span class="line">                &#125;</span><br><span class="line">                wait(delay);</span><br><span class="line">                now = System.currentTimeMillis() - base;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+<p>因此<code>join</code>方法的特性大致与<code>wait</code>方法相同：线程状态变成<code>waiting</code>,能接受中断(IDE会提示受检异常)，接受<code>notify</code>，等待时会释放锁。<br>而<code>threadA</code>线程对象退出的时候，会调用<code>notifyAll</code>方法，通知所有等待它退出的线程。</p>
+<h2 id="4-4-线程应用实例"><a href="#4-4-线程应用实例" class="headerlink" title="4.4 线程应用实例"></a>4.4 线程应用实例</h2><p>这节主要写了一个简单的线程池构造、使用示例，Web服务器示例。<br>实现中：</p>
+<ol>
+<li>线程通信使用了原子变量<code>AtomicInteger</code>进行数据记录，记录多个线程成功及失败的线程数；</li>
+<li>连接池的线程安全委托给了<code>LinkedList</code>，但是用<code>Collections.synchronizedList</code>包装了一下；另一个地方的实现则是用<code>synchronized</code>对所有相关容器的访问进行保护；</li>
+<li>实验相关的代码，为了加大线程的冲突，用<code>countDownLatch</code>同步了线程的启动和结束；</li>
+<li>使用了wait/notify机制，尽量使用了<code>notify</code>而不是<code>notifyAll</code>，避免唤醒太多；(感觉可以考虑使用<code>unpark</code>)</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/02/03/2018-02/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC%E5%9B%9B%E7%AB%A0/" data-id="ck96cxpnx00asmaamhdbc1vjt" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-01/awk笔记" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/01/28/2018-01/awk%E7%AC%94%E8%AE%B0/" class="article-date">
@@ -1499,87 +1752,6 @@
 
 
   
-    <article id="post-2018-01/谷歌的一致性哈希算法" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/01/13/2018-01/%E8%B0%B7%E6%AD%8C%E7%9A%84%E4%B8%80%E8%87%B4%E6%80%A7%E5%93%88%E5%B8%8C%E7%AE%97%E6%B3%95/" class="article-date">
-  <time datetime="2018-01-13T03:18:36.000Z" itemprop="datePublished">2018-01-13</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/">数据结构与算法</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/01/13/2018-01/%E8%B0%B7%E6%AD%8C%E7%9A%84%E4%B8%80%E8%87%B4%E6%80%A7%E5%93%88%E5%B8%8C%E7%AE%97%E6%B3%95/">谷歌的一致性哈希算法</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="jump-consistent-hash"><a href="#jump-consistent-hash" class="headerlink" title="jump consistent hash"></a>jump consistent hash</h1><p><code>jump consistent hash</code>是谷歌发表的一种一致性哈希算法.<br>空间复杂度: O(1);<br>时间复杂度: O(lgn).</p>
-<h2 id="设计目标："><a href="#设计目标：" class="headerlink" title="设计目标："></a>设计目标：</h2><p>1.平衡性，把对象均匀地分布在所有桶中。(这个大部分哈希算法都能做到)<br>2.单调性，当桶的数量变化时，只需要把最少量的对象从旧桶移动到新桶，不需要做更多移动。比如原来是10个桶,增加了10个桶,只需要移动一半的对象就好了.<br>(更改算法的输入参数n,会有一半的对象依然映射到原来的桶里,有一半的对象映射到新的桶里.)</p>
-<h2 id="问题分析"><a href="#问题分析" class="headerlink" title="问题分析"></a>问题分析</h2><p>记 <code>ch(key,num_buckets)</code> 为桶数量为<code>num_buckets</code>时的<code>hash</code>函数,返回分配的桶下标。</p>
-<ul>
-<li><p>num_buckets=1时:<br>由于只有1个桶，显而易见，对任意k，有<code>ch(k,1)==0</code>。</p>
-</li>
-<li><p>num_buckets=2时:<br>为了使hash的结果保持均匀，ch(k,2)的结果应该有占比1/2的结果保持为0，有1/2跳变为1。</p>
-</li>
-</ul>
-<p>由此可以归纳，一般规律是：</p>
-<blockquote>
-<p><code>num_buckets</code>从<code>n</code>变化到<code>n+1</code>后，<br><code>ch(k,n+1)</code> 的结果中，应该有占比 <code>n/(n+1)</code> 的结果保持不变，<br>而有 <code>1/(n+1)</code> 跳变为 <code>n+1</code>。</p>
-</blockquote>
-<p>因此，我们可以用一个随机数生成器，来决定每次要不要跳变，并且让这个随机数生成器的状态仅仅依赖于<code>key</code>。所以就得到下面这个初步代码：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">ch</span><span class="params">(<span class="keyword">int</span> key, <span class="keyword">int</span> num_buckets)</span> </span>&#123;</span><br><span class="line">    random.seed(key) ;</span><br><span class="line">    <span class="keyword">int</span> b = <span class="number">0</span>; </span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">int</span> j = <span class="number">1</span>; j &lt; num_buckets; j++) &#123;</span><br><span class="line">        <span class="keyword">if</span> (random.next() &lt; <span class="number">1.0</span>/(j+<span class="number">1</span>) ) &#123;</span><br><span class="line">            b = j ;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> b;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h2 id="算法正确性"><a href="#算法正确性" class="headerlink" title="算法正确性"></a>算法正确性</h2><p>(0-based)<br>n个桶,从0开始往n-2跳变(n-2次)，每次跳变的概率依次是<code>1/2</code>,<code>1/3</code>,<code>1/4</code>…<code>1/n</code>。<br>从而保证keys在每个桶分布的概率均匀。</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">P(b&#x3D;0(初始值)) &#x3D;每次都不变&#x3D;1&#x2F;2*2&#x2F;3*3&#x2F;4...(n-2)&#x2F;(n-1)*(n-1)&#x2F;n&#x3D;1&#x2F;n;</span><br><span class="line">P(b&#x3D;1) &#x3D;1&#x2F;2(变)*2&#x2F;3(不变)*....&#x3D;1&#x2F;n;</span><br><span class="line">P(b&#x3D;2) &#x3D;1(变或者不变)*1&#x2F;3(变)*3&#x2F;4*...(n-1)&#x2F;n&#x3D;1&#x2F;n;</span><br><span class="line">P(b&#x3D;3) &#x3D;1(变或者不变)*1(变或者不变)*1&#x2F;4*4&#x2F;5...*(n-1)&#x2F;n&#x3D;1&#x2F;n;</span><br><span class="line">P(b&#x3D;k) &#x3D;1*1....1&#x2F;k(变)*k&#x2F;(k+1)...(n-1)&#x2F;n&#x3D;1&#x2F;n;</span><br><span class="line">P(b&#x3D;n-2) &#x3D;1&#x2F;n;</span><br><span class="line">P(b&#x3D;n-1) &#x3D;1- (上述所有的和)&#x3D;1-(n-1)&#x2F;(n-2)&#x3D;1&#x2F;n.</span><br></pre></td></tr></table></figure>
-
-<h2 id="算法复杂度"><a href="#算法复杂度" class="headerlink" title="算法复杂度"></a>算法复杂度</h2><p>n为桶的数量的话,进行n-1次跳变判断,算法复杂度是O(n).</p>
-<h1 id="改进"><a href="#改进" class="headerlink" title="改进"></a>改进</h1><h2 id="改进的思路"><a href="#改进的思路" class="headerlink" title="改进的思路"></a>改进的思路</h2><p>通过随机数，确定下一个跳变的j，而不是对每一个位置进行跳变判断。<br>因为跳变的概率从1/2开始一直在减少，所以依概率来说每次跳变的间隔大于1,所以计算下一个跳变值的次数少于n-1.</p>
-<blockquote>
-<p>定义P(b,j&gt;=i)的含义为: 当前跳变值为b时,下一个跳变值为j,j&gt;=i的概率. </p>
-</blockquote>
-<p>假设我们使用0-base的数组,则下标i位置不变的概率为: <code>(i+1)/(i+2)</code><br>下一个跳变值j&gt;=i时,也就是[b+1,i-2]区间内保持不变,因此有:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">P(b,j&gt;&#x3D;b)&#x3D;1 &#x2F;&#x2F;(显然下一个跳变值&gt;b)</span><br><span class="line">P(b,j&gt;&#x3D;b+1)&#x3D;1 &#x2F;&#x2F;(显然下一个跳变值&gt;&#x3D;b+1)</span><br><span class="line">P(b,j&gt;&#x3D;b+2)&#x3D;1*(b+1&#x2F;b+2)</span><br><span class="line">...</span><br><span class="line">P(b,j&gt;&#x3D;i)&#x3D; 1*(b+1&#x2F;b+2)*(b+2)&#x2F;(b+3)...(i-1)&#x2F;i &#x3D; (b+1)&#x2F;i</span><br></pre></td></tr></table></figure>
-
-<p>假设有一个在[0,1]区间均匀分布的随机变量R,由于均匀分布的特性,R &lt; k的概率为 k.<br>(例如R&lt; 0.3的概率为0.3),P(R&lt;(b+1)/i)= (b+1)/i = P(j&gt;=i);</p>
-<p>因此可以生成一个[0,1]范围的随机数r,规定r&lt;(b+1)/i的时候,就有j&gt;=i;<br>因此 i&lt;(b+1)/r. 由于对于任意的i都有j&gt;=i,因此:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">j&#x3D;floor( (b+1)&#x2F;r)，</span><br></pre></td></tr></table></figure>
-<p>这样我们用一个随机数r得到了j。</p>
-<p>改进后代码如下：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">ch</span><span class="params">(<span class="keyword">int</span> key, <span class="keyword">int</span> num_buckets)</span> </span>&#123;</span><br><span class="line">    random.seed(key) ;</span><br><span class="line">    <span class="keyword">int</span> b = -<span class="number">1</span>; <span class="comment">//  上次跳变值</span></span><br><span class="line">    <span class="keyword">int</span> j = <span class="number">0</span>; <span class="comment">// 这次跳变值</span></span><br><span class="line">    <span class="keyword">while</span>(j&lt;num_buckets)&#123;<span class="comment">// j不能超出范围</span></span><br><span class="line">        b=j; </span><br><span class="line">        <span class="keyword">double</span> r=random.next(); <span class="comment">//  0&lt;r&lt;1.0</span></span><br><span class="line">        j = floor( (b+<span class="number">1</span>) /r);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> b;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>其中r为<code>[0,1]</code>区间的随机数(均匀分布)。<br>算法中使用了一个64位的线性同余随机数生成器。<br>结果分布的均匀性与输入<code>key</code>的分布无关，由伪随机数生成器的均匀性保证。<br>由于用的是伪随机数,生成器由<code>key</code>进行seed,因此能保证一致性.</p>
-<h2 id="时间复杂度"><a href="#时间复杂度" class="headerlink" title="时间复杂度"></a>时间复杂度</h2><p>根据概率计算.<br>由于r平均为0.5,因此j平均来说是成倍增长的,因此改进后算法的平均时间复杂度为：<code>O(log(n))</code></p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/01/13/2018-01/%E8%B0%B7%E6%AD%8C%E7%9A%84%E4%B8%80%E8%87%B4%E6%80%A7%E5%93%88%E5%B8%8C%E7%AE%97%E6%B3%95/" data-id="ck96cxpns00a2maam6rh0b1uq" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E4%B8%80%E8%87%B4%E6%80%A7%E5%93%88%E5%B8%8C/" rel="tag">一致性哈希</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E7%AE%97%E6%B3%95/" rel="tag">算法</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1606,6 +1778,10 @@
       <ul>
         
           <li>
+            <a href="/2022/09/27/2022-09/sql%E6%B3%A8%E5%85%A5%E6%94%BB%E5%87%BB/">sql注入攻击</a>
+          </li>
+        
+          <li>
             <a href="/2022/09/26/2022-09/%E5%B7%B2%E7%9F%A5%E6%98%8E%E6%96%87%E7%A0%B4%E8%A7%A3zip/">已知明文破解zip</a>
           </li>
         
@@ -1619,10 +1795,6 @@
         
           <li>
             <a href="/2022/09/25/2022-09/%E8%B0%83%E4%BC%98-%E8%A7%A3%E5%86%B3%E7%BA%BF%E7%A8%8B%E6%B1%A0%E9%80%A0%E6%88%90%E7%9A%84%E8%BF%9B%E7%A8%8B%E5%8D%A1%E9%A1%BF%E3%80%81cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-解决线程池造成的进程卡顿、cpu毛刺问题</a>
-          </li>
-        
-          <li>
-            <a href="/2022/08/30/2022-08/%E8%B0%83%E4%BC%98-cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-cpu毛刺问题</a>
           </li>
         
       </ul>

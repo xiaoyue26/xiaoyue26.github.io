@@ -72,6 +72,102 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-rabbitmq-in-action笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2017/03/24/rabbitmq-in-action%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2017-03-24T11:57:10.000Z" itemprop="datePublished">2017-03-24</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/">消息队列</a>►<a class="article-category-link" href="/categories/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/rabbitmq/">rabbitmq</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2017/03/24/rabbitmq-in-action%E7%AC%94%E8%AE%B0/">rabbitmq in action笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <p>管理面板:(好用)<br><a href="http://localhost:15672/" target="_blank" rel="noopener">http://localhost:15672/</a><br>基本功能可以在网页上进行,创建vhost等高级功能需要命令行.</p>
+<p><code>Channel</code> : 信道.一个连接多个Channel. 节省开销.<br><code>Exchange</code>: 交换器.<br><code>Queue</code>: 队列. 带名字的邮箱.<br><code>Binding</code>: 绑定.// 路由规则</p>
+<p>基本工作流程:</p>
+<blockquote>
+<ol>
+<li>配置类:<br>创建exchange,queue;<br>为某个exchange创建binding(路由规则).<br>比如为exchange1创建规则:<br><code>routing key 为info的,转发到 queue1中.</code></li>
+</ol>
+</blockquote>
+<p>2.生产者: </p>
+<blockquote>
+<p>将消息打上routing key,发送到某个exchange中.<br>如果不指定exchange,默认发送到名为””的exchange中.</p>
+</blockquote>
+<p>3.消费者:</p>
+<blockquote>
+<p>从某个queue提取消息.</p>
+</blockquote>
+<p>4.exchange:</p>
+<blockquote>
+<p>根据配置好的路由规则,转发收到的消息到符合的queue.</p>
+</blockquote>
+<p>basic.cosume: 订阅<br>basic.get : 先订阅,然后获取一条,然后取消订阅.</p>
+<p>同一个队列多个消费者的话,1个消费者取了消息(ack),消息被删除,别的消费者就取不到了. 因此这种情况应该使用多个队列.(每人有自己的邮箱)</p>
+<p><code>exclusive</code>: 声明队列为私有的.(单消费者)<br><code>durable</code>: 适用于交换器和队列,重启后是否消失.</p>
+<p>msg–&gt;<code>Exchange</code>-&gt;<code>Queue</code></p>
+<p>生产者:<br>msg–&gt;<code>Exchange</code><br>消费者:<br><code>Queue</code>-&gt;msg<br>RabbitMQ:<br><code>Exchange</code>–<code>binding</code>–&gt;<code>Queue</code><br>e.g:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">binding:</span><br><span class="line">&quot;hello-queue&quot;--&quot;routingkey&quot;--&gt;&quot;hello-exchange&quot;</span><br></pre></td></tr></table></figure>
+
+
+<h1 id="Exchange"><a href="#Exchange" class="headerlink" title="Exchange"></a>Exchange</h1><ul>
+<li>direct 直连</li>
+<li>fanout 一个消息到多个队列</li>
+<li>topic  多个消息到一个队列 </li>
+<li>header // 不实用,即将弃用</li>
+</ul>
+<p>默认<code>Exchange</code>名字为空字符串<code>&quot;&quot;</code>,连接到所有队列.</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> String DEFAULT_EXCHANGE = <span class="string">""</span>;</span><br><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> String DEFAULT_ROUTING_KEY = <span class="string">""</span>;</span><br></pre></td></tr></table></figure>
+
+
+<p>topic的routing key格式:</p>
+<ul>
+<li><code>*</code>: 通配符,<code>.</code>以外的任何字符任意个</li>
+<li><code>.</code>: 分隔符</li>
+<li><code>#</code>: 所有队列. </li>
+</ul>
+<h1 id="vhost-多租户"><a href="#vhost-多租户" class="headerlink" title="vhost (多租户)"></a>vhost (多租户)</h1><p>默认vhost是<code>/</code>.<br>每个vhost里可以有自己的<code>Exchange</code>,<code>Queue</code>,用户,权限等等.<br>彼此隔离.</p>
+<h1 id="持久化消息"><a href="#持久化消息" class="headerlink" title="持久化消息"></a>持久化消息</h1><ol>
+<li>投递时指定</li>
+<li>投递到持久交换器</li>
+<li>投递到持久队列</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2017/03/24/rabbitmq-in-action%E7%AC%94%E8%AE%B0/" data-id="ck96cxpls004hmaam4phg657h" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/rabbitmq/" rel="tag">rabbitmq</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-pig笔记" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2017/03/21/pig%E7%AC%94%E8%AE%B0/" class="article-date">
@@ -1127,57 +1223,6 @@
 
 
   
-    <article id="post-java-jdk源码阅读" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2017/02/11/java-jdk%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB/" class="article-date">
-  <time datetime="2017-02-11T11:40:34.000Z" itemprop="datePublished">2017-02-11</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2017/02/11/java-jdk%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB/">java jdk源码阅读</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="Collections"><a href="#Collections" class="headerlink" title="Collections"></a>Collections</h1><p>sort,shuffle,等各种集合运算.<br>返回并发集合,同步容器,不可修改集合,等等.</p>
-<h1 id="Arrays"><a href="#Arrays" class="headerlink" title="Arrays"></a>Arrays</h1><p>fill,等等. </p>
-<h1 id="Math-StrictMath"><a href="#Math-StrictMath" class="headerlink" title="Math. StrictMath"></a>Math. StrictMath</h1><p>addExact<br>subExact<br>在加减溢出时可以抛异常.(Math.abs不抛异常)</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;&#x2F; 位运算小技巧</span><br><span class="line">&#x2F;&#x2F; 1. x和y异号 &lt;&#x3D;&gt; 异或后&lt;0 </span><br><span class="line">(1)x^y &lt;0 </span><br><span class="line">&#x2F;&#x2F; 异号定义: 都不等于0, 异号.</span><br><span class="line"></span><br><span class="line">(2)x和y同号 &#x3D;&gt; x^y &gt;&#x3D;0 </span><br><span class="line">一般使用(1).</span><br><span class="line">&#x2F;&#x2F; 2. &amp;</span><br><span class="line">(1) x和y均小于0   &lt;&#x3D;&gt; x&amp;y &lt; 0 </span><br><span class="line">(2) x和y均大于0  &#x3D;&gt;  x&amp;y&gt;&#x3D;0</span><br><span class="line">(3) x和y异号 &#x3D;&gt; x&amp;y&gt;&#x3D;0</span><br><span class="line">&#x2F;&#x2F; (2),(3)难以区分,一般使用(1) .</span><br></pre></td></tr></table></figure>
-
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2017/02/11/java-jdk%E6%BA%90%E7%A0%81%E9%98%85%E8%AF%BB/" data-id="ck96cxpl7002bmaam82b4e28b" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1204,6 +1249,10 @@
       <ul>
         
           <li>
+            <a href="/2022/09/27/2022-09/sql%E6%B3%A8%E5%85%A5%E6%94%BB%E5%87%BB/">sql注入攻击</a>
+          </li>
+        
+          <li>
             <a href="/2022/09/26/2022-09/%E5%B7%B2%E7%9F%A5%E6%98%8E%E6%96%87%E7%A0%B4%E8%A7%A3zip/">已知明文破解zip</a>
           </li>
         
@@ -1217,10 +1266,6 @@
         
           <li>
             <a href="/2022/09/25/2022-09/%E8%B0%83%E4%BC%98-%E8%A7%A3%E5%86%B3%E7%BA%BF%E7%A8%8B%E6%B1%A0%E9%80%A0%E6%88%90%E7%9A%84%E8%BF%9B%E7%A8%8B%E5%8D%A1%E9%A1%BF%E3%80%81cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-解决线程池造成的进程卡顿、cpu毛刺问题</a>
-          </li>
-        
-          <li>
-            <a href="/2022/08/30/2022-08/%E8%B0%83%E4%BC%98-cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-cpu毛刺问题</a>
           </li>
         
       </ul>

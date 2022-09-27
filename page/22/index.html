@@ -72,6 +72,91 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-ubuntu松耦合配置jdk和终端快捷键" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2015/10/03/ubuntu%E6%9D%BE%E8%80%A6%E5%90%88%E9%85%8D%E7%BD%AEjdk%E5%92%8C%E7%BB%88%E7%AB%AF%E5%BF%AB%E6%8D%B7%E9%94%AE/" class="article-date">
+  <time datetime="2015-10-03T13:46:15.000Z" itemprop="datePublished">2015-10-03</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E9%85%8D%E7%BD%AE/">配置</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2015/10/03/ubuntu%E6%9D%BE%E8%80%A6%E5%90%88%E9%85%8D%E7%BD%AEjdk%E5%92%8C%E7%BB%88%E7%AB%AF%E5%BF%AB%E6%8D%B7%E9%94%AE/">ubuntu松耦合配置jdk和终端快捷键</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <ul>
+<li><p><strong>终端快捷键：</strong><br>新做系统后，为了提高工作效率，安装右键打开终端快捷键：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">sudo apt-get install nautilus-open-terminal</span><br><span class="line">nautilus -q</span><br></pre></td></tr></table></figure>
+<p>注销后登录，可以右键+e,在当前路径打开终端，比<code>ctrl+alt+T</code>顺手一点。而且<code>ctrl+alt+T</code>只能在<code>~</code>路径下打开终端，不够灵活。</p>
+</li>
+<li><p><strong>jdk:</strong><br>首先搜索jdk后进入官网下载最新版64位jdk。(多用tab快捷键补全。)</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">tar zxvf jdk(alt+/)</span><br><span class="line">sudo mkdir /usr/lib/jdk/</span><br><span class="line">sudo  mv jdk1.8.0_45/ /usr/lib/jdk/jdk1.8.0_45</span><br><span class="line">cd /usr/lib/jdk/</span><br><span class="line">sudo ln -s jdk(tab) jdk_current </span><br><span class="line">cd /etc/profile.d</span><br><span class="line">sudo vi java.sh</span><br><span class="line">export JAVA_HOME=/usr/lib/jdk/jdk_current</span><br><span class="line">export CLASSPATH=.:%JAVA_HOME%/lib/dt.jar:%JAVA_HOME%/lib/tools.jar</span><br><span class="line">export PATH=$PATH:$JAVA_HOME/bin</span><br><span class="line">source java.sh</span><br></pre></td></tr></table></figure>
+<p>注销后登录, <code>java</code>和<code>javac</code>命令可以使用。这样做有几个好处:</p>
+</li>
+</ul>
+<ul>
+<li><p>更换jdk时,只需将jdk_current软链接指向新的jdk路径即可。</p>
+</li>
+<li><p>与别的环境变量耦合度较低，以此类推每个新的环境变量可以下<code>/etc/profile.d</code>路径下建立新的<code>hadoop.sh</code>，linux系统启动时会自动加载此目录下的<code>*.sh</code>文件。</p>
+</li>
+<li><p>可以把<code>java.sh</code>文件和jdk文件夹拷贝到别的电脑的<code>/etc/profile.d</code>路径下以添加jdk的环境变量。</p>
+</li>
+<li><p><strong>配置root用户图形界面登录</strong></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">vi &#x2F;etc&#x2F;lightdm&#x2F;lightdm.conf</span><br><span class="line"># 添加：</span><br><span class="line">greeter-show-manual-login&#x3D;true</span><br><span class="line">allow-guest&#x3D;false</span><br></pre></td></tr></table></figure>
+</li>
+<li><p><strong>自动挂载新增的磁盘</strong></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"># 安装gparted</span><br><span class="line">sudo apt-get install gparted</span><br><span class="line"># 以root用户进入图形界面</span><br><span class="line"># gparted配置分区, 查看ssd磁盘的uuid，然后修改文件以自动挂载新增的盘：</span><br><span class="line">vi &#x2F;etc&#x2F;fstab </span><br><span class="line"># 末尾添加一行：</span><br><span class="line">UUID&#x3D;8436117e-d922-452d-8d86-56edb76b46f6 &#x2F;home&#x2F;xiaoyue26&#x2F;ssd            ext4    defaults              0       2</span><br><span class="line"># 上述格式为: UUID  挂载点 文件系统 策略 &lt;dump&gt; &lt;pass&gt;</span><br></pre></td></tr></table></figure>
+
+</li>
+</ul>
+<p>default参数说明按照默认格式挂载.<br>其他参数：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">auto: 开机自动挂载 </span><br><span class="line">noauto: 开机不自动挂载 </span><br><span class="line">defaults: 按照大多数永久文件系统的缺省值设置挂载定义 </span><br><span class="line">ro: 按只读权限挂载 </span><br><span class="line">rw: 按可读可写权限挂载 </span><br><span class="line">user: 任何用户都可以挂载 </span><br><span class="line">user: 同步磁盘与内存中的数据，async 则是异步</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>dump处为1的话，表示要将整个文件系统里的内容备份；<br>现在很少用到dump这个工具，在这里一般选0。0表示不做dump备份，1表示要进行dump备份，2也表示要做dump备份，不过，该分区的重要行比1小。</p>
+</blockquote>
+<blockquote>
+<p>pass用来指定如何使用fsck来检查硬盘。如果这里填 0，则不检查；挂载点为 / 的（即根分区），必须在这里填写 1，其它的都不能填写 1。<br>如果有分区填写大于 1的话，则在检查完根分区后，接着按填写的数字从小到大依次检查下去。同数字的同时检查。</p>
+</blockquote>
+<ul>
+<li><strong>退出保存,检查语法是否正确并且自动挂载盘：</strong><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">mount -a </span><br><span class="line"># 挂好以后, 递归更改一下权限：</span><br><span class="line">chmod -R 775 &#x2F;home&#x2F;xiaoyue26&#x2F;ssd #更改读写权限</span><br><span class="line">chown -R xiaoyue26  &#x2F;home&#x2F;xiaoyue26&#x2F;ssd #更改拥有者</span><br><span class="line">chgrp -R xiaoyue26  &#x2F;home&#x2F;xiaoyue26&#x2F;ssd #更高所属组</span><br></pre></td></tr></table></figure>
+
+
+</li>
+</ul>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2015/10/03/ubuntu%E6%9D%BE%E8%80%A6%E5%90%88%E9%85%8D%E7%BD%AEjdk%E5%92%8C%E7%BB%88%E7%AB%AF%E5%BF%AB%E6%8D%B7%E9%94%AE/" data-id="ck96cxpm7005wmaam8avl5q46" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E9%85%8D%E7%BD%AE/" rel="tag">配置</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-springmvc笔记" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2015/10/02/springmvc%E7%AC%94%E8%AE%B0/" class="article-date">
@@ -683,56 +768,6 @@
 
 
   
-    <article id="post-centos官网安装nginx" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2014/10/29/centos%E5%AE%98%E7%BD%91%E5%AE%89%E8%A3%85nginx/" class="article-date">
-  <time datetime="2014-10-29T04:00:55.000Z" itemprop="datePublished">2014-10-29</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/%E9%85%8D%E7%BD%AE/">配置</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2014/10/29/centos%E5%AE%98%E7%BD%91%E5%AE%89%E8%A3%85nginx/">centos官网安装nginx</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p><code>vi /etc/yum.repos.d/nginx.repo</code><br>加入如下内容：</p>
-<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">[nginx]</span></span><br><span class="line"><span class="string">name=nginx</span> <span class="string">repo</span> </span><br><span class="line"><span class="string">baseurl=http://nginx.org/packages/centos/6/$basearch/</span></span><br><span class="line"><span class="string">gpgcheck=0</span></span><br><span class="line"><span class="string">enabled=1</span></span><br></pre></td></tr></table></figure>
-
-<p>然后直接<code>yum install nginx</code>。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2014/10/29/centos%E5%AE%98%E7%BD%91%E5%AE%89%E8%A3%85nginx/" data-id="ck96cxpkt0011maamh9b46lss" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E9%85%8D%E7%BD%AE/" rel="tag">配置</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -759,6 +794,10 @@
       <ul>
         
           <li>
+            <a href="/2022/09/27/2022-09/sql%E6%B3%A8%E5%85%A5%E6%94%BB%E5%87%BB/">sql注入攻击</a>
+          </li>
+        
+          <li>
             <a href="/2022/09/26/2022-09/%E5%B7%B2%E7%9F%A5%E6%98%8E%E6%96%87%E7%A0%B4%E8%A7%A3zip/">已知明文破解zip</a>
           </li>
         
@@ -772,10 +811,6 @@
         
           <li>
             <a href="/2022/09/25/2022-09/%E8%B0%83%E4%BC%98-%E8%A7%A3%E5%86%B3%E7%BA%BF%E7%A8%8B%E6%B1%A0%E9%80%A0%E6%88%90%E7%9A%84%E8%BF%9B%E7%A8%8B%E5%8D%A1%E9%A1%BF%E3%80%81cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-解决线程池造成的进程卡顿、cpu毛刺问题</a>
-          </li>
-        
-          <li>
-            <a href="/2022/08/30/2022-08/%E8%B0%83%E4%BC%98-cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-cpu毛刺问题</a>
           </li>
         
       </ul>
