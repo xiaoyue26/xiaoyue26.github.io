@@ -72,6 +72,126 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2022-03/中断梳理" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2022/03/14/2022-03/%E4%B8%AD%E6%96%AD%E6%A2%B3%E7%90%86/" class="article-date">
+  <time datetime="2022-03-14T09:52:23.000Z" itemprop="datePublished">2022-03-14</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E6%80%A7%E8%83%BD/">性能</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2022/03/14/2022-03/%E4%B8%AD%E6%96%AD%E6%A2%B3%E7%90%86/">java方法是否可中断梳理</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="常见方法的中断相关汇总"><a href="#常见方法的中断相关汇总" class="headerlink" title="常见方法的中断相关汇总"></a>常见方法的中断相关汇总</h1><table>
+<thead>
+<tr>
+<th>调用方法</th>
+<th>是否可以中断</th>
+<th>是否释放资源(锁)</th>
+<th>是否释放cpu</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>synchronized</code></td>
+<td>不可中断</td>
+<td>不释放</td>
+<td>释放</td>
+</tr>
+<tr>
+<td><code>lock</code></td>
+<td>不可中断</td>
+<td>不释放</td>
+<td>释放</td>
+</tr>
+<tr>
+<td><code>tryLock</code></td>
+<td>可以中断</td>
+<td>不释放</td>
+<td>释放</td>
+</tr>
+<tr>
+<td><code>lockInterruptibly</code></td>
+<td>可以中断</td>
+<td>不释放</td>
+<td>释放</td>
+</tr>
+<tr>
+<td><code>InterruptibleChannel</code></td>
+<td>可以中断</td>
+<td>不释放</td>
+<td>释放</td>
+</tr>
+<tr>
+<td><code>Thread.sleep</code></td>
+<td>可以中断</td>
+<td>不释放</td>
+<td>释放</td>
+</tr>
+<tr>
+<td><code>thread.join()</code></td>
+<td>可以中断</td>
+<td>释放thread对象的锁，其他不释放</td>
+<td>释放</td>
+</tr>
+<tr>
+<td><code>object.wait()</code></td>
+<td>可以中断</td>
+<td>释放</td>
+<td>释放</td>
+</tr>
+<tr>
+<td><code>condition.await()</code></td>
+<td>可以中断</td>
+<td>释放</td>
+<td>释放</td>
+</tr>
+</tbody></table>
+<p>其中<code>thread.join</code>底层其实是调用了thread对象的<code>wait</code>方法，之后一般被jvm的<code>notify</code>唤醒。<br>源码参考:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">final</span> <span class="keyword">synchronized</span> <span class="keyword">void</span> <span class="title">join</span><span class="params">(<span class="keyword">long</span> millis)</span> <span class="comment">// 方法上有synchronized</span></span></span><br><span class="line"><span class="function">    <span class="keyword">throws</span> InterruptedException </span>&#123;</span><br><span class="line">        <span class="keyword">long</span> base = System.currentTimeMillis();</span><br><span class="line">        <span class="keyword">long</span> now = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (millis &lt; <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> IllegalArgumentException(<span class="string">"timeout value is negative"</span>);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (millis == <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="keyword">while</span> (isAlive()) &#123;</span><br><span class="line">                wait(<span class="number">0</span>);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="keyword">while</span> (isAlive()) &#123;</span><br><span class="line">                <span class="keyword">long</span> delay = millis - now;</span><br><span class="line">                <span class="keyword">if</span> (delay &lt;= <span class="number">0</span>) &#123;</span><br><span class="line">                    <span class="keyword">break</span>;</span><br><span class="line">                &#125;</span><br><span class="line">                wait(delay); <span class="comment">// 实际调用的是wait,由notify唤醒</span></span><br><span class="line">                now = System.currentTimeMillis() - base;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+<p><em>总结</em><br><code>lock</code>,<code>synchronized</code>容易死锁，因为不可中断。<br>尽量用表格下方的方法，性能会高些。</p>
+<h1 id="内核态"><a href="#内核态" class="headerlink" title="内核态"></a>内核态</h1><h2 id="What-什么是内核态"><a href="#What-什么是内核态" class="headerlink" title="What: 什么是内核态"></a>What: 什么是内核态</h2><p>访问不属于自己的内存（用户空间、虚拟内存地址）时，<br>需要系统调用，进入cpu特权模式，因此需要切换到内核态；</p>
+<p><em>切换到内核态时是否一定要释放cpu?</em><br>只是把寄存器保存到进程内核栈而已，进程cpu并不需要释放；</p>
+<p><em>进程切换、线程切换是否需要切换内核态？</em><br>进程切换、线程切换：需要用到内核里的数据结构，因此需要进入内核态；</p>
+<h1 id="操作系统线程库"><a href="#操作系统线程库" class="headerlink" title="操作系统线程库"></a>操作系统线程库</h1><p>1）POSIX Pthreads：可以作为用户或内核库提供，作为 POSIX 标准的扩展<br>2）Win32 线程：用于 Window 操作系统的内核级线程库</p>
+<h2 id="java的线程库"><a href="#java的线程库" class="headerlink" title="java的线程库"></a>java的线程库</h2><p>Java 线程 API 通常采用宿主系统的线程库来实现。<br>也就是说在 Win 系统上，Java 线程 API 通常采用 Win API 来实现；<br>在 UNIX 类系统上，采用 Pthread 来实现。</p>
+<p>具体到hotpot实现，则JVM线程跟内核轻量级进程一一对应。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2022/03/14/2022-03/%E4%B8%AD%E6%96%AD%E6%A2%B3%E7%90%86/" data-id="cl0qj2eb80000lxama0cn89sj" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E4%B8%AD%E6%96%AD/" rel="tag">中断</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%86%85%E6%A0%B8%E6%80%81/" rel="tag">内核态</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E7%BA%BF%E7%A8%8B/" rel="tag">线程</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2022-03/mp4格式" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2022/03/13/2022-03/mp4%E6%A0%BC%E5%BC%8F/" class="article-date">
@@ -705,81 +825,10 @@
 
 
   
-    <article id="post-2021-07/metaspace笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2021/07/26/2021-07/metaspace%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2021-07-26T03:45:43.000Z" itemprop="datePublished">2021-07-26</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/jvm/">jvm</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2021/07/26/2021-07/metaspace%E7%AC%94%E8%AE%B0/">metaspace笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="metaspace内容"><a href="#metaspace内容" class="headerlink" title="metaspace内容"></a>metaspace内容</h1><p>Klass Metaspace+NoKlass Metaspace: </p>
-<img src="/images/2021-07/metaspace.png" class="" width="800" height="1200" title="metaspace">
-
-<h1 id="Klass-Metaspace"><a href="#Klass-Metaspace" class="headerlink" title="Klass Metaspace"></a>Klass Metaspace</h1><blockquote>
-<p>如果关闭压缩指针，或者堆大于32G，这块儿会存到NoKlass Metaspace里。</p>
-</blockquote>
-<p>存class元数据，JVM对class的表示。<br>vtable: 类中的方法（我理解类似虚函数指针，指到NoKlass区域）<br>itable: 类实现的接口<br>oop map: 类引用的对象地址</p>
-<h1 id="NoKlass-Metaspace"><a href="#NoKlass-Metaspace" class="headerlink" title="NoKlass Metaspace"></a>NoKlass Metaspace</h1><p>方法相关：</p>
-<blockquote>
-<p>方法的字节码<br>参数信息<br>局部变量表<br>异常表</p>
-</blockquote>
-<p>常量池<br>注解<br>方法计数器（JIT）</p>
-<h1 id="相关参数"><a href="#相关参数" class="headerlink" title="相关参数"></a>相关参数</h1><p><code>-Xnoclassgc</code>: 让 JVM 在垃圾收集的时候不去卸载类.<br>尽量别开启这个选项。</p>
-<p><code>–XX:+CMSClassUnloadingEnabled</code>: 如果使用CMS，需要开启这个选项。</p>
-<p><code>CompressedClassSpaceSize</code>: Klass空间的大小。默认1G,可能要改大。<br>比如可以CompressedClassSpaceSize设置2G, MaxMetaspaceSize设置3G.(看klass和noklass的比例)</p>
-<h1 id="jstat"><a href="#jstat" class="headerlink" title="jstat"></a>jstat</h1><p>主要看MC，MU，CCSC，CCSU：<br>MC: Klass+NoKlass Metaspace已committed的内存大小/KB<br>MU: Klass+NoKlass Metaspace已使用的内存大小<br>CCSC: Klass Metaspace已commit的内存大小/KB<br>CCSU: Klass Metaspace已使用的内存大小/KB</p>
-<p>其他:<br>M: Klass+NoKlass总共使用率<br>CCS: CCSU/CCSC<br>MCMN和CCSMN: 0<br>MCMX: Klass+NoKlass Metaspace两者总共的reserved的内存大小<br>CCSMX: Klass Metaspace reserved的内存大小</p>
-<h1 id="生命周期"><a href="#生命周期" class="headerlink" title="生命周期"></a>生命周期</h1><p>每个class loader都会有自己的metaspace，各自分配（metachunk,metablock），但是总和是公用的。</p>
-<p>普通类metaspace: 基本不太可能卸载，因为需要等class loader卸载；<br>匿名类metaspace: 跟着匿名类的生命周期。lambda和method handler可以提前卸载，不等待class loader。</p>
-<p>卸载以后内存是否会归还：</p>
-<ol>
-<li>Klass空间必不归还；</li>
-<li>noKlass空间: 如果Node分配给同一个class loader，比较容易归还；<br>如果分配给了多个class loader，不释放空间。<br>一个Node多个chunk；<br>单个chunk整体属于一个class loader；<br>一个chunk多个block，每个block是最小分配单元（分配给调用者）。</li>
-</ol>
-<h1 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h1><p><a href="https://javadoop.com/post/metaspace" target="_blank" rel="noopener">https://javadoop.com/post/metaspace</a><br><a href="https://segmentfault.com/a/1190000023235677" target="_blank" rel="noopener">https://segmentfault.com/a/1190000023235677</a><br><a href="https://www.infoq.cn/article/troubleshooting-java-memory-issues" target="_blank" rel="noopener">https://www.infoq.cn/article/troubleshooting-java-memory-issues</a></p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2021/07/26/2021-07/metaspace%E7%AC%94%E8%AE%B0/" data-id="ckrk3gxn90000jiam5pquf1al" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/jvm/" rel="tag">jvm</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/metaspace/" rel="tag">metaspace</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
-    <a class="extend prev" rel="prev" href="/">&amp;laquo; 上一页</a><a class="page-number" href="/">1</a><span class="page-number current">2</span><a class="page-number" href="/page/3/">3</a><a class="page-number" href="/page/4/">4</a><span class="space">&hellip;</span><a class="page-number" href="/page/23/">23</a><a class="extend next" rel="next" href="/page/3/">下一页&amp;raquo;</a>
+    <a class="extend prev" rel="prev" href="/">&amp;laquo; 上一页</a><a class="page-number" href="/">1</a><span class="page-number current">2</span><a class="page-number" href="/page/3/">3</a><a class="page-number" href="/page/4/">4</a><span class="space">&hellip;</span><a class="page-number" href="/page/24/">24</a><a class="extend next" rel="next" href="/page/3/">下一页&amp;raquo;</a>
   </nav>
 </section>
            
@@ -802,6 +851,10 @@
       <ul>
         
           <li>
+            <a href="/2022/10/03/2022-09/java%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E6%94%BB%E5%87%BB-md/">java反序列化攻击.md</a>
+          </li>
+        
+          <li>
             <a href="/2022/09/27/2022-09/sql%E6%B3%A8%E5%85%A5%E6%94%BB%E5%87%BB/">sql注入攻击</a>
           </li>
         
@@ -815,10 +868,6 @@
         
           <li>
             <a href="/2022/09/25/2022-09/nc%E5%91%BD%E4%BB%A4%E7%AC%94%E8%AE%B0/">nc命令笔记</a>
-          </li>
-        
-          <li>
-            <a href="/2022/09/25/2022-09/%E8%B0%83%E4%BC%98-%E8%A7%A3%E5%86%B3%E7%BA%BF%E7%A8%8B%E6%B1%A0%E9%80%A0%E6%88%90%E7%9A%84%E8%BF%9B%E7%A8%8B%E5%8D%A1%E9%A1%BF%E3%80%81cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-解决线程池造成的进程卡顿、cpu毛刺问题</a>
           </li>
         
       </ul>

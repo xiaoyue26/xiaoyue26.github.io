@@ -72,6 +72,243 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2020-05/BeanCopier测评报告" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/05/05/2020-05/BeanCopier%E6%B5%8B%E8%AF%84%E6%8A%A5%E5%91%8A/" class="article-date">
+  <time datetime="2020-05-05T09:38:53.000Z" itemprop="datePublished">2020-05-05</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/spring/">spring</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2020/05/05/2020-05/BeanCopier%E6%B5%8B%E8%AF%84%E6%8A%A5%E5%91%8A/">BeanCopier测评报告</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="What-BeanCopier是什么"><a href="#What-BeanCopier是什么" class="headerlink" title="What: BeanCopier是什么?"></a>What: BeanCopier是什么?</h1><p>本文讨论的<code>BeanCopier</code>具体指的是:<br><code>org.springframework.cglib.beans.BeanCopier</code><br>, 此外用于对比的<code>BeanUtils</code>指的是:<br><code>org.springframework.beans.BeanUtils</code></p>
+<p>其中spring使用<code>5.1.1.release</code>,所以cglib版本为<code>3.2.10</code>.</p>
+<p>BeanCopier和BeanUtils都能用于对象之间浅拷贝成员字段。</p>
+<h1 id="Why-背景"><a href="#Why-背景" class="headerlink" title="Why: 背景"></a>Why: 背景</h1><p>这里引用一下网上的说法:</p>
+<blockquote>
+<p>在做业务的时候，我们有时为了隔离变化，会将DAO查询出来的Entity，和对外提供的DTO隔离开来。大概90%的时候，它们的结构都是类似的，但是我们很不喜欢写很多冗长的b.setF1(a.getF1())这样的代码，于是我们需要BeanCopier来帮助我们。选择Cglib的BeanCopier进行Bean拷贝的理由是，其性能要比Spring的BeanUtils，Apache的BeanUtils和PropertyUtils要好很多，尤其是数据量比较大的情况下。</p>
+</blockquote>
+<h1 id="性能测评"><a href="#性能测评" class="headerlink" title="性能测评"></a>性能测评</h1><p>参考网上一些benchmark，如<a href="https://juejin.im/post/5dc2b293e51d456e65283e61" target="_blank" rel="noopener">https://juejin.im/post/5dc2b293e51d456e65283e61</a><br>beanCopier能比beanUtils快30～45倍。</p>
+<table>
+<thead>
+<tr>
+<th>场景</th>
+<th>耗时</th>
+<th>原理</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>直接使用get&amp;set方法</td>
+<td>22ms</td>
+<td>直接调用</td>
+</tr>
+<tr>
+<td>使用BeanCopiers（不使用Converter）</td>
+<td>22ms</td>
+<td>修改字节码</td>
+</tr>
+<tr>
+<td>使用BeanCopiers（使用Converter）</td>
+<td>249ms</td>
+<td>修改字节码</td>
+</tr>
+<tr>
+<td>使用BeanUtils</td>
+<td>12983ms</td>
+<td>反射</td>
+</tr>
+<tr>
+<td>使用PropertyUtils（不使用Converter）</td>
+<td>3922ms</td>
+<td>反射</td>
+</tr>
+</tbody></table>
+<p>因此如果我们不使用类型转换，使用BeanCopiers几乎没有性能损耗。这是因为cglib修改生成的字节码和get&amp;set几乎是一样的：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">MA</span>$$<span class="title">BeanCopierByCGLIB</span>$$<span class="title">d9c04262</span> <span class="keyword">extends</span> <span class="title">BeanCopier</span> </span>&#123;</span><br><span class="line">    <span class="keyword">public</span> MA$$BeanCopierByCGLIB$$d9c04262() &#123;</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">copy</span><span class="params">(Object var1, Object var2, Converter var3)</span> </span>&#123;</span><br><span class="line">        MA var10000 = (MA)var2;</span><br><span class="line">        MA var10001 = (MA)var1;</span><br><span class="line">        var10000.setBooleanP(((MA)var1).isBooleanP());</span><br><span class="line">        var10000.setByteP(var10001.getByteP());</span><br><span class="line">        var10000.setCharP(var10001.getCharP());</span><br><span class="line">        var10000.setDoubleP(var10001.getDoubleP());</span><br><span class="line">        var10000.setFloatP(var10001.getFloatP());</span><br><span class="line">        var10000.setId(var10001.getId());</span><br><span class="line">        var10000.setIntP(var10001.getIntP());</span><br><span class="line">        var10000.setLongP(var10001.getLongP());</span><br><span class="line">        var10000.setName(var10001.getName());</span><br><span class="line">        var10000.setShortP(var10001.getShortP());</span><br><span class="line">        var10000.setStringP(var10001.getStringP());</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="自测"><a href="#自测" class="headerlink" title="自测"></a>自测</h2><table>
+<thead>
+<tr>
+<th></th>
+<th>1kw次</th>
+<th>1亿次</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>beanUtils</td>
+<td>8秒</td>
+<td>91秒</td>
+</tr>
+<tr>
+<td>beanCopier（无converter/有缓存）</td>
+<td>0.5秒</td>
+<td>4秒</td>
+</tr>
+<tr>
+<td>beanCopier（无converter/无缓存）</td>
+<td>1.1秒</td>
+<td>10秒</td>
+</tr>
+<tr>
+<td>beanCopier（无converter/懒汉式缓存）</td>
+<td>3.3秒</td>
+<td>30秒</td>
+</tr>
+</tbody></table>
+<p>其中各个测试的相关代码:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 1. beanUtils:</span></span><br><span class="line">BeanUtils.copyProperties(bean, vo);</span><br><span class="line"> </span><br><span class="line"><span class="comment">// 2. beanCopier（无converter/有缓存）:</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> BeanCopier MODEL_2_VO = BeanCopier.create(Banner<span class="class">.<span class="keyword">class</span></span></span><br><span class="line"><span class="class">            , <span class="title">BannerVO</span>.<span class="title">class</span>, <span class="title">false</span>)</span>;</span><br><span class="line">copier.copy(bean, vo, <span class="keyword">null</span>);</span><br><span class="line"> </span><br><span class="line"><span class="comment">// 3. beanCopier（无converter/无缓存）:</span></span><br><span class="line">copier = BeanCopier.create(Banner<span class="class">.<span class="keyword">class</span>, <span class="title">BannerVO</span>.<span class="title">class</span>, <span class="title">false</span>)</span>;</span><br><span class="line">copier.copy(bean, vo, <span class="keyword">null</span>);</span><br><span class="line"> </span><br><span class="line"><span class="comment">// 4. beanCopier（无converter/懒汉式缓存）:</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> Map&lt;String, BeanCopier&gt; MAP = <span class="keyword">new</span> ConcurrentHashMap&lt;&gt;();</span><br><span class="line">copier = MAP.computeIfAbsent(key, k -&gt; BeanCopier.create(Banner<span class="class">.<span class="keyword">class</span></span></span><br><span class="line"><span class="class">                , <span class="title">BannerVO</span>.<span class="title">class</span>, <span class="title">false</span>))</span>;</span><br><span class="line">copier.copy(bean, vo, <span class="keyword">null</span>);</span><br></pre></td></tr></table></figure>
+
+<h2 id="耗时组成"><a href="#耗时组成" class="headerlink" title="耗时组成"></a>耗时组成</h2><p>BeanUtils耗时组成:(主要为反射)</p>
+<img src="/images/2020-05/beanUtils.png" class="" width="800" height="1200" title="beanUtils">
+
+<p>BeanCopier（有缓存、无convert）耗时组成:（主要为调用构造函数(xxx::new)）</p>
+<img src="/images/2020-05/beanCopier1.png" class="" width="800" height="1200" title="beanCopier1">
+
+<p>beanCopier（无converter/懒汉式缓存）: 生成key和查询缓存花费了大量的时间，因此第四种写法是得不偿失的。</p>
+<img src="/images/2020-05/beanCopier2.png" class="" width="800" height="1200" title="beanCopier2">
+
+<h3 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h3><p>BeanCopier（无convert、有缓存）: 主要耗时是业务自身的代码(创建对象)，性能最优，可以考虑;</p>
+<p>BeanCopier（无convert、无缓存）：不需要预创建，写法简洁，耗时增加不多，可以考虑。</p>
+<p>BeanUtils: 反射调用占用了60%的代码，其中还涉及到查询concurrentHashMap中的bean定义，损耗较大。</p>
+<h1 id="How-用法"><a href="#How-用法" class="headerlink" title="How: 用法"></a>How: 用法</h1><p>BeanCopier： 只拷贝名称和类型都相同的属性, 基本类型和装箱类型视为不同类型。</p>
+<p>如果不符合上述规则，可以自定义converter。（否则可以将converter字段传null）</p>
+<p>示例代码:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> BeanCopier MODEL_2_VO = BeanCopier.create(Banner<span class="class">.<span class="keyword">class</span></span></span><br><span class="line"><span class="class">            , <span class="title">BannerVO</span>.<span class="title">class</span>, <span class="title">false</span>)</span>; <span class="comment">// 可以复用一个copier，提高一倍速度</span></span><br><span class="line"> </span><br><span class="line">banner = ... ; <span class="comment">// 例如从DAO获取到</span></span><br><span class="line">BannerVO vo = <span class="keyword">new</span> BannerVO();</span><br><span class="line">MODEL_2_VO.copy(b, vo, <span class="keyword">null</span>); <span class="comment">// converter可以直接传null</span></span><br></pre></td></tr></table></figure>
+
+
+<h2 id="支持功能"><a href="#支持功能" class="headerlink" title="支持功能"></a>支持功能</h2><table>
+<thead>
+<tr>
+<th>情况</th>
+<th>Apache BeanUtils</th>
+<th>Cglib BeanCopier</th>
+<th>Spring BeanUtils</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>非public类</td>
+<td>不支持</td>
+<td>支持</td>
+<td>支持</td>
+</tr>
+<tr>
+<td>基本类型与装箱类型，int-&gt;Integer，Integer-&gt;int</td>
+<td>支持，可以copy</td>
+<td>不支持，不copy</td>
+<td>不支持，不copy</td>
+</tr>
+<tr>
+<td>int-&gt;long，long-&gt;int，int-&gt;Long，Integer-&gt;long</td>
+<td>不支持</td>
+<td>不支持</td>
+<td>不支持</td>
+</tr>
+<tr>
+<td>源对象相同属性无get方法</td>
+<td>不支持 不copy</td>
+<td>不支持 不copy</td>
+<td>不支持 不copy</td>
+</tr>
+<tr>
+<td>目标对象相同属性无get方法</td>
+<td>支持</td>
+<td>不支持</td>
+<td>支持</td>
+</tr>
+<tr>
+<td>目标对象相同属性无set方法</td>
+<td>不copy，不报错</td>
+<td>报错</td>
+<td>不copy，不报错</td>
+</tr>
+<tr>
+<td>源对象相同属性无set方法</td>
+<td>支持</td>
+<td>支持</td>
+<td>支持</td>
+</tr>
+<tr>
+<td>目标对象相同属性set方法返回非void</td>
+<td>不设置，其他正常属性可以copy</td>
+<td>不设置，导致其他属性都无法copy</td>
+<td>支持，能够copy</td>
+</tr>
+<tr>
+<td>目标对象多字段</td>
+<td>支持</td>
+<td>支持</td>
+<td>支持</td>
+</tr>
+<tr>
+<td>目标对象少字段</td>
+<td>支持</td>
+<td>支持</td>
+<td>支持</td>
+</tr>
+</tbody></table>
+<p>此外一些较为复杂的情况BeanCopier会进行浅拷贝：</p>
+<p>1.属性为对象；</p>
+<p>2.属性为List&lt;自定义类&gt;；(注意范型的类型擦除)</p>
+<p>当然前提还是源类和目标类中该属性的类型相同，如果不同只能自定义converter了。相应生成的字节码:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">copy</span><span class="params">(Object var1, Object var2, Converter var3)</span> </span>&#123;</span><br><span class="line">        BeanB var10000 = (BeanB)var2;</span><br><span class="line">        BeanA var10001 = (BeanA)var1;</span><br><span class="line">        var10000.setAList(((BeanA)var1).getAList());</span><br><span class="line">        var10000.setName(var10001.getName());</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+<p>因此不能用BeanCopier做深拷贝。</p>
+<p>对应我们考虑的场景，entity和VO之间拷贝数据，由于entity和VO一般不包含集合或者对象，而且没有修改数据的副作用，因此还是可以用的。</p>
+<h1 id="线程安全"><a href="#线程安全" class="headerlink" title="线程安全"></a>线程安全</h1><h2 id="copy方法"><a href="#copy方法" class="headerlink" title="copy方法"></a>copy方法</h2><p>BeanCopier实例的copy方法是线程安全的，因为它是无状态的，相关讨论：<a href="https://cglib-devel.narkive.com/2cqPSUM1/cglib-and-thread-safeness" target="_blank" rel="noopener">https://cglib-devel.narkive.com/2cqPSUM1/cglib-and-thread-safeness</a></p>
+<h2 id="create方法"><a href="#create方法" class="headerlink" title="create方法"></a>create方法</h2><p>BeanCopier的create方法底层会缓存生成过的字节码，因此不是无状态的，但是有用到synchronized进行线程安全的保护：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">protected</span> Object <span class="title">create</span><span class="params">(Object key)</span> </span>&#123;</span><br><span class="line">    Class gen = <span class="keyword">null</span>;</span><br><span class="line"><span class="keyword">synchronized</span> (source) &#123;</span><br><span class="line">        ClassLoader loader = getClassLoader();</span><br><span class="line">        Map cache2 = <span class="keyword">null</span>;</span><br><span class="line">        cache2 = (Map) source.cache.get(loader);</span><br><span class="line">...</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">/** 3.根据生成类，创建实例并返回 **/</span></span><br><span class="line">    <span class="keyword">return</span> firstInstance(gen);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>由于BeanCopier的create方法需要查询底层map中的缓存，因此当它生成过的copier非常多的时候，有理由猜测create性能会下降。</p>
+<p>1.create方法由悲观锁(synchronized)保护: 并发高时，性能下降；</p>
+<p>2.create方法底层有存储: 历史上生成过的copier非常多时，查询性能下降。</p>
+<h1 id="类卸载"><a href="#类卸载" class="headerlink" title="类卸载"></a>类卸载</h1><p>资料2显示，BeanCopier增强的字节码缓存由一个两级map保存，第一级为WeakHashMap，第二级为HashMap，线程安全由synchronized保护。</p>
+<p>第一级weakHashMap的key是classloader，因此类的卸载当classloader被回收时进行。</p>
+<p>但类似的，如果是我们自己封装拷贝函数，也会面临字节码回收、metaspace占用的问题。</p>
+<p>个人认为BeanCopier生成的字节码并不比自己手写的多很多，因此推荐使用BeanCopier。</p>
+<p>可能的坑:</p>
+<p>跨多个classloader的情况：<a href="https://stackoverflow.com/questions/20816197/use-cglib-beancopier-with-multiple-classloaders" target="_blank" rel="noopener">https://stackoverflow.com/questions/20816197/use-cglib-beancopier-with-multiple-classloaders</a></p>
+<p>BeanCopier无法判断两个不同classloader加载的同名类是不同的类。所以如果使用不同classloader加载同名类，需要特别考虑。</p>
+<h1 id="参考资料"><a href="#参考资料" class="headerlink" title="参考资料"></a>参考资料</h1><p><a href="https://www.cnblogs.com/winner-0715/p/10117282.html" target="_blank" rel="noopener">https://www.cnblogs.com/winner-0715/p/10117282.html</a></p>
+<p><a href="https://www.jianshu.com/p/f8b892e08d26" target="_blank" rel="noopener">https://www.jianshu.com/p/f8b892e08d26</a></p>
+<p><a href="https://www.cnblogs.com/mengdd/p/3594608.html" target="_blank" rel="noopener">https://www.cnblogs.com/mengdd/p/3594608.html</a></p>
+<p><a href="https://blog.csdn.net/xihuanyuye/article/details/89887913" target="_blank" rel="noopener">https://blog.csdn.net/xihuanyuye/article/details/89887913</a></p>
+<p><a href="https://ningyu1.github.io/blog/20190322/113-object-copy.html" target="_blank" rel="noopener">https://ningyu1.github.io/blog/20190322/113-object-copy.html</a></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2020/05/05/2020-05/BeanCopier%E6%B5%8B%E8%AF%84%E6%8A%A5%E5%91%8A/" data-id="ck9tq5tbb0000alamfplm0rxy" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spring/" rel="tag">spring</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2020-04/spring拾遗" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2020/04/19/2020-04/spring%E6%8B%BE%E9%81%97/" class="article-date">
@@ -744,102 +981,10 @@
 
 
   
-    <article id="post-2019-11/利用序列样本超越A-B-Test-interleaving和多臂老虎机" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/11/13/2019-11/%E5%88%A9%E7%94%A8%E5%BA%8F%E5%88%97%E6%A0%B7%E6%9C%AC%E8%B6%85%E8%B6%8AA-B-Test-interleaving%E5%92%8C%E5%A4%9A%E8%87%82%E8%80%81%E8%99%8E%E6%9C%BA/" class="article-date">
-  <time datetime="2019-11-13T06:13:15.000Z" itemprop="datePublished">2019-11-13</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/%E8%AE%BA%E6%96%87/">论文</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/11/13/2019-11/%E5%88%A9%E7%94%A8%E5%BA%8F%E5%88%97%E6%A0%B7%E6%9C%AC%E8%B6%85%E8%B6%8AA-B-Test-interleaving%E5%92%8C%E5%A4%9A%E8%87%82%E8%80%81%E8%99%8E%E6%9C%BA/">利用序列样本超越A/B Test: interleaving和多臂老虎机</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <blockquote>
-<p>interleaving实验: 快速找到最优解;<br>多臂老虎机: 降低实验成本;</p>
-</blockquote>
-<h1 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h1><p>经典统计分析的样本: 农业统计中样本是同时产生的。<br>在线服务中的样本: 序列样本,在线服务中样本是依次到达的;</p>
-<p>利用这个特性,可以有比传统统计分析方法成本更小、更灵活的实验方法。<br>序列样本环境下的假设检验,在相同显著性和检验力下,经典t检验结束更早,需要样本更少。</p>
-<h1 id="Interleaving实验"><a href="#Interleaving实验" class="headerlink" title="Interleaving实验"></a>Interleaving实验</h1><p><code>交错实验</code><br>优先确定哪个方案更好,而不是统计出具体效果好多少.<br>参考: <a href="https://zhuanlan.zhihu.com/p/31770319" target="_blank" rel="noopener">https://zhuanlan.zhihu.com/p/31770319</a><br><code>优点</code>: 更少的样本达到与Abtest相同的偏向结果；<br><code>缺点</code>： 无法知道究竟有多好的效果；（比如A组究竟能提高多少阅读时长）</p>
-<h2 id="解决方案"><a href="#解决方案" class="headerlink" title="解决方案"></a>解决方案</h2><p>用<code>Interleaving</code>+<code>ABtest</code>两阶段完成整个评估。</p>
-<p><code>要点</code>：抛硬币交错，保证公平。<br><code>灵敏度</code>： 高于AB；<br><code>准确度</code>： 与AB有很强的相关性；<br><code>场景</code>： 排名算法</p>
-<img src="/images/2019-11/right.jpg" class="" width="800" height="1200" title="right">
-
-
-<h2 id="案例-Netflix的方法"><a href="#案例-Netflix的方法" class="headerlink" title="案例: Netflix的方法"></a>案例: Netflix的方法</h2><p>第一阶段: 快速筛选,从众多算法中挑选出最有前途的排名算法;<br>第二阶段，进行传统的A/B测试,以测量长期效应;</p>
-<img src="/images/2019-11/interleaving.jpg" class="" width="800" height="1200" title="interleaving">
-
-<h2 id="使用条件"><a href="#使用条件" class="headerlink" title="使用条件"></a>使用条件</h2><ol>
-<li>指标对排序算法的质量非常敏感;</li>
-<li>对第二阶段进行准确预测：第一阶段衡量的指标与A/B 评估的指标正相关；</li>
-</ol>
-<h3 id="指标示例"><a href="#指标示例" class="headerlink" title="指标示例"></a>指标示例</h3><p>传统AB指标: 留存、观看时长；<br>交错测试指标: 观看时长比例；</p>
-<h1 id="MAB-多臂老虎机"><a href="#MAB-多臂老虎机" class="headerlink" title="MAB: 多臂老虎机"></a>MAB: 多臂老虎机</h1><p>参考: <a href="http://www.fengjunchen.com/%E9%80%82%E7%94%A8%E4%BA%8E%E5%9C%A8%E7%BA%BF%E6%9C%8D%E5%8A%A1%E7%9A%84ab%E6%B5%8B%E8%AF%95%E6%96%B9%E6%B3%95%E8%AE%BA/" target="_blank" rel="noopener">http://www.fengjunchen.com/%E9%80%82%E7%94%A8%E4%BA%8E%E5%9C%A8%E7%BA%BF%E6%9C%8D%E5%8A%A1%E7%9A%84ab%E6%B5%8B%E8%AF%95%E6%96%B9%E6%B3%95%E8%AE%BA/</a></p>
-<h2 id="What-什么是多臂老虎机"><a href="#What-什么是多臂老虎机" class="headerlink" title="What: 什么是多臂老虎机"></a>What: 什么是多臂老虎机</h2><p>一种在线实验的方法，特点是兼顾实验结果和实验成本，不会让差劲的方案暴露给用户太久。</p>
-<p>在线上进行大规模实验的时候，可能会影响用户体验，从而影响用户留存等关键业务指标。因此我们希望在实验过程中，尽可能降低差方案曝光的频率。为了达到这个目的,大致有两种思路:<br>思路1: 动态结束;一旦A方案胜出,立即停止实验,采用A方案;<br>思路2: 非均衡分组;在优势方案下多分配用户.(多臂老虎机)</p>
-<p>使用场景: 序列样本/在线服务</p>
-<h3 id="背景-1"><a href="#背景-1" class="headerlink" title="背景"></a>背景</h3><blockquote>
-<p>Bandit: 老虎机</p>
-</blockquote>
-<img src="/images/2019-11/mab.jpg" class="" width="400" height="600" title="mab">
-<p>多臂老虎机问题:<br>老虎机有N个摇杆,每个得到奖励的概率为p1~pN;<br>假设可以拉很多次摇杆，使用什么策略可以使总收益最大化?</p>
-<h4 id="一种可能的思路"><a href="#一种可能的思路" class="headerlink" title="一种可能的思路"></a>一种可能的思路</h4><p>先抽样统计收益较好的摇杆,然后利用统计解决快速调整策略。<br>也就是分两个阶段:</p>
-<ol>
-<li>探索规律;</li>
-<li>利用规律;</li>
-</ol>
-<h3 id="汤普森抽样"><a href="#汤普森抽样" class="headerlink" title="汤普森抽样"></a>汤普森抽样</h3><p>在每个周期计算”摇杆i是最优摇杆”的后验概率,作为下一个周期随机分配摇杆的依据。</p>
-<p>优点: 灵活性、扩展性、保证实验过程坑用户比例最小;<br>缺点: 没有人公开发表过简单靠谱的停止条件。</p>
-<h4 id="PVR-停止条件的解决方案"><a href="#PVR-停止条件的解决方案" class="headerlink" title="PVR: 停止条件的解决方案"></a>PVR: 停止条件的解决方案</h4><p><code>google analytics</code>: PVR(潜在剩余价值)。<br>定义分界线为a,分界概率为b:</p>
-<blockquote>
-<p>P(潜在最优收益&gt;(1+a%)*目前最优收益) &lt; b</p>
-</blockquote>
-<p>google analytics的参数设置是<code>a=0.01,b=0.05</code>,即潜在最优收益比目前最优收益大1%的概率不到5%。</p>
-<h3 id="PVR方案的缺点"><a href="#PVR方案的缺点" class="headerlink" title="PVR方案的缺点"></a>PVR方案的缺点</h3><p>即使A/B方案没有任何区别,PVR也会导致相当一部分实验在有限时间内终止。<br>第一类错误的概率随时间延长增加。</p>
-<img src="/images/2019-11/error2.jpg" class="" width="800" height="1200" title="error2">
-<p>scott: 线上实验不需要考虑第一类错误，因为代价极小；而第二类错误是致命的。</p>
-<h2 id="案例"><a href="#案例" class="headerlink" title="案例"></a>案例</h2><p>谷歌analytics/yahoo/bing: 汤普森抽样的贝叶斯解法<br>论文: <a href="http://quinonero.net/Publications/AdPredictorICML2010-final.pdf" target="_blank" rel="noopener">http://quinonero.net/Publications/AdPredictorICML2010-final.pdf</a><br>数学要求: 超精深<br>相关图灵书: 《Bandit Algorithms for Website Optimization》</p>
-<img src="/images/2019-11/mab_book.jpg" class="" width="400" height="600" title="mab_book">
-<p>相关论文： <a href="http://www.economics.uci.edu/~ivan/asmb.874.pdf" target="_blank" rel="noopener">http://www.economics.uci.edu/~ivan/asmb.874.pdf</a></p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/11/13/2019-11/%E5%88%A9%E7%94%A8%E5%BA%8F%E5%88%97%E6%A0%B7%E6%9C%AC%E8%B6%85%E8%B6%8AA-B-Test-interleaving%E5%92%8C%E5%A4%9A%E8%87%82%E8%80%81%E8%99%8E%E6%9C%BA/" data-id="ck96cxpqd00kgmaam8k871wzq" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E8%AE%BA%E6%96%87/" rel="tag">论文</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
-    <a class="extend prev" rel="prev" href="/page/3/">&amp;laquo; 上一页</a><a class="page-number" href="/">1</a><a class="page-number" href="/page/2/">2</a><a class="page-number" href="/page/3/">3</a><span class="page-number current">4</span><a class="page-number" href="/page/5/">5</a><a class="page-number" href="/page/6/">6</a><span class="space">&hellip;</span><a class="page-number" href="/page/23/">23</a><a class="extend next" rel="next" href="/page/5/">下一页&amp;raquo;</a>
+    <a class="extend prev" rel="prev" href="/page/3/">&amp;laquo; 上一页</a><a class="page-number" href="/">1</a><a class="page-number" href="/page/2/">2</a><a class="page-number" href="/page/3/">3</a><span class="page-number current">4</span><a class="page-number" href="/page/5/">5</a><a class="page-number" href="/page/6/">6</a><span class="space">&hellip;</span><a class="page-number" href="/page/24/">24</a><a class="extend next" rel="next" href="/page/5/">下一页&amp;raquo;</a>
   </nav>
 </section>
            
@@ -862,6 +1007,10 @@
       <ul>
         
           <li>
+            <a href="/2022/10/03/2022-09/java%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E6%94%BB%E5%87%BB-md/">java反序列化攻击.md</a>
+          </li>
+        
+          <li>
             <a href="/2022/09/27/2022-09/sql%E6%B3%A8%E5%85%A5%E6%94%BB%E5%87%BB/">sql注入攻击</a>
           </li>
         
@@ -875,10 +1024,6 @@
         
           <li>
             <a href="/2022/09/25/2022-09/nc%E5%91%BD%E4%BB%A4%E7%AC%94%E8%AE%B0/">nc命令笔记</a>
-          </li>
-        
-          <li>
-            <a href="/2022/09/25/2022-09/%E8%B0%83%E4%BC%98-%E8%A7%A3%E5%86%B3%E7%BA%BF%E7%A8%8B%E6%B1%A0%E9%80%A0%E6%88%90%E7%9A%84%E8%BF%9B%E7%A8%8B%E5%8D%A1%E9%A1%BF%E3%80%81cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-解决线程池造成的进程卡顿、cpu毛刺问题</a>
           </li>
         
       </ul>

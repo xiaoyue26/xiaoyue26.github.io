@@ -72,6 +72,88 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-08/Future-FutureTask笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/08/05/2018-08/Future-FutureTask%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2018-08-05T09:32:45.000Z" itemprop="datePublished">2018-08-05</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/08/05/2018-08/Future-FutureTask%E7%AC%94%E8%AE%B0/">Future/FutureTask笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h2 id="Future和Callable"><a href="#Future和Callable" class="headerlink" title="Future和Callable"></a>Future和Callable</h2><p><code>Future</code>是个接口：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">Future</span>&lt;<span class="title">V</span>&gt; </span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">boolean</span> <span class="title">cancel</span><span class="params">(<span class="keyword">boolean</span> mayInterruptIfRunning)</span></span>;</span><br><span class="line">    <span class="function"><span class="keyword">boolean</span> <span class="title">isCancelled</span><span class="params">()</span></span>;</span><br><span class="line">    <span class="function"><span class="keyword">boolean</span> <span class="title">isDone</span><span class="params">()</span></span>;</span><br><span class="line">    <span class="function">V <span class="title">get</span><span class="params">()</span> <span class="keyword">throws</span> InterruptedException, ExecutionException</span>;</span><br><span class="line">    <span class="function">V <span class="title">get</span><span class="params">(<span class="keyword">long</span> timeout, TimeUnit unit)</span></span></span><br><span class="line"><span class="function">        <span class="keyword">throws</span> InterruptedException, ExecutionException, TimeoutException</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>可见它的功能主要包括：</p>
+<ol>
+<li>下取消指令;</li>
+<li>查询状态: 取消或者完成;</li>
+<li>获取结果。// 这一点和callable一样。</li>
+</ol>
+<p>回顾<code>callable</code>的源码:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">Callable</span>&lt;<span class="title">V</span>&gt; </span>&#123;</span><br><span class="line">    <span class="function">V <span class="title">call</span><span class="params">()</span> <span class="keyword">throws</span> Exception</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>可见两者区别主要在于<code>Future</code>并不定义任务详情，多了任务执行管理查询接口。<br>没有<code>callable</code>的call函数。</p>
+<p>实际使用的时候它们一般的分工如下:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Future&lt;String&gt; future = executorService.submit(<span class="keyword">new</span> MyCallable());</span><br></pre></td></tr></table></figure>
+
+<h2 id="FutureTask"><a href="#FutureTask" class="headerlink" title="FutureTask"></a>FutureTask</h2><p>FutureTask是一个实际的类.</p>
+<h3 id="外部使用-接口"><a href="#外部使用-接口" class="headerlink" title="外部使用/接口:"></a>外部使用/接口:</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">Callable&lt;Integer&gt; callable = () -&gt; <span class="keyword">new</span> Random().nextInt(<span class="number">100</span>);</span><br><span class="line">FutureTask&lt;Integer&gt; future = <span class="keyword">new</span> FutureTask&lt;&gt;(callable);</span><br><span class="line"><span class="comment">// 方法1: 可以由当前线程执行:</span></span><br><span class="line"><span class="comment">// future.run();</span></span><br><span class="line"><span class="comment">// 方法2: 可以由别的线程来执行:</span></span><br><span class="line"><span class="keyword">new</span> Thread(future).start();</span><br><span class="line">System.out.println(future.get());</span><br></pre></td></tr></table></figure>
+<p>可以看出<code>FutureTask</code>可以由<code>Callable</code>构造，然后用于执行、异步获取结果。</p>
+<h3 id="内部组件"><a href="#内部组件" class="headerlink" title="内部组件:"></a>内部组件:</h3><p>源码:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">FutureTask</span>&lt;<span class="title">V</span>&gt; <span class="keyword">implements</span> <span class="title">RunnableFuture</span>&lt;<span class="title">V</span>&gt; </span></span><br><span class="line"><span class="class">    <span class="title">private</span> <span class="title">volatile</span> <span class="title">int</span> <span class="title">state</span></span>;<span class="comment">// 可能的取值如下: </span></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> NEW          = <span class="number">0</span>; <span class="comment">// 初始状态</span></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> COMPLETING   = <span class="number">1</span>; <span class="comment">// 计算中</span></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> NORMAL       = <span class="number">2</span>; <span class="comment">// 正常结束 （终结状态）</span></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> EXCEPTIONAL  = <span class="number">3</span>; <span class="comment">// 异常结束 （终结状态）</span></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> CANCELLED    = <span class="number">4</span>; <span class="comment">// 已取消   （终结状态）</span></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> INTERRUPTING = <span class="number">5</span>; <span class="comment">// 打断中</span></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> INTERRUPTED  = <span class="number">6</span>; <span class="comment">// 已打断   （终结状态）</span></span><br><span class="line"></span><br><span class="line">    <span class="comment">/** The underlying callable; nulled out after running */</span></span><br><span class="line">    <span class="keyword">private</span> Callable&lt;V&gt; callable;</span><br><span class="line">    <span class="comment">/** The result to return or exception to throw from get() */</span></span><br><span class="line">    <span class="keyword">private</span> Object outcome; <span class="comment">// non-volatile, protected by state reads/writes</span></span><br><span class="line">    <span class="comment">/** The thread running the callable; CASed during run() */</span></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">volatile</span> Thread runner;</span><br><span class="line">    <span class="comment">/** Treiber stack of waiting threads */</span></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">volatile</span> WaitNode waiters;</span><br><span class="line"><span class="comment">// 省略很多方法: ...</span></span><br></pre></td></tr></table></figure>
+
+<p>其中状态可能的流转如下:（对应四个终结状态的生成）</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">NEW -&gt; COMPLETING -&gt; NORMAL</span><br><span class="line">NEW -&gt; COMPLETING -&gt; EXCEPTIONAL</span><br><span class="line">NEW -&gt; CANCELLED</span><br><span class="line">NEW -&gt; INTERRUPTING -&gt; INTERRUPTED</span><br></pre></td></tr></table></figure>
+<p>// TODO 为啥异常状态不用负数标示呢？</p>
+<p>其中<code>RunnableFuture</code>接口是这样的：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">RunnableFuture</span>&lt;<span class="title">V</span>&gt; <span class="keyword">extends</span> <span class="title">Runnable</span>, <span class="title">Future</span>&lt;<span class="title">V</span>&gt; </span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">void</span> <span class="title">run</span><span class="params">()</span></span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>可见<code>FutureTask</code>是<code>Runnable</code>和<code>Future</code>的结合, 拥有<code>Future</code>的查询结果特性和<code>Runnable</code>的定义计算任务的特性。</p>
+<p>然而它的内部实现实际上是用了<code>Callable</code>而不是<code>Runnable</code>:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">FutureTask</span><span class="params">(Callable&lt;V&gt; callable)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (callable == <span class="keyword">null</span>)</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> NullPointerException();</span><br><span class="line">        <span class="keyword">this</span>.callable = callable;</span><br><span class="line">        <span class="keyword">this</span>.state = NEW;       <span class="comment">// ensure visibility of callable</span></span><br><span class="line">    &#125;</span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">FutureTask</span><span class="params">(Runnable runnable, V result)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.callable = Executors.callable(runnable, result);</span><br><span class="line">        <span class="keyword">this</span>.state = NEW;       <span class="comment">// ensure visibility of callable</span></span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+<p>可以看到它只有两个构造函数，即使传入的<code>Runnable</code>也会被装配成<code>Callable</code>。</p>
+<h3 id="RunnableFuture-FutureTask与AbstractExecutorService"><a href="#RunnableFuture-FutureTask与AbstractExecutorService" class="headerlink" title="RunnableFuture/FutureTask与AbstractExecutorService"></a>RunnableFuture/FutureTask与AbstractExecutorService</h3><p>线程池的submit方法默认有如下3个实现: （来自<code>AbstractExecutorService</code>类）</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> Future&lt;?&gt; submit(Runnable task) &#123;</span><br><span class="line">    <span class="keyword">if</span> (task == <span class="keyword">null</span>) <span class="keyword">throw</span> <span class="keyword">new</span> NullPointerException();</span><br><span class="line">    RunnableFuture&lt;Void&gt; ftask = newTaskFor(task, <span class="keyword">null</span>);</span><br><span class="line">    execute(ftask);</span><br><span class="line">    <span class="keyword">return</span> ftask;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> &lt;T&gt; <span class="function">Future&lt;T&gt; <span class="title">submit</span><span class="params">(Runnable task, T result)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (task == <span class="keyword">null</span>) <span class="keyword">throw</span> <span class="keyword">new</span> NullPointerException();</span><br><span class="line">    RunnableFuture&lt;T&gt; ftask = newTaskFor(task, result);</span><br><span class="line">    execute(ftask);</span><br><span class="line">    <span class="keyword">return</span> ftask;</span><br><span class="line">&#125;</span><br><span class="line"> </span><br><span class="line"><span class="keyword">public</span> &lt;T&gt; <span class="function">Future&lt;T&gt; <span class="title">submit</span><span class="params">(Callable&lt;T&gt; task)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (task == <span class="keyword">null</span>) <span class="keyword">throw</span> <span class="keyword">new</span> NullPointerException();</span><br><span class="line">    RunnableFuture&lt;T&gt; ftask = newTaskFor(task);</span><br><span class="line">    execute(ftask);</span><br><span class="line">    <span class="keyword">return</span> ftask;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>因此线程池中传入任务后，实际上会转化为<code>RunnableFuture</code>.</p>
+<p>其中构造<code>RunnableFuture</code>的方法如下.</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">protected</span> &lt;T&gt; <span class="function">RunnableFuture&lt;T&gt; <span class="title">newTaskFor</span><span class="params">(Runnable runnable, T value)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">new</span> FutureTask&lt;T&gt;(runnable, value);</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">protected</span> &lt;T&gt; <span class="function">RunnableFuture&lt;T&gt; <span class="title">newTaskFor</span><span class="params">(Callable&lt;T&gt; callable)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">new</span> FutureTask&lt;T&gt;(callable);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>因此<code>RunnableFuture</code>的实际实现，在线程池中默认是<code>FutureTask</code>。</p>
+<p>综上所述：<br>因此线程池中传入任务后，实际上会转化为<code>FutureTask</code>.</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/08/05/2018-08/Future-FutureTask%E7%AC%94%E8%AE%B0/" data-id="ck96cxpoc00cpmaametp4aore" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%B9%B6%E5%8F%91/" rel="tag">并发</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-07/消息队列小结" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/07/22/2018-07/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97%E5%B0%8F%E7%BB%93/" class="article-date">
@@ -947,137 +1029,10 @@
 
 
   
-    <article id="post-2018-04/java并发编程的艺术笔记-第六章1-map" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/04/07/2018-04/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF%E7%AC%94%E8%AE%B0-%E7%AC%AC%E5%85%AD%E7%AB%A01-map/" class="article-date">
-  <time datetime="2018-04-07T13:49:47.000Z" itemprop="datePublished">2018-04-07</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/04/07/2018-04/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF%E7%AC%94%E8%AE%B0-%E7%AC%AC%E5%85%AD%E7%AB%A01-map/">java并发编程的艺术笔记-第六章-1-map</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="第六章-java并发容器和框架"><a href="#第六章-java并发容器和框架" class="headerlink" title="第六章 java并发容器和框架"></a>第六章 java并发容器和框架</h1><p>主要内容是concurrent包中并发性能较好的几个容器，逻辑上是：</p>
-<ol>
-<li>map： <code>concurrentHashMap</code>;</li>
-<li>队列: <code>concurrentLinkedQueue</code>;</li>
-<li>阻塞队列.<br>此外还有<code>Fork/Join</code>工作窃取框架（<code>java8 stream api</code>的底层）。</li>
-</ol>
-<h2 id="6-1-ConcurrentHashMap"><a href="#6-1-ConcurrentHashMap" class="headerlink" title="6.1 ConcurrentHashMap"></a>6.1 ConcurrentHashMap</h2><h3 id="6-1-1-背景"><a href="#6-1-1-背景" class="headerlink" title="6.1.1 背景"></a>6.1.1 背景</h3><p><code>HashTable</code>缺点：并发性能低，直接锁整个table。<br><code>HashMap</code>缺点：非线程安全，并发时产生死循环。<br>多线程put操作可能导致环形链表。</p>
-<ul>
-<li><code>ConcurrentHashMap</code>：<br>分段加锁，并发效率高。</li>
-</ul>
-<h3 id="6-1-2-具体实现"><a href="#6-1-2-具体实现" class="headerlink" title="6.1.2 具体实现"></a>6.1.2 具体实现</h3><p><code>concurrentHashMap</code>在不同jdk版本中实现不同：</p>
-<h3 id="jdk1-6中的实现"><a href="#jdk1-6中的实现" class="headerlink" title="jdk1.6中的实现"></a>jdk1.6中的实现</h3><ul>
-<li>基本思路<br>将哈希表分成几个段，然后分段加锁。<br>把原来的一维数组，变成二维数组。（类似于二级索引，先寻址到第一级，获得锁以后再访问第二级具体数据）</li>
-</ul>
-<img src="/images/concurrentClass.jpg" class="" width="400" height="600" title="concurrentClass">
-<p>如类图所示：<br><code>ConcurrentHashMap</code>-&gt;<code>Segment</code>-&gt;<code>HashEntry</code></p>
-<img src="/images/concurrentStruct.jpg" class="" width="400" height="600" title="concurrentStruct">
-
-<p>第一维是<code>Segment</code>数组，每个<code>Segment</code>里存一个<code>HashEntry</code>数组，最后拉链表。<br><code>HashEntry</code>源码：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">static</span> <span class="keyword">final</span> <span class="class"><span class="keyword">class</span> <span class="title">HashEntry</span>&lt;<span class="title">K</span>,<span class="title">V</span>&gt; </span>&#123;</span><br><span class="line">        <span class="keyword">final</span> <span class="keyword">int</span> hash;</span><br><span class="line">        <span class="keyword">final</span> K key;</span><br><span class="line">        <span class="keyword">volatile</span> V value;</span><br><span class="line">        <span class="keyword">volatile</span> HashEntry&lt;K,V&gt; next;</span><br></pre></td></tr></table></figure>
-
-
-<p><strong>特点</strong><br>1.实际并发度为2的n次方。（离散取值，而不是连续）<br>=&gt;原因：<br><code>Segment</code>数组的长度需要为2的n次方<br>=&gt;原因：<br>寻址的时候使用移位来提高性能，需要数组长度为2的n次方：<br>hash值的高位确定落在哪个<code>Segment</code>里，低位确定落在<code>Segment</code>中的位置。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">hash &gt;&gt;&gt; segmentShift) &amp; segmentMask<span class="comment">//定位Segment所使用的hash算法</span></span><br><span class="line"><span class="keyword">int</span> index = hash &amp; (tab.length - <span class="number">1</span>);<span class="comment">// 定位HashEntry所使用的hash算法</span></span><br><span class="line"><span class="comment">// 当tab.length为2的n次方时，index的计算等价于= hash % tab.length</span></span><br></pre></td></tr></table></figure>
-<p>并发度(<code>Concurrency Level</code>)实际就是由多少锁，也就是<code>Segment</code>数组的长度。<br>如果设定并发度为14，实际上会创建长度为16的<code>Segment</code>数组，也就是实际并发度为16.</p>
-<p>2.<strong>弱一致性</strong><br>写入的数据并不一定能马上读到，或者不一定能读到最新数据。<br>// <code>get</code>,<code>containsKey</code>,<code>clear</code>方法和迭代器都是弱一致性的<br>原因：<br>并发的时候使用了<code>volatile</code>代替锁提高性能，牺牲了一致性换取性能。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">static</span> <span class="keyword">final</span> <span class="class"><span class="keyword">class</span> <span class="title">HashEntry</span>&lt;<span class="title">K</span>,<span class="title">V</span>&gt; </span>&#123;</span><br><span class="line">        <span class="keyword">final</span> <span class="keyword">int</span> hash;</span><br><span class="line">        <span class="keyword">final</span> K key;</span><br><span class="line">        <span class="keyword">volatile</span> V value;</span><br><span class="line">        <span class="keyword">volatile</span> HashEntry&lt;K,V&gt; next;</span><br></pre></td></tr></table></figure>
-<p>由于遍历期间其他线程可能对链表结构做了调整，因此<code>get和containsKey</code>返回的可能是过时的数据。如在get执行<code>UNSAFE.getObjectVolatile(segments, u)</code>之后，其他线程若执行了<code>clear</code>操作，则<code>get</code>将读到失效的数据。</p>
-<p>由于<code>clear</code>没有使用全局的锁，当清除完一个<code>segment</code>之后，开始清理下一个<code>segment</code>的时候，已经清理<code>segments</code>可能又被加入了数据，因此<code>clear</code>返回的时候，<code>ConcurrentHashMap</code>中是可能存在数据的。因此，<code>clear</code>方法是弱一致的。</p>
-<p>如果加锁的话，就能保证强一致性了。</p>
-<h3 id="jdk1-8中的实现"><a href="#jdk1-8中的实现" class="headerlink" title="jdk1.8中的实现"></a>jdk1.8中的实现</h3><ul>
-<li><p>基本思路<br>//把链表改成红黑树，提高效率。<br>第一维：数组<br>第二维：链表(&lt;8)/红黑树<br>用CAS操作代替大范围加锁。<br>锁的粒度缩小到<code>Node</code>级别。（linux中很多并发相关的数据结构都是红黑树，在如epoll，防火墙中应用）</p>
-</li>
-<li><p>具体实现</p>
-</li>
-</ul>
-<ol>
-<li>最小粒度是<code>Node</code>,成员变量如下:<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">Node</span>&lt;<span class="title">K</span>,<span class="title">V</span>&gt; <span class="keyword">implements</span> <span class="title">Map</span>.<span class="title">Entry</span>&lt;<span class="title">K</span>,<span class="title">V</span>&gt; </span>&#123;</span><br><span class="line">        <span class="keyword">final</span> <span class="keyword">int</span> hash;</span><br><span class="line">        <span class="keyword">final</span> K key;</span><br><span class="line">        <span class="keyword">volatile</span> V val;</span><br><span class="line">        <span class="keyword">volatile</span> Node&lt;K,V&gt; next;</span><br></pre></td></tr></table></figure>
-可以看出与原来的<code>HashEntry</code>基本一致，多了一个继承。</li>
-</ol>
-<p>其他的容器成员：</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * The array of bins. Lazily initialized upon first insertion.</span></span><br><span class="line"><span class="comment"> * Size is always a power of two. Accessed directly by iterators.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">transient</span> <span class="keyword">volatile</span> Node&lt;K,V&gt;[] table;</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * 平时为null。扩容时,为下一个表。</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">transient</span> <span class="keyword">volatile</span> Node&lt;K,V&gt;[] nextTable;</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Base counter value, used mainly when there is no contention,</span></span><br><span class="line"><span class="comment"> * but also as a fallback during table initialization</span></span><br><span class="line"><span class="comment"> * races. Updated via CAS.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">transient</span> <span class="keyword">volatile</span> <span class="keyword">long</span> baseCount;</span><br><span class="line"><span class="keyword">private</span> <span class="keyword">transient</span> <span class="keyword">volatile</span> <span class="keyword">int</span> sizeCtl;</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * The next table index (plus one) to split while resizing.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">transient</span> <span class="keyword">volatile</span> <span class="keyword">int</span> transferIndex;</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Spinlock (locked via CAS) used when resizing and/or creating CounterCells.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">transient</span> <span class="keyword">volatile</span> <span class="keyword">int</span> cellsBusy;</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * Table of counter cells. When non-null, size is a power of 2.</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">transient</span> <span class="keyword">volatile</span> CounterCell[] counterCells;</span><br><span class="line"></span><br><span class="line"><span class="comment">// views</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">transient</span> KeySetView&lt;K,V&gt; keySet;</span><br><span class="line"><span class="keyword">private</span> <span class="keyword">transient</span> ValuesView&lt;K,V&gt; values;</span><br><span class="line"><span class="keyword">private</span> <span class="keyword">transient</span> EntrySetView&lt;K,V&gt; entrySet;</span><br></pre></td></tr></table></figure>
-<p>修饰符复习：<br><code>transient</code>: 序列化的时候忽略。（一般会自定义相关的序列化操作）一般用于一些运行时的状态变量。</p>
-<p><strong>sizeCtl</strong><br><code>表初始化和扩容时的控制状态量。</code></p>
-<ul>
-<li><p>负数时: </p>
-<ul>
-<li>-1: 正在初始化;   </li>
-<li>-2: 正在扩容,有1个活跃的扩容线程数;</li>
-<li>-3: 正在扩容,有2个活跃的扩容线程数;</li>
-<li>-N: 正在扩容,有N-1个活跃的扩容线程数;<br>以此类推…</li>
-</ul>
-</li>
-<li><p>0: 还没初始化,未指定容量。   </p>
-</li>
-<li><p>正数时: </p>
-<ul>
-<li>table=null: 还没初始化,目标初始化容量。</li>
-<li>table!=null: sizeCtrl=0.75*n(扩容阈值,抵达这个值就要进行扩容了)</li>
-</ul>
-</li>
-</ul>
-<ol start="2">
-<li><p><code>Node</code>节点会从链表节点转化为红黑树节点<code>TreeNode</code>:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment">* Nodes for use in TreeBins</span></span><br><span class="line"><span class="comment">*/</span></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">final</span> <span class="class"><span class="keyword">class</span> <span class="title">TreeNode</span>&lt;<span class="title">K</span>,<span class="title">V</span>&gt; <span class="keyword">extends</span> <span class="title">Node</span>&lt;<span class="title">K</span>,<span class="title">V</span>&gt; </span>&#123;</span><br><span class="line">    TreeNode&lt;K,V&gt; parent;  <span class="comment">// red-black tree links</span></span><br><span class="line">    TreeNode&lt;K,V&gt; left;</span><br><span class="line">    TreeNode&lt;K,V&gt; right;</span><br><span class="line">    TreeNode&lt;K,V&gt; prev;    <span class="comment">// needed to unlink next upon deletion</span></span><br><span class="line">    <span class="keyword">boolean</span> red;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p><code>TreeBin</code>作为红黑树的根节点，封装相关的操作，并且有读写锁:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">static</span> <span class="keyword">final</span> <span class="class"><span class="keyword">class</span> <span class="title">TreeBin</span>&lt;<span class="title">K</span>,<span class="title">V</span>&gt; <span class="keyword">extends</span> <span class="title">Node</span>&lt;<span class="title">K</span>,<span class="title">V</span>&gt; </span>&#123;</span><br><span class="line">    TreeNode&lt;K,V&gt; root;</span><br><span class="line">    <span class="keyword">volatile</span> TreeNode&lt;K,V&gt; first;</span><br><span class="line">    <span class="keyword">volatile</span> Thread waiter;</span><br><span class="line">    <span class="keyword">volatile</span> <span class="keyword">int</span> lockState;</span><br><span class="line">    <span class="comment">// values for lockState</span></span><br><span class="line">    <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> WRITER = <span class="number">1</span>; <span class="comment">// set while holding write lock</span></span><br><span class="line">    <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> WAITER = <span class="number">2</span>; <span class="comment">// set when waiting for write lock</span></span><br><span class="line">    <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> READER = <span class="number">4</span>; <span class="comment">// increment value for setting read lock</span></span><br><span class="line">    </span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * Acquires write lock for tree restructuring.</span></span><br><span class="line"><span class="comment">    进行平衡梳理的时候,也会lockRoot</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="function"><span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">void</span> <span class="title">lockRoot</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (!U.compareAndSwapInt(<span class="keyword">this</span>, LOCKSTATE, <span class="number">0</span>, WRITER))</span><br><span class="line">            contendedLock(); <span class="comment">// offload to separate method</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * Releases write lock for tree restructuring.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="function"><span class="keyword">private</span> <span class="keyword">final</span> <span class="keyword">void</span> <span class="title">unlockRoot</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        lockState = <span class="number">0</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * Finds or adds a node.</span></span><br><span class="line"><span class="comment">     * <span class="doctag">@return</span> null if added</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="function"><span class="keyword">final</span> TreeNode&lt;K,V&gt; <span class="title">putTreeVal</span><span class="params">(<span class="keyword">int</span> h, K k, V v)</span> </span>&#123;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p><code>tabAt</code>方法,获取i位置上的<code>Node</code>:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">static final &lt;K,V&gt; Node&lt;K,V&gt; tabAt(Node&lt;K,V&gt;[] tab, int i) &#123;</span><br><span class="line">    return (Node&lt;K,V&gt;)U.getObjectVolatile(tab, ((long)i &lt;&lt; ASHIFT) + ABASE);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p><code>casTabAt</code>方法,CAS设定i位置上的<code>Node</code>:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">static</span> <span class="keyword">final</span> &lt;K,V&gt; <span class="function"><span class="keyword">boolean</span> <span class="title">casTabAt</span><span class="params">(Node&lt;K,V&gt;[] tab, <span class="keyword">int</span> i,</span></span></span><br><span class="line"><span class="function"><span class="params">Node&lt;K,V&gt; c, Node&lt;K,V&gt; v)</span> </span>&#123;</span><br><span class="line"><span class="keyword">return</span> U.compareAndSwapObject(tab, ((<span class="keyword">long</span>)i &lt;&lt; ASHIFT) + ABASE, c, v);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p><code>setTabAt</code>方法,直接设定i位置上的<code>Node</code>(已经占据锁的时候使用),<br>利用<code>volatile</code>:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">static final &lt;K,V&gt; void setTabAt(Node&lt;K,V&gt;[] tab, int i, Node&lt;K,V&gt; v) &#123;</span><br><span class="line">U.putObjectVolatile(tab, ((long)i &lt;&lt; ASHIFT) + ABASE, v);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-</li>
-</ol>
-<p>简单总结:<br><code>get</code>方法: 利用<code>volatile</code>,不加锁,并发访问;(弱一致性)<br><code>put</code>方法: 利用CAS方法,轮询,大部分时候不加锁.如果是红黑树，调用它的<code>putTreeVal</code>方法。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/04/07/2018-04/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF%E7%AC%94%E8%AE%B0-%E7%AC%AC%E5%85%AD%E7%AB%A01-map/" data-id="ck96cxpo400bqmaamgdek8zm0" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%B9%B6%E5%8F%91/" rel="tag">并发</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
-    <a class="extend prev" rel="prev" href="/page/12/">&amp;laquo; 上一页</a><a class="page-number" href="/">1</a><span class="space">&hellip;</span><a class="page-number" href="/page/11/">11</a><a class="page-number" href="/page/12/">12</a><span class="page-number current">13</span><a class="page-number" href="/page/14/">14</a><a class="page-number" href="/page/15/">15</a><span class="space">&hellip;</span><a class="page-number" href="/page/23/">23</a><a class="extend next" rel="next" href="/page/14/">下一页&amp;raquo;</a>
+    <a class="extend prev" rel="prev" href="/page/12/">&amp;laquo; 上一页</a><a class="page-number" href="/">1</a><span class="space">&hellip;</span><a class="page-number" href="/page/11/">11</a><a class="page-number" href="/page/12/">12</a><span class="page-number current">13</span><a class="page-number" href="/page/14/">14</a><a class="page-number" href="/page/15/">15</a><span class="space">&hellip;</span><a class="page-number" href="/page/24/">24</a><a class="extend next" rel="next" href="/page/14/">下一页&amp;raquo;</a>
   </nav>
 </section>
            
@@ -1100,6 +1055,10 @@
       <ul>
         
           <li>
+            <a href="/2022/10/03/2022-09/java%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E6%94%BB%E5%87%BB-md/">java反序列化攻击.md</a>
+          </li>
+        
+          <li>
             <a href="/2022/09/27/2022-09/sql%E6%B3%A8%E5%85%A5%E6%94%BB%E5%87%BB/">sql注入攻击</a>
           </li>
         
@@ -1113,10 +1072,6 @@
         
           <li>
             <a href="/2022/09/25/2022-09/nc%E5%91%BD%E4%BB%A4%E7%AC%94%E8%AE%B0/">nc命令笔记</a>
-          </li>
-        
-          <li>
-            <a href="/2022/09/25/2022-09/%E8%B0%83%E4%BC%98-%E8%A7%A3%E5%86%B3%E7%BA%BF%E7%A8%8B%E6%B1%A0%E9%80%A0%E6%88%90%E7%9A%84%E8%BF%9B%E7%A8%8B%E5%8D%A1%E9%A1%BF%E3%80%81cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">调优-解决线程池造成的进程卡顿、cpu毛刺问题</a>
           </li>
         
       </ul>
