@@ -72,6 +72,143 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-java并发编程实践笔记-1-3章" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2017/02/24/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E8%B7%B5%E7%AC%94%E8%AE%B0-1-3%E7%AB%A0/" class="article-date">
+  <time datetime="2017-02-24T11:42:54.000Z" itemprop="datePublished">2017-02-24</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2017/02/24/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E8%B7%B5%E7%AC%94%E8%AE%B0-1-3%E7%AB%A0/">java并发编程实践笔记-1-3章</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <blockquote>
+<p>避免多线程错误三个方法:<br>(1)不共享变量(ThreadLocal);//空间换时间<br>(2)共享变量设定为不可变(Immutable);//空间换时间<br>(3)使用同步(Synchronized).//时间换空间</p>
+</blockquote>
+<p>tips: </p>
+<blockquote>
+<p>java8stream在parallel中,不能操作非线程安全的类。</p>
+</blockquote>
+<h1 id="Synchronized"><a href="#Synchronized" class="headerlink" title="Synchronized"></a>Synchronized</h1><blockquote>
+<p>内置锁.<br>非静态方法synchronized: 对当前对象加锁;<br>  静态方法synchronized: 对Class对象加锁.</p>
+</blockquote>
+<p>同步块:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">synchronized</span>(<span class="keyword">this</span>)&#123;</span><br><span class="line"><span class="comment">//do something</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>因为锁是加在某个对象上,所以叫做内置锁.线程在进入同步块的时候获得锁,出来的时候释放锁.</p>
+<blockquote>
+<p>释放锁的情况:</p>
+</blockquote>
+<ol>
+<li>正常退出</li>
+<li>异常退出.</li>
+</ol>
+<ul>
+<li><p>优点:<br>同步块中的代码能作为一个原子操作.</p>
+</li>
+<li><p>缺点:<br>只有一个线程能获得锁.性能较低.</p>
+</li>
+</ul>
+<h2 id="可重入"><a href="#可重入" class="headerlink" title="可重入"></a>可重入</h2><blockquote>
+<p>重入: 当某个线程试图获取它自己已经持有的锁.<br><code>Synchronized</code>内置锁是可重入的,意味着线程可以多次获取自己持有的内置锁,都可以获得成功.</p>
+</blockquote>
+<h3 id="实现"><a href="#实现" class="headerlink" title="实现:"></a>实现:</h3><p>锁在对象里,锁中记录持有者的线程和获取计数器.<br>计数器为0时,锁被认为不被任何线程所持有;<br>当线程请求一个计数器为0的锁时,锁中记录下锁的持有者,并且将计数器置为1.如果再一次进入同步块,计数器+1,退出一次同步块计数器-1,当计数器为0,锁被释放.</p>
+<h1 id="可见性"><a href="#可见性" class="headerlink" title="可见性"></a>可见性</h1><blockquote>
+<p>不加任何同步控制的变量,由于指令重排,多线程等因素,可见性无法保证,读线程可能读到的不是最新的值(读到失效数据).这种级别是最低安全性.</p>
+</blockquote>
+<blockquote>
+<p>对于大部分基本类型来说,最低安全性是可以容忍的.但对于double,long来说,由于被更新的可能是数据的一半,除非使用volatile关键字等机制,否则读出来的可能不仅是失效数据,而是一个混合了失效数据\最新数据的近乎随机的值,可能带来毁灭性的后果. </p>
+</blockquote>
+<h1 id="volatile"><a href="#volatile" class="headerlink" title="volatile"></a>volatile</h1><p>作用: 保持可见性<br>缺点: 不保证操作的原子性. (需要原子性,应该使用锁或原子类)<br>使用场景:</p>
+<ol>
+<li>boolean值,状态变量;</li>
+<li>只有一个线程写,其他线程读.<br>或 写的时候不依赖原先的值(不是自增这种). </li>
+</ol>
+<h2 id="编译优化与变量"><a href="#编译优化与变量" class="headerlink" title="编译优化与变量"></a>编译优化与变量</h2><blockquote>
+<p>jvm在server模式下对循环内没有改变的变量进行优化,将其提出循环.<br>;在client模式下则不会有这种优化.</p>
+</blockquote>
+<p>示例代码:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">boolean</span> otherDone;<span class="comment">//此处应该volatile</span></span><br><span class="line"><span class="keyword">while</span>(!otherDone)&#123;</span><br><span class="line"><span class="comment">//sleep</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>上述代码如果不加volatile,则在server模式下可能会死锁,因为!otherDone的判断可能会被优化到循环外面.导致无限循环.</p>
+<h1 id="线程封闭"><a href="#线程封闭" class="headerlink" title="线程封闭"></a>线程封闭</h1><p>不在线程间共享变量,因此可以达到线程安全.<br>例如使用ThreadLocal. </p>
+<h2 id="栈封闭"><a href="#栈封闭" class="headerlink" title="栈封闭"></a>栈封闭</h2><p>线程封闭的特例.<br>由于每个线程有自己的栈,而局部变量在栈上,因此只使用局部变量的话,就是栈封闭.(达到线程安全)<br>由于基本类型无法获取引用,因此基本类型无法逸出,是安全的;<br>而对象引用可能逸出,因此需要编程人员自行保证不会逸出.<br>(不把引用乱传递)</p>
+<h1 id="发布与逸出"><a href="#发布与逸出" class="headerlink" title="发布与逸出"></a>发布与逸出</h1><ol>
+<li>线程安全的叫发布;</li>
+<li>不安全的叫逸出.</li>
+</ol>
+<p>安全发布的两种途径:</p>
+<blockquote>
+<ol>
+<li>发布的对象是不可变的;</li>
+<li>发布的时候使用同步方法. </li>
+</ol>
+</blockquote>
+<h2 id="途径1"><a href="#途径1" class="headerlink" title="途径1"></a>途径1</h2><p>其中,不可变的方法:</p>
+<blockquote>
+<p>private final,且返回clone或Arrays.copy的值.</p>
+</blockquote>
+<h2 id="途径2"><a href="#途径2" class="headerlink" title="途径2"></a>途径2</h2><p>把不可变对象安全发布的方法:</p>
+<blockquote>
+<ol>
+<li>静态初始化函数中初始化一个对象引用;</li>
+<li>把对象引用存放到volatile或AtomicReference;</li>
+<li>把对象引用存放到正确构造对象的final类型域;</li>
+<li>把对象引用存放到一个由锁保护的域中.(如放入同步容器中,包括HashTable,Vector,sychronizedMap,synchronizedMap,concurrentMap,CopyOnWriteArrayList,BlockingQueue,ConcurrentLinkedQueue).</li>
+</ol>
+</blockquote>
+<ul>
+<li>方法1: 静态初始化函数<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> Holder holder=<span class="keyword">new</span> Holder(<span class="number">42</span>);</span><br></pre></td></tr></table></figure>
+
+</li>
+</ul>
+<p>对于不可变对象,安全发布后就可以用了;<br>对于可变对象,安全发布以后还需要安全得使用,也就是使用的时候也需要同步.</p>
+<ul>
+<li>总结:<blockquote>
+<p>不可变对象: 任意发布<br>事实不可变: 安全发布<br>可变: 安全发布且安全使用.</p>
+</blockquote>
+</li>
+</ul>
+<h1 id="建议"><a href="#建议" class="headerlink" title="建议"></a>建议</h1><ol>
+<li>尽量使用final,private.<br>其中final能保证初始化值过程中的安全性.</li>
+</ol>
+<h1 id="疑问"><a href="#疑问" class="headerlink" title="疑问"></a>疑问</h1><ol>
+<li>immutable和threadLocal选哪个?</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2017/02/24/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E8%B7%B5%E7%AC%94%E8%AE%B0-1-3%E7%AB%A0/" data-id="ck96cxplb002rmaam7x6zgt9a" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-java泛型" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2017/02/12/java%E6%B3%9B%E5%9E%8B/" class="article-date">
@@ -965,109 +1102,6 @@
 
 
   
-    <article id="post-gradle学习笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2016/12/31/gradle%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2016-12-31T11:18:04.000Z" itemprop="datePublished">2016-12-31</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/gradle/">gradle</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2016/12/31/gradle%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/">gradle学习笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>有用的命令:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;&#x2F; 查看某个依赖具体是怎么引入的.</span><br><span class="line">gradle dI --dependency org.springframework:spring-messaging</span><br><span class="line">&#x2F;&#x2F; dI是dependencyInsight的缩写</span><br></pre></td></tr></table></figure>
-<p><a href="https://www.jetbrains.com/help/idea/creating-and-running-your-scala-application.html" target="_blank" rel="noopener">https://www.jetbrains.com/help/idea/creating-and-running-your-scala-application.html</a><br><a href="https://docs.gradle.org/3.3/userguide/scala_plugin.html" target="_blank" rel="noopener">https://docs.gradle.org/3.3/userguide/scala_plugin.html</a><br><a href="https://dzone.com/articles/intellij-scala-and-gradle" target="_blank" rel="noopener">https://dzone.com/articles/intellij-scala-and-gradle</a><br><a href="http://www.cnblogs.com/davenkin/p/gradle-learning-4.html" target="_blank" rel="noopener">http://www.cnblogs.com/davenkin/p/gradle-learning-4.html</a></p>
-<p><a href="http://www.cnblogs.com/davenkin/p/gradle-learning-1.html" target="_blank" rel="noopener">http://www.cnblogs.com/davenkin/p/gradle-learning-1.html</a><br>git clone <a href="https://github.com/davenkin/gradle-learning.git" target="_blank" rel="noopener">https://github.com/davenkin/gradle-learning.git</a></p>
-<h1 id="gradle-task"><a href="#gradle-task" class="headerlink" title="gradle task"></a>gradle task</h1><p>gradle主要有两个元素:task和plugin.<br>如下task开头的就是task,没有task的就是project的属性(或扩展属性).</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">task helloWorld &lt;&lt; &#123;</span><br><span class="line">    println &quot;Hello World!&quot;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">task copyFile(type: Copy) &#123;</span><br><span class="line">    from &#39;xml&#39;</span><br><span class="line">    into &#39;destination&#39;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">task hello2 &#123; &#x2F;&#x2F;doLast等效于helloWorld的 &lt;&lt; </span><br><span class="line">   doLast &#123;</span><br><span class="line">        println &#39;hello2&#39;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line">task hello3 &#123;</span><br><span class="line">    doLast &#123;</span><br><span class="line">        println &#39;hello last&#39;</span><br><span class="line">    &#125;</span><br><span class="line">   doFirst &#123;</span><br><span class="line">      println &#39;hello first&#39;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>可以看出gradle也是有语法的.据说是groovy:<br><a href="http://blog.csdn.net/wangbaochu/article/details/51177672" target="_blank" rel="noopener">http://blog.csdn.net/wangbaochu/article/details/51177672</a><br><a href="http://www.jianshu.com/p/37b46cc815b3" target="_blank" rel="noopener">http://www.jianshu.com/p/37b46cc815b3</a></p>
-<ol>
-<li>大括号之间的内容则表示传递给task()方法的一个闭包.</li>
-<li>&lt;&lt; 表示向helloWorld中追加入执行代码——其实就是groovy代码.</li>
-<li>执行命令: <code>gradle helloWorld</code>,表示执行<code>helloWorld</code>这个task.</li>
-<li>helloWorld是默认类型,copyFile是Copy类型的task.</li>
-</ol>
-<h1 id="task之间的依赖"><a href="#task之间的依赖" class="headerlink" title="task之间的依赖:"></a>task之间的依赖:</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">task taskA(dependsOn: taskB) &#123;</span><br><span class="line">   &#x2F;&#x2F;do something</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h1 id="查看当前项目的task列表-包括自带的tasks"><a href="#查看当前项目的task列表-包括自带的tasks" class="headerlink" title="查看当前项目的task列表:(包括自带的tasks)"></a>查看当前项目的task列表:(包括自带的tasks)</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">gradle tasks --all</span><br></pre></td></tr></table></figure>
-
-<h1 id="查看当前的属性配置列表"><a href="#查看当前的属性配置列表" class="headerlink" title="查看当前的属性配置列表:"></a>查看当前的属性配置列表:</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">gradle properties</span><br></pre></td></tr></table></figure>
-
-<p>#执行顺序:<br>Gradle在执行Task时分为两个阶段，首先是配置阶段，然后才是实际执行阶段.</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">task hello9 &lt;&lt; &#123;</span><br><span class="line">   println description</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">hello9.configure &#123;</span><br><span class="line">   description &#x3D; &quot;this is hello9&quot;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>配置在定义后,但依然能打印出<code>this is hello9</code>.<br>一个Task除了执行操作之外，还可以包含多个Property，其中有Gradle为每个Task默认定义的Property，比如description，logger等。另外，每一个特定的Task类型还可以含有特定的Property，比如Copy的from和to等。当然，我们还可以动态地向Task中加入额外的Property。</p>
-<h1 id="增量编译"><a href="#增量编译" class="headerlink" title="增量编译:"></a>增量编译:</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;&#x2F;规定输入输出:</span><br><span class="line">inputs.dir sources</span><br><span class="line">outputs.file destination</span><br></pre></td></tr></table></figure>
-<h1 id="静态设置变量"><a href="#静态设置变量" class="headerlink" title="静态设置变量:"></a>静态设置变量:</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">version &#x3D; &#39;this is the project version&#39;</span><br><span class="line">description &#x3D; &#39;this is the project description&#39;</span><br><span class="line">task showProjectProperties &lt;&lt; &#123;</span><br><span class="line">    println version &#x2F;&#x2F; task没有version属性,因此默认调用 project.version</span><br><span class="line">    println project.version</span><br><span class="line">    println description &#x2F;&#x2F; task有description属性,但是没有赋值</span><br><span class="line">    println project.description</span><br><span class="line"></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">&#x2F;&#x2F; 为project添加额外的Property(不能像python那样直接定义,需要用ext关键字添加)</span><br><span class="line">ext.property1 &#x3D; &quot;this is property1&quot;</span><br><span class="line"></span><br><span class="line">ext &#123;</span><br><span class="line">    property2 &#x3D; &quot;this is property2&quot;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">&#x2F;&#x2F; project和task都是实现了ExtensionAware接口的gradle对象,因此可以这样添加属性</span><br><span class="line">task showProperties &lt;&lt; &#123;</span><br><span class="line">    println property1</span><br><span class="line">    println property2</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h1 id="动态设置变量"><a href="#动态设置变量" class="headerlink" title="动态设置变量"></a>动态设置变量</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">task showCommandLieProperties &lt;&lt; &#123;</span><br><span class="line">    println property3</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>调用命令:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;&#x2F; 动态定义属性(命令行中定义),调用命令:</span><br><span class="line">gradle -Pproperty3&#x3D;&quot;this is property3&quot; showCommandLieProperties</span><br><span class="line">&#x2F;&#x2F; 或者:</span><br><span class="line">gradle -Dorg.gradle.project.property3&#x3D;&quot;this is another property3&quot; showCommandLieProperties</span><br><span class="line">&#x2F;&#x2F; 或者:</span><br><span class="line">export ORG_GRADLE_PROJECT_property3&#x3D;&quot;this is yet another property3&quot;</span><br><span class="line">gradle showCommandLieProperties</span><br><span class="line">unset ORG_GRADLE_PROJECT_property3</span><br></pre></td></tr></table></figure>
-
-<h1 id="gradle复合项目"><a href="#gradle复合项目" class="headerlink" title="gradle复合项目"></a>gradle复合项目</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;&#x2F;根项目:</span><br><span class="line">&#x2F;&#x2F;settings.gradle</span><br><span class="line">include &#39;sub-project1&#39;, &#39;sub-project2&#39;</span><br><span class="line"></span><br><span class="line">&#x2F;&#x2F;作用于所有项目的task:(包括root-project)</span><br><span class="line">allprojects &#123;</span><br><span class="line">    apply plugin: &#39;idea&#39;</span><br><span class="line">    task allTask &lt;&lt; &#123;</span><br><span class="line">        println project.name</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line">&#x2F;&#x2F;作用于所有子项目的task:(不包括root-project)</span><br><span class="line">subprojects &#123;</span><br><span class="line">    task subTask &lt;&lt; &#123;</span><br><span class="line">        println project.name</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line">&#x2F;&#x2F;gradle allTask 输出:</span><br><span class="line">:allTask  &#x2F;&#x2F; 调用的root的allTask</span><br><span class="line">root-project &#x2F;&#x2F;输出</span><br><span class="line">:sub-project1:allTask &#x2F;&#x2F;调用sub-project1的allTask</span><br><span class="line">sub-project1</span><br><span class="line">:sub-project2:allTask</span><br><span class="line">sub-project2</span><br></pre></td></tr></table></figure>
-
-<p>可以在跟项目的build.gradle中定义所有子项目的task:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;&#x2F; 方法1:</span><br><span class="line">project(&#39;:sub-project1&#39;) &#123;</span><br><span class="line">    task forProject1 &lt;&lt; &#123;</span><br><span class="line">        println &#39;for project 1&#39;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">&#x2F;&#x2F; 方法2:</span><br><span class="line">configure(allprojects.findAll &#123; it.name.startsWith(&#39;sub&#39;) &#125;) &#123;</span><br><span class="line">    subTask &lt;&lt; &#123;</span><br><span class="line">        println &#39;this is a sub project&#39;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>执行<code>gradle forProject1</code>时会级联查找所有项目的对应task.也可以显式得调用某个子项目的task:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">gradle :sub-project1:forProject1</span><br></pre></td></tr></table></figure>
-
-<p>groovy语法:<br><a href="http://blog.csdn.net/u014761700/article/details/51867939" target="_blank" rel="noopener">http://blog.csdn.net/u014761700/article/details/51867939</a></p>
-<h1 id="gradle执行阶段"><a href="#gradle执行阶段" class="headerlink" title="gradle执行阶段:"></a>gradle执行阶段:</h1><p>Initialization phase<br>-&gt;hook1<br>-&gt;Configuration phase<br>-&gt;hook2<br>-&gt;Execution phase<br>-&gt;hook3</p>
-<p>其中hook1:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">gradle.beforeProject&#123;</span><br><span class="line">project-&gt;</span><br><span class="line">    ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>hook2:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">gradle.taskGraph.whenReady&#123;</span><br><span class="line">graph-&gt;</span><br><span class="line">    ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>hook3:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">gradle.buildFinished&#123;</span><br><span class="line">result-&gt;</span><br><span class="line">    ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<ol>
-<li>初始化阶段执行<code>settings.gradle</code></li>
-<li>配置阶段解析每个project中的build.gradle<br>,以确定整个build的project以及内部的task关系.(即hook2中的task的有向图)</li>
-<li>执行阶段</li>
-</ol>
-<p>gradle包含三大对象: gradle对象,project对象,task对象.<br>一个project对象有多少task对象,往往由plugin对象决定. </p>
-<p>spring的gradle:<br><a href="https://github.com/spring-projects/spring-scala/blob/master/build.gradle" target="_blank" rel="noopener">https://github.com/spring-projects/spring-scala/blob/master/build.gradle</a></p>
-<h1 id="gradle排除依赖"><a href="#gradle排除依赖" class="headerlink" title="gradle排除依赖:"></a>gradle排除依赖:</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">compile(&quot;org.springframework.boot:spring-boot-starter-web&quot;) &#123;</span><br><span class="line">        exclude group: &#39;com.fasterxml.jackson.core&#39;</span><br><span class="line">      &#125; &#x2F;&#x2F; 排除依赖示例</span><br></pre></td></tr></table></figure>
-<p>maven也有类似的语法排除.</p>
-<h2 id="多版本库的选择"><a href="#多版本库的选择" class="headerlink" title="多版本库的选择:"></a>多版本库的选择:</h2><ul>
-<li>maven: 后面引入的覆盖前面的.可以使用shadow插件进行换名;</li>
-<li>gradle: 新版本覆盖旧版本.</li>
-</ul>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2016/12/31/gradle%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/" data-id="ck96cxpkz001jmaam74k6csyn" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/gradle/" rel="tag">gradle</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1094,6 +1128,10 @@
       <ul>
         
           <li>
+            <a href="/2022/11/21/2022-11/cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98%E9%80%9A%E7%94%A8%E4%BC%98%E5%8C%96%E6%80%9D%E8%B7%AF/">调优-cpu毛刺问题通用优化思路</a>
+          </li>
+        
+          <li>
             <a href="/2022/10/03/2022-10/java%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E6%94%BB%E5%87%BB-md/">java反序列化攻击</a>
           </li>
         
@@ -1107,10 +1145,6 @@
         
           <li>
             <a href="/2022/09/26/2022-09/jwt%E7%A0%B4%E8%A7%A3/">jwt破解</a>
-          </li>
-        
-          <li>
-            <a href="/2022/09/25/2022-09/nc%E5%91%BD%E4%BB%A4%E7%AC%94%E8%AE%B0/">nc命令笔记</a>
           </li>
         
       </ul>

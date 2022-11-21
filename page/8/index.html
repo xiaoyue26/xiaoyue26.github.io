@@ -72,6 +72,101 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-03/redis设计与实现笔记10-订阅-事物-lua" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/03/10/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B010-%E8%AE%A2%E9%98%85-%E4%BA%8B%E7%89%A9-lua/" class="article-date">
+  <time datetime="2019-03-10T12:08:34.000Z" itemprop="datePublished">2019-03-10</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/03/10/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B010-%E8%AE%A2%E9%98%85-%E4%BA%8B%E7%89%A9-lua/">redis设计与实现笔记10-订阅,事物,lua</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="发布订阅"><a href="#发布订阅" class="headerlink" title="发布订阅"></a>发布订阅</h1><p>(书上第18章)<br>客户端可以订阅某个频道，或者订阅符合某种模式的频道们。</p>
+<img src="/images/2019-03/publish.png" class="" width="800" height="1200" title="publish">
+
+<h2 id="订阅关系保存"><a href="#订阅关系保存" class="headerlink" title="订阅关系保存"></a>订阅关系保存</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">redisServer</span>&#123;</span></span><br><span class="line">    <span class="comment">// 保存所有频道的订阅关系:</span></span><br><span class="line">    dict* pubsub_channels;</span><br><span class="line">    <span class="comment">// key: 频道名字(string)</span></span><br><span class="line">    <span class="comment">// value: 订阅的客户端们(链表)</span></span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 模式订阅: 订阅符合某种模式的频道</span></span><br><span class="line">    dict* pubsub_patterns;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>（如果有个客户端疯狂乱订阅，服务器是不是内存就爆了？）</p>
+<h1 id="第19章-事务"><a href="#第19章-事务" class="headerlink" title="第19章-事务"></a>第19章-事务</h1><p>相关命令:</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">MULTI: 类似于事务开始start transaction;</span><br><span class="line"><span class="comment"># 中间一堆正常redis set命令。</span></span><br><span class="line">EXEC: 类似于commit.</span><br><span class="line">WATCH: 乐观锁，在<span class="built_in">exec</span>执行前监视一些key是否被修改。</span><br><span class="line">如果被修改，则拒绝执行事务（类似于CAS）</span><br></pre></td></tr></table></figure>
+<p>事务执行阶段不会执行别的客户端的命令。（相当于独占了）</p>
+<h3 id="事务开始"><a href="#事务开始" class="headerlink" title="事务开始"></a>事务开始</h3><p>MULTI: 客户端状态打开<code>REDIS_MULTI</code>标识。</p>
+<h3 id="命令入队"><a href="#命令入队" class="headerlink" title="命令入队"></a>命令入队</h3><p>除了<code>EXEC</code>,<code>DISCARD</code>,<code>WATCH</code>,<code>MULTI</code>之外的命令放入队列中；<br>否则立即执行。</p>
+<h3 id="Watch功能实现"><a href="#Watch功能实现" class="headerlink" title="Watch功能实现"></a>Watch功能实现</h3><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">redisDb</span>&#123;</span></span><br><span class="line">    <span class="comment">// 正在被watch监视的key:</span></span><br><span class="line">    dict *watched_keys;</span><br><span class="line">    <span class="comment">// key: 被监视的key</span></span><br><span class="line">    <span class="comment">// value: 监视的客户端们(list)</span></span><br><span class="line">&#125;redisDb;</span><br></pre></td></tr></table></figure>
+<p>存在redisDb中，可见每个数据库都保存一个这个字典。</p>
+<p>每个修改操作都要检查watched_keys字典，通知对应的客户端。（打脏标记<code>REIDS_DIRTY_CAS</code>）</p>
+<h2 id="事务的ACID"><a href="#事务的ACID" class="headerlink" title="事务的ACID"></a>事务的ACID</h2><p>A: 原子性 Atomicity<br>C: 一致性 Consistency<br>I: 隔离性 Isolation<br>D: 耐久性 Durability</p>
+<h3 id="A：原子性"><a href="#A：原子性" class="headerlink" title="A：原子性"></a>A：原子性</h3><ul>
+<li>mysql：<br>要么一个都不执行成功，要么都全部执行成功。</li>
+</ul>
+<p>redis这里略有修改，它只保证执行，不保证执行成功：<br>要么一个都不执行，要么都全部执行。<br>（redis只检查编译错误，如命令不存在，不检查运行时错误）<br>redis执行事务过程中出错的话，不会回滚已经执行的命令。<br>（开发者表示这算程序员自己的锅）</p>
+<h3 id="C-一致性"><a href="#C-一致性" class="headerlink" title="C: 一致性"></a>C: 一致性</h3><p>单实例：肯定一致。<br>主从： 由raft保证；<br>cluster: 分slot以后，相当于单实例+主从，因此一致。</p>
+<h3 id="I-隔离性"><a href="#I-隔离性" class="headerlink" title="I: 隔离性"></a>I: 隔离性</h3><p>也就是让并发执行达到串行一致性。<br>由于redis本来就是单线程串行执行事务，因此天然不需要做额外的事就能达到隔离性。</p>
+<h3 id="D-耐久性"><a href="#D-耐久性" class="headerlink" title="D: 耐久性"></a>D: 耐久性</h3><p>redis三种模式:<br>无持久化存储: 无耐久<br>RDB: 不能完全保证；<br>AOF: <code>appendfsync</code>为<code>always</code>时，达到事务耐久性。</p>
+<h1 id="第20章-Lua脚本"><a href="#第20章-Lua脚本" class="headerlink" title="第20章-Lua脚本"></a>第20章-Lua脚本</h1><p>主要涉及两个命令<code>EVAL</code>和<code>EVALSHA</code>。<br>redis服务器端2.6开始有lua环境，因此客户端可以：</p>
+<ol>
+<li>执行lua脚本: <figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">redis&gt;</span><span class="bash"> EVAL <span class="string">"return 'hello world'"</span> 0</span></span><br></pre></td></tr></table></figure>
+最后的0表示输入参数的个数是0个。参见：<a href="http://doc.redisfans.com/script/eval.html" target="_blank" rel="noopener">http://doc.redisfans.com/script/eval.html</a></li>
+<li>通过SHA1校验和，执行对应的lua脚本:<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">redis&gt;</span><span class="bash"> EVALSHA <span class="string">"a27e72..........."</span></span></span><br></pre></td></tr></table></figure>
+这个校验和需要服务器认识才行，服务器认识的方法：<br>(1)服务器以前执行过对应的lua脚本；<br>(2)客户端用<code>SCRIPT LOAD</code>命令告诉过服务器：<code>SCRIPT LOAD &quot;return 2*2&quot;</code>。</li>
+</ol>
+<h3 id="如果在cluster模式："><a href="#如果在cluster模式：" class="headerlink" title="如果在cluster模式："></a>如果在cluster模式：</h3><p>lua脚本如果要使用redis数据库中的键，一定要通过参数传递进去，才能被分析出来，方便兼容新版本的集群功能。</p>
+<h3 id="redis的lua环境"><a href="#redis的lua环境" class="headerlink" title="redis的lua环境"></a>redis的lua环境</h3><p>为了保证lua脚本之间不会互相影响，redis服务器需要保证luz脚本无副作用，它做了一下措施：</p>
+<ol>
+<li>修改随机数函数，消除副作用；</li>
+<li>禁止lua脚本创建全局变量；</li>
+</ol>
+<p>但是好像遗漏了lua脚本对于已有全局变量的修改：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">math.randomseed(10086) --change seed</span><br></pre></td></tr></table></figure>
+<p>应该是把这块儿交给程序员自行保证。</p>
+<h3 id="lua脚本特有的排序辅助"><a href="#lua脚本特有的排序辅助" class="headerlink" title="lua脚本特有的排序辅助"></a>lua脚本特有的排序辅助</h3><p>此外，为了获得确定性一致的结果，redis对集合的输出结果做了排序。<br>例如调用<code>SMEMBERS</code>后的结果，会经过排序辅助函数进行排序。<br>保证同样的数据集的输出结果相同。</p>
+<h2 id="lua-scripts字典"><a href="#lua-scripts字典" class="headerlink" title="lua_scripts字典"></a>lua_scripts字典</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">redisServer</span>&#123;</span></span><br><span class="line">    <span class="comment">// 整个服务器全局的lua校验和</span></span><br><span class="line">    dict *lua_scripts;</span><br><span class="line">    <span class="comment">// key: checksum</span></span><br><span class="line">    <span class="comment">// value: lua脚本代码</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>所有执行过或要求记住的lua校验和都会存下来。</p>
+<h2 id="EVAL命令实现"><a href="#EVAL命令实现" class="headerlink" title="EVAL命令实现"></a>EVAL命令实现</h2><p>3个步骤:</p>
+<ol>
+<li>计算校验和，然后用校验和定义一个函数f_校验和;</li>
+<li>&lt;校验和，脚本&gt;保存到<code>lua_scripts</code>字典；</li>
+<li>执行函数。</li>
+</ol>
+<p>比如校验和是a0e1ffff,函数名就是f_a0e1fffffffff。<br>然后利用函数的局部性，避免全局变量。</p>
+<h2 id="超时检测"><a href="#超时检测" class="headerlink" title="超时检测"></a>超时检测</h2><p>参数<code>lua-time-limit</code>。<br>lua脚本的运行时间是有上限的，避免编程错误的死循环。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/03/10/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B010-%E8%AE%A2%E9%98%85-%E4%BA%8B%E7%89%A9-lua/" data-id="ck96cxppj00hlmaam458w1wmn" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2019-03/redis设计与实现笔记9-cluster模式" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/03/03/2019-03/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B09-cluster%E6%A8%A1%E5%BC%8F/" class="article-date">
@@ -921,192 +1016,6 @@
 
 
   
-    <article id="post-2019-02/高性能mysql附录A-E-笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/02/13/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E9%99%84%E5%BD%95A-E-%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2019-02-13T01:36:10.000Z" itemprop="datePublished">2019-02-13</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/mysql/">mysql</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/02/13/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E9%99%84%E5%BD%95A-E-%E7%AC%94%E8%AE%B0/">高性能mysql附录A-E-笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="高性能mysql附录A-笔记-mysql分支"><a href="#高性能mysql附录A-笔记-mysql分支" class="headerlink" title="高性能mysql附录A-笔记-mysql分支"></a>高性能mysql附录A-笔记-mysql分支</h1><p>mysql的三个分支(变种):</p>
-<ol>
-<li>Percona Server: 透明、性能、灵活，用XtraDB引擎代替innodb；</li>
-<li>MariaDB: mysql原作者。面向客户、补丁插件扩展更多；</li>
-<li>Drizzle：sql语法不兼容mysql, 修正bug，最开源。</li>
-</ol>
-<p>官方mysql: 最接近于Percona Server。</p>
-<h1 id="高性能mysql附录B-笔记-服务器状态"><a href="#高性能mysql附录B-笔记-服务器状态" class="headerlink" title="高性能mysql附录B-笔记-服务器状态"></a>高性能mysql附录B-笔记-服务器状态</h1><p>系统变量: <code>show variables like &#39;%xxx%&#39;</code>;<br>只读状态: <code>show status like &#39;%xxx%&#39;</code>; 或<code>infomation_schema.global_status</code>表和<code>information_schama.session_status</code>表;<br>其他信息:<code>infomation_schema</code>库中</p>
-<h2 id="线程和连接统计"><a href="#线程和连接统计" class="headerlink" title="线程和连接统计"></a>线程和连接统计</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">connections,max_used_connections,threads_connected</span><br><span class="line">bytes_received,bytes_sent</span><br><span class="line">slow_launch_threads,threads_cached,threads_created,threads_running</span><br></pre></td></tr></table></figure>
-
-<h2 id="二进制日志状态"><a href="#二进制日志状态" class="headerlink" title="二进制日志状态"></a>二进制日志状态</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">binlog_cache_use,binlog_cache_disk_use</span><br></pre></td></tr></table></figure>
-
-<h2 id="命令计数器"><a href="#命令计数器" class="headerlink" title="命令计数器"></a>命令计数器</h2><p><code>Com_*</code>变量统计每种类型的SQL或C API命令发起过的次数。</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Com_select: select语句的数量;</span><br><span class="line">Com_change_db: 更改默认数据库的次数(use xxx);</span><br></pre></td></tr></table></figure>
-
-<h2 id="临时文件和表"><a href="#临时文件和表" class="headerlink" title="临时文件和表"></a>临时文件和表</h2><p>隐式表和文件:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">global</span> <span class="keyword">status</span> <span class="keyword">like</span> <span class="string">'Created_tmp%'</span></span><br></pre></td></tr></table></figure>
-<p>显式临时表:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">global</span> <span class="keyword">temporary</span> <span class="keyword">tables</span>;</span><br></pre></td></tr></table></figure>
-
-<h2 id="查看select查询类型统计"><a href="#查看select查询类型统计" class="headerlink" title="查看select查询类型统计"></a>查看select查询类型统计</h2><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">global</span> <span class="keyword">status</span> <span class="keyword">like</span> <span class="string">'Select%'</span>;</span><br><span class="line">+<span class="comment">------------------------+----------+</span></span><br><span class="line">| Variable_name          | Value    |</span><br><span class="line">+<span class="comment">------------------------+----------+</span></span><br><span class="line">| Select_full_join       | 677      |</span><br><span class="line">| Select_full_range_join | 0        |</span><br><span class="line">| Select_range           | 135124   |</span><br><span class="line">| Select_range_check     | 0        |</span><br><span class="line">| Select_scan            | 16623726 |</span><br><span class="line">+<span class="comment">------------------------+----------+</span></span><br></pre></td></tr></table></figure>
-<p>按预期次数从多到少/开销从少到多的顺序:<br>Select_range: 在第一个表上扫描一个索引区间的连接数目；<br>Select_scan: 扫描整个第一个表；<br>Select_full_range_join: 开销多于Select_scan；<br>Select_range_check: 开销非常高；<br>Select_full_join: 开销最高。</p>
-<h2 id="表锁"><a href="#表锁" class="headerlink" title="表锁"></a>表锁</h2><p>Table_locks_immediate: 立即授权的表锁次数；<br>Table_locks_waited:    需要等待的表锁次数。</p>
-<h2 id="innodb状态"><a href="#innodb状态" class="headerlink" title="innodb状态"></a>innodb状态</h2><p>查看innodb相关的状态开销很大，会创建一个全局锁。</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">1. 通过<span class="keyword">show</span> <span class="keyword">engine</span> <span class="keyword">innodb</span> <span class="keyword">status</span>;</span><br><span class="line">2. 通过information_schema表;</span><br><span class="line">3. 通过<span class="keyword">show</span> <span class="keyword">status</span>,<span class="keyword">show</span> <span class="keyword">variables</span>。</span><br></pre></td></tr></table></figure>
-<p>因此不能频繁查看这些变量。</p>
-<p>输出信息包括:</p>
-<ol>
-<li>fsync()平均每秒调用次数；</li>
-<li>头部信息: 时间；</li>
-<li>Semaphores: 操作系统等待数组，等待互斥量的innodb线程；(如果有等待，可以看出热点是什么)<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">waited at buf0buf.ic for 0 second: 等待缓冲区</span><br><span class="line">waiters flag 0: 0个线程在等待；</span><br><span class="line">waiting is ending: 等待结束。</span><br></pre></td></tr></table></figure>
-
-</li>
-</ol>
-<p><code>innodb_sync_spin_loops</code>变量:<br>空转多少次后停止spin，挂起进入真正等待。</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">variables</span> <span class="keyword">like</span> <span class="string">'%spin%'</span>;</span><br><span class="line">+<span class="comment">------------------------+-------+</span></span><br><span class="line">| Variable_name          | Value |</span><br><span class="line">+<span class="comment">------------------------+-------+</span></span><br><span class="line">| innodb_spin_wait_delay | 6     |</span><br><span class="line">| innodb_sync_spin_loops | 30    |</span><br><span class="line">+<span class="comment">------------------------+-------+</span></span><br></pre></td></tr></table></figure>
-
-<h3 id="死锁"><a href="#死锁" class="headerlink" title="死锁"></a>死锁</h3><p><code>SHOW ENGINE INNODB STATUS\G</code>的输出还有一部分是上两次死锁的情况。(包括进程id和sql、等待的是什么锁)</p>
-<p>死锁类型：</p>
-<ol>
-<li>循环等待；</li>
-<li>等待关系图太深：<br>(1)检查超过100W个锁;<br>(2)重做超过200个事务。<br>错误信息：”TOO DEEP OR LONG SEARCH IN THE LOCK TABLE WAITS-FOR GRAPH”.</li>
-</ol>
-<h4 id="减少死锁的TIPS"><a href="#减少死锁的TIPS" class="headerlink" title="减少死锁的TIPS"></a>减少死锁的TIPS</h4><p>在事务里更新数据时，先按主键排序，这样扫描索引的顺序就都是一致的；</p>
-<h3 id="事务信息"><a href="#事务信息" class="headerlink" title="事务信息"></a>事务信息</h3><p><code>SHOW ENGINE INNODB STATUS\G</code>的输出里还有一部分是事务总结信息和当前活跃事务信息。</p>
-<h4 id="事务总结信息"><a href="#事务总结信息" class="headerlink" title="事务总结信息"></a>事务总结信息</h4><ol>
-<li>当前事务ID;</li>
-<li>已经清理MVCC行的事务ID;(可以知道有多少老版本数据没被清理)</li>
-<li>历史记录的长度；</li>
-<li>锁结构的数目（可能包含多个行锁）。</li>
-</ol>
-<h4 id="活跃事务信息"><a href="#活跃事务信息" class="headerlink" title="活跃事务信息"></a>活跃事务信息</h4><ol>
-<li>进程id(与<code>show processlist</code>中id通用)</li>
-<li>内部查询号;</li>
-<li>连接信息</li>
-<li>查询的sql。</li>
-</ol>
-<h3 id="File-I-O"><a href="#File-I-O" class="headerlink" title="File I/O"></a>File I/O</h3><p><code>SHOW ENGINE INNODB STATUS\G</code>的输出里还有一部分是IO辅助线程的状态和性能计数器的状态。<br>其中:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">insert</span> buffer <span class="keyword">thread</span>: 插入缓冲合并到表空间；</span><br><span class="line"><span class="keyword">log</span> <span class="keyword">thread</span>: 异步刷日志；</span><br><span class="line"><span class="keyword">read</span> <span class="keyword">thread</span>: 预读操作；</span><br><span class="line">write <span class="keyword">thread</span>: 刷脏缓冲。</span><br></pre></td></tr></table></figure>
-
-<h3 id="redo-log统计"><a href="#redo-log统计" class="headerlink" title="redo log统计"></a>redo log统计</h3><p><code>SHOW ENGINE INNODB STATUS\G</code>的输出里还有一部分是事务日志(redo log)的统计。</p>
-<ol>
-<li>sequence number: 当前日志序号；</li>
-<li>flushed up to  : 当前刷到哪里；  </li>
-<li>last checkpoint: 上一个检测点的位置。</li>
-<li>pending和done的日志操作数量。</li>
-</ol>
-<h3 id="缓冲池和内存"><a href="#缓冲池和内存" class="headerlink" title="缓冲池和内存"></a>缓冲池和内存</h3><p><code>SHOW ENGINE INNODB STATUS\G</code>的输出里还有一部分是BufferPool和内存统计。<br>包括信息：</p>
-<ol>
-<li>分配了多少字节；</li>
-<li>pool总共多少页，其中free多少页；</li>
-<li>database用了多少页，多少页已经修改；</li>
-<li>命中率等统计信息。<br>多个缓冲池的话后头还有各个buffer pool各自的统计信息。</li>
-</ol>
-<h3 id="ROW-OPERATIONS"><a href="#ROW-OPERATIONS" class="headerlink" title="ROW OPERATIONS"></a>ROW OPERATIONS</h3><p><code>SHOW ENGINE INNODB STATUS\G</code>的输出里最后一部分是行操作统计。</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">--------------</span><br><span class="line">ROW OPERATIONS</span><br><span class="line">--------------</span><br><span class="line">0 queries inside InnoDB, 0 queries in queue</span><br><span class="line">15 read views open inside InnoDB</span><br><span class="line">Main thread process no. 9004, id 139699662354176, state: sleeping</span><br><span class="line">Number of rows inserted 1111442430, updated 2610575313, deleted 42594651, read 8977633484</span><br><span class="line">98.47 inserts&#x2F;s, 1108.97 updates&#x2F;s, 0.00 deletes&#x2F;s, 1671.23 reads&#x2F;s</span><br><span class="line">----------------------------</span><br></pre></td></tr></table></figure>
-<p>包括信息：</p>
-<ol>
-<li>多少线程在innodb内核内，多少在等待队列;</li>
-<li>累积增删改查;</li>
-<li>增删改查的瞬时速度。</li>
-</ol>
-<h2 id="主备相关查看命令"><a href="#主备相关查看命令" class="headerlink" title="主备相关查看命令"></a>主备相关查看命令</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">show master status \G</span><br><span class="line">show binary logs;</span><br><span class="line">show binlog events ... </span><br><span class="line">show relaylog events</span><br><span class="line">show slave status</span><br></pre></td></tr></table></figure>
-
-<h2 id="Information-schema中的innodb信息表"><a href="#Information-schema中的innodb信息表" class="headerlink" title="Information_schema中的innodb信息表"></a>Information_schema中的innodb信息表</h2><h2 id="innodb-trx-innodb-locks"><a href="#innodb-trx-innodb-locks" class="headerlink" title="innodb_trx,innodb_locks"></a>innodb_trx,innodb_locks</h2><p>事务、拥有和等待锁的事务。</p>
-<h2 id="performance-schema"><a href="#performance-schema" class="headerlink" title="performance_schema"></a>performance_schema</h2><p>略</p>
-<h1 id="高性能mysql附录C-笔记-大文件传输"><a href="#高性能mysql附录C-笔记-大文件传输" class="headerlink" title="高性能mysql附录C-笔记-大文件传输"></a>高性能mysql附录C-笔记-大文件传输</h1><p>大概是ssh,tar,gz,rsync命令的运用，略。</p>
-<h1 id="高性能mysql附录E-笔记-explain"><a href="#高性能mysql附录E-笔记-explain" class="headerlink" title="高性能mysql附录E-笔记-explain"></a>高性能mysql附录E-笔记-explain</h1><p>explain语句：</p>
-<ol>
-<li><code>explain select xxx</code>: 近似的执行计划信息；</li>
-<li>近似的执行计划信息+等效sql:<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">explain</span> <span class="keyword">extended</span> <span class="keyword">select</span> xxx;</span><br><span class="line"><span class="keyword">show</span> <span class="keyword">warnings</span>; <span class="comment">-- 这里得到的sql是从执行计划反向翻译过来的sql</span></span><br></pre></td></tr></table></figure></li>
-<li><code>explain partitions select xxx</code>: 显示查询的分区。（仅对分区表有效）</li>
-</ol>
-<p>mysql5.6前，explain的时候会执行子查询创建临时表，以便进行外层优化。</p>
-<h2 id="explain各列的含义"><a href="#explain各列的含义" class="headerlink" title="explain各列的含义"></a>explain各列的含义</h2><h2 id="id"><a href="#id" class="headerlink" title="id"></a>id</h2><p>select语句顺序编号，对应在原始语句中的位置;（从外到内）</p>
-<p>select的三种类型：</p>
-<ol>
-<li>简单子查询；</li>
-<li>复杂子查询（派生表）；</li>
-<li>union查询。</li>
-</ol>
-<p>其中union查询的id列为null，select_type列为<code>union result</code>。</p>
-<h2 id="select-type列"><a href="#select-type列" class="headerlink" title="select_type列"></a>select_type列</h2><p>取值含义：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">simple:  简单查询;</span><br><span class="line">primary: 复杂查询的最外层;</span><br><span class="line">subquery: select列表中的子查询;(不在from子句中);</span><br><span class="line">derived:  from子句中的子查询;</span><br><span class="line">union:  union语句中第二个和随后的select;</span><br><span class="line">union result: 从匿名临时表检索结果的select.</span><br></pre></td></tr></table></figure>
-
-<h2 id="table列"><a href="#table列" class="headerlink" title="table列"></a>table列</h2><p>访问的表或别名。<br>或者&lt; derivedN&gt;,其中N是子查询的id。<br>union行中table列出现的&lt; union2,3&gt;其中2，3也是子查询的id。</p>
-<h2 id="type列"><a href="#type列" class="headerlink" title="type列"></a>type列</h2><p>访问类型：从差到好：</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">all: 扫全表</span><br><span class="line">index: 按索引顺序扫全表(避免排序) <span class="comment">-- extra列的using index表示覆盖索引</span></span><br><span class="line">range: 有范围限制的索引扫描</span><br><span class="line">ref:   索引查找，查找某个索引值；</span><br><span class="line">eq_ref: 唯一索引查找，结果只有一行；</span><br><span class="line">const,system: 可以优化成常量替换；</span><br><span class="line">NULL: 可以优化到无需访问表和索引。</span><br></pre></td></tr></table></figure>
-
-<h2 id="possible-keys列"><a href="#possible-keys列" class="headerlink" title="possible_keys列"></a>possible_keys列</h2><p>优化早期尝试的索引，可能无用。</p>
-<h2 id="key列"><a href="#key列" class="headerlink" title="key列"></a>key列</h2><p>决定采用的索引。</p>
-<h2 id="key-len列"><a href="#key-len列" class="headerlink" title="key_len列"></a>key_len列</h2><p>采用索引的可能最大长度。</p>
-<h2 id="ref列"><a href="#ref列" class="headerlink" title="ref列"></a>ref列</h2><p>在索引查找值时使用的列或常量。</p>
-<h2 id="rows列"><a href="#rows列" class="headerlink" title="rows列"></a>rows列</h2><p>估算大概要读取的行数。</p>
-<h2 id="filtered列"><a href="#filtered列" class="headerlink" title="filtered列"></a>filtered列</h2><p><code>explain extended select xxx</code>时有的列。<br>符合条件行数的悲观估计。</p>
-<h2 id="Extra列"><a href="#Extra列" class="headerlink" title="Extra列"></a>Extra列</h2><p>包括的值：</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">using index: 使用覆盖索引；</span><br><span class="line">using where: 从存储引擎返回后，需要在服务器再过滤一次;(可能暗示查询可以加更多索引)</span><br><span class="line">using temporary: 查询结果排序时会使用临时表；</span><br><span class="line">using filesort: 排序时会使用外部索引排序，而不是按索引顺序扫描；</span><br><span class="line">range checked for each record: 没有理想的索引，对于连接后的每一行重新检查使用哪个索引(很慢)。</span><br></pre></td></tr></table></figure>
-
-<p>可以用<code>Percona Toolkit</code>的<code>pt-visual-explain</code>获得树形执行计划。</p>
-<h1 id="高性能mysql附录E-笔记-锁的调试"><a href="#高性能mysql附录E-笔记-锁的调试" class="headerlink" title="高性能mysql附录E-笔记-锁的调试"></a>高性能mysql附录E-笔记-锁的调试</h1><p>锁的类型：</p>
-<ol>
-<li>表锁；</li>
-<li>全局锁： <code>flush tables with read lock</code>或设置<code>read_only=1</code></li>
-<li>命名锁：表锁的一种，重命名或者删除表时创建；</li>
-<li>字符锁：可以用<code>get_lock</code>等函数在服务器级别锁住/释放单个字符。</li>
-</ol>
-<h2 id="表锁-1"><a href="#表锁-1" class="headerlink" title="表锁"></a>表锁</h2><h3 id="显式"><a href="#显式" class="headerlink" title="显式"></a>显式</h3><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">lock</span> <span class="keyword">tables</span> film <span class="keyword">read</span>;</span><br><span class="line"><span class="keyword">lock</span> <span class="keyword">tables</span> film write;</span><br><span class="line"><span class="keyword">unlock</span> <span class="keyword">tables</span> ...;</span><br></pre></td></tr></table></figure>
-<h3 id="隐式"><a href="#隐式" class="headerlink" title="隐式"></a>隐式</h3><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> <span class="keyword">sleep</span>(<span class="number">30</span>) <span class="keyword">from</span> film <span class="keyword">limit</span> <span class="number">1</span></span><br><span class="line"><span class="comment">-- 相当于lock tables film read;</span></span><br></pre></td></tr></table></figure>
-<p>可以用<code>mysqladmin debug</code>命令检测锁的持有信息。（输出的末尾）</p>
-<h2 id="全局读锁"><a href="#全局读锁" class="headerlink" title="全局读锁"></a>全局读锁</h2><p><code>show processlist</code>中<code>status</code>是<code>waiting for release of readlock</code>时，就是等待全局读锁了。</p>
-<h2 id="命名锁"><a href="#命名锁" class="headerlink" title="命名锁"></a>命名锁</h2><p><code>show processlist</code>中<code>status</code>是<code>waiting for table</code>时，就是等待命名锁了。<br>还可以在<code>show open tables</code>中看到命名锁的影响。</p>
-<h2 id="用户锁"><a href="#用户锁" class="headerlink" title="用户锁"></a>用户锁</h2><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- 试图获得名为`my_lock`的锁，超时时间100秒。</span></span><br><span class="line"><span class="keyword">select</span> <span class="keyword">get_lock</span>(<span class="string">'my_lock'</span>,<span class="number">100</span>);</span><br></pre></td></tr></table></figure>
-
-<h2 id="使用information-schema查看锁"><a href="#使用information-schema查看锁" class="headerlink" title="使用information_schema查看锁"></a>使用information_schema查看锁</h2><p><a href="https://dev.mysql.com/doc/refman/5.6/en/innodb-information-schema-examples.html" target="_blank" rel="noopener">https://dev.mysql.com/doc/refman/5.6/en/innodb-information-schema-examples.html</a><br>哪个事务在等待锁，哪个事务持有锁：</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span></span><br><span class="line">  r.trx_id waiting_trx_id,</span><br><span class="line">  r.trx_mysql_thread_id waiting_thread,</span><br><span class="line">  r.trx_query waiting_query,</span><br><span class="line">  b.trx_id blocking_trx_id,</span><br><span class="line">  b.trx_mysql_thread_id blocking_thread,</span><br><span class="line">  b.trx_query blocking_query</span><br><span class="line"><span class="keyword">FROM</span>       information_schema.innodb_lock_waits w</span><br><span class="line"><span class="keyword">INNER</span> <span class="keyword">JOIN</span> information_schema.innodb_trx b</span><br><span class="line">  <span class="keyword">ON</span> b.trx_id = w.blocking_trx_id</span><br><span class="line"><span class="keyword">INNER</span> <span class="keyword">JOIN</span> information_schema.innodb_trx r</span><br><span class="line">  <span class="keyword">ON</span> r.trx_id = w.requesting_trx_id;</span><br></pre></td></tr></table></figure>
-
-<p>查看阻塞查询的线程元凶:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span></span><br><span class="line">	<span class="keyword">CONCAT</span>(<span class="string">'thread '</span>, b.trx_mysql_thread_id, <span class="string">' from '</span>, p.host) <span class="keyword">AS</span> who_blocks,</span><br><span class="line">	<span class="keyword">IF</span>(p.command = <span class="string">"Sleep"</span>, p.time, <span class="number">0</span>) <span class="keyword">AS</span> idle_in_trx,</span><br><span class="line">	<span class="keyword">MAX</span>(<span class="keyword">TIMESTAMPDIFF</span>(<span class="keyword">SECOND</span>, r.trx_wait_started, <span class="keyword">CURRENT_TIMESTAMP</span>)) <span class="keyword">AS</span> max_wait_time,</span><br><span class="line">	<span class="keyword">COUNT</span>(*) <span class="keyword">AS</span> num_waiters</span><br><span class="line">   <span class="keyword">FROM</span> INFORMATION_SCHEMA.INNODB_LOCK_WAITS <span class="keyword">AS</span> w</span><br><span class="line">   <span class="keyword">INNER</span> <span class="keyword">JOIN</span> INFORMATION_SCHEMA.INNODB_TRX <span class="keyword">AS</span> b <span class="keyword">ON</span> b.trx_id = w.blocking_trx_id</span><br><span class="line">   <span class="keyword">INNER</span> <span class="keyword">JOIN</span> INFORMATION_SCHEMA.INNODB_TRX <span class="keyword">AS</span> r <span class="keyword">ON</span> r.trx_id = w.requesting_trx_id</span><br><span class="line">   <span class="keyword">LEFT</span> <span class="keyword">JOIN</span> INFORMATION_SCHEMA.PROCESSLIST <span class="keyword">AS</span> p <span class="keyword">ON</span> p.id = b.trx_mysql_thread_id</span><br><span class="line">   <span class="keyword">GROUP</span> <span class="keyword">BY</span> who_blocks <span class="keyword">ORDER</span> <span class="keyword">BY</span> num_waiters <span class="keyword">DESC</span>;</span><br><span class="line">   </span><br><span class="line">+<span class="comment">-------------------------+-------------+---------------+-------------+</span></span><br><span class="line">| who_blocks              | idle_in_trx | max_wait_time | num_waiters |</span><br><span class="line">+<span class="comment">-------------------------+-------------+---------------+-------------+</span></span><br><span class="line">| thread 4 from localhost |          98 |            12 |           1 |</span><br><span class="line">+<span class="comment">-------------------------+-------------+---------------+-------------+</span></span><br></pre></td></tr></table></figure>
-
-<p>结果看线程4空闲了98秒，至少有一个线程等了它12秒，有1个线程在等待它。</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/02/13/2019-02/%E9%AB%98%E6%80%A7%E8%83%BDmysql%E9%99%84%E5%BD%95A-E-%E7%AC%94%E8%AE%B0/" data-id="ck96cxpph00hemaam49869b9w" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1133,6 +1042,10 @@
       <ul>
         
           <li>
+            <a href="/2022/11/21/2022-11/cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98%E9%80%9A%E7%94%A8%E4%BC%98%E5%8C%96%E6%80%9D%E8%B7%AF/">调优-cpu毛刺问题通用优化思路</a>
+          </li>
+        
+          <li>
             <a href="/2022/10/03/2022-10/java%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E6%94%BB%E5%87%BB-md/">java反序列化攻击</a>
           </li>
         
@@ -1146,10 +1059,6 @@
         
           <li>
             <a href="/2022/09/26/2022-09/jwt%E7%A0%B4%E8%A7%A3/">jwt破解</a>
-          </li>
-        
-          <li>
-            <a href="/2022/09/25/2022-09/nc%E5%91%BD%E4%BB%A4%E7%AC%94%E8%AE%B0/">nc命令笔记</a>
           </li>
         
       </ul>
