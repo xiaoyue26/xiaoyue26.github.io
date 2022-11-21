@@ -102,7 +102,13 @@
         
         <h1 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h1><p>工作中可能会遇到这么一种现象：<br>服务的cpu平均值不高，但是偶尔会有毛刺，也就是峰值高、均值低。</p>
 <h1 id="现象"><a href="#现象" class="headerlink" title="现象"></a>现象</h1><p>这里需要分类讨论，从触发时机角度可以分3类：<br>A1。启动后可稳定复现；（或者大概率）<br>A2。启动时稳定复现；（或者大概率）<br>A3。无法稳定复现；</p>
+<img src="/images/2022-11/a1_3.png" class="" width="800" height="1200" title="a1_3">
+
+
 <p>从cpu峰值和流量大小的关系，则可以分2类:<br>B1: 峰值与流量大小无关;<br>B2: 峰值与流量大小有关;</p>
+<img src="/images/2022-11/b1_2.png" class="" width="800" height="1200" title="b1_2">
+
+
 <h1 id="解决方案"><a href="#解决方案" class="headerlink" title="解决方案"></a>解决方案</h1><p>对于上一节中的几种分类现象，其实大致是从易到难排列的，解决方案依次有：</p>
 <h2 id="A1，启动后稳定复现"><a href="#A1，启动后稳定复现" class="headerlink" title="A1，启动后稳定复现"></a>A1，启动后稳定复现</h2><p>也就是提供服务期间，某些特定请求会触发，例如之前遇到过的情况：<br><a href="http://xiaoyue26.github.io/2022/09/25/2022-09/%E8%B0%83%E4%BC%98-%E8%A7%A3%E5%86%B3%E7%BA%BF%E7%A8%8B%E6%B1%A0%E9%80%A0%E6%88%90%E7%9A%84%E8%BF%9B%E7%A8%8B%E5%8D%A1%E9%A1%BF%E3%80%81cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/">http://xiaoyue26.github.io/2022/09/25/2022-09/%E8%B0%83%E4%BC%98-%E8%A7%A3%E5%86%B3%E7%BA%BF%E7%A8%8B%E6%B1%A0%E9%80%A0%E6%88%90%E7%9A%84%E8%BF%9B%E7%A8%8B%E5%8D%A1%E9%A1%BF%E3%80%81cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98/</a><br>这个时候可以使用<code>arthas</code>的<code>trace</code>命令，找出耗时长的代码链路：</p>
 <figure class="highlight shell"><figcaption><span>script</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">options unsafe true</span><br><span class="line">trace -E java.util.concurrent.CompletableFuture|java.lang.Thread supplyAsync|asyncSupplyStage|start  -n 1 --skipJDKMethod false '#cost &gt; 200'</span><br></pre></td></tr></table></figure>
