@@ -153,6 +153,9 @@
 <p>也可以考虑一些通用的优化，比如:</p>
 <figure class="highlight shell"><figcaption><span>script</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">-XX:-PreserveFramePointer 关闭打调用栈用的存储来优化性能</span><br><span class="line">-XX:+UseLargePages</span><br><span class="line">-XX:+UseTransparentHugePages</span><br></pre></td></tr></table></figure>
 
+<blockquote>
+<p>-XX:-PreserveFramePointer类似于GCC的 -fomit-frame-pointer 选项，PreserveFramePointer选项会将函数调用的frame pointer保存至寄存器，给perf等基于backtrace获取完整调用堆栈的场景提供支持，但同时也额外多执行了一些指令，引入一定开销。<br>JVM自身提供的jvmti接口，可以在不依赖PreserveFramePointer的情况下，获取Java堆栈，构建在其之上的jstack、async-profiler(AsyncGetCallTrace) 等工具也都不依赖PreserveFramePointer.<br>鉴于 「使用native工具获取Java堆栈 」这种场景出现的频率低，而常用JVM诊断工具均不依赖此参数，可以考虑仅在有限环境下开启PreserveFramePointer</p>
+</blockquote>
 <h2 id="B2-cpu峰值与流量大小有关"><a href="#B2-cpu峰值与流量大小有关" class="headerlink" title="B2 cpu峰值与流量大小有关"></a>B2 cpu峰值与流量大小有关</h2><p>这种情况可能是高并发情况下触发了什么缺陷。<br>可以看看线程池的使用率，看看是哪个线程池飙升了，针对性进行优化业务代码。<br>或者可以通过压测或者分解成A1到A3的情况进行处理。</p>
 <h1 id="参考资料"><a href="#参考资料" class="headerlink" title="参考资料"></a>参考资料</h1><p><a href="https://heapdump.cn/topic/UseLargePages" target="_blank" rel="noopener">https://heapdump.cn/topic/UseLargePages</a><br><a href="https://www.modb.pro/db/37684" target="_blank" rel="noopener">https://www.modb.pro/db/37684</a><br><a href="https://zhuanlan.zhihu.com/p/459695978" target="_blank" rel="noopener">https://zhuanlan.zhihu.com/p/459695978</a><br><a href="https://martijndwars.nl/2020/02/24/graal-vs-c2.html" target="_blank" rel="noopener">https://martijndwars.nl/2020/02/24/graal-vs-c2.html</a></p>
 
