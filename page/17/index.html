@@ -72,6 +72,81 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2017-12/mysql调优小记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2017/12/07/2017-12/mysql%E8%B0%83%E4%BC%98%E5%B0%8F%E8%AE%B0/" class="article-date">
+  <time datetime="2017-12-07T10:49:56.000Z" itemprop="datePublished">2017-12-07</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2017/12/07/2017-12/mysql%E8%B0%83%E4%BC%98%E5%B0%8F%E8%AE%B0/">mysql调优小记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <ul>
+<li>摘要<blockquote>
+<p>mysql表出现慢查询,单表数据量500W<del>700W条. 每天2</del>3W条.<br>措施: </p>
+<ol>
+<li>优化查询语句; </li>
+<li>更改存储引擎.</li>
+<li>优化索引.</li>
+</ol>
+</blockquote>
+</li>
+</ul>
+<h3 id="详情"><a href="#详情" class="headerlink" title="详情"></a>详情</h3><p>同事去塞班岛玩前留了个大坑,导致网站报表卡死刷不开.</p>
+<h3 id="STEP-1"><a href="#STEP-1" class="headerlink" title="STEP 1"></a>STEP 1</h3><p>进入后台:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">processlist</span></span><br></pre></td></tr></table></figure>
+<p>发现Query很多,<code>show full processlist</code>找出查询语句,发现多表join的时候没有利用到索引.<br>查询语句模式如下:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">explain</span> <span class="keyword">select</span> ...</span><br></pre></td></tr></table></figure>
+<p>发现没有用上索引,更改查询语句。</p>
+<ul>
+<li><p><code>explain</code>查询计划中的<code>type</code>:</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">const(system): 根据PRI或Unique key,只取出确定的(一行)数据,常量优化. </span><br><span class="line"></span><br><span class="line">eq_ref: JOIN条件包括了所有索引,并且索引是Unique key. </span><br><span class="line">ref: JOIN条件包括部分索引或不是Unique key.</span><br><span class="line">ref_or_null: WHERE col=exp or col is null</span><br><span class="line"></span><br><span class="line">index_merge: Where id=xx or userid=xxx. 索引合并优化.</span><br><span class="line"></span><br><span class="line">unique_subquery: where col in( <span class="keyword">select</span> <span class="keyword">id</span> <span class="keyword">from</span> xxx). 这里<span class="keyword">id</span>唯一.</span><br><span class="line">index_subquery: 同上,只是<span class="keyword">id</span>不唯一.</span><br><span class="line"></span><br><span class="line"><span class="keyword">range</span>: 索引在某个范围内.</span><br><span class="line"><span class="keyword">all</span>: 扫全表</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>TODO:<br>研究除了子查询以外的方式使用索引.</p>
+</li>
+</ul>
+<p>此外, 索引对于数据类型敏感, 查询中存在字符串和date类型相等的时候, 无法利用索引,<br>需要将date类型转成字符串.</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">dt = date_format(date_sub(current_date, interval 1 day), '%Y-%m-%d')</span><br></pre></td></tr></table></figure>
+
+<h3 id="STEP-2"><a href="#STEP-2" class="headerlink" title="STEP 2"></a>STEP 2</h3><p>检查后台,发现许多连接状态都是:<br><code>waiting for table level lock</code>.<br>进一步发现这几张表的存储引擎是<code>MYISAM</code>,而不是默认的<code>innodb</code>.<br>由于<code>myisam</code>引擎只有表级锁,不符合我们的使用要求.于是我把涉及到的几张表引擎都改为<code>innodb</code>.</p>
+<h3 id="STEP-3"><a href="#STEP-3" class="headerlink" title="STEP 3"></a>STEP 3</h3><p>修改后,查询不会卡死(毕竟不扫全表了ORZ),降低到40s,但还是太慢了.<br>进一步检查explain结果,发现<code>key_len</code>太长了.<br>于是重新设计索引, 把筛选度高的放前面(利用最左前缀), 并且根据具体业务\语义,尽量缩短索引字段的长度,<br>实在无法缩短的则取其中一部分. 最后查询缩短到0.04sec,几个报表都是秒出.  </p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2017/12/07/2017-12/mysql%E8%B0%83%E4%BC%98%E5%B0%8F%E8%AE%B0/" data-id="ck96cxpni008vmaamfhcygtrf" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2017-12/sqoop的SQL注入漏洞" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2017/12/01/2017-12/sqoop%E7%9A%84SQL%E6%B3%A8%E5%85%A5%E6%BC%8F%E6%B4%9E/" class="article-date">
@@ -1376,95 +1451,6 @@
 
 
   
-    <article id="post-sqoop学习笔记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2017/09/28/sqoop%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/" class="article-date">
-  <time datetime="2017-09-28T12:08:36.000Z" itemprop="datePublished">2017-09-28</time>
-</a>
-    
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2017/09/28/sqoop%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/">sqoop学习笔记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p><a href="https://geosmart.github.io/2016/02/24/Sqoop%E4%BD%BF%E7%94%A8%E7%AC%94%E8%AE%B0/" target="_blank" rel="noopener">https://geosmart.github.io/2016/02/24/Sqoop%E4%BD%BF%E7%94%A8%E7%AC%94%E8%AE%B0/</a><br><a href="https://sqoop.apache.org/docs/1.4.6/SqoopUserGuide.html#_mysql" target="_blank" rel="noopener">https://sqoop.apache.org/docs/1.4.6/SqoopUserGuide.html#_mysql</a><br><a href="http://stackoverflow.com/questions/25887086/sqoop-export-using-update-key" target="_blank" rel="noopener">http://stackoverflow.com/questions/25887086/sqoop-export-using-update-key</a></p>
-<h1 id="1-列出数据库"><a href="#1-列出数据库" class="headerlink" title="1.列出数据库:"></a>1.列出数据库:</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sqoop list-databases --connect jdbc:mysql:&#x2F;&#x2F;pipe-reader:3306&#x2F; -username pipe -password pipe</span><br></pre></td></tr></table></figure>
-
-<h1 id="2-列出表"><a href="#2-列出表" class="headerlink" title="2.列出表:"></a>2.列出表:</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sqoop list-tables --connect jdbc:mysql:&#x2F;&#x2F;pipe-reader:3306&#x2F;pipe_tutor --username xxx --password pipe123</span><br></pre></td></tr></table></figure>
-
-<h1 id="3-复制表结构"><a href="#3-复制表结构" class="headerlink" title="3. 复制表结构:"></a>3. 复制表结构:</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">sqoop create-hive-table --connect jdbc:mysql:&#x2F;&#x2F;pipe-reader:3306&#x2F;pipe_tutor --table dim_tutor_teacher \</span><br><span class="line">--username xxx --password xxx \</span><br><span class="line">--hive-table tutor.dim_tutor_teacher  --fields-terminated-by &quot;\t&quot;  --lines-terminated-by &quot;\n&quot;;</span><br></pre></td></tr></table></figure>
-
-<h1 id="4-复制数据"><a href="#4-复制数据" class="headerlink" title="4. 复制数据:"></a>4. 复制数据:</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">sqoop import --connect jdbc:mysql:&#x2F;&#x2F;pipe-reader:3306&#x2F;pipe_tutor \</span><br><span class="line">--username xxx --password xxx \</span><br><span class="line">--table dim_tutor_teacher --hive-import --hive-table tutor.dim_tutor_teacher \</span><br><span class="line">-m 1 --fields-terminated-by &quot;\t&quot;;</span><br></pre></td></tr></table></figure>
-
-<h2 id="工作流程为"><a href="#工作流程为" class="headerlink" title="工作流程为:"></a>工作流程为:</h2><blockquote>
-<p>(1) 连接ZK<br>(2) 使用 <code>SELECT t.* FROM</code>dim_tutor_teacher<code>AS t LIMIT 1&#39; 测试连接
-(3) 生成一个运行jar包:</code>/tmp/sqoop-maintain/compile/a2b05194f5b67b58688dff76426380ef/dim_tutor_teacher.jar<code>(4) 提交jar包到RM,输出文件到</code>/user/maintain/dim_tutor_teacher<code>(5) load数据到内部表,</code>/user/maintain/dim_tutor_teacher<code>下的文件除了</code>_success<code>文件都移动到 :</code>/user/hive/warehouse/tutor.db/dim_tutor_teacher`</p>
-</blockquote>
-<h2 id="注意事项"><a href="#注意事项" class="headerlink" title="注意事项:"></a>注意事项:</h2><blockquote>
-<p>(1) 若输出文件夹已经存在则会报错: <code>dfs -rmr  /user/maintain/dim_tutor_teacher</code><br>(2) 内部表可以原先不存在,或者存在.<br>(3) 若表中原有数据,则load数据后会有两份数据. (需要自己手动删原有数据: <code>truncate table tutor.dim_tutor_teacher</code> )<br>(4) 使用<code>--direct</code>参数可以更快,但不支持blob和clob类型字段.<br>(5) 若hive表结构存在且与mysql表结构不一样,不影响sqoop工作(多退少补NULL).</p>
-</blockquote>
-<h2 id="启发"><a href="#启发" class="headerlink" title="启发:"></a>启发:</h2><blockquote>
-<p>若使用外部表:<br>(1) 不需要删表数据,只需要和原来一样,删除输出文件夹.<br>(2) 表结构更新:<br>(2.1)内部表使用alter语句,外部表可以使用drop,create语句.<br>(2.2)若有dt且表结构中间多了一列,数据错位,无论内部表外部表,历史数据都不可直接用.需要写脚本转换调整.</p>
-</blockquote>
-<h1 id="5-将hive中的表数据导入到mysql数据库表中"><a href="#5-将hive中的表数据导入到mysql数据库表中" class="headerlink" title="5. 将hive中的表数据导入到mysql数据库表中"></a>5. 将hive中的表数据导入到mysql数据库表中</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">sqoop export --connect jdbc:mysql:&#x2F;&#x2F;pipe-reader:3306&#x2F;pipe_tutor \</span><br><span class="line">--username xxx --password xxx \</span><br><span class="line">--table test_teacher --export-dir &#x2F;user&#x2F;hive&#x2F;warehouse&#x2F;tutor.db&#x2F;dim_tutor_teacher  \</span><br><span class="line">--input-fields-terminated-by &#39;\t&#39; \</span><br><span class="line">--update-mode allowinsert --update-key id \</span><br><span class="line">--input-null-string &quot;\\\\N&quot; --input-null-non-string &quot;\\\\N&quot;</span><br></pre></td></tr></table></figure>
-
-<blockquote>
-<p>注意事项:</p>
-</blockquote>
-<ol>
-<li>其中mysql表<code>pipe_tutor.test_teacher</code>需要自己手动建立表结构,这一点和从mysql导到hive不同.</li>
-<li>若<code>pipe_tutor.test_teacher</code>中原有一部分数据,则当出现主键冲突时,会卡死.使用<code>--update-mode allowinsert --update-key id</code>参数可解开卡死.</li>
-<li>导出的时候最好在末尾加上:<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">--input-null-string &quot;\\\\N&quot; --input-null-non-string &quot;\\\\N&quot;</span><br></pre></td></tr></table></figure></li>
-<li>更新模式:–update-mode updateonly/allowinsert<br>updateonly则只更新,allowinsert则对于没有冲突的primary key 进行插入.</li>
-</ol>
-<h1 id="6-–query-语句和–append使用-mysql-gt-hdfs"><a href="#6-–query-语句和–append使用-mysql-gt-hdfs" class="headerlink" title="6. –query 语句和–append使用 (mysql -&gt; hdfs)"></a>6. –query 语句和–append使用 (mysql -&gt; hdfs)</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">sqoop import --append --connect jdbc:mysql:&#x2F;&#x2F;pipe-reader:3306&#x2F;pipe_tutor --username xxx --password xxx --query &quot;select * from test_teacher where \$CONDITIONS and id&gt;30&quot;  -m 2  --split-by id --target-dir &#x2F;user&#x2F;maintain&#x2F;dim_tutor_teacher --fields-terminated-by &quot;\t&quot;;</span><br><span class="line">&#96;&#96;&#96; </span><br><span class="line">或:</span><br></pre></td></tr></table></figure>
-<p>sqoop import –append –connect jdbc:mysql://pipe-reader:3306/pipe_tutor –username xxx –password xxx –query “select * from test_teacher where $CONDITIONS and id&gt;30”  -m 1  –target-dir /user/maintain/dim_tutor_teacher –fields-terminated-by “\t”;</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">\$CONDITIONS 作为关键字,用于均摊任务到mapper中时填充筛选条件.</span><br><span class="line">使用--query时必须使用\$CONDITIONS.</span><br><span class="line"></span><br><span class="line"># 7. --columns  --where 语句使用(mysql -&gt; hdfs)</span><br></pre></td></tr></table></figure>
-<p>sqoop import –append –connect jdbc:mysql://pipe-reader:3306/pipe_tutor –username xxx –password xxx –table test_teacher –columns “id,status,course”  –where “id &lt; 3 “  -m 1  –target-dir /user/maintain/dim_tutor_teacher –fields-terminated-by “,”;</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">--fields-terminated-by默认以&#39;,&#39;分隔.</span><br><span class="line"></span><br><span class="line">导入hdfs:</span><br><span class="line">--target-dir &#x2F;user&#x2F;maintain&#x2F;dim_tutor_teacher</span><br><span class="line">导入hive表:</span><br><span class="line"> --hive-import --hive-table tutor.dim_tutor_teacher</span><br><span class="line"> </span><br><span class="line">分隔符:</span><br><span class="line">--fields-terminated-by &#39;\t&#39;  --lines-terminated-by &#39;\n&#39; --optionally-enclosed-by &#39;\&quot;&#39;     \</span><br><span class="line"></span><br><span class="line">#8. 测试 --direct 参数</span><br><span class="line"></span><br><span class="line">clob的字段是导入到hdfs上是正常显示文本，blob是二进制文件导出到hdfs上显示为16进制. 16进制转string:</span><br><span class="line">http:&#x2F;&#x2F;www.aboutyun.com&#x2F;thread-14008-1-1.html</span><br><span class="line"></span><br><span class="line">对于clob和blob字段,使用--direct参数时应使用--query参数,不能使用--table参数.</span><br><span class="line">或者不使用--direct参数.</span><br><span class="line"></span><br><span class="line">参数:</span><br></pre></td></tr></table></figure>
-<p>–driver com.mysql.jdbc.Driver</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">语句:</span><br></pre></td></tr></table></figure>
-<p>sqoop import –append  <br>–connect jdbc:mysql://mysql-ape-exercise13-reader:3306/ape_exercise13 <br>–username ape –password ape@ytkz7c <br>–query “select * from exercise where $CONDITIONS   limit 1” <br>-m 1  –target-dir /user/maintain/dim_tutor_teacher <br>–direct <br> –fields-terminated-by “\t”;</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line"></span><br></pre></td></tr></table></figure>
-<p>sqoop import –append  <br>–connect jdbc:mysql://mysql-ape-conan-task4-reader:3306/ape_conan_task14 <br>–username ape –password 87mPiRJky <br>–query “select * from task where $CONDITIONS” <br> -m 1  –target-dir /user/maintain/dim_tutor_teacher <br>–direct <br> –fields-terminated-by “\t”;</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line">#9. sqoop执行文件:</span><br><span class="line">sqoop --options-file .&#x2F;test.opt</span><br><span class="line">sqoop命令格式是 &#96;sqoop CMD [args]&#96;</span><br><span class="line">从下文示例可以看出:</span><br><span class="line">test.opt文件第一行是&#96;CMD&#96;(&#96;import&#96;);</span><br><span class="line">以换行分隔参数(&#96;args&#96;).每对参数和值分成两行,</span><br><span class="line">key前加&#96;--&#96;,value则不用.</span><br><span class="line">关键字&#96;$CONDITIONS&#96;前的反斜杠不能加.</span><br><span class="line">&#96;--query&#96;的&#96;sql&#96;语句的引号可有可无.</span><br><span class="line">分隔符的&#96;\t&#96;语句的引号可有可无.</span><br><span class="line"></span><br><span class="line">&#96;&#96;&#96;test.opt</span><br><span class="line">import</span><br><span class="line">--append</span><br><span class="line">--connect</span><br><span class="line">jdbc:mysql:&#x2F;&#x2F;mysql-ape-conan-task4-reader:3306&#x2F;ape_conan_task14</span><br><span class="line">--username</span><br><span class="line">ape</span><br><span class="line">--password</span><br><span class="line">87mPiRJky</span><br><span class="line">--query</span><br><span class="line">select * from task where $CONDITIONS</span><br><span class="line">-m</span><br><span class="line">1</span><br><span class="line">--target-dir</span><br><span class="line">&#x2F;user&#x2F;maintain&#x2F;dim_tutor_teacher</span><br><span class="line">--direct</span><br><span class="line">--fields-terminated-by</span><br><span class="line">\t</span><br></pre></td></tr></table></figure>
-
-
-<h1 id="10-–warehouse-dir参数"><a href="#10-–warehouse-dir参数" class="headerlink" title="10. –warehouse-dir参数:"></a>10. –warehouse-dir参数:</h1><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">sqoop import  --append --connect jdbc:mysql:&#x2F;&#x2F;pipe-reader:3306&#x2F;pipe_tutor \</span><br><span class="line">--username xxx --password xxx \</span><br><span class="line">--table dim_tutor_teacher \</span><br><span class="line">--warehouse-dir &#x2F;user&#x2F;maintain&#x2F;dim_tutor_teacher \</span><br><span class="line">-m 1 --fields-terminated-by &quot;\t&quot;;</span><br></pre></td></tr></table></figure>
-<p><code>--warehouse-dir</code>会在目录建立与表名同名的目录(如果没有).然后把数据导入相应目录中.<br>日志:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">17&#x2F;05&#x2F;25 10:22:35 INFO util.AppendUtils: Creating missing output directory - dim_tutor_teacher</span><br></pre></td></tr></table></figure>
-<p><code>--target-dir</code>则直接写入,不创建目录.</p>
-<h1 id="11-指定参数"><a href="#11-指定参数" class="headerlink" title="11. 指定参数:"></a>11. 指定参数:</h1><p>不预测执行(降低attempt数量,降低数据库压力).</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">-D</span><br><span class="line">mapreduce.map.speculative&#x3D;false</span><br><span class="line">-D</span><br><span class="line">mapreduce.job.name&#x3D;question_hour</span><br></pre></td></tr></table></figure>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2017/09/28/sqoop%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/" data-id="ck96cxpm1005gmaam0h3t37hs" class="article-share-link">分享</a>
-      
-      
-      
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1491,6 +1477,10 @@
       <ul>
         
           <li>
+            <a href="/2023/02/01/2023-02/%E8%AF%8A%E6%96%AD-jvm%E7%A8%8B%E5%BA%8Fcpu%E9%97%AE%E9%A2%98/">诊断-jvm程序cpu问题</a>
+          </li>
+        
+          <li>
             <a href="/2022/11/21/2022-11/cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98%E9%80%9A%E7%94%A8%E4%BC%98%E5%8C%96%E6%80%9D%E8%B7%AF/">调优-cpu毛刺问题通用优化思路</a>
           </li>
         
@@ -1504,10 +1494,6 @@
         
           <li>
             <a href="/2022/09/26/2022-09/%E5%B7%B2%E7%9F%A5%E6%98%8E%E6%96%87%E7%A0%B4%E8%A7%A3zip/">已知明文破解zip</a>
-          </li>
-        
-          <li>
-            <a href="/2022/09/26/2022-09/jwt%E7%A0%B4%E8%A7%A3/">jwt破解</a>
           </li>
         
       </ul>
@@ -1525,7 +1511,7 @@
   
   <div class="outer">
     <div id="footer-left">
-      &copy; 2014 - 2022 风梦七&nbsp;|&nbsp;
+      &copy; 2014 - 2023 风梦七&nbsp;|&nbsp;
       主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
     </div>
      <div id="footer-right">

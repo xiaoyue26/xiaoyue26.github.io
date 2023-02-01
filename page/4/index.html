@@ -72,6 +72,160 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2020-06/jdk11下g1收集器使用" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/06/15/2020-06/jdk11%E4%B8%8Bg1%E6%94%B6%E9%9B%86%E5%99%A8%E4%BD%BF%E7%94%A8/" class="article-date">
+  <time datetime="2020-06-15T01:37:21.000Z" itemprop="datePublished">2020-06-15</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/jvm/">jvm</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2020/06/15/2020-06/jdk11%E4%B8%8Bg1%E6%94%B6%E9%9B%86%E5%99%A8%E4%BD%BF%E7%94%A8/">jdk11下g1收集器使用</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="WHAT-g1是什么"><a href="#WHAT-g1是什么" class="headerlink" title="WHAT: g1是什么?"></a>WHAT: g1是什么?</h1><p>g1是一个jdk9推荐默认使用的垃圾收集器。</p>
+<h1 id="WHY-为什么要使用g1"><a href="#WHY-为什么要使用g1" class="headerlink" title="WHY: 为什么要使用g1"></a>WHY: 为什么要使用g1</h1><p>主要优点：收集高吞吐、没有内存碎片、收集时间可控。</p>
+<p>G1出来之前，OLTP应用之前一般使用CMS收集器，达到暂停时间短的效果。<br>CMS: <a href="https://www.jianshu.com/p/fed80fdba376" target="_blank" rel="noopener">https://www.jianshu.com/p/fed80fdba376</a></p>
+<p>CMS收集器的缺点:<br>1.有内存碎片: 标记清理算法容易留下碎片，可以用参数在几次full gc以后进行一次压缩；<code>-XX:CMSFullGCsBeforeCompaction=0</code>: 每次都压缩;<br>2.full gc风险(foreground): 业务线程请求分配内存，但是内存不够了，于是可能触发一次CMS GC，这个过程就必须要等待内存分配成功后业务线程才能继续往下面走，因此整个过程必须STW，所以这种CMS GC整个过程都是STW，相当于full gc了;</p>
+<p>cms触发回收: <code>-XX:CMSInitiatingOccupancyFraction=75 -XX:+UseCMSInitiatingOccupancyOnly</code>: old区占75%的时候满足回收条件，检查这个条件的线程:<code>-XX:CMSWaitDuration=2000</code>(默认2秒)。</p>
+<p>g1以前的大部分收集器包括cms，都需要程序员手动设置新生代和老生代，g1则会自动调节eden region和old region的占比，以达到设定的暂停时长目标，因此更加智能。<br>g1的目标是取代CMS，因此我们有必要了解一下g1。</p>
+<h1 id="HOW-G1怎么工作的、原理"><a href="#HOW-G1怎么工作的、原理" class="headerlink" title="HOW: G1怎么工作的、原理"></a>HOW: G1怎么工作的、原理</h1><img src="/images/2020-06/g1_region.png" class="" width="800" height="1200" title="g1_region">
+
+<p>g1以前的收集器是新生代+老生代的布局，g1则是先分&lt;=2048个region，然后这些region可以用于eden region\old region\humongous region\suvivor region。<br>相当于空间布局更加细致了。</p>
+<p>eden: 和以前的新生代eden类似；<br>old: 和以前的老生代类似；<br>humongous：和以前的大对象直接进old区类似；<br>suvivor: 和以前的双缓冲区类似。</p>
+<p>g1可以通过统计信息，动态调节eden region和old region的比例，达到设定的暂停时长目标。</p>
+<h2 id="G1中的关键过程"><a href="#G1中的关键过程" class="headerlink" title="G1中的关键过程"></a>G1中的关键过程</h2><p>G1垃圾收集器工作过程中有几个关键的过程：<br>1.对象分配: 有内存使用才有内存的回收；<br>2.YGC;<br>3.全局并发标记周期;<br>4.Mixed GC;<br>5.FGC: 具体实现不是G1负责，只是作为兜底使用。</p>
+<h3 id="对象分配"><a href="#对象分配" class="headerlink" title="对象分配"></a>对象分配</h3><p>大部分到eden，少部分直接到 Humongous region， 统计时算作old区占用。<br>Humongous: &gt;=0.5*region size的对象会直接分配一个独立的Humongous region。<br>相关参数: <code>-XX:G1HeapRegionSize=16M</code></p>
+<h3 id="YGC"><a href="#YGC" class="headerlink" title="YGC"></a>YGC</h3><p>STW, 并发复制，一部分到old（年龄）；  Ygc末尾，重新计算edan区,survive区大小</p>
+<h4 id="触发时机"><a href="#触发时机" class="headerlink" title="触发时机"></a>触发时机</h4><p>eden region用完。</p>
+<h3 id="全局并发标记周期"><a href="#全局并发标记周期" class="headerlink" title="全局并发标记周期"></a>全局并发标记周期</h3><p>即concurrent marking cycle: 主要为old region/Humongous region回收服务。</p>
+<h4 id="1-初始标记"><a href="#1-初始标记" class="headerlink" title="1.初始标记"></a>1.初始标记</h4><p>STW, initial mark,找根；</p>
+<p>这个过程需要跟混YGC，在YGC的末尾触发，因为需要STW，而YGC也需要STW，为了减少STW的次数，就让初始标记阶段直接跟混YGC的STW。</p>
+<p>理由也很简单，因为正常的服务YGC肯定比较频繁，比OLD区满的频率大多了。而且大部分增大old区的对象都在YGC之后从young区移动到old region，除了直接分配的大对象之外。而大对象毕竟是小概率、低频事件。</p>
+<h4 id="2-并发扫描"><a href="#2-并发扫描" class="headerlink" title="2.并发扫描"></a>2.并发扫描</h4><p>并发扫描从新生代出发的直接可达性，完成后才能下一次YGC,不然白扫了</p>
+<h4 id="3-并发标记"><a href="#3-并发标记" class="headerlink" title="3.并发标记"></a>3.并发标记</h4><p>扫描间接可达性；</p>
+<h4 id="4-最终标记"><a href="#4-最终标记" class="headerlink" title="4.最终标记"></a>4.最终标记</h4><p>STW, 避免浮动垃圾；</p>
+<h4 id="5-并发清理"><a href="#5-并发清理" class="headerlink" title="5.并发清理"></a>5.并发清理</h4><p>STW, 回收完全空闲的region。(比如直接回收Humongous region)<br>这个过程不会产生碎片，因为是整个region回收的。<br>并不是完全空闲的region的处理: 交给Mixed GC。</p>
+<h3 id="Mixed-GC"><a href="#Mixed-GC" class="headerlink" title="Mixed GC"></a>Mixed GC</h3><h4 id="触发时机-1"><a href="#触发时机-1" class="headerlink" title="触发时机"></a>触发时机</h4><p>标记阶段结束后，可以知道old region有多少可以被回收；YGC之后,看浪费占比(可回收未回收),太浪费的话就MixedGC;</p>
+<p>相关参数:</p>
+<ol>
+<li><code>G1HeapWastePercent=10</code>: YGC之后,看浪费占比(可回收未回收),太浪费的话就MixedGC;</li>
+<li><code>G1MixedGCLiveThresholdPercent=85</code>: 超过85%占用率的region就不加入CSet了，性价比太低;</li>
+<li><code>G1MixedGCCountTarget=8</code>: 连续可以进行多少次MixedGC;</li>
+<li><code>G1OldCSetRegionThresholdPercent</code>: 一次Mixed最多选多少region进CSet;</li>
+</ol>
+<h3 id="FGC"><a href="#FGC" class="headerlink" title="FGC"></a>FGC</h3><p>G1不直接提供full gc，&lt; jdk10是调的serial old，我们用的jdk11是调并发的收集，都需要STW。</p>
+<h4 id="触发时机-2"><a href="#触发时机-2" class="headerlink" title="触发时机"></a>触发时机</h4><p>由于标记阶段不能进行Mixed GC，所以如果标记阶段堆被塞满了，就会触发FGC。(一般是非STW阶段,也就是第二阶段并发扫描和第三阶段并发标记，因为STW阶段不会分配新的对象)</p>
+<h3 id="Evacuation"><a href="#Evacuation" class="headerlink" title="Evacuation"></a>Evacuation</h3><p>非完全空闲的region的处理，都是压缩复制到另一个region，G1称这个为Evacuation。（翻译过来就是对象的疏散）</p>
+<h2 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h2><p>从上述过程可以总结占用、增多各种region的事件；回收、减少各种region的事件。<br>eden region增多: 普通小对象的分配;<br>eden region的减少: YGC;<br>Humongous region的增多: 大对象的分配，直接进H region;<br>Humongous region的减少: concurrent marking cycle的最后阶段（并发清理），回收完全空闲的region;<br>old region的增多: YGC末尾，随着对象年龄晋级到old region;<br>old region的减少: concurrent marking cycle的最后阶段（并发清理），回收完全空闲的region; 以及Mixed GC: 回收部分占用的region。</p>
+<h1 id="实战"><a href="#实战" class="headerlink" title="实战"></a>实战</h1><h2 id="环境配置"><a href="#环境配置" class="headerlink" title="环境配置"></a>环境配置</h2><p>容器CPU: 4<br>容器内存: 8G<br>JDK: 11<br>JVM参数: 未设置</p>
+<h2 id="现象"><a href="#现象" class="headerlink" title="现象"></a>现象</h2><p>通过命令:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">nohup jstat -gcutil &lt;pid&gt; \</span><br><span class="line"><span class="meta">&gt;</span><span class="bash"> gcutil.log 2&gt;&amp;1 &amp; <span class="built_in">echo</span> $! &gt; gcutil.pid</span></span><br></pre></td></tr></table></figure>
+<p>发现old区增长比young区快。</p>
+<p>执行命令:</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">jmap -histo:live &lt;pid&gt; | head</span><br></pre></td></tr></table></figure>
+<p>触发FGC、STW，内存占用突然掉下来。</p>
+<p>观察内存自然回收前一刻的内存占用，可以看到old区占用大概为43.49%。而默认的参数<code>-XX:InitiatingHeapOccupancyPercent=45</code>。<br>G1这里的<code>InitiatingHeapOccupancyPercent</code>指的是old区占整个堆的比例，和CMS的不同。也有资料认为这个是指整个堆的占用/总大小，但其实统计的时候都统计的是YGC以后的堆的占用/总大小，<br>也就等于old区的使用/整个堆的大小。</p>
+<p>所以这种情况下young区增长比old区快的原因是大对象的分配。<br>大对象region的清理依赖标记阶段最后的清理，而标记阶段的初始mark依赖YGC的末尾。</p>
+<p>最后因为没有几乎YGC，所以大对象很容易就一直堆积着、而且由于young区太大了，old区的占用很高也触发不了标记阈值。</p>
+<h2 id="调优参数"><a href="#调优参数" class="headerlink" title="调优参数"></a>调优参数</h2><p>如果要维持old区在gcutil视角下不超过90%，可以通过简单的计算，将InitiatingHeapOccupancyPercent调整为37%。（仅当前case）</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">-Xmx4096M -Xms4096M -XX:G1HeapRegionSize=8M -XX:MetaspaceSize=512M -XX:MaxMetaspaceSize=512M -Xlog:gc*:gc.log -XX:InitiatingHeapOccupancyPercent=37</span><br></pre></td></tr></table></figure>
+
+<img src="/images/2020-06/gcutil2.png" class="" width="800" height="1200" title="gcutil2">
+
+<p>调整以后old区维持98%, YGC次数增多。<br>但这个参数仅第一次有用，因为之后G1会根据暂停时间目标来调整不同region的比例，因此并不能长期解决。</p>
+<h3 id="调参2"><a href="#调参2" class="headerlink" title="调参2"></a>调参2</h3><p>我们这个case因为是空转服务，而且Eden区基本不使用，光怼Old区了（大对象）。可以通过调节大对象阈值，让Eden区增长速度稍微快于Old区(IHOP为45%)。</p>
+<p>相同参数: <code>-Xmx4096M -Xms4096M -XX:MetaspaceSize=512M -XX:MaxMetaspaceSize=512M -Xlog:gc*:gc.log</code> </p>
+<p>各种姿势的结果：</p>
+<table>
+<thead>
+<tr>
+<th>思路</th>
+<th>gc耗时(ms)</th>
+<th>YGC</th>
+<th>Mixed GC</th>
+<th>FGC</th>
+<th>差异参数</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>拒绝大对象</td>
+<td>2260</td>
+<td>31</td>
+<td>0</td>
+<td>0</td>
+<td>-XX:G1HeapRegionSize=16M -XX:InitiatingHeapOccupancyPercent=37</td>
+</tr>
+<tr>
+<td>拒绝大对象</td>
+<td>5390</td>
+<td>52</td>
+<td>0</td>
+<td>0</td>
+<td>-XX:G1HeapRegionSize=32M -XX:InitiatingHeapOccupancyPercent=37</td>
+</tr>
+<tr>
+<td>停顿小</td>
+<td>5688</td>
+<td>128</td>
+<td>0</td>
+<td>0</td>
+<td>-XX:G1HeapRegionSize=8M -XX:InitiatingHeapOccupancyPercent=37 -XX:MaxGCPauseMillis=50</td>
+</tr>
+<tr>
+<td>不让调IHOP</td>
+<td>3507</td>
+<td>128</td>
+<td>1</td>
+<td>0</td>
+<td>-XX:G1HeapRegionSize=8M -XX:InitiatingHeapOccupancyPercent=37 -XX:-G1UseAdaptiveIHOP</td>
+</tr>
+</tbody></table>
+<p>下面解释4个试验结果：</p>
+<p>结果1： 16M的region，所以大于8M的对象会分配一个Humongous region，否则在edan区分配，由于Humongous region也在统计中算到了old region里头，所以我们这样操作以后会减少统计结果中old区的占用率。16M配置下，看gc.log已经完全没有了Humongous region，因此这样配置就肯定不会触发报警了。</p>
+<p>结果2：32M的region，类似于16M的，0个Humongous region，但由于region比较大，碎片多，比较浪费, YGC比较多，gc耗时比较大；</p>
+<p>结果3：由于G1会动态调整young区\old区的大小比例，young在5%~60%之间调整，如果young在60%，那么即使old区填满了也才40%，无法达到IHOP，也就无法通过IHOP触发标记阶段，只能通过YGC触发；因此这里我们把自动调整的关掉，这样young区就不会太大，就能触发IHOP的阈值了。这种情况下由于region大小没有调大，YGC次数没有太大变化；而由于没有使用自动调整IHOP，old区很满以后会触发标记阶段，然后G1发现回收young以后，浪费的空间仍然大于G1HeapWastePercent参数，于是就进行Mixed GC，回收old区。所以这种配置下有1次MixedGC。</p>
+<p>结果4：这个思路也比较类似思路3，由于G1是根据停顿时间来调整young区/old区大小的，我们把停顿时间设定得超小，它就会把young区变小已达到停顿时间的要求，同时也会更频繁得YGC，Humongous可以在标记阶段的末尾得到清理，所以这种配置下也不会触发Old区的长期占用高的报警。同时由于停顿时间超小，YGC次数变得很高，总耗时也很高。</p>
+<p>以上四种配置，真正在线上只有配置1是实用的。因此如果理解了G1的过程，其实调参可以只调很少。</p>
+<h2 id="其他-Metaspace"><a href="#其他-Metaspace" class="headerlink" title="其他: Metaspace"></a>其他: Metaspace</h2><p>除了上述区域，还有一个元数据区域。通过<code>jstat -gcutil</code>可以看到它的占用率一般是在98.1%左右，比较高。但实际上元数据区的占用率是越高越高的，因为它的实际含义类似于(1-碎片率)，占用率98.1%，差不多相当于碎片率是1.9%。因为程序工作一段时间后，metaspace基本就不怎么增长了，所以基本不用我们操心，最多只需要将初始metaspace的大小设大一点，避免它增长到稳定之前触发full gc。可以先启动一次，看看稳定的时候metaspace的大小，然后向上取2的幂，设置大小。不要以为把这个值设大2倍，占用率会下降一半，metaspace是用多少申请多少的，所以即使设大了也不会影响占用率的。</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">-XX:MetaspaceSize=512M -XX:MaxMetaspaceSize=512M</span><br></pre></td></tr></table></figure>
+<p>元数据相关参见: <a href="http://lovestblog.cn/blog/2016/10/29/metaspace/" target="_blank" rel="noopener">http://lovestblog.cn/blog/2016/10/29/metaspace/</a></p>
+<h1 id="参考资料"><a href="#参考资料" class="headerlink" title="参考资料"></a>参考资料</h1><p><a href="https://www.oracle.com/cn/technical-resources/articles/java/g1gc.html" target="_blank" rel="noopener">https://www.oracle.com/cn/technical-resources/articles/java/g1gc.html</a><br><a href="https://www.jianshu.com/p/0f1f5adffdc1" target="_blank" rel="noopener">https://www.jianshu.com/p/0f1f5adffdc1</a><br><a href="https://tech.meituan.com/2016/09/23/g1.html" target="_blank" rel="noopener">https://tech.meituan.com/2016/09/23/g1.html</a></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2020/06/15/2020-06/jdk11%E4%B8%8Bg1%E6%94%B6%E9%9B%86%E5%99%A8%E4%BD%BF%E7%94%A8/" data-id="ckbfu7dbm00009mam2tyihheu" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/jvm/" rel="tag">jvm</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2020-06/mysql可重复读下用for-update导致的死锁" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2020/06/08/2020-06/mysql%E5%8F%AF%E9%87%8D%E5%A4%8D%E8%AF%BB%E4%B8%8B%E7%94%A8for-update%E5%AF%BC%E8%87%B4%E7%9A%84%E6%AD%BB%E9%94%81/" class="article-date">
@@ -944,70 +1098,6 @@
 
 
   
-    <article id="post-2019-12/分布式限流-redis-令牌桶" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/12/28/2019-12/%E5%88%86%E5%B8%83%E5%BC%8F%E9%99%90%E6%B5%81-redis-%E4%BB%A4%E7%89%8C%E6%A1%B6/" class="article-date">
-  <time datetime="2019-12-28T13:34:45.000Z" itemprop="datePublished">2019-12-28</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/redis/">redis</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/12/28/2019-12/%E5%88%86%E5%B8%83%E5%BC%8F%E9%99%90%E6%B5%81-redis-%E4%BB%A4%E7%89%8C%E6%A1%B6/">分布式限流: redis+令牌桶</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>限流一般有漏桶和令牌桶两种实现，详情网上很多资料。<br>一般都会选用令牌桶算法，比较灵活，可以支持预热、容忍一定突发流量、预支一部分流量的弹性。</p>
-<h1 id="单进程限流"><a href="#单进程限流" class="headerlink" title="单进程限流"></a>单进程限流</h1><p>单个jvm限流有现成的库，谷歌的guava库提供了<code>RateLimiter</code>,底层实现上有两个，一个是能容忍突发的实现，一个是能提供预热功能的实现；通过create时提供不同的参数来获得。</p>
-<h2 id="实现原理"><a href="#实现原理" class="headerlink" title="实现原理"></a>实现原理</h2><h3 id="朴素解法"><a href="#朴素解法" class="headerlink" title="朴素解法"></a>朴素解法</h3><p>如果按照令牌桶算法朴素的定义来实现的话，一个很自然的思路就是增加一个定时线程、进程，然后不断生成新的token; </p>
-<h4 id="朴素解法的缺点"><a href="#朴素解法的缺点" class="headerlink" title="朴素解法的缺点"></a>朴素解法的缺点</h4><p>重度依赖这个定时线程，如果定时程序挂了，所有工作线程就被卡住了，风险较大。<br>如果给定时线程加监控，又会需要监控的监控，那就变成俄罗斯套娃了。</p>
-<h3 id="guava库中的解法"><a href="#guava库中的解法" class="headerlink" title="guava库中的解法"></a>guava库中的解法</h3><p>需要访问者多输入一个参数: 当前时钟。<br><code>lazy eval</code>: 每次取token的时候才计算当前”应该”有多少token。<br>基于时钟来计算: 当前时钟下, 过去了多久没有生成token，应该生成多少新的token。<br>核心代码:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment">   * Updates &#123;<span class="doctag">@code</span> storedPermits&#125; and &#123;<span class="doctag">@code</span> nextFreeTicketMicros&#125; based on the current time.</span></span><br><span class="line"><span class="comment">   */</span></span><br><span class="line">  <span class="function"><span class="keyword">void</span> <span class="title">resync</span><span class="params">(<span class="keyword">long</span> nowMicros)</span> </span>&#123;</span><br><span class="line">    <span class="comment">// if nextFreeTicket is in the past, resync to now</span></span><br><span class="line">    <span class="keyword">if</span> (nowMicros &gt; nextFreeTicketMicros) &#123;</span><br><span class="line">      storedPermits = min(maxPermits,</span><br><span class="line">          storedPermits</span><br><span class="line">            + (nowMicros - nextFreeTicketMicros) / coolDownIntervalMicros());</span><br><span class="line">      nextFreeTicketMicros = nowMicros;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
-<h3 id="guava库中解法的优点"><a href="#guava库中解法的优点" class="headerlink" title="guava库中解法的优点"></a>guava库中解法的优点</h3><p>开销更低: 去掉了定时线程的开销;<br>健壮性更高: 每个线程都可以承担生成新token的任务;</p>
-<h3 id="guava库中解法的缺点"><a href="#guava库中解法的缺点" class="headerlink" title="guava库中解法的缺点"></a>guava库中解法的缺点</h3><p>每个线程的时钟得对齐。但这一点在单进程场景下很好保证。</p>
-<h2 id="使用"><a href="#使用" class="headerlink" title="使用"></a>使用</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> com.google.common.util.concurrent.RateLimiter;</span><br><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">run1</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        RateLimiter limiter = RateLimiter.create(<span class="number">5</span>);<span class="comment">// 令牌桶</span></span><br><span class="line">        <span class="keyword">while</span> (<span class="keyword">true</span>) &#123;</span><br><span class="line">            System.out.println(<span class="string">"get 1 tokens: "</span> + limiter.acquire() + <span class="string">"s"</span></span><br><span class="line">            );</span><br><span class="line"></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 3秒预热期: 预热期内限频较严格: 1.3s , 0.9s , 0.6s // 线性提速</span></span><br><span class="line"><span class="comment">     * 预热期后: 正式达到1秒2个的额定速度.</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">run2</span><span class="params">()</span> </span>&#123;<span class="comment">// 预热测试</span></span><br><span class="line">        RateLimiter r = RateLimiter.create(<span class="number">2</span>, <span class="number">3</span>, TimeUnit.SECONDS);</span><br><span class="line">        <span class="keyword">while</span> (<span class="keyword">true</span>) &#123;</span><br><span class="line">            System.out.println(<span class="string">"get 1 tokens: "</span> + r.acquire(<span class="number">1</span>) + <span class="string">"s"</span>);</span><br><span class="line">            System.out.println(<span class="string">"get 1 tokens: "</span> + r.acquire(<span class="number">1</span>) + <span class="string">"s"</span>);</span><br><span class="line">            System.out.println(<span class="string">"get 1 tokens: "</span> + r.acquire(<span class="number">1</span>) + <span class="string">"s"</span>);</span><br><span class="line">            System.out.println(<span class="string">"get 1 tokens: "</span> + r.acquire(<span class="number">1</span>) + <span class="string">"s"</span>);</span><br><span class="line">            System.out.println(<span class="string">"end"</span>);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">run3</span><span class="params">()</span> </span>&#123;<span class="comment">// 突发测试</span></span><br><span class="line">        RateLimiter r = RateLimiter.create(<span class="number">5</span>);</span><br><span class="line">        <span class="keyword">while</span> (<span class="keyword">true</span>) &#123;</span><br><span class="line">            System.out.println(<span class="string">"get 5 tokens: "</span> + r.acquire(<span class="number">5</span>) + <span class="string">"s"</span>);</span><br><span class="line">            System.out.println(<span class="string">"get 1 tokens: "</span> + r.acquire(<span class="number">1</span>) + <span class="string">"s"</span>);<span class="comment">// 每次都负责还债</span></span><br><span class="line">            System.out.println(<span class="string">"get 1 tokens: "</span> + r.acquire(<span class="number">1</span>) + <span class="string">"s"</span>);</span><br><span class="line">            System.out.println(<span class="string">"get 1 tokens: "</span> + r.acquire(<span class="number">1</span>) + <span class="string">"s"</span>);</span><br><span class="line">            System.out.println(<span class="string">"end"</span>);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
-
-
-
-<h1 id="分布式限流"><a href="#分布式限流" class="headerlink" title="分布式限流"></a>分布式限流</h1><p>如果是多实例的情况下,下游处理能力有上限时(例如物料有限),需要对整体有一个限流。<br>可以参考guava的实现,实现一个基于redis的，有一定弹性的令牌桶实现:<br>(由于是借鉴guava的实现，所以有相同的依赖: 所有进程、机器的时钟对齐)</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">tokenLimitDemo</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        DefaultRedisScript&lt;Long&gt; lua = <span class="keyword">new</span> DefaultRedisScript&lt;&gt;();</span><br><span class="line">        lua.setResultType(Long<span class="class">.<span class="keyword">class</span>)</span>;</span><br><span class="line">        lua.setScriptSource(<span class="keyword">new</span> ResourceScriptSource(<span class="keyword">new</span></span><br><span class="line">                ClassPathResource(<span class="string">"tokenLimiter.lua"</span>)));</span><br><span class="line">        List&lt;String&gt; keys = <span class="keyword">new</span> ArrayList&lt;&gt;();</span><br><span class="line">        keys.add(<span class="string">"test_ip"</span>);</span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i &lt; <span class="number">100</span>; i++) &#123;</span><br><span class="line">            Long res = (Long) redisTemplate.execute(lua, keys</span><br><span class="line">                    , <span class="string">"1"</span></span><br><span class="line">                    , String.valueOf(System.currentTimeMillis())</span><br><span class="line">            );</span><br><span class="line">            <span class="keyword">if</span> (res != <span class="number">1</span>) &#123;</span><br><span class="line">                <span class="keyword">try</span> &#123;</span><br><span class="line">                    System.out.println(<span class="string">"waiting"</span>);</span><br><span class="line">                    Thread.sleep(<span class="number">100</span>);</span><br><span class="line">                    i--;</span><br><span class="line">                &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                    e.printStackTrace();</span><br><span class="line">                &#125;</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                System.out.println(res);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>相应的lua脚本: </p>
-<figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- 令牌桶算法:</span></span><br><span class="line"><span class="comment">-- 1. 校验输入:</span></span><br><span class="line"><span class="keyword">local</span> need_token = <span class="built_in">tonumber</span>(ARGV[<span class="number">1</span>])</span><br><span class="line"><span class="keyword">local</span> req_time = <span class="built_in">tonumber</span>(ARGV[<span class="number">2</span>])</span><br><span class="line"><span class="keyword">if</span> <span class="built_in">type</span>(need_token) ~= <span class="string">"number"</span> <span class="keyword">or</span> <span class="built_in">type</span>(req_time) ~= <span class="string">"number"</span> <span class="keyword">then</span></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span></span><br><span class="line"><span class="keyword">end</span></span><br><span class="line"></span><br><span class="line"><span class="comment">-- 2. 校验redis:</span></span><br><span class="line"><span class="keyword">local</span> key = KEYS[<span class="number">1</span>]</span><br><span class="line"><span class="keyword">local</span> info = redis.<span class="built_in">pcall</span>(<span class="string">"HMGET"</span>, key, <span class="string">"last_time"</span>, <span class="string">"cur_token_num"</span>, <span class="string">"max_token"</span>, <span class="string">"rate"</span>)</span><br><span class="line"><span class="keyword">local</span> last_time = <span class="built_in">tonumber</span>(info[<span class="number">1</span>])</span><br><span class="line"><span class="keyword">local</span> cur_token_num = <span class="built_in">tonumber</span>(info[<span class="number">2</span>])</span><br><span class="line"><span class="keyword">local</span> max_token = <span class="built_in">tonumber</span>(info[<span class="number">3</span>])</span><br><span class="line"><span class="keyword">local</span> rate = <span class="built_in">tonumber</span>(info[<span class="number">4</span>])</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> <span class="built_in">type</span>(last_time) ~= <span class="string">"number"</span> <span class="keyword">then</span> <span class="comment">-- init</span></span><br><span class="line">    last_time = req_time</span><br><span class="line">    max_token = <span class="number">2</span> <span class="comment">-- 最大token弹性</span></span><br><span class="line">    cur_token_num = max_token <span class="comment">-- 假设已经预热完毕</span></span><br><span class="line">    rate = <span class="number">1</span></span><br><span class="line">    <span class="comment">-- 初始化redis:</span></span><br><span class="line">    redis.<span class="built_in">pcall</span>(<span class="string">"HMSET"</span>, key, <span class="string">"last_time"</span>, req_time, <span class="string">"cur_token_num"</span>, cur_token_num)</span><br><span class="line">    redis.<span class="built_in">pcall</span>(<span class="string">"HMSET"</span>, key, <span class="string">"max_token"</span>, max_token, <span class="string">"rate"</span>, rate)</span><br><span class="line"><span class="keyword">end</span></span><br><span class="line"></span><br><span class="line"><span class="comment">-- 3. 处理请求:</span></span><br><span class="line"><span class="keyword">local</span> result = <span class="number">0</span></span><br><span class="line"><span class="keyword">if</span> <span class="built_in">tonumber</span>(need_token) &gt; <span class="built_in">tonumber</span>(max_token) <span class="keyword">then</span></span><br><span class="line">    result = <span class="number">0</span></span><br><span class="line"><span class="keyword">end</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">local</span> new_gen_token = <span class="built_in">math</span>.<span class="built_in">floor</span>((req_time - last_time) / <span class="number">1000</span>) * rate</span><br><span class="line"><span class="keyword">local</span> cur_token_num = <span class="built_in">math</span>.<span class="built_in">min</span>(cur_token_num + new_gen_token, max_token)</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> <span class="built_in">tonumber</span>(need_token) &gt; <span class="built_in">tonumber</span>(cur_token_num) <span class="keyword">then</span></span><br><span class="line">    result = <span class="number">0</span></span><br><span class="line"><span class="keyword">else</span> <span class="comment">-- do consume token</span></span><br><span class="line">    cur_token_num = cur_token_num - need_token</span><br><span class="line">    result = <span class="number">1</span></span><br><span class="line">    <span class="comment">-- 保存进度:</span></span><br><span class="line">    redis.<span class="built_in">pcall</span>(<span class="string">"HMSET"</span>, key, <span class="string">"last_time"</span>, req_time, <span class="string">"cur_token_num"</span>, cur_token_num)</span><br><span class="line"><span class="keyword">end</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">return</span> result</span><br></pre></td></tr></table></figure>
-
-
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/12/28/2019-12/%E5%88%86%E5%B8%83%E5%BC%8F%E9%99%90%E6%B5%81-redis-%E4%BB%A4%E7%89%8C%E6%A1%B6/" data-id="ck96cxpqg00ksmaamhw2t7jgz" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1034,6 +1124,10 @@
       <ul>
         
           <li>
+            <a href="/2023/02/01/2023-02/%E8%AF%8A%E6%96%AD-jvm%E7%A8%8B%E5%BA%8Fcpu%E9%97%AE%E9%A2%98/">诊断-jvm程序cpu问题</a>
+          </li>
+        
+          <li>
             <a href="/2022/11/21/2022-11/cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98%E9%80%9A%E7%94%A8%E4%BC%98%E5%8C%96%E6%80%9D%E8%B7%AF/">调优-cpu毛刺问题通用优化思路</a>
           </li>
         
@@ -1047,10 +1141,6 @@
         
           <li>
             <a href="/2022/09/26/2022-09/%E5%B7%B2%E7%9F%A5%E6%98%8E%E6%96%87%E7%A0%B4%E8%A7%A3zip/">已知明文破解zip</a>
-          </li>
-        
-          <li>
-            <a href="/2022/09/26/2022-09/jwt%E7%A0%B4%E8%A7%A3/">jwt破解</a>
           </li>
         
       </ul>
@@ -1068,7 +1158,7 @@
   
   <div class="outer">
     <div id="footer-left">
-      &copy; 2014 - 2022 风梦七&nbsp;|&nbsp;
+      &copy; 2014 - 2023 风梦七&nbsp;|&nbsp;
       主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
     </div>
      <div id="footer-right">

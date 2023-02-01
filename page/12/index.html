@@ -72,6 +72,156 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-09/通俗理解SSL-TLS协议区别与原理" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/09/26/2018-09/%E9%80%9A%E4%BF%97%E7%90%86%E8%A7%A3SSL-TLS%E5%8D%8F%E8%AE%AE%E5%8C%BA%E5%88%AB%E4%B8%8E%E5%8E%9F%E7%90%86/" class="article-date">
+  <time datetime="2018-09-26T12:07:37.000Z" itemprop="datePublished">2018-09-26</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/Netty/">Netty</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/09/26/2018-09/%E9%80%9A%E4%BF%97%E7%90%86%E8%A7%A3SSL-TLS%E5%8D%8F%E8%AE%AE%E5%8C%BA%E5%88%AB%E4%B8%8E%E5%8E%9F%E7%90%86/">通俗理解SSL/TLS协议区别与原理</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="区别-历史"><a href="#区别-历史" class="headerlink" title="区别(历史)"></a>区别(历史)</h1><p><code>TLS 1.0</code>又被叫做<code>SSL 3.1</code>。<br>换算关系:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">TLS 1.0 &#x3D; SSL 3.1</span><br><span class="line">TLS 1.1 &#x3D; SSL 3.2</span><br><span class="line">TLS 1.2 &#x3D; SSL 3.3</span><br></pre></td></tr></table></figure>
+<p>综上，简单说，它们的区别只是版本更迭而已。<br>展开说的话，历史: </p>
+<blockquote>
+<p>1994年，NetScape公司设计了SSL协议（Secure Sockets Layer）的1.0版，但是未发布。<br>1995年，NetScape公司发布SSL 2.0版，很快发现有严重漏洞。<br>1996年，SSL 3.0版问世，得到大规模应用。<br>1999年，互联网标准化组织ISOC接替NetScape公司，发布了SSL的升级版TLS 1.0版。<br>2006年和2008年，TLS 1.1版和TLS 1.2版发布。（TLS1.2已经获得主流浏览器支持）<br>2008年8月，TLS 1.3版发布，性能好。移除了很多东西，速度快了很多，少了一次握手。</p>
+</blockquote>
+<p>TLS1.2: 兼容性高；握手需要2RTT；（重连需要1RTT）<br>TLS1.3: 安全、性能高；握手需要1RTT；(重连需要0RTT)</p>
+<p>综上，可以先用<code>TLS 1.2</code>获得最大的兼容性。</p>
+<h1 id="原理"><a href="#原理" class="headerlink" title="原理"></a>原理</h1><p>和以前莉姐课上说的<code>PGP</code>协议差不多，都是三板斧：摘要、非对称加密、对称加密。</p>
+<h2 id="要解决的问题"><a href="#要解决的问题" class="headerlink" title="要解决的问题"></a>要解决的问题</h2><pre><code>1. 窃听。解决方案：加密
+2. 篡改。解决方案：摘要 （解决数据完整性）
+3. 冒充。解决方案：数字签名 （解决中间人攻击）</code></pre><h2 id="架构"><a href="#架构" class="headerlink" title="架构"></a>架构</h2><p>ISO七层协议:<br><code>TCP</code> :  传输层<br><code>TLS</code> :  会话层<br>    <em>表示层略</em><br><code>HTTP</code>:  应用层<br>（<code>TLS</code>+<code>HTTP</code>=&gt;<code>HTTPS</code>）</p>
+<p>所以是先进行<code>3</code>次握手建立<code>TCP</code>,然后<code>4</code>次握手建立<code>TLS</code>,然后进行<code>HTTP</code>数据传输。</p>
+<p>如果在<code>TCP</code>层抓包的话，里头是<code>TLS</code>加密过的数据。（中间人无法知道内容）<br>如果在<code>HTTP</code>层（应用层）收取数据的话，是已经解密过的明文。(但是中间人不太可能在应用层，除非已经嵌入到业务层代码了。)</p>
+<p>这个分层架构的划分其实不太合理，quic重新做了分层，详见:<br><a href="http://xiaoyue26.github.io/2022/02/17/2022-02/http3-quic%E4%BC%98%E7%BC%BA%E7%82%B9%E5%8F%8A%E5%8E%9F%E5%9B%A0/">http://xiaoyue26.github.io/2022/02/17/2022-02/http3-quic%E4%BC%98%E7%BC%BA%E7%82%B9%E5%8F%8A%E5%8E%9F%E5%9B%A0/</a></p>
+<h2 id="简化版加密通信"><a href="#简化版加密通信" class="headerlink" title="简化版加密通信"></a>简化版加密通信</h2><p>假设用三个算法做一下加密通信，可以怎么实现呢？<br>定义如下：<br><code>RSA</code>: 一种非对称加密算法<br><code>AES</code>: 一种对称加密算法<br><code>SHA1</code>: 一种摘要算法</p>
+<h3 id="方案1：AES-K-data"><a href="#方案1：AES-K-data" class="headerlink" title="方案1：AES(K,data)"></a>方案1：AES(K,data)</h3><p>假如客户端是<code>C</code>，服务端是<code>S</code>，<code>C</code>和<code>S</code>要传输的数据<code>data</code>。<br>直接传明文肯定是不行，可以加密一下。用一个密钥<code>K</code>，加密成<code>AES(K,data)</code>。<br>这里为啥用AES呢，不用RSA呢，因为非对称加密(RSA)太慢了。</p>
+<img src="/images/2018-09/tls1.png" class="" width="400" height="600" title="加密">
+
+<ul>
+<li>问题：<br>虽然别人不知道你俩传输了啥，但是可能悄悄得在中间篡改了数据，双方察觉不到。</li>
+<li>解决方案：<br>加上摘要算法。</li>
+</ul>
+<h3 id="方案2：AES-K-data-SHA1-data"><a href="#方案2：AES-K-data-SHA1-data" class="headerlink" title="方案2：AES(K,data+SHA1(data))"></a>方案2：AES(K,data+SHA1(data))</h3><p>可以在数据后面加上数据的摘要，然后再加密，这样中间人一旦乱改东西马上就会被检测出来，类似于校验位。</p>
+<img src="/images/2018-09/tls2.png" class="" width="400" height="600" title="摘要">
+
+<ul>
+<li>问题：<br>上述方案都有一个前提，就是通信双方使用同一个K进行加解密。<br>那么一开始的时候怎么约定、协商这个密钥K呢？</li>
+<li>解决方案:<br>先用RSA协商出一个对称密钥K。</li>
+</ul>
+<h3 id="协商密钥"><a href="#协商密钥" class="headerlink" title="协商密钥"></a>协商密钥</h3><p>最安全的方法当然是线下见面，约定一个密钥K。但是这个通信效率太低了，并发也不高。<br>为了避免中间人攻击，这个问题的关键点在于确认对方的身份。对于CS架构来说，最关键的是客户端确认服务端的身份。因此一个很自然的思路是让每个服务端有自己的身份证。</p>
+<p>计算机领域的话，身份证就是数字证书，颁发身份证的机构就是CA。<br>具体原理就是非对称加密:<br>服务端通过数字签名向客户端证明自己的身份，客户端定义一个对称密钥K，然后用服务端的公钥加密一下发给服务端，因为只有服务端能用私钥解开，因此协商密钥的过程是安全的。（即使别人截获到也没关系）</p>
+<h4 id="相关原理"><a href="#相关原理" class="headerlink" title="相关原理:"></a>相关原理:</h4><p>对称加密: </p>
+<blockquote>
+<p>加密时候用密钥K，解密时候也用密钥K，是对称的，因此叫对称加密。</p>
+</blockquote>
+<p>非对称加密: </p>
+<blockquote>
+<p>加密时候用公钥K1,解密时候用私钥K2,不是同一个密钥，不对称，因此叫非对称加密。<br>msg = RSA(K1,data);<br>data = RSA(K2,msg)</p>
+</blockquote>
+<p>也就是说，把数据用K1加密一下，可以且仅可以用K2解开；反之用K2加密消息，也可以且仅可以用K1解开，这个特性就很厉害了，正好可以用于身份认证的需求。</p>
+<p>回到刚才的需求，需要有一种数字证书的机制。<br>简单实现就是服务端先去CA申请一对密钥(K1,K2)，他选K1作为公钥，另一个K2作为私钥。<br>当他需要向别人证明自己的身份的时候，他用私钥加密一下消息发给客户端（<code>RSA(K2,data)</code>，数字签名）。客户端可以用公钥K1解开消息，确认他的身份。客户端可以用公钥K1加密一份数据发出去，这份数据也就服务端能解开，因为只有服务端有私钥K2。</p>
+<h4 id="总结"><a href="#总结" class="headerlink" title="总结:"></a>总结:</h4><pre><code>数字签名: RSA(私钥K2,data)
+加密一份只有指定人能解开的数据: RSA(公钥K1,data)。</code></pre><p>这个过程中客户端如何得到公钥K1呢?<br>可以由服务端发给客户端数字证书，证书由CA签名证明服务端的公钥确实是K1。</p>
+<p>客户端是因为信任CA,所以信任CA作保的服务端公钥K1，所以才可以用K1验证服务端的数字签名。（信任传递）<br>也就是说即使是网络世界，也还是需要签发证书的机构的。类似于一种官方机构。如果没有这种信任的基础，匿名的网络世界是很难建立起互信机制的。</p>
+<h2 id="TLS组成部分"><a href="#TLS组成部分" class="headerlink" title="TLS组成部分"></a>TLS组成部分</h2><p>握手协议+记录协议</p>
+<p>1。握手协议包括：</p>
+<ul>
+<li>握手：证书认证、协商算法和密钥；</li>
+<li>密码规格变更协议：v1.3删除了；</li>
+<li>警告协议: 错误的时候通知对方；</li>
+<li>应用数据协议: 传输数据协议；<br>2。记录协议：负责使用对称密码对消息进行加密；</li>
+</ul>
+<h2 id="TLS运行流程"><a href="#TLS运行流程" class="headerlink" title="TLS运行流程"></a>TLS运行流程</h2><p>简单地说就是2个步骤：先协商一个密钥，之后的通信就用这个密钥加密数据。<br><code>TLS 1.2</code>:<br>协商: 4次握手，协商出一个对称加密的密钥K；<br>通信：双方用K加密数据以后通信。</p>
+<img src="/images/2018-09/tls3.png" class="" width="400" height="600" title="tls3.png">
+<p>如上图所示，这4次握手就是想要协商出一个对称加密的密钥KEY,以及摘要算法的密钥。<br>图中的变量定义:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">r1: 随机数1;</span><br><span class="line">r2: 随机数2;</span><br><span class="line">r3: 随机数3;</span><br><span class="line">AES(KEY,data): 密钥是KEY，对称加密data；</span><br><span class="line">RSA(K1,data): 密钥是K1, 非对称加密data；</span><br><span class="line">finish: finish信息</span><br><span class="line">HMAC(data): 用HMAC算法对data做摘要（key省略了）。</span><br></pre></td></tr></table></figure>
+<p>其中对称加密的KEY是根据3个随机数r1,r2,r3生成出来的。之所以需要这么多随机数，是为了保证这个KEY的随机性。</p>
+<p>具体展开来说的话4次握手：<br>1.客户端=&gt;服务端: </p>
+<blockquote>
+<p>(1)随机数r1;<br>(2)客户端支持的协议版本、算法版本；</p>
+</blockquote>
+<p>2.服务端=&gt;客户端: </p>
+<blockquote>
+<p>(1)随机数r2;<br>(2)确定用的协议、算法版本;<br>(3)CA签名的证书(里面有服务器公钥K1);<br>(4)服务端数字签名。</p>
+</blockquote>
+<p>3.客户端=&gt;服务端: 先确认服务端的身份、生成r3, 生成对称加密的key，然后发送数据:</p>
+<blockquote>
+<p>(1)用服务器公钥K1非对称加密后的随机数r3;<br>(2)对称加密过的finish信息以及摘要。<br>(此时客户端已经有了r1,r2,r3,可以生成对称加密密钥key)</p>
+</blockquote>
+<p>4.服务端=&gt;客户端: 先解开非对称加密的数据，得到r3,然后生成对称加密的key，然后解开finish信息，发现确实能用，也就是客户端进行的对称加密是符合预期的，然后发送:</p>
+<blockquote>
+<p>(1)对称加密过的server finish信息以及摘要。</p>
+</blockquote>
+<p>如果客户端和服务端都能对Finish信息进行正常加解密且消息正确的被验证，则说明握手通道已经建立成功，接下来，双方可以进行对称加密的数据传输了。</p>
+<h3 id="几个小细节"><a href="#几个小细节" class="headerlink" title="几个小细节"></a>几个小细节</h3><ol>
+<li>上面的HMAC摘要算法也是有key的，而且也是由r1,r2,r3算出来的;</li>
+<li>大部分时候只需要认证服务端身份(http)，有时候也需要认证客户端身份，这个时候就需要客户端也有CA证书。</li>
+<li>实际代码实现中，三个随机数都是有名字的: <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">r1: 随机数1; &#x3D;&gt; random_C(random number)</span><br><span class="line">r2: 随机数2; &#x3D;&gt; random_S(random number)</span><br><span class="line">r3: 随机数3; &#x3D;&gt; pre-master key(random number)</span><br></pre></td></tr></table></figure>
+r3是关键的加密保护的随机数，r1,r2,r3一起生成key。<br>r1,r2的主要用途是为了避免中间人攻击、重放攻击。（用摘要确保r1,r2无篡改，然后又是随机数的话，就不会因为是重复的key被碰撞到相同的r3，从而生成相同的key）<br>此外其他术语也略有不同：<img src="/images/2018-09/real3.png" class="" width="400" height="600" title="实际握手">
+
+</li>
+</ol>
+<h3 id="DH密钥交换算法（怎么用3个随机数算出密钥）"><a href="#DH密钥交换算法（怎么用3个随机数算出密钥）" class="headerlink" title="DH密钥交换算法（怎么用3个随机数算出密钥）"></a>DH密钥交换算法（怎么用3个随机数算出密钥）</h3><img src="/images/2022-02/DH_scret.png" class="" width="400" height="600" title="DH_scret">
+<p>如上图所示:<br>客户端计算密钥:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">A&#x3D; g^a mod p </span><br><span class="line">K &#x3D; B^a mod p</span><br></pre></td></tr></table></figure>
+<p>服务端计算密钥: b</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">B &#x3D; g^b mod p</span><br><span class="line">K &#x3D; A^b mod p</span><br></pre></td></tr></table></figure>
+<p>同模推导:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">K &#x3D; A^b mod p </span><br><span class="line">&#x3D; (g^a mod p) ^ b mod p </span><br><span class="line">&#x3D; g^ab mod p</span><br><span class="line">&#x3D; (g^b mod p ) ^ a mod p</span><br><span class="line">&#x3D; B^a mod p</span><br></pre></td></tr></table></figure>
+<p>三个随机数中，有一个是本地随机生成的，不用网络传输；<br>（对于服务端来说是a，客户端是b，而网络传输的是A和B，因此中间人进行反向破解难度大）<br>由于网络上传输的只是p,g和A,B，难以破解出a,b，因此中间人也难以破解出K。</p>
+<h3 id="tls1-2实际加密方式"><a href="#tls1-2实际加密方式" class="headerlink" title="tls1.2实际加密方式"></a>tls1.2实际加密方式</h3><p>实际上加密算法是需要padding的，最早的padding方法是:<br><code>AES(text+MAC(text)+padding)</code><br>后来因为这种方式容易遭遇padding攻击，因此tls1.3采用了更安全的padding方法:<br>先<code>E=AES(text+padding)</code><br>然后： <code>E+MAC(E)</code></p>
+<blockquote>
+<p>padding攻击，通过反复修改部分内容、并触发解密过程，从而探测猜测加密算法的密钥；</p>
+</blockquote>
+<h3 id="tls1-3的前向安全性"><a href="#tls1-3的前向安全性" class="headerlink" title="tls1.3的前向安全性"></a>tls1.3的前向安全性</h3><p>前向安全: 当前会话的密钥泄露后，不能用来解密以前会话的消息，也就是不影响以前会话的安全性。<br>例如如果每次会话都用ECDHE协商新的密钥，这次会话的密钥无法用于以前的会话解密，则可以达到前向安全性。</p>
+<p><code>Ephemeral Secret</code> (ES)：每个连接新鲜的 ECDHE 协商得出的值。凡是从 ES 得出的值，都是前向安全的（当然，在 PSK only模式下，不是前向安全的）。<br><code>Static Secret</code> (SS)：从静态，或者半静态key得出的值。例如psk，或者服务器的半静态 ECDH 公钥。</p>
+<p>如果用Session ticket或者server config机制来实现0RTT的快速建立连接，本质上是客户端缓存了一部分上次建连的密钥信息；<br>因此tls1.3虽然提高了性能，但是牺牲了一定时间(配置过期时间内)的前向安全性。</p>
+<h2 id="可能的优化"><a href="#可能的优化" class="headerlink" title="可能的优化"></a>可能的优化</h2><p>TLS1.2的4次握手可以优化成近似3次握手。<br>因此协商过程中唯一不会被中间人破译的是客户端第三次握手发送的随机数r3，只要确保这一性质即可。这个r3之所以不会被破译，是因为是用服务端公钥加密的，只有服务端私钥能解开。<br>因此如果客户端事先知道服务端的公钥，可以在第一次握手的时候，就发送由服务端公钥加密的r3。（对于以前曾经通信过的服务端，这一前提是可行的）</p>
+<p>因此整个流程就是：<br>1.客户端=&gt;服务端:<br>(1)r1; //防重放<br>(2)RSA(K1,r3+hash(r3)); //可以把自己支持的所有协议的随机数都算好，加密好。<br>(3)支持的协议、算法;<br>2.服务端=&gt;客户端:<br>(1)RSA(对r1的回应),顺便签名证明自己的身份,也消除了重放攻击;<br>(2)r2; 明文即可<br>(3)确定的协议、算法;<br>(4)AES(Key,finish信息+HMAC(finish信息)); // 客户端知道上述两个信息，就能算出对称加密的key了。</p>
+<p>3.客户端=&gt;服务端: AES(Key,finish信息+HMAC(finish信息))</p>
+<h2 id="TLS-1-3实际的优化"><a href="#TLS-1-3实际的优化" class="headerlink" title="TLS 1.3实际的优化"></a>TLS 1.3实际的优化</h2><p>回顾TLS1.2:<br>第1个RTT:协商用什么协议，client hello + server hello;<br>第2个RTT:协商对应协议下，用什么随机数，client key exchange + server key exchange;</p>
+<p>TLS1.3的选择:<br>牺牲兼容性，去掉第一次rtt的密钥协议协商，直接按自己选择的成熟安全的密钥套件生成对应参数，然后发送给服务端;<br>如果失败，再走HelloRetryRequest。<br>因此Tls1.3只需要1RTT就可以建连。（第二次建立是甚至0RTT，连协商过程都省了，直接告诉服务器用上次的密钥）</p>
+<p>参考链接:<br><a href="https://www.cnblogs.com/lovesong/p/5186200.html" target="_blank" rel="noopener">https://www.cnblogs.com/lovesong/p/5186200.html</a><br><a href="https://blog.soaer.com/1/3eac1f9d9045410fb249dbc81cff6b22.html" target="_blank" rel="noopener">https://blog.soaer.com/1/3eac1f9d9045410fb249dbc81cff6b22.html</a><br><a href="http://www.ruanyifeng.com/blog/2014/02/ssl_tls.html" target="_blank" rel="noopener">http://www.ruanyifeng.com/blog/2014/02/ssl_tls.html</a></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/09/26/2018-09/%E9%80%9A%E4%BF%97%E7%90%86%E8%A7%A3SSL-TLS%E5%8D%8F%E8%AE%AE%E5%8C%BA%E5%88%AB%E4%B8%8E%E5%8E%9F%E7%90%86/" data-id="ck96cxpom00dnmaam2tyrfqth" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/AES/" rel="tag">AES</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/HMAC/" rel="tag">HMAC</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/HTTP/" rel="tag">HTTP</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Netty/" rel="tag">Netty</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/RSA/" rel="tag">RSA</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/SSL/" rel="tag">SSL</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/TLS/" rel="tag">TLS</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-09/Netty-in-action第十章-编解码器-笔记" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/09/22/2018-09/Netty-in-action%E7%AC%AC%E5%8D%81%E7%AB%A0-%E7%BC%96%E8%A7%A3%E7%A0%81%E5%99%A8-%E7%AC%94%E8%AE%B0/" class="article-date">
@@ -1133,72 +1283,6 @@
 
 
   
-    <article id="post-2018-08/堆外内存DirectByteBuffer" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/08/18/2018-08/%E5%A0%86%E5%A4%96%E5%86%85%E5%AD%98DirectByteBuffer/" class="article-date">
-  <time datetime="2018-08-18T12:52:15.000Z" itemprop="datePublished">2018-08-18</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/java/">java</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/08/18/2018-08/%E5%A0%86%E5%A4%96%E5%86%85%E5%AD%98DirectByteBuffer/">堆外内存DirectByteBuffer</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>堆外内存: 不进行GC，防止JNI访问错位。</p>
-<h2 id="使用方式"><a href="#使用方式" class="headerlink" title="使用方式"></a>使用方式</h2><p>使用堆外内存的两种方式：<br>1.隐式：比如读写文件时：</p>
-<blockquote>
-</blockquote>
-<p>读文件: 文件(disk)=&gt;堆外内存=&gt;堆内内存;(过程中JVM保证不GC)<br>写文件: 堆内内存=&gt;堆外内存=&gt;文件(disk)。</p>
-<p>2.显式：使用<code>DirectByteBuffer</code>，直接在堆外分配空间，节省1倍空间，减去一倍拷贝操作。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 底层源码:</span></span><br><span class="line">unsafe.allocateMemory(size)</span><br></pre></td></tr></table></figure>
-
-<h2 id="Unsafe"><a href="#Unsafe" class="headerlink" title="Unsafe"></a>Unsafe</h2><p>java直接管理内存用的类,之所以叫<code>Unsafe</code>,意思是这些原来设计是给sun公司的人专用的，不是开放给外面的人用的，希望普通用户不要依赖它的接口，随时随着jdk版本升级而更改接口。// 如果不升级jdk，就不用care了。<br>并不是说这个类不安全。</p>
-<h2 id="使用场景"><a href="#使用场景" class="headerlink" title="使用场景"></a>使用场景</h2><p>(因为不gc)<br>生命期较长的大对象;<br>创建次数不会太多。<br>// 如直接的文件拷贝操作。</p>
-<h2 id="优点"><a href="#优点" class="headerlink" title="优点"></a>优点</h2><p>1.对于大内存有良好的伸缩性<br>2.对垃圾回收停顿的改善可以明显感觉到<br>3.在进程间可以共享，减少虚拟机间的复制</p>
-<h2 id="配置"><a href="#配置" class="headerlink" title="配置"></a>配置</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">-XX:MaxDirectMemorySize</span><br><span class="line">-Dsun.nio.MaxDirectMemorySize</span><br><span class="line">directMemory = Runtime.getRuntime().maxMemory()</span><br></pre></td></tr></table></figure>
-
-<h2 id="堆外内存回收"><a href="#堆外内存回收" class="headerlink" title="堆外内存回收"></a>堆外内存回收</h2><p>三种方法:<br>1.达到限制触发自动回收;(<code>system.gc()</code>) // 可能被配置<code>-XX:+DisableExplicitGC</code>关闭。</p>
-<p>2.手动调用<code>Unsafe</code>的<code>freeMemory</code>接口。</p>
-<p>3.使用<code>DirectByteBuffer</code>，它在初始化的时候会创建<code>Cleaner</code>这个Cleaner对象会在合适的时候执行<code>unsafe.freeMemory(address)</code>，从而回收这块堆外内存。</p>
-<img src="/images/2018-08/collect.png" class="" width="400" height="600" title="堆外内存回收">
-
-<p>4.手动调用<code>((DirectBuffer)bb).cleaner().clean();</code>.<br>// 内部还是调用<code>System.gc()</code>,所以一定不要<code>-XX:+DisableExplicitGC</code>。</p>
-<p>相关代码:</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">Deallocator</span> <span class="keyword">implements</span> <span class="title">Runnable</span>  </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> Unsafe unsafe = Unsafe.getUnsafe();</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">long</span> address;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">long</span> size;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">int</span> capacity;</span><br><span class="line">    <span class="function"><span class="keyword">private</span> <span class="title">Deallocator</span><span class="params">(<span class="keyword">long</span> address, <span class="keyword">long</span> size, <span class="keyword">int</span> capacity)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">assert</span> (address != <span class="number">0</span>);</span><br><span class="line">        <span class="keyword">this</span>.address = address;</span><br><span class="line">        <span class="keyword">this</span>.size = size;</span><br><span class="line">        <span class="keyword">this</span>.capacity = capacity;</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (address == <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="comment">// Paranoia</span></span><br><span class="line">            <span class="keyword">return</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        unsafe.freeMemory(address);</span><br><span class="line">        address = <span class="number">0</span>;</span><br><span class="line">        Bits.unreserveMemory(size, capacity);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/08/18/2018-08/%E5%A0%86%E5%A4%96%E5%86%85%E5%AD%98DirectByteBuffer/" data-id="ck96cxpof00czmaambjgd4s9d" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1225,6 +1309,10 @@
       <ul>
         
           <li>
+            <a href="/2023/02/01/2023-02/%E8%AF%8A%E6%96%AD-jvm%E7%A8%8B%E5%BA%8Fcpu%E9%97%AE%E9%A2%98/">诊断-jvm程序cpu问题</a>
+          </li>
+        
+          <li>
             <a href="/2022/11/21/2022-11/cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98%E9%80%9A%E7%94%A8%E4%BC%98%E5%8C%96%E6%80%9D%E8%B7%AF/">调优-cpu毛刺问题通用优化思路</a>
           </li>
         
@@ -1238,10 +1326,6 @@
         
           <li>
             <a href="/2022/09/26/2022-09/%E5%B7%B2%E7%9F%A5%E6%98%8E%E6%96%87%E7%A0%B4%E8%A7%A3zip/">已知明文破解zip</a>
-          </li>
-        
-          <li>
-            <a href="/2022/09/26/2022-09/jwt%E7%A0%B4%E8%A7%A3/">jwt破解</a>
           </li>
         
       </ul>
@@ -1259,7 +1343,7 @@
   
   <div class="outer">
     <div id="footer-left">
-      &copy; 2014 - 2022 风梦七&nbsp;|&nbsp;
+      &copy; 2014 - 2023 风梦七&nbsp;|&nbsp;
       主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
     </div>
      <div id="footer-right">

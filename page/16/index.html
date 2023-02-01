@@ -72,6 +72,267 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-01/高性能Mysql笔记-第1章" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/01/14/2018-01/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC1%E7%AB%A0/" class="article-date">
+  <time datetime="2018-01-14T10:16:46.000Z" itemprop="datePublished">2018-01-14</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/01/14/2018-01/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC1%E7%AB%A0/">高性能Mysql笔记-第1章</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="第一章-架构与历史"><a href="#第一章-架构与历史" class="headerlink" title="第一章 架构与历史"></a>第一章 架构与历史</h1><p>逻辑架构:<br>客户端<br>=&gt;连接/线程处理<br>=&gt;查询缓存/解析器<br>=&gt;优化器<br>=&gt;存储引擎. </p>
+<p>其中只有innodb引擎会解析SQL中的外键定义.其他引擎不会解析SQL.<br>所有内容都应该同时关注两个层面的实现: 服务器层和存储引擎层.</p>
+<h2 id="1-1-1-连接管理"><a href="#1-1-1-连接管理" class="headerlink" title="1.1.1 连接管理"></a>1.1.1 连接管理</h2><p>每个客户端连接都会在服务器进程中拥有一个线程,这个连接的查询只会在这个单独的线程中执行. 服务器会负责缓存线程,因此不需要为每个新连接创建或销毁线程.</p>
+<h2 id="1-1-2-优化与执行"><a href="#1-1-2-优化与执行" class="headerlink" title="1.1.2 优化与执行"></a>1.1.2 优化与执行</h2><p>首先查询缓存中有没有,如果没有:</p>
+<p>Mysql会解析查询,并创建内部数据结构(解析树),然后进行优化,包括重写查询,决定表的读取顺序以及选择合适的索引.</p>
+<p>用户可以使用hint指令指导优化.</p>
+<p>优化器并不关心底层存储引擎的具体实现,但会向底层存储引擎请求一些数据.</p>
+<h2 id="1-2-并发控制"><a href="#1-2-并发控制" class="headerlink" title="1.2 并发控制"></a>1.2 并发控制</h2><h3 id="1-2-1-读写锁"><a href="#1-2-1-读写锁" class="headerlink" title="1.2.1 读写锁"></a>1.2.1 读写锁</h3><p>读锁: 共享锁,不干扰其他锁.<br>写锁: 排他锁,排除其他读写锁.</p>
+<h3 id="1-2-2-锁粒度"><a href="#1-2-2-锁粒度" class="headerlink" title="1.2.2 锁粒度"></a>1.2.2 锁粒度</h3><ul>
+<li><p>表锁<br>开销最小,但并发度低.<br>// ALTER TABLE语句都会使用表锁,不管底层引擎是什么.</p>
+</li>
+<li><p>行锁<br>最大程度的并发,但也有最大的锁开销. 由存储引擎各自实现.</p>
+</li>
+</ul>
+<h2 id="1-3-事务"><a href="#1-3-事务" class="headerlink" title="1.3 事务"></a>1.3 事务</h2><p>基本流程:</p>
+<ol>
+<li>Start transaction;</li>
+<li>执行一组SQL</li>
+<li>commit. </li>
+</ol>
+<p>事务的4个指标(ACID):</p>
+<ol>
+<li>原子性: 要么全部成功,要么全部回滚.</li>
+<li>一致性: 事务中间状态的修改不会保存到数据库中.(感觉和原子性有重合)</li>
+<li>隔离性: 事务在最终提交之前,对其他事务是不可见的.</li>
+<li>持久性: 一旦事务提交,修改就会永久保存到数据库中. </li>
+</ol>
+<h3 id="1-3-1-隔离级别"><a href="#1-3-1-隔离级别" class="headerlink" title="1.3.1 隔离级别"></a>1.3.1 隔离级别</h3><p>4种隔离级别(由低到高):<br><strong>1.Read uncommitted:</strong></p>
+<blockquote>
+<p>未提交读. 有脏读. 能读到别的事务还没commit的修改. 太弱, 基本不用.</p>
+</blockquote>
+<p><strong>2.Read committed</strong>  (Mysql以外的数据库默认级别)</p>
+<blockquote>
+<p>提交读. 一个事务的修改,提交前对其他事务不可见.<br>存在不可重复读问题.<br>比如如下流程:</p>
+</blockquote>
+<ol>
+<li>A事务读V; </li>
+<li>B事务提交V;</li>
+<li>A事务读V.<br>由于B事务中间提交了一次,A事务两次读到的值不一样,也就是不可重复读.</li>
+</ol>
+<p><strong>3.Repeatable Read</strong> (Mysql默认级别)</p>
+<blockquote>
+<p>可重复读. 可以重复读单条记录. (方法,InnoDb增加多版本并发控制MVCC)<br>存在幻读问题.<br>比如如下流程:</p>
+</blockquote>
+<ol>
+<li>A事务读范围行Vs;</li>
+<li>B事务插入v到Vs中;</li>
+<li>A事务读范围行Vs.<br>由于B事务中交提交了一次,A事务两次读到的范围行不一样,也就是幻读.<br>(可以用MVCC+间隙锁解决.)</li>
+</ol>
+<p><strong>4.Serialable</strong></p>
+<blockquote>
+<p>可串行化. 解决了幻读.<br>强制事务串行执行. 增加了每一行锁.</p>
+</blockquote>
+<p>总结问题:</p>
+<blockquote>
+<ol>
+<li>未提交读: 脏读,不可重复读,幻读.</li>
+<li>提交读:        不可重复读,幻读.</li>
+<li>可重复读:                 幻读.</li>
+<li>可串行:   慢.</li>
+</ol>
+</blockquote>
+<p>mysql默认是可重复读,解决正确使用的幻读，使用MVCC+间隙锁;<br>MVCC:  解决两次快照读的幻读; (两次快照读一定一样)<br>间隙锁: 解决两次当前读的幻读; (两次当前读一定一样)</p>
+<p>而，快照读和当前读的结果对于mysql的<code>可重复读</code>级别来说，可能结果不一样。<br>因此我们定义的正确使用: 程序￿员不应假设”快照读”和”当前读”的结果一样。</p>
+<blockquote>
+<p>快照读: select xxx<br>当前读: select xxx for update; 或者update/insert语句中隐含的读(基于当前数据库的数据状态)</p>
+</blockquote>
+<p>如果在最高隔离级别(串行)下，事务中的所有读都会被加上间歇锁，<br>因此保证了快照读和当前读的结果。// 也就是即使程序员不懂这方面知识、不正确使用，也能得到正确的结果。</p>
+<h3 id="1-3-2-事务死锁"><a href="#1-3-2-事务死锁" class="headerlink" title="1.3.2 事务死锁"></a>1.3.2 事务死锁</h3><p>Innodb:<br>检查到死锁的循环依赖<br>=&gt;立即返回错误.</p>
+<ul>
+<li>处理死锁:<br>将持有最少行级写锁(排他锁)的事务进行回滚.</li>
+</ul>
+<h3 id="1-3-3-事务日志"><a href="#1-3-3-事务日志" class="headerlink" title="1.3.3 事务日志"></a>1.3.3 事务日志</h3><p><code>WAL(Write-Ahead Logging) 异步刷盘</code>.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">1. 数据追加写到日志里(顺序IO);</span><br><span class="line">2. 数据修改到原数据里. (随机IO).</span><br></pre></td></tr></table></figure>
+
+<p>第二步如果失败崩溃,可以利用第一步的日志修复.</p>
+<h3 id="1-3-4-Mysql中的事务"><a href="#1-3-4-Mysql中的事务" class="headerlink" title="1.3.4 Mysql中的事务"></a>1.3.4 Mysql中的事务</h3><p>Mysql事务型引擎: InnoDB, NDB Cluster. (MyIsam不支持事务)<br>第三方引擎: XtraDB,PBXT<br>InnoDb支持所有4个隔离级别.</p>
+<p><strong>自动提交</strong><br>Mysql默认使用自动提交. 如果不显式得开始一个事务,每个查询都被当成一个独立的事务.</p>
+<p>可能导致强制提交事务的命令:</p>
+<ol>
+<li>Alter Table</li>
+<li>Lock Tables</li>
+<li>其他导致大量数据更改的语句…</li>
+</ol>
+<p><strong>在事务中混合使用存储引擎(不推荐)</strong></p>
+<ul>
+<li>服务层: 不管理事务;</li>
+<li>存储引擎: 具体实现事务.</li>
+</ul>
+<p>混合使用InnoDb,MyISAM: (事务型表+非事务型表)</p>
+<blockquote>
+<p>回滚时,非事务型表上的变更无法撤销, 导致数据库处于不一致状态.</p>
+</blockquote>
+<p><strong>隐式和显式锁定</strong><br>InnoDb采用两阶段锁定协议. </p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">加锁: 事务执行过程中随时加锁;</span><br><span class="line">解锁: 仅当Commit或RollBack时.</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>隐式加锁: 存储引擎自动加锁<br>显式加锁: 明确指定语句: <code>Select ... Lock In Share Mode</code></p>
+</blockquote>
+<ul>
+<li>tip<blockquote>
+<p>尽量不要显式加锁,而是交给Innodb实现. 以避免无法预料的错误.<br>(除非研究得很深了.)</p>
+</blockquote>
+</li>
+</ul>
+<h2 id="1-4-多版本并发控制-MVCC"><a href="#1-4-多版本并发控制-MVCC" class="headerlink" title="1.4 多版本并发控制 MVCC"></a>1.4 多版本并发控制 MVCC</h2><p>MVCC: 行级锁的一个变种. 在很多情况下避免了加锁操作, 开销更低.<br>大多实现了非阻塞的读操作, 写操作只锁定必要的行.</p>
+<ul>
+<li>实现<br>每个事务开始的时候保存数据在某个时间点的快照.</li>
+</ul>
+<p><strong>InnoDb的MVCC</strong>(空间换时间,少加锁)</p>
+<blockquote>
+<p>每行记录后保存两个隐藏列: </p>
+</blockquote>
+<ol>
+<li>行的创建系统版本号;</li>
+<li>行的删除系统版本号.</li>
+</ol>
+<p>系统版本号反映了时间.<br>每开始一个新的事务,系统版本号都会递增.<br>事务开始时刻的系统版本号会作为事务的版本号,<br>用来和查询到的每行记录的版本号比较.</p>
+<p>##Innodb的可重复读级别下<br><strong>Select</strong></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">1. 创建版本号&lt;&#x3D;当前事务版本的数据;</span><br><span class="line">2. 删除版本号&gt;当前事务版本的数据 (或者没有删除).</span><br></pre></td></tr></table></figure>
+
+<p><strong>Insert</strong></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">1. 插入新行,创建版本号&#x3D;当前事务版本号.</span><br></pre></td></tr></table></figure>
+
+<p><strong>Delete</strong>(标记删)</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">1. 删除的行,删除版本号&#x3D;当前事务版本号.</span><br><span class="line">(打标记,而不是真的删)</span><br></pre></td></tr></table></figure>
+
+<p><strong>Update</strong>(标记删+插入新)</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">1. 插入新行,创建版本号&#x3D;当前事务版本号.</span><br><span class="line">2. 原来的行,删除版本号&#x3D;当前事务版本号.</span><br></pre></td></tr></table></figure>
+
+<h2 id="底层原理"><a href="#底层原理" class="headerlink" title="底层原理"></a>底层原理</h2><p>实际实现参见: <a href="https://liuzhengyang.github.io/2017/04/18/innodb-mvcc/" target="_blank" rel="noopener">https://liuzhengyang.github.io/2017/04/18/innodb-mvcc/</a><br>是将旧版本的行存在undo log中，如果没有依赖这部分undo log的事务结束了(提交或者回滚),<br>这部分undo log是会销毁的，因此不会造成永久的存储负担。</p>
+<p>MVCC与隔离级别:</p>
+<blockquote>
+<ol>
+<li>读未提交: 不使用MVCC;</li>
+<li>读已提交: 使用MVCC; // 可能版本号条件不同</li>
+<li>可重复读: 使用MVCC+当前读间隙锁; // 解决正确使用情况下的幻读 </li>
+<li>可串行读: MVCC+快照读和当前读都有间隙锁. // 解决所有情况下的幻读</li>
+</ol>
+</blockquote>
+<p>MVCC相当于乐观锁或者无锁、空间换时间；<br>间隙锁相当于悲观锁。真实地锁了索引。</p>
+<h2 id="1-5-Mysql的存储引擎"><a href="#1-5-Mysql的存储引擎" class="headerlink" title="1.5 Mysql的存储引擎"></a>1.5 Mysql的存储引擎</h2><ul>
+<li><p>每个数据库: 一个目录</p>
+</li>
+<li><p>每个数据表: </p>
+</li>
+</ul>
+<ol>
+<li><code>元数据</code>(表定义): 表同名的<code>.frm</code>文件; (服务层统一实现)</li>
+<li><code>数据</code>;  (存储引擎分别实现)</li>
+<li><code>索引</code>.  (存储引擎分别实现)</li>
+</ol>
+<h3 id="元数据-表定义具体内容"><a href="#元数据-表定义具体内容" class="headerlink" title="元数据(表定义具体内容)"></a>元数据(表定义具体内容)</h3><p>表的相关属性:</p>
+<ul>
+<li>Name</li>
+<li>Engine</li>
+<li>Row_format: </li>
+</ul>
+<ol>
+<li>Dynamic: 行长度可变,包含Varchar或Blob的行.</li>
+<li>Fixed: 只包含固定长度列.</li>
+<li>Compressed: 压缩表.</li>
+</ol>
+<ul>
+<li>Rows: 行数. Innodb:估算值. MyISAM: 精确值;</li>
+<li>Index_length: 索引长度</li>
+<li>Collcation: 默认字符集和字符排序规则.</li>
+<li>其他信息…</li>
+</ul>
+<h3 id="1-5-1-InnoDB存储引擎"><a href="#1-5-1-InnoDB存储引擎" class="headerlink" title="1.5.1 InnoDB存储引擎"></a>1.5.1 InnoDB存储引擎</h3><p>设计目标: 大量短期事务.<br>Mysql主推引擎.</p>
+<p><strong>存储</strong><br>数据: 表空间中,一系列数据文件组成.<br>索引: 表空间中,独立的索引文件.</p>
+<p>隔离级别的实现:</p>
+<ol>
+<li>MVCC;</li>
+<li>间隙锁: 不仅锁定查询涉及的行,还锁定索引中的间隙,防止幻读. </li>
+</ol>
+<p>存储格式:(跨平台)</p>
+<ol>
+<li>主键: 指向物理地址;</li>
+<li>二级索引: 非主键索引,指向主键,所以主键应尽可能小. </li>
+</ol>
+<h2 id="MyISam"><a href="#MyISam" class="headerlink" title="MyISam"></a>MyISam</h2><p><strong>存储</strong></p>
+<ol>
+<li>数据: <code>.MYD</code></li>
+<li>索引: <code>.MYI</code></li>
+</ol>
+<p>变长行: 默认最大数据量256TB,因为指向数据记录的指针长度是6B.<br>可以修改Max_Rows和Avg_row_length的值,来改变指针长度.<br>(两者相乘=表最大容量)</p>
+<p><strong>并发</strong><br>整张表加锁.</p>
+<p><strong>索引</strong><br>支持全文索引,基于分词创建的索引.</p>
+<p><strong>压缩表</strong><br>不再修改的表可以进行压缩,提高查询性能,减少磁盘空间.</p>
+<h3 id="1-5-3-其他引擎"><a href="#1-5-3-其他引擎" class="headerlink" title="1.5.3 其他引擎"></a>1.5.3 其他引擎</h3><p>Archive: 只支持插入和查询,不支持修改和删除.<br>BlackHole: 丢弃所有插入的数据,只记录日志. 有很多问题.<br>CSV: 存储CSV文件. (这个场景应该考虑使用Sql Server)<br>Federated: 访问其他Mysql服务器的代理,默认禁用.</p>
+<ul>
+<li>Memory: 磁盘只保存结构,数据在内存,重启后丢失数据.<br>使用场景: </li>
+</ul>
+<ol>
+<li>查找或映射表;// 邮编和州名的映射表;</li>
+<li>缓存周期性聚合数据;</li>
+<li>保存数据分析中产生的中间数据.</li>
+</ol>
+<p>限制: </p>
+<ol>
+<li>表级锁;</li>
+<li>只支持定长列, 如果指定了varchar,会转换成char. </li>
+</ol>
+<p>Merge引擎:<br>多个MyIsam表合并的虚拟表;<br>引入分区功能后弃用.</p>
+<p>NDB引擎:<br>Mysql集群版.</p>
+<h3 id="1-5-5-选择合适的引擎"><a href="#1-5-5-选择合适的引擎" class="headerlink" title="1.5.5 选择合适的引擎"></a>1.5.5 选择合适的引擎</h3><p>场景:</p>
+<ol>
+<li>全文索引: InnoDB + Sphinx</li>
+<li>在线热备份: InnoDB</li>
+<li>记录日志: MyISAM,Archive</li>
+<li>10TB以下: InnoDB</li>
+<li>10TB以上: InfoBright.</li>
+<li>大部分情况优先考虑: Innodb</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/01/14/2018-01/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC1%E7%AB%A0/" data-id="ck96cxpnv00ahmaam9sch1mtq" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-01/Netty-in-action笔记-第1-2章" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/01/13/2018-01/Netty-in-action%E7%AC%94%E8%AE%B0-%E7%AC%AC1-2%E7%AB%A0/" class="article-date">
@@ -943,81 +1204,6 @@
 
 
   
-    <article id="post-2017-12/mysql调优小记" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2017/12/07/2017-12/mysql%E8%B0%83%E4%BC%98%E5%B0%8F%E8%AE%B0/" class="article-date">
-  <time datetime="2017-12-07T10:49:56.000Z" itemprop="datePublished">2017-12-07</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/mysql/">mysql</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2017/12/07/2017-12/mysql%E8%B0%83%E4%BC%98%E5%B0%8F%E8%AE%B0/">mysql调优小记</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <ul>
-<li>摘要<blockquote>
-<p>mysql表出现慢查询,单表数据量500W<del>700W条. 每天2</del>3W条.<br>措施: </p>
-<ol>
-<li>优化查询语句; </li>
-<li>更改存储引擎.</li>
-<li>优化索引.</li>
-</ol>
-</blockquote>
-</li>
-</ul>
-<h3 id="详情"><a href="#详情" class="headerlink" title="详情"></a>详情</h3><p>同事去塞班岛玩前留了个大坑,导致网站报表卡死刷不开.</p>
-<h3 id="STEP-1"><a href="#STEP-1" class="headerlink" title="STEP 1"></a>STEP 1</h3><p>进入后台:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">show</span> <span class="keyword">processlist</span></span><br></pre></td></tr></table></figure>
-<p>发现Query很多,<code>show full processlist</code>找出查询语句,发现多表join的时候没有利用到索引.<br>查询语句模式如下:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">explain</span> <span class="keyword">select</span> ...</span><br></pre></td></tr></table></figure>
-<p>发现没有用上索引,更改查询语句。</p>
-<ul>
-<li><p><code>explain</code>查询计划中的<code>type</code>:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">const(system): 根据PRI或Unique key,只取出确定的(一行)数据,常量优化. </span><br><span class="line"></span><br><span class="line">eq_ref: JOIN条件包括了所有索引,并且索引是Unique key. </span><br><span class="line">ref: JOIN条件包括部分索引或不是Unique key.</span><br><span class="line">ref_or_null: WHERE col=exp or col is null</span><br><span class="line"></span><br><span class="line">index_merge: Where id=xx or userid=xxx. 索引合并优化.</span><br><span class="line"></span><br><span class="line">unique_subquery: where col in( <span class="keyword">select</span> <span class="keyword">id</span> <span class="keyword">from</span> xxx). 这里<span class="keyword">id</span>唯一.</span><br><span class="line">index_subquery: 同上,只是<span class="keyword">id</span>不唯一.</span><br><span class="line"></span><br><span class="line"><span class="keyword">range</span>: 索引在某个范围内.</span><br><span class="line"><span class="keyword">all</span>: 扫全表</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>TODO:<br>研究除了子查询以外的方式使用索引.</p>
-</li>
-</ul>
-<p>此外, 索引对于数据类型敏感, 查询中存在字符串和date类型相等的时候, 无法利用索引,<br>需要将date类型转成字符串.</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">dt = date_format(date_sub(current_date, interval 1 day), '%Y-%m-%d')</span><br></pre></td></tr></table></figure>
-
-<h3 id="STEP-2"><a href="#STEP-2" class="headerlink" title="STEP 2"></a>STEP 2</h3><p>检查后台,发现许多连接状态都是:<br><code>waiting for table level lock</code>.<br>进一步发现这几张表的存储引擎是<code>MYISAM</code>,而不是默认的<code>innodb</code>.<br>由于<code>myisam</code>引擎只有表级锁,不符合我们的使用要求.于是我把涉及到的几张表引擎都改为<code>innodb</code>.</p>
-<h3 id="STEP-3"><a href="#STEP-3" class="headerlink" title="STEP 3"></a>STEP 3</h3><p>修改后,查询不会卡死(毕竟不扫全表了ORZ),降低到40s,但还是太慢了.<br>进一步检查explain结果,发现<code>key_len</code>太长了.<br>于是重新设计索引, 把筛选度高的放前面(利用最左前缀), 并且根据具体业务\语义,尽量缩短索引字段的长度,<br>实在无法缩短的则取其中一部分. 最后查询缩短到0.04sec,几个报表都是秒出.  </p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2017/12/07/2017-12/mysql%E8%B0%83%E4%BC%98%E5%B0%8F%E8%AE%B0/" data-id="ck96cxpni008vmaamfhcygtrf" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1044,6 +1230,10 @@
       <ul>
         
           <li>
+            <a href="/2023/02/01/2023-02/%E8%AF%8A%E6%96%AD-jvm%E7%A8%8B%E5%BA%8Fcpu%E9%97%AE%E9%A2%98/">诊断-jvm程序cpu问题</a>
+          </li>
+        
+          <li>
             <a href="/2022/11/21/2022-11/cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98%E9%80%9A%E7%94%A8%E4%BC%98%E5%8C%96%E6%80%9D%E8%B7%AF/">调优-cpu毛刺问题通用优化思路</a>
           </li>
         
@@ -1057,10 +1247,6 @@
         
           <li>
             <a href="/2022/09/26/2022-09/%E5%B7%B2%E7%9F%A5%E6%98%8E%E6%96%87%E7%A0%B4%E8%A7%A3zip/">已知明文破解zip</a>
-          </li>
-        
-          <li>
-            <a href="/2022/09/26/2022-09/jwt%E7%A0%B4%E8%A7%A3/">jwt破解</a>
           </li>
         
       </ul>
@@ -1078,7 +1264,7 @@
   
   <div class="outer">
     <div id="footer-left">
-      &copy; 2014 - 2022 风梦七&nbsp;|&nbsp;
+      &copy; 2014 - 2023 风梦七&nbsp;|&nbsp;
       主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
     </div>
      <div id="footer-right">

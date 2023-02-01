@@ -72,6 +72,159 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-04/2-3树与红黑树" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/04/22/2018-04/2-3%E6%A0%91%E4%B8%8E%E7%BA%A2%E9%BB%91%E6%A0%91/" class="article-date">
+  <time datetime="2018-04-22T12:33:46.000Z" itemprop="datePublished">2018-04-22</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/">数据结构与算法</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/04/22/2018-04/2-3%E6%A0%91%E4%B8%8E%E7%BA%A2%E9%BB%91%E6%A0%91/">2-3树与红黑树</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="2-3树与红黑树"><a href="#2-3树与红黑树" class="headerlink" title="2-3树与红黑树"></a>2-3树与红黑树</h1><blockquote>
+<p>参考资料：<br>2-3树：<br><a href="http://blog.jobbole.com/79307/" target="_blank" rel="noopener">http://blog.jobbole.com/79307/</a><br>红黑树：<br><a href="http://blog.jobbole.com/79309/" target="_blank" rel="noopener">http://blog.jobbole.com/79309/</a></p>
+</blockquote>
+<h1 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h1><p><code>2-3树</code>和<code>红黑树</code>都是一种平衡查找树。其中<code>红黑树</code>是在<code>2-3树</code>的基础上，对于实现进行了简化，代价是逻辑上（表现图）增加了直接理解的难度。换句话说就是:</p>
+<ul>
+<li><code>2-3树</code>理解起来简单，实现起来代码比较麻烦(其实也可以实现);</li>
+<li><code>红黑树</code>理解起来稍微曲折，实现起来代码非常简单/简洁,如果用递归实现还非常优雅。</li>
+</ul>
+<p>因此我们应该先学<code>2-3树</code>，理解以后，带着简单理解去学<code>红黑树</code>的实现。上述参考资料里的两个链接对于两者的介绍非常值得一看。</p>
+<h1 id="2-3树"><a href="#2-3树" class="headerlink" title="2-3树"></a>2-3树</h1><h2 id="定义"><a href="#定义" class="headerlink" title="定义"></a>定义</h2><p>2-3树意思就是树里有两种节点:<br><code>2-node</code>: 保存1个key,左右2个子节点;<br><code>3-node</code>: 保存2个key,左中右3个子节点。</p>
+<p>和二叉查找树类似,如果中序遍历一个<code>2-3树</code>,可以得到一个排好序的序列。<br>在一个完全平衡的2-3树中,根节点到每一个叶节点距离相同.</p>
+<img src="/images/2018-04/a1.jpg" class="" width="400" height="600" title="tree23">
+
+<h2 id="平衡性"><a href="#平衡性" class="headerlink" title="平衡性:"></a>平衡性:</h2><p>直观上理解: 由于2-3树的<code>3-node</code>具有缓冲作用,而且它的分裂逻辑可以将不平衡因子传递到父节点(还可以继续),最终消除;<br>严谨证明: 还没找到相关论文,理论上它与AA树等价,所以可以按left-leaning red-black tree/LLRB的证明来完成。</p>
+<h2 id="查找"><a href="#查找" class="headerlink" title="查找"></a>查找</h2><p>和B树类似,按key跳转子节点查找就好了.</p>
+<h2 id="插入"><a href="#插入" class="headerlink" title="插入"></a>插入</h2><h3 id="往2-node节点插入"><a href="#往2-node节点插入" class="headerlink" title="往2-node节点插入"></a>往2-node节点插入</h3><img src="/images/2018-04/a2.jpg" class="" width="400" height="600" title="tree23insert2">
+<p>插入K,把2-node变成3-node。</p>
+<h3 id="往3-node节点插入"><a href="#往3-node节点插入" class="headerlink" title="往3-node节点插入"></a>往3-node节点插入</h3><p><strong>1. 只有一个3-node节点</strong></p>
+<img src="/images/2018-04/a3.jpg" class="" width="400" height="600" title="tree23insert3">
+<p>插入S,把3-node变成4-node,把4-node分裂成3个2-node,中间key拉升做根节点.（无法向上传导,根分裂,高度+1）</p>
+<p><strong>2. 父节点是2-node,节点是3-node</strong></p>
+<img src="/images/2018-04/a4.jpg" class="" width="400" height="600" title="tree23insert4">
+<p>插入Z:</p>
+<ol>
+<li>把3-node变成4-node;</li>
+<li>把中间key往上扔,传递给父节点;</li>
+<li>父节点从<code>2-node</code>=&gt;<code>3-node</code>。</li>
+</ol>
+<p><strong>3. 父节点是3-node,节点是3-node</strong></p>
+<img src="/images/2018-04/a5.jpg" class="" width="400" height="600" title="tree23insert5">
+<p>思路和之前相似,把中间元素往上传导,直到遇到父节点是2-node的。<br>如果连根节点也是3-node，就进行根节点分裂，高度+1。</p>
+<h2 id="性能"><a href="#性能" class="headerlink" title="性能"></a>性能</h2><p>最坏情况,所有节点都是2-node,因此最坏时间复杂度为O(logN).<br>最好情况,所有节点都是3-node,因此最好时间复杂度为O(log3N)=0.631logN.</p>
+<h1 id="红黑树"><a href="#红黑树" class="headerlink" title="红黑树"></a>红黑树</h1><p>(这里其实是left-leaning red-black tree/LLRB)<br><code>2-3树</code>中有<code>3-node</code>，红黑树则是将其全部转化成二叉树来实现。<br>参考资料2中同时出现红色节点与红色连线,容易引起混淆. 这里统一定义一下, 红色本质上是指节点,红黑信息实现上存放在红子节点中. 之所以有红色连线,主要是为了在图里画,可以更清晰得看出有两个红子节点的父节点. </p>
+<p>下文中:</p>
+<ol>
+<li>图中: 以红色连线表示子节点是红节点;️</li>
+<li>实现中: 红色信息存放在子节点中. （并不会存指向父节点的指针）</li>
+</ol>
+<p>具体实现:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Node</span></span></span><br><span class="line"><span class="class"></span>&#123;</span><br><span class="line">    <span class="keyword">public</span> Node Left &#123; get; set; &#125; <span class="comment">// 左子</span></span><br><span class="line">    <span class="keyword">public</span> Node Right &#123; get; set; &#125; <span class="comment">// 右子</span></span><br><span class="line">    <span class="keyword">public</span> TKey Key &#123; get; set; &#125; <span class="comment">// key</span></span><br><span class="line">    <span class="keyword">public</span> TValue Value &#123; get; set; &#125; <span class="comment">// 数据</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">int</span> Number &#123; get; set; &#125; <span class="comment">// 当前子树的size,总共有多少节点 </span></span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 当前节点是红还是黑</span></span><br><span class="line">    <span class="keyword">public</span> bool Color &#123; get; set; &#125;  </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>定义:</strong></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">1. 所有节点分为红节点和黑节点;</span><br><span class="line">2. 表现图中一个红节点的画法: 把它和父节点之间的连线画成红色。</span><br><span class="line">(看图的时候,一条红线:子节点是红节点)</span><br></pre></td></tr></table></figure>
+
+<p><strong>规则:</strong></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. 所有节点,只有左子节点可以是红节点, 右子节点只能是黑;(通过旋转保证)</span><br><span class="line">2. 红色节点不能相连; &#x2F;&#x2F; 父节点红色,子节点不能也红色</span><br><span class="line">3. 不能左右都是红节点. &#x2F;&#x2F; 左右子节点不能都是红色</span><br><span class="line">(2，3两个规则,图上看就是一个节点不能有两个红色连线)</span><br></pre></td></tr></table></figure>
+
+<img src="/images/2018-04/2.jpg" class="" width="400" height="600" title="red2">
+<p>如上图所示，红黑树其实是2-3树的另一种表现形式。将红黑树的红色连线水平绘制，就可以把水平的两个节点整体看作一个<code>3-node</code>.<br>从实现上看，也就是把节点和它的红子节点看作一个<code>3-node</code>。<br>从这个思路来看,也就能理解上述的3条规则了, 如果违反了任意一条,都会导致节点与其红子节点合并成一个整体来看待的时候, 变成<code>4-node</code>甚至<code>5-node</code>更多.<br>只有满足所有规则, 才能保证合并来看的时候最多是一个<code>3-node</code>。</p>
+<h2 id="查找-1"><a href="#查找-1" class="headerlink" title="查找"></a>查找</h2><p>由于本质上还是二叉查找树,查找的代码与普通二叉查找树一样.<br>只不过由于比较平衡,性能有保障。<br>(如果把红黑树看作<code>2-3树</code>的话,查找过程的差别就在于遇到<code>3-node</code>的时候,先找的是最左的key,然后通过红子节点查找了中间<code>key</code>。)</p>
+<h2 id="平衡化"><a href="#平衡化" class="headerlink" title="平衡化"></a>平衡化</h2><p>为了维持上文中的规则，也为了红黑树保持平衡,保障性能,需要进行一些平衡操作。</p>
+<h2 id="旋转"><a href="#旋转" class="headerlink" title="旋转"></a>旋转</h2><p>左旋: 输入父节点;<br>右旋: 输入父节点.</p>
+<h3 id="左旋"><a href="#左旋" class="headerlink" title="左旋"></a>左旋</h3><img src="/images/2018-04/3.jpg" class="" width="400" height="600" title="red3">
+<img src="/images/2018-04/4.jpg" class="" width="400" height="600" title="red4">
+<img src="/images/2018-04/5.gif" class="" width="400" height="600" title="red5">
+<p>左旋实现:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//左旋转</span></span><br><span class="line"><span class="function"><span class="keyword">private</span> Node <span class="title">RotateLeft</span><span class="params">(Node h)</span><span class="comment">// 输入父节点</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    Node x = h.Right;</span><br><span class="line">    <span class="comment">//将x的左节点复制给h右节点</span></span><br><span class="line">    h.Right = x.Left;</span><br><span class="line">    <span class="comment">//将h复制给x右节点</span></span><br><span class="line">    x.Left = h;</span><br><span class="line">    x.Color = h.Color;</span><br><span class="line">    h.Color = RED;</span><br><span class="line">    <span class="keyword">return</span> x;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>注意: 子节点继承父节点的颜色.<br>父节点变为红色。</p>
+<h3 id="右旋"><a href="#右旋" class="headerlink" title="右旋"></a>右旋</h3><img src="/images/2018-04/6.jpg" class="" width="400" height="600" title="red6">
+<img src="/images/2018-04/7.jpg" class="" width="400" height="600" title="red7">
+<img src="/images/2018-04/8.gif" class="" width="400" height="600" title="red8">
+<p>右旋实现:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//右旋转</span></span><br><span class="line"><span class="function"><span class="keyword">private</span> Node <span class="title">RotateRight</span><span class="params">(Node h)</span><span class="comment">// 输入父节点</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    Node x = h.Left;</span><br><span class="line">    h.Left = x.Right;</span><br><span class="line">    x.Right = h;</span><br><span class="line"></span><br><span class="line">    x.Color = h.Color;</span><br><span class="line">    h.Color = RED;</span><br><span class="line">    <span class="keyword">return</span> x;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>注意: 子节点继承父节点的颜色.<br>父节点变为红色。</p>
+<h2 id="颜色反转"><a href="#颜色反转" class="headerlink" title="颜色反转"></a>颜色反转</h2><p>如果违反规则2，也就是两个子节点都是红色节点,也需要调整/平衡化.如下图所示的话,其实就是把父节点变成红色，两个子节点变成黑色. 很简单。</p>
+<img src="/images/2018-04/9.jpg" class="" width="400" height="600" title="red9">
+<img src="/images/2018-04/10.jpg" class="" width="400" height="600" title="red10">
+
+
+<h2 id="插入-1"><a href="#插入-1" class="headerlink" title="插入"></a>插入</h2><h3 id="往2-node底部插入"><a href="#往2-node底部插入" class="headerlink" title="往2-node底部插入"></a>往2-node底部插入</h3><p>规则:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">新插入的节点标记为红色.</span><br></pre></td></tr></table></figure>
+<img src="/images/2018-04/11.jpg" class="" width="400" height="600" title="red11">
+<p>左图不需要额外操作;<br>右图需要一次左旋.</p>
+<h3 id="往3-node底部插入"><a href="#往3-node底部插入" class="headerlink" title="往3-node底部插入"></a>往3-node底部插入</h3><ol>
+<li>往只有两个节点的树中插入: （注意形状一定是左偏的）<br>规则:<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">新插入的节点标记为红色.</span><br></pre></td></tr></table></figure>
+<img src="/images/2018-04/12.jpg" class="" width="400" height="600" title="red12">
+左图需要1次颜色反转;<br>中图需要1次右旋,1次颜色反转;<br>右图需要1次左旋,1次右旋,1次颜色反转.</li>
+</ol>
+<p>简单总结一下平衡化的技巧如下:(按顺序检查,每次调整后回到1从头重复检查)</p>
+<ol>
+<li>如果左右都是红,用颜色反转;</li>
+<li>如果右子是红,左旋;</li>
+<li>如果连续两个左子是红,(父子都是红节点),右旋,然后颜色反转.</li>
+</ol>
+<p>更多案例:</p>
+<img src="/images/2018-04/13.jpg" class="" width="400" height="600" title="red13">
+<img src="/images/2018-04/14.jpg" class="" width="400" height="600" title="red14">
+<p>注意图14中到红色传递到根节点M后,由于根节点没有父节点,它的红黑属性不再重要,为了维持不打破上述的规则,定义根节点始终为黑. 如果通过颜色反转或者其他平衡化操作,把根节点变红以后,可以视作根节点还是黑.(强制根节点黑)</p>
+<h2 id="Put实现代码"><a href="#Put实现代码" class="headerlink" title="Put实现代码"></a>Put实现代码</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> override <span class="keyword">void</span> <span class="title">Put</span><span class="params">(TKey key, TValue value)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    root = Put(root, key, value);</span><br><span class="line">    root.Color = BLACK; <span class="comment">// 强制根节点黑</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">private</span> Node <span class="title">Put</span><span class="params">(Node h, TKey key, TValue value)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (h == <span class="keyword">null</span>) <span class="keyword">return</span> <span class="keyword">new</span> Node(key, value, <span class="number">1</span>, RED);</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 1. 进行二叉树插入: </span></span><br><span class="line">    <span class="keyword">int</span> cmp = key.CompareTo(h.Key);</span><br><span class="line">    <span class="keyword">if</span> (cmp &lt; <span class="number">0</span>) h.Left = Put(h.Left, key, value);</span><br><span class="line">    <span class="keyword">else</span> <span class="keyword">if</span> (cmp &gt; <span class="number">0</span>) h.Right = Put(h.Right, key, value);</span><br><span class="line">    <span class="keyword">else</span> h.Value = value;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 2. 进行平衡化:</span></span><br><span class="line">    <span class="keyword">if</span> (IsRed(h.Right) &amp;&amp; !IsRed(h.Left)) h = RotateLeft(h); <span class="comment">// 右边红节点</span></span><br><span class="line">    <span class="keyword">if</span> (IsRed(h.left) &amp;&amp; IsRed(h.Left.Left)) h = RotateRight(h); <span class="comment">// 我个人理解的写法,连续红节点</span></span><br><span class="line">    <span class="comment">// if (IsRed(h.Right) &amp;&amp; IsRed(h.Left.Left)) h = RotateRight(h); //  原文写法,我感觉不对	</span></span><br><span class="line">    <span class="keyword">if</span> (IsRed(h.Left) &amp;&amp; IsRed(h.Right)) h = FlipColor(h);<span class="comment">// 颜色反转</span></span><br><span class="line"></span><br><span class="line">    h.Number = Size(h.Left) + Size(h.Right) + <span class="number">1</span>; <span class="comment">// 更新子树size信息</span></span><br><span class="line">    <span class="keyword">return</span> h;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">int</span> <span class="title">Size</span><span class="params">(Node node)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (node == <span class="keyword">null</span>) <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">return</span> node.Number;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>注意到插入操作是自顶向下(<code>dfs</code>递归调用)进行的,由于<code>dfs</code>深度优先,可以先从子节点检查平衡/调整.因此不平衡从子节点传递到父节点,可以逐步调整传递到根节点,平衡操作也贯穿这个层层返回的过程,从平衡树的底层一直进行到根节点为止.</p>
+<h2 id="性能-1"><a href="#性能-1" class="headerlink" title="性能"></a>性能</h2><p>满足上述规则后, 红黑树能保障所有操作最坏复杂度为O(logN)。</p>
+<ul>
+<li>最坏情况:<br>除了最左侧路径,其他全部是<code>3-node</code>组成. 红黑相间的路径长度是全黑路径的两倍.</li>
+</ul>
+<p>特性:<br>红黑树从根节点到叶子节点的路径中,全黑路径是平衡的.</p>
+<h2 id="应用"><a href="#应用" class="headerlink" title="应用"></a>应用</h2><p>主要是各种map/符号表:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Java: TreeMap,TreeSet,HashMap,ConcurrentHashMap</span><br><span class="line">C++: STL: map,multimap,multiset</span><br><span class="line">.Net: SortedDictionary,SortedSet</span><br><span class="line">Linux: epoll,防火墙规则表</span><br></pre></td></tr></table></figure>
+
+<h2 id="核心规则"><a href="#核心规则" class="headerlink" title="核心规则"></a>核心规则</h2><ol>
+<li>不能两个左右子节点都是红节点; (颜色反转)</li>
+<li>父子节点不能都是红节点;(右旋)</li>
+<li>右节点不能是红节点;(左旋)</li>
+<li>新插入的节点是红节点;(新红)</li>
+<li>根节点强制是黑节点.(根黑)</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/04/22/2018-04/2-3%E6%A0%91%E4%B8%8E%E7%BA%A2%E9%BB%91%E6%A0%91/" data-id="ck96cxpo300bnmaam6m9gf9f4" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/2-3%E6%A0%91/" rel="tag">2-3树</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/" rel="tag">数据结构与算法</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E7%BA%A2%E9%BB%91%E6%A0%91/" rel="tag">红黑树</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-04/resolv-conf笔记" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/04/08/2018-04/resolv-conf%E7%AC%94%E8%AE%B0/" class="article-date">
@@ -1862,226 +2015,6 @@
 
 
   
-    <article id="post-2018-02/高性能Mysql笔记-第5章" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/02/11/2018-02/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC5%E7%AB%A0/" class="article-date">
-  <time datetime="2018-02-11T14:25:22.000Z" itemprop="datePublished">2018-02-11</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/mysql/">mysql</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/02/11/2018-02/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC5%E7%AB%A0/">高性能Mysql笔记-第5章</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="第五章-创建高性能的索引"><a href="#第五章-创建高性能的索引" class="headerlink" title="第五章 创建高性能的索引"></a>第五章 创建高性能的索引</h1><p>索引，key，index。<br>mysql中，<code>key</code>相当于<code>index</code>。<br>索引的存储=&gt;存储引擎层。</p>
-<h2 id="5-1-1-索引的类型"><a href="#5-1-1-索引的类型" class="headerlink" title="5.1.1 索引的类型"></a>5.1.1 索引的类型</h2><h3 id="B-Tree索引"><a href="#B-Tree索引" class="headerlink" title="B-Tree索引"></a>B-Tree索引</h3><p>实际上大多使用的是B+树。<br>相关区别：<a href="https://www.cnblogs.com/oldhorse/archive/2009/11/16/1604009.html" target="_blank" rel="noopener">https://www.cnblogs.com/oldhorse/archive/2009/11/16/1604009.html</a><br>B树：二叉树<br>B-树：多叉树，数据存所有的各个节点上；<br>B+树：数据存叶节点上，叶节点连在一起。<br>B*树：比B+树多一个非叶节点之间的指针。(类似跳表)</p>
-<p>虽然不同存储引擎的具体索引实现不同，但Mysql中对于这一类索引使用的关键字是<code>B-Tree</code>索引。</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">NDB引擎： T-Tree结构</span><br><span class="line">InnoDB: B+Tree</span><br><span class="line">MyIsam: 前缀压缩，索引更小</span><br></pre></td></tr></table></figure>
-
-<p><code>B-Tree索引</code>(B+Tree)的适用查询：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. 全键值： Key中所有列是某个值；</span><br><span class="line">2. 键值范围： Key中所有列落在某个范围；</span><br><span class="line">3. 键前缀（最左前缀）：Key中前几列或前缀是某个值或某个范围。</span><br><span class="line">4. 上述条件的order by。</span><br></pre></td></tr></table></figure>
-
-<h3 id="哈希索引"><a href="#哈希索引" class="headerlink" title="哈希索引"></a>哈希索引</h3><p>哈希索引基于哈希表实现：<br>每一个Key计算一个哈希值，哈希表里的value存数据行的指针。<code>Memory</code>引擎对于相同哈希值的行用拉链存储。（非唯一哈希索引）</p>
-<p>支持哈希索引的引擎： 只有<code>Memory</code>引擎。</p>
-<p><code>Memory</code>引擎： 默认哈希索引，也支持B-Tree索引。</p>
-<p><strong>哈希索引的适用查询</strong>：</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">1. 全键值。</span><br></pre></td></tr></table></figure>
-
-<p><strong>哈希索引的局限性</strong>：</p>
-<ol>
-<li>只存了哈希值，因此无法进行范围查询；</li>
-<li>无法用于排序；</li>
-<li>整个Key做哈希，因此无法部分匹配查询；</li>
-<li>不支持前缀匹配；</li>
-<li>要求哈希函数冲突少。</li>
-</ol>
-<p><strong>哈希索引的适用场景</strong>：</p>
-<ul>
-<li>数据仓库的查找表。（精确匹配O(1)复杂度，星形,多表连接）</li>
-</ul>
-<p>个人理解: 哈希索引既然是Memory引擎里用的,可能实现上就是在内存里load表数据,做了一张HashMap.(TODO)</p>
-<p><strong>自适应哈希索引</strong><br><code>Innodb</code>引擎的<code>自适应哈希索引</code>：<br>当注意到某些索引值被使用得非常频繁时，会在内存中基于B-Tree索引再创建一个哈希索引。<br>（可以选择开启）</p>
-<p><strong>创建自定义哈希索引</strong><br>假如有一个列url特别长，使用B-Tree索引的话存储内容就很大。如果查询时大多是精确匹配某个url，就可以考虑使用哈希索引。<br>方法：</p>
-<ol>
-<li>新增一列url_crc,专门存储url的哈希值；</li>
-<li>用触发器维护这一列。（增改）</li>
-</ol>
-<p>哈希函数选择：</p>
-<ol>
-<li>不使用MD5或SHA1，开销太大，结果太长；</li>
-<li>使用CRC32或自定义。</li>
-</ol>
-<p>难点： 平衡长度和冲突。</p>
-<h3 id="空间数据索引（R-Tree）（不推荐）"><a href="#空间数据索引（R-Tree）（不推荐）" class="headerlink" title="空间数据索引（R-Tree）（不推荐）"></a>空间数据索引（R-Tree）（不推荐）</h3><p>多维度索引数据（不只是前缀索引）。<br>需要使用Mysql的GIS相关函数<code>MBRContains()</code>。<br>推荐使用PostgreSql的<code>PostGIS</code>,Mysql还没做好。</p>
-<h3 id="全文索引"><a href="#全文索引" class="headerlink" title="全文索引"></a>全文索引</h3><p>见另一篇文章中的讨论。<br><a href="http://xiaoyue26.github.io/2018/01/14/2018-01/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E5%85%A8%E6%96%87%E7%B4%A2%E5%BC%95/">http://xiaoyue26.github.io/2018/01/14/2018-01/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E5%85%A8%E6%96%87%E7%B4%A2%E5%BC%95/</a></p>
-<h3 id="其他索引类型"><a href="#其他索引类型" class="headerlink" title="其他索引类型"></a>其他索引类型</h3><p>第三方存储引擎中的索引类型：<br>TokuDB: 分形树索引。<br>ScaleDB: Patricia tries<br>等等。</p>
-<h2 id="5-2-索引的优点"><a href="#5-2-索引的优点" class="headerlink" title="5.2 索引的优点"></a>5.2 索引的优点</h2><ol>
-<li>减少扫描数据量；</li>
-<li>避免排序和临时表；</li>
-<li>将随机IO转化为顺序IO.</li>
-</ol>
-<p>索引与查询匹配程度的评价：三星系统：</p>
-<ol>
-<li>一星： 将查询相关记录放在了一起；（顺序IO,范围查询能利用到索引） </li>
-<li>二星： 数据顺序与查找顺序一致；（避免排序,让排序也能利用到索引）</li>
-<li>三星： 索引列包含查询的所有列。(避免二次访问磁盘)</li>
-</ol>
-<p>上述评价的对象是(索引,某种查询). 因此并没有一个索引能够完美适应所有查询.只能说尽量适应当前场景下的高频查询.</p>
-<p>索引适用场景：</p>
-<ol>
-<li>小表： 直接扫全表即可；</li>
-<li>中表： 索引；</li>
-<li>大表： 分区。索引开销太大。</li>
-</ol>
-<h2 id="5-3-高性能的索引策略"><a href="#5-3-高性能的索引策略" class="headerlink" title="5.3 高性能的索引策略"></a>5.3 高性能的索引策略</h2><p>索引策略分为两个方面：</p>
-<ol>
-<li>建立索引的策略；</li>
-<li>使用索引的策略。</li>
-</ol>
-<h3 id="5-3-1-独立列（使用索引的策略）"><a href="#5-3-1-独立列（使用索引的策略）" class="headerlink" title="5.3.1 独立列（使用索引的策略）"></a>5.3.1 独立列（使用索引的策略）</h3><p>独立列： 索引列不能是表达式的一部分，也不能是函数的参数。<br>此外，如果数据类型不匹配，相当于隐式调用了类型转换函数，也是无法使用到索引的。</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">错误示例：（表达式）</span><br><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> xxx <span class="keyword">where</span> <span class="keyword">id</span>+<span class="number">1</span>=<span class="number">5</span>;</span><br><span class="line">正确示例：(移到等号另一边)</span><br><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> xxx <span class="keyword">where</span> <span class="keyword">id</span>=<span class="number">5</span><span class="number">-1</span>;</span><br><span class="line"></span><br><span class="line">错误示例：（类型不匹配）</span><br><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> xxx </span><br><span class="line"><span class="keyword">where</span> dt=<span class="keyword">date_sub</span>(<span class="keyword">current_date</span>, <span class="built_in">interval</span> <span class="number">1</span> <span class="keyword">day</span>)；</span><br><span class="line"></span><br><span class="line">正确示例：</span><br><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> xxx</span><br><span class="line"><span class="keyword">where</span> dt = <span class="keyword">date_format</span>(<span class="keyword">date_sub</span>(<span class="keyword">current_date</span>, <span class="built_in">interval</span> <span class="number">1</span> <span class="keyword">day</span>), <span class="string">'%Y-%m-%d'</span>)</span><br></pre></td></tr></table></figure>
-<p>可以使用<code>explain</code>语句检查查询是否能够利用索引。（<code>type</code>不是<code>ALL</code>）</p>
-<h3 id="5-3-2-前缀索引和索引选择性（建立索引策略）"><a href="#5-3-2-前缀索引和索引选择性（建立索引策略）" class="headerlink" title="5.3.2 前缀索引和索引选择性（建立索引策略）"></a>5.3.2 前缀索引和索引选择性（建立索引策略）</h3><p>索引的选择性= count(distinct key)/count(1)<br>因此Unique key的选择性是1.</p>
-<p>可用： 选择性达到0.031以上。<br>当提升前缀的长度已经无法显著提高选择性，就可以停下来考虑这个长度了。</p>
-<p>前缀索引的优点：</p>
-<ol>
-<li>性能好；</li>
-<li>空间小。</li>
-</ol>
-<p>前缀索引的缺点：</p>
-<ol>
-<li>Order By和Group By无法使用；</li>
-<li>覆盖扫描无法使用。</li>
-</ol>
-<p><strong>后缀索引：</strong><br>可以存储反转以后的列来达到这个目的。</p>
-<h3 id="5-3-3-多列索引"><a href="#5-3-3-多列索引" class="headerlink" title="5.3.3 多列索引"></a>5.3.3 多列索引</h3><p><strong>index merge(索引合并)</strong><br>利用两个单列索引来优化总查询。<br>explain计划里的索引type是<code>index_merge</code>.<br>三个变种：</p>
-<ol>
-<li>OR=转化=&gt;分治以后Union；</li>
-<li>And=转化=&gt;分治以后取交集；</li>
-<li>上述两种情况的组合。</li>
-</ol>
-<p><strong>OR</strong></p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> xxx <span class="keyword">where</span> actorid=<span class="number">1</span> <span class="keyword">or</span> filmid=<span class="number">2</span></span><br><span class="line">转化为：</span><br><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> xxx <span class="keyword">where</span> actorid=<span class="number">1</span></span><br><span class="line"><span class="keyword">UNION</span></span><br><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> xxx <span class="keyword">where</span> filmid=<span class="number">2</span></span><br></pre></td></tr></table></figure>
-<p>索引合并并不一定比扫全表快，可以考虑用参数<code>optimizer_switch</code>来关闭，或者<code>IGNORE index</code>。<br>另一种思路就是直接建立多列索引，而不是单列索引。</p>
-<h3 id="5-3-4-索引顺序"><a href="#5-3-4-索引顺序" class="headerlink" title="5.3.4 索引顺序"></a>5.3.4 索引顺序</h3><p>本节针对B-Tree索引。</p>
-<p>索引的顺序设置得好的话，可以受益的查询：</p>
-<ol>
-<li>order by与group by</li>
-<li>where条件部分匹配，范围匹配</li>
-<li>distinct</li>
-</ol>
-<ul>
-<li>经验法则：<br>选择性高的列放前面=&gt;优化Where<br>（不一定能优化order by和group by）</li>
-</ul>
-<h3 id="5-3-5-聚簇索引"><a href="#5-3-5-聚簇索引" class="headerlink" title="5.3.5 聚簇索引"></a>5.3.5 聚簇索引</h3><p>形容的是Innodb存储B-tree索引的数据存储方式。<br>聚簇索引： 数据行存储在叶子节点。<br>聚簇： 数据行与相邻的键值紧凑存储。</p>
-<p>InnoDB的主键列是聚簇索引；其他key列则不是（叶子节点存的不是数据行，而是主键值）。</p>
-<p>Innodb没有主键时：</p>
-<ol>
-<li>找Not Null的Unique key，建立聚簇索引；</li>
-<li>没有的话，隐式定义一个主键。</li>
-</ol>
-<p>聚簇索引优点：</p>
-<ol>
-<li>符合查询的话，磁盘IO次数少；</li>
-<li>顺序IO多；</li>
-<li>覆盖索引扫描可以使用页节点中的主键值。</li>
-</ol>
-<p>缺点：</p>
-<ol>
-<li>数据不在磁盘（例如在内存），顺序IO就没优势了；</li>
-<li>插入速度依赖于插入顺序；</li>
-<li>更新聚簇索引列代价高（大量移动）；</li>
-<li>扫全表稍微慢（页分裂导致数据存储不连续）；</li>
-<li>页分裂导致存储空间大于实际数据大小；</li>
-<li>二级索引需要两次索引查找（第一次只找到主键）。（可以使用自适应哈希索引，优化重复的查询）</li>
-</ol>
-<p><strong>Innodb和Myisam的数据分布对比</strong><br>MyIsam: 主键索引和非主键索引都是非聚簇索引，存储上没有差异，叶子节点都指向物理地址。<br>Innodb: 主键索引是聚簇索引，叶子节点指向物理地址；非主键索引是二级索引，非聚簇索引，叶子节点指向主键值（需要二次查找）。</p>
-<p>Innodb二级索引：<br>存储主键值，所以主键里的页分裂或移动的时候，不需要更新二级索引。</p>
-<h3 id="Innodb中按主键顺序插入行"><a href="#Innodb中按主键顺序插入行" class="headerlink" title="Innodb中按主键顺序插入行"></a>Innodb中按主键顺序插入行</h3><p>使用自增id可以让主键顺序，保证插入效率，也保证聚簇索引的存储效率。</p>
-<p>不适用场景：</p>
-<ol>
-<li>id随机；</li>
-<li>不连续id，id分布范围过大。</li>
-</ol>
-<p>（避免使用uuid作为innodb的主键）</p>
-<p>顺序主键的缺点：</p>
-<ol>
-<li>并发插入时间隙锁成为热点；</li>
-<li>自增锁成为热点,可以通过更改Innodb_autoinc _lock_mode尽量避免这一点,但又会引进自增id存在空洞的问题.</li>
-</ol>
-<p>Innodb_autoinc _lock_mode有三个取值:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">0: 传统模式. 每个sesson都会竞争自增锁;(默认)</span><br><span class="line">1: 连续模式. 只有bulk insert使用自增锁.</span><br><span class="line">2: 交叉模式. 不用自增锁.性能最好.空洞最多.</span><br></pre></td></tr></table></figure>
-
-<p>自增id空洞产生的原因:</p>
-<ol>
-<li>事务回滚,导致原先分配的id浪费了;</li>
-<li>使用连续模式时有并发插入;</li>
-<li>使用交叉模式.</li>
-</ol>
-<p>详见<a href="https://www.jianshu.com/p/cca59b515e20" target="_blank" rel="noopener">https://www.jianshu.com/p/cca59b515e20</a>.</p>
-<h3 id="5-3-6-覆盖索引"><a href="#5-3-6-覆盖索引" class="headerlink" title="5.3.6 覆盖索引"></a>5.3.6 覆盖索引</h3><p>覆盖索引： 索引已经覆盖到了需要查询的所有数据。（叶子节点）<br>(这种情况下Select *性能会低于Select xxx)</p>
-<p>覆盖索引的优点：</p>
-<ol>
-<li>减少IO次数；</li>
-<li>减少IO数量，提高缓存效率；</li>
-<li>对于Innodb，如果二级索引覆盖了数据，就可以避免二次查询（二次查询主键索引）。</li>
-</ol>
-<p>由于覆盖索引需要存储列的值，因此哈希索引、空间索引、全文索引都不能成为覆盖索引。<br>只有B-Tree索引才能成为覆盖索引。</p>
-<p>explain时，如果<code>Extra</code>列的值为<code>Using index</code>，说明利用了覆盖索引。</p>
-<p>回顾一下三星评价系统:<br>1星: 常用查询的范围查询能利用到索引(顺序IO);<br>2星: 常用查询的Order BY能利用到索引;<br>3星: 常用查询的输出只包含索引. (避免二次查找,减少磁盘IO, 覆盖索引)<br>因此如果一个覆盖索引,同时又能满足1星和2星,那就是3星级的索引了.</p>
-<p><strong>覆盖索引相关优化:</strong></p>
-<ol>
-<li>索引为: (actor,title)<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> products</span><br><span class="line"><span class="keyword">where</span> actor=<span class="string">'SEAN CARREY'</span> </span><br><span class="line"> <span class="keyword">AND</span> title <span class="keyword">like</span> <span class="string">'%APOLO%'</span></span><br></pre></td></tr></table></figure>
-上述查询explain以后,<code>Extra</code>列为<code>Using Where</code>,说明没有用到覆盖索引.<br>原因是,<code>select *</code>包含的是所有列,而索引只有两列,不符合覆盖索引的定义.<br>用到的索引是actor前缀索引,title无法应用到,因为用的Like模糊查询.</li>
-</ol>
-<p>查询流程大致为:<br>(1) 使用actor前缀索引,取出表中符合条件的主键地址;// 第1次磁盘IO<br>(2) 使用(1)中的主键地址,回表(读磁盘)取出相应的数据行. // 第2次磁盘IO</p>
-<ol start="2">
-<li>索引为: (actor,title,pro_id)<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> *</span><br><span class="line"><span class="keyword">FROM</span> product</span><br><span class="line"><span class="keyword">JOIN</span> (</span><br><span class="line">    <span class="keyword">select</span> prod_id</span><br><span class="line">    <span class="keyword">FROM</span> product</span><br><span class="line">    <span class="keyword">WHERE</span> actor=<span class="string">'SEAN CARREY'</span> <span class="keyword">AND</span> title <span class="keyword">like</span> <span class="string">'%APOLO%'</span></span><br><span class="line">    )<span class="keyword">AS</span> t1 </span><br><span class="line">  <span class="keyword">ON</span> t1.prod_id=t2.prod_id</span><br></pre></td></tr></table></figure>
-上述查询explain以后,<code>Extra</code>列为<code>Using where;Using index</code>.说明用到了覆盖索引.<br>原因是,子查询中输出的列是prod_id,包含在索引中,因此省去了此处的二次查询.<br>随后进行了延迟关联,找出product表中的其他列.<br>查询流程大致为:<br>(1)使用actor前缀索引,取出表中符合条件的索引与主键地址;//第1次磁盘IO<br>(2)使用(1)中的进行join,取出表中其他数据列.//第2次磁盘IO</li>
-</ol>
-<p>由于都要使用两次磁盘IO,<br>1和2查询的效率取决于where条件中匹配返回的行数,假设这个product表有100W行:<br><strong>(1) 返回行数很多:</strong><br>actor过滤后剩下3W行,title过滤后剩下2W行;<br>1和2查询效率相同:<br>大部分时间在发送和读取数据上;<br><strong>(2) 返回行数很少:</strong><br>actor过滤后剩下3W行,title过滤后剩下40行;<br>2的查询效率高很多:<br>2读取3W个id,40个整行;1读取3w个整行.<br><strong>(3) 总数据量少,返回行数也少:</strong><br>actor过滤后剩下50行,title过滤后剩下40行;<br>1和2查询效率相近:<br>2读取50个id,40个整行;1读取50个整行.</p>
-<p>上述查询的执行框架:</p>
-<ol>
-<li>使用索引actor从存储引擎获取数据行;</li>
-<li>将数据行读入服务器层,用title进行过滤.</li>
-</ol>
-<p>因此上述优化针对的是减少存储引擎读取到服务器层的数据行.<br>上述优化只针对Mysql5.6版本之前. 5.6之后,有Index condition pushdown (索引条件推送), 把查询条件推送到存储引擎, 减少读取的数据量.</p>
-<p>– TO BE CONTINUE…</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/02/11/2018-02/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC5%E7%AB%A0/" data-id="ck96cxpnz00b1maam9nil2vjh" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -2108,6 +2041,10 @@
       <ul>
         
           <li>
+            <a href="/2023/02/01/2023-02/%E8%AF%8A%E6%96%AD-jvm%E7%A8%8B%E5%BA%8Fcpu%E9%97%AE%E9%A2%98/">诊断-jvm程序cpu问题</a>
+          </li>
+        
+          <li>
             <a href="/2022/11/21/2022-11/cpu%E6%AF%9B%E5%88%BA%E9%97%AE%E9%A2%98%E9%80%9A%E7%94%A8%E4%BC%98%E5%8C%96%E6%80%9D%E8%B7%AF/">调优-cpu毛刺问题通用优化思路</a>
           </li>
         
@@ -2121,10 +2058,6 @@
         
           <li>
             <a href="/2022/09/26/2022-09/%E5%B7%B2%E7%9F%A5%E6%98%8E%E6%96%87%E7%A0%B4%E8%A7%A3zip/">已知明文破解zip</a>
-          </li>
-        
-          <li>
-            <a href="/2022/09/26/2022-09/jwt%E7%A0%B4%E8%A7%A3/">jwt破解</a>
           </li>
         
       </ul>
@@ -2142,7 +2075,7 @@
   
   <div class="outer">
     <div id="footer-left">
-      &copy; 2014 - 2022 风梦七&nbsp;|&nbsp;
+      &copy; 2014 - 2023 风梦七&nbsp;|&nbsp;
       主题 <a href="https://github.com/giscafer/hexo-theme-cafe/" target="_blank">Cafe</a>
     </div>
      <div id="footer-right">
