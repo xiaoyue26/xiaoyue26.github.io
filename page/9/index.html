@@ -72,6 +72,141 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2019-02/redis设计与实现笔记4-持久化" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2019/02/17/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B04-%E6%8C%81%E4%B9%85%E5%8C%96/" class="article-date">
+  <time datetime="2019-02-17T13:31:49.000Z" itemprop="datePublished">2019-02-17</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/redis/">redis</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2019/02/17/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B04-%E6%8C%81%E4%B9%85%E5%8C%96/">redis设计与实现笔记4-持久化</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <ol>
+<li>RDB: 定期(比如五分钟)做一次快照。 (<code>Redis DataBase</code>)压缩的二进制文件;</li>
+<li>AOF: 类似于WAL，存每条操作指令日志。(<code>Append only file</code>)</li>
+</ol>
+<p>题外:<br><code>mmkv</code>: 内存映射文件(<code>MMF</code>)，场景是频繁刷盘，对丢失敏感前提下的尽量高性能。</p>
+<h2 id="相关命令"><a href="#相关命令" class="headerlink" title="相关命令"></a>相关命令</h2><ol>
+<li><code>SAVE</code>: 直接停服保存；</li>
+<li><code>BGSAVE</code>: 开一个子进程在后台保存。<br>检测到<code>RDB</code>或<code>AOF</code>文件后,redis进程会自动载入文件。(优先<code>AOF</code>,因为<code>AOF</code>一般更新更频繁)<img src="/images/2019-02/load_aof.png" class="" width="800" height="1200" title="load_aof">
+
+</li>
+</ol>
+<p><code>BGSAVE</code>执行期间，不接受类似指令如<code>SAVE</code>,<code>BGSAVE</code>,<code>BGWRITEAOF</code>。<br>载入文件期间，服务器阻塞不接受任何指令。</p>
+<h3 id="自动BGSAVE"><a href="#自动BGSAVE" class="headerlink" title="自动BGSAVE"></a>自动BGSAVE</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">save 900 1 # 900秒内至少1次修改</span><br><span class="line">save 300 10 # 300秒内至少10次修改</span><br><span class="line">save 60 10000 # 60秒内至少10000次修改</span><br></pre></td></tr></table></figure>
+
+<h2 id="实现"><a href="#实现" class="headerlink" title="实现"></a>实现</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">redisServer</span>&#123;</span></span><br><span class="line">    <span class="comment">// 记录自动bgsave的条件</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">saveparam</span> *<span class="title">saveparams</span>;</span></span><br><span class="line">    <span class="comment">// 修改计数器:</span></span><br><span class="line">    <span class="keyword">long</span> <span class="keyword">long</span> dirty;</span><br><span class="line">    <span class="comment">// 上一次执行保存的时间(unixtimestamp):</span></span><br><span class="line">    <span class="keyword">time_t</span> lastsave;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>有了上述3个变量，可以保存需要的状态；<br>再加上每100ms执行的<code>serverCron</code>函数，就能完成自动保存的工作了。</p>
+<h1 id="RDB持久化"><a href="#RDB持久化" class="headerlink" title="RDB持久化"></a>RDB持久化</h1><h2 id="RDB文件结构-第6版RDB格式"><a href="#RDB文件结构-第6版RDB格式" class="headerlink" title="RDB文件结构(第6版RDB格式)"></a>RDB文件结构(第6版RDB格式)</h2><img src="/images/2019-02/rdb_struct.png" class="" width="800" height="1200" title="rdb_struct">
+<ol>
+<li><code>&quot;REDIS&quot;</code>: 常量字符;</li>
+<li><code>db_version</code>:  4B,版本号；</li>
+<li><code>database</code>:所有保存的数据库（kv数据）,长度不定;</li>
+<li><code>EOF</code>: 1B，表示数据结束；(<code>377</code>)</li>
+<li><code>check_suim</code>: 8B，前4个部分校验和。</li>
+</ol>
+<h3 id="database部分结构"><a href="#database部分结构" class="headerlink" title="database部分结构"></a>database部分结构</h3><img src="/images/2019-02/rdb_database.png" class="" width="800" height="1200" title="rdb_database">
+<ol>
+<li><code>SELECTDB</code>: 1B,常量，区别于EOF；</li>
+<li><code>db_number</code>: 1B,2B,5B不等，具体的数据库号；</li>
+<li><code>key_value_pairs</code>: kv数据、过期时间，长度不等。</li>
+</ol>
+<h3 id="key-value-pairs部分结构"><a href="#key-value-pairs部分结构" class="headerlink" title="key_value_pairs部分结构"></a>key_value_pairs部分结构</h3><ol>
+<li>EXPIRETIME_MS(可选)：1B,过期时间标记，常量;</li>
+<li><code>ms</code>(可选): 8B,具体过期时间(毫秒);</li>
+<li><code>TYPE</code>: 1B,类型，标记value的具体类型;</li>
+<li><code>key</code>: 总是字符串编码；</li>
+<li><code>value</code>: 值的编码根据<code>TYPE</code>字段判断。</li>
+</ol>
+<p>其中<code>TYPE</code>的取值,一种对象类型或底层编码：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">string,list,set,zset,hash</span><br><span class="line">,list_ziplist,set_intset,zset_ziplist</span><br><span class="line">,hash_ziplist</span><br></pre></td></tr></table></figure>
+<p>服务器根据这个<code>TYPE</code>字段决定如何解析<code>value</code>字段的编码。</p>
+<h3 id="实例"><a href="#实例" class="headerlink" title="实例"></a>实例</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 以ascii码查看:</span></span><br><span class="line">od -c ./home/dump.rdb</span><br><span class="line"></span><br><span class="line">0000000   R   E   D   I   S   0   0   0   6 377 334 263   C 360   Z 334</span><br><span class="line">0000020 362   V</span><br></pre></td></tr></table></figure>
+<p>其中377表示EOF，<code>redis</code>5B,版本4B，<code>EOF</code>1B,校验和8B，总共18B.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"># 以16进制查看:</span><br><span class="line">od -x .&#x2F;home&#x2F;dump.rdb</span><br><span class="line"></span><br><span class="line">0000000 4552 4944 3053 3030 ff36 b3dc f043 dc5a</span><br><span class="line">0000020 56f2</span><br></pre></td></tr></table></figure>
+
+
+<h1 id="第11章AOF持久化"><a href="#第11章AOF持久化" class="headerlink" title="第11章AOF持久化"></a>第11章AOF持久化</h1><p>三个步骤：</p>
+<ol>
+<li>append：命令追加到redis的内存缓冲区;</li>
+<li>文件写入（不刷盘）:从redis的内存缓冲区到操作系统的内存页缓存;</li>
+<li>fsync: 文件同步（实际刷盘）；<h2 id="写入和同步"><a href="#写入和同步" class="headerlink" title="写入和同步"></a>写入和同步</h2>写入文件：实际上操作系统不会立即刷盘，而且处于性能先放内存缓冲区，后续再一起刷盘；<br>同步：调用<code>fsync</code>或<code>fdatasync</code>函数刷盘。</li>
+</ol>
+<h2 id="实现-1"><a href="#实现-1" class="headerlink" title="实现"></a>实现</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">redisServer</span>&#123;</span></span><br><span class="line">    <span class="comment">// AOF缓冲区</span></span><br><span class="line">    sds aof_buf;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<ol>
+<li>执行写命令;</li>
+<li>将写命令追加到aof_buf缓冲区的末尾；</li>
+<li>每次结束一个事件循环前，考虑是否将aof_buf内容写入同步到aof文件；（根据<code>appendfsync</code>选项）</li>
+</ol>
+<h3 id="appendfsync选项"><a href="#appendfsync选项" class="headerlink" title="appendfsync选项"></a>appendfsync选项</h3><table>
+<thead>
+<tr>
+<th align="center">appendfsync选项</th>
+<th align="left">操作</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">always</td>
+<td align="left">将aof_buf内容写入且同步到AOF文件</td>
+</tr>
+<tr>
+<td align="center">everysec(默认值)</td>
+<td align="left">将aof_buf内容写入AOF文件，每秒同步一次</td>
+</tr>
+<tr>
+<td align="center">no</td>
+<td align="left">将aof_buf内容写入AOF文件，同步由操作系统决定</td>
+</tr>
+</tbody></table>
+<h2 id="AOF载入还原"><a href="#AOF载入还原" class="headerlink" title="AOF载入还原"></a>AOF载入还原</h2><img src="/images/2019-02/read_aof.png" class="" width="800" height="1200" title="read_aof">
+<p>用一个伪客户端执行所有aof命令即可。</p>
+<h2 id="AOF重写-AOF文件压缩"><a href="#AOF重写-AOF文件压缩" class="headerlink" title="AOF重写(AOF文件压缩)"></a>AOF重写(AOF文件压缩)</h2><p>由于AOF文件记录的是命令而不是实际数据，可能会非常膨胀。<br>为了减少空间，同时加快载入恢复速度，可以根据实际数据进行压缩，跳过合并多余的命令。<br>方法类似于RDB，通过读取实际的数据库状态，生成AOF命令。</p>
+<h3 id="性能优化"><a href="#性能优化" class="headerlink" title="性能优化"></a>性能优化</h3><p>出于对缓冲区的保护，如果遇到数据库中数据量太多的集合、有序集合、列表、哈希表，会让每条命令插入的数据量&lt;=<code>REDIS_AOF_REWRITE_ITEMS_PER_CMD</code>(默认为64)。</p>
+<h3 id="BGREWRITEAOF细节-尽量不停服"><a href="#BGREWRITEAOF细节-尽量不停服" class="headerlink" title="BGREWRITEAOF细节(尽量不停服)"></a>BGREWRITEAOF细节(尽量不停服)</h3><img src="/images/2019-02/bg_rewrite.png" class="" width="800" height="1200" title="bg_rewrite">
+<p>调用子进程进程AOF重写期间，并不停服，为了保证一致性，会把这期间的命令追加到两个缓冲区：AOF缓冲区、AOF重写缓冲区。</p>
+<p>重写完成后，stop the world:</p>
+<ol>
+<li>AOF重写缓冲区=&gt;AOF重写文件;</li>
+<li>AOF重写文件替换旧AOF文件；(利用文件系统的改名原子性)</li>
+<li>恢复服务。</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2019/02/17/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B04-%E6%8C%81%E4%B9%85%E5%8C%96/" data-id="ck96cxpp700g5maambm2r3ts3" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2019-02/redis设计与实现笔记3-数据库" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2019/02/13/2019-02/redis%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0%E7%AC%94%E8%AE%B03-%E6%95%B0%E6%8D%AE%E5%BA%93/" class="article-date">
@@ -1177,62 +1312,6 @@
 
 
   
-    <article id="post-2019-01/redis的quicklist" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2019/01/19/2019-01/redis%E7%9A%84quicklist/" class="article-date">
-  <time datetime="2019-01-19T12:29:18.000Z" itemprop="datePublished">2019-01-19</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/redis/">redis</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2019/01/19/2019-01/redis%E7%9A%84quicklist/">redis的quicklist</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>列表对象: <code>REDIS_LIST</code></p>
-<p>列表对象以前有两种编码: <code>linkedlist</code>和<code>zipList</code>：<br><code>linkedList</code>: 双向链表,灵活扩展,存取效率低。<br><code>zipList</code>: 连续存储,存取效率高，对缓存友好，扩展性差，修改插入需要级联移动.甚至可以粗略看做数组。<br>小数据量的时候会使用<code>zipList</code>,大数据量的时候会使用<code>linkedList</code>。<br>但它们其实是两个极端，各有优缺点。因此之后的版本就把它们混血了一下，出了一个<code>quickList</code>，平衡优缺点。</p>
-<h2 id="quickList设计"><a href="#quickList设计" class="headerlink" title="quickList设计"></a>quickList设计</h2><p>粗略地看，把双向链表的每一个节点变成<code>zipList</code>，就是<code>quickList</code>了。<br>在原来的两个数据结构之间做一个折中，量化折中的参数:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"># 负数表示存储容量等级,每个节点上的ziplist大小不能超过8Kb（也就是2^3KB，以此类推）</span><br><span class="line">list-max-ziplist-size -2</span><br><span class="line"># 正数表示存储个数，每个节点上的zipList内元素不能超过5个:</span><br><span class="line">list-max-ziplist-size 5</span><br></pre></td></tr></table></figure>
-
-<p>还有一个压缩参数:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"># 不进行压缩:</span><br><span class="line">list-compress-depth 0 </span><br><span class="line"># 除了首尾1个，中间的压缩:</span><br><span class="line">list-compress-depth 1</span><br></pre></td></tr></table></figure>
-<p>由于双向链表一般用<code>LPush</code>,<code>Rpush</code>，两端的数据访问比较频繁，</p>
-<h2 id="quickList源码"><a href="#quickList源码" class="headerlink" title="quickList源码"></a>quickList源码</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">quicklist</span> &#123;</span></span><br><span class="line">    quicklistNode *head;    <span class="comment">// 头结点</span></span><br><span class="line">    quicklistNode *tail;    <span class="comment">// 尾节点</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">long</span> count;    <span class="comment">// 所有数据的数量</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> len;       <span class="comment">// quicklist节点数量</span></span><br><span class="line">    <span class="keyword">int</span> <span class="built_in">fill</span>:<span class="number">16</span>;          <span class="comment">// 单个ziplist的大小限制</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> compress:<span class="number">16</span>;   <span class="comment">// 压缩深度</span></span><br><span class="line">&#125; quicklist;</span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">quicklistNode</span> &#123;</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">quicklistNode</span> *<span class="title">prev</span>;</span> <span class="comment">// 前一个节点</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">quicklistNode</span> *<span class="title">next</span>;</span> <span class="comment">// 后一个节点</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">char</span> *zl;  <span class="comment">// ziplist</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> sz;             <span class="comment">// ziplist的内存大小</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> count:<span class="number">16</span>;     <span class="comment">// zpilist中数据项的个数</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> encoding:<span class="number">2</span>;   <span class="comment">// 1为ziplist 2是LZF压缩存储方式</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> container:<span class="number">2</span>;  </span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> recompress:<span class="number">1</span>;   <span class="comment">// 压缩标志, 为1 是压缩</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> attempted_compress:<span class="number">1</span>; <span class="comment">// 节点是否能够被压缩,只用在测试</span></span><br><span class="line">    <span class="keyword">unsigned</span> <span class="keyword">int</span> extra:<span class="number">10</span>; <span class="comment">/* more bits to steal for future usage */</span></span><br><span class="line">&#125; quicklistNode;</span><br></pre></td></tr></table></figure>
-
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2019/01/19/2019-01/redis%E7%9A%84quicklist/" data-id="ck96cxpp400fqmaam3ugwg3le" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/redis/" rel="tag">redis</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1259,6 +1338,10 @@
       <ul>
         
           <li>
+            <a href="/2023/02/03/2023-02/%E8%B0%83%E4%BC%98-ByteString%E7%9B%B8%E5%85%B3%E5%86%85%E5%AD%98%E6%8B%B7%E8%B4%9D%E9%97%AE%E9%A2%98/">调优-ByteString相关内存拷贝问题</a>
+          </li>
+        
+          <li>
             <a href="/2023/02/01/2023-02/%E8%AF%8A%E6%96%AD-jvm%E7%A8%8B%E5%BA%8Fcpu%E9%97%AE%E9%A2%98/">诊断-jvm程序cpu问题</a>
           </li>
         
@@ -1272,10 +1355,6 @@
         
           <li>
             <a href="/2022/09/27/2022-09/sql%E6%B3%A8%E5%85%A5%E6%94%BB%E5%87%BB/">sql注入攻击</a>
-          </li>
-        
-          <li>
-            <a href="/2022/09/26/2022-09/%E5%B7%B2%E7%9F%A5%E6%98%8E%E6%96%87%E7%A0%B4%E8%A7%A3zip/">已知明文破解zip</a>
           </li>
         
       </ul>

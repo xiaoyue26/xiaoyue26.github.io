@@ -72,6 +72,118 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-java并发编程实战笔记-6-7章" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2017/02/25/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-6-7%E7%AB%A0/" class="article-date">
+  <time datetime="2017-02-25T11:45:43.000Z" itemprop="datePublished">2017-02-25</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2017/02/25/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-6-7%E7%AB%A0/">java并发编程实战笔记-6-7章</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="6-1节-背景"><a href="#6-1节-背景" class="headerlink" title="6.1节 背景"></a>6.1节 背景</h1><p>(为了引出Executor框架)<br>任务执行方式:</p>
+<ol>
+<li>串行; 单线程,太慢;</li>
+<li>完全并行; 每个任务一个线程,开销太大.</li>
+<li>使用Executor框架. OK </li>
+</ol>
+<h1 id="6-2-Executor框架"><a href="#6-2-Executor框架" class="headerlink" title="6.2 Executor框架"></a>6.2 Executor框架</h1><p><code>java.util.concurrent</code>提供的线程池.<br>可以通过实现Executor接口,自定义执行策略:</p>
+<ol>
+<li>谁来执行;</li>
+<li>执行顺序;(FIFO,LIFO,优先级)</li>
+<li>并发度;</li>
+<li>线程池容量(包括等待的);</li>
+<li>什么时候拒绝任务,拒绝哪一个;</li>
+<li>执行任务前后的操作.</li>
+</ol>
+<p>或者直接使用<code>Executors</code>中编写好的线程池/执行策略:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">newFixedThreadPool &#x2F;&#x2F; 定长</span><br><span class="line">newCachedThreadPool &#x2F;&#x2F; 无限增长,但会复用原来的</span><br><span class="line">newSingleThreadExecutor &#x2F;&#x2F; 单线程</span><br><span class="line">newScheduledThreadPool &#x2F;&#x2F; 定长,但可以定时\延迟执行.</span><br><span class="line">newWorkStealingPool &#x2F;&#x2F; 用fork-join的,工作觅取的 &#x2F;&#x2F; 1.8新增.</span><br></pre></td></tr></table></figure>
+
+<h2 id="Executor的生命周期"><a href="#Executor的生命周期" class="headerlink" title="Executor的生命周期"></a>Executor的生命周期</h2><p>为了以各种方式关掉<code>Executor</code>,库中写了<code>ExecutorService</code>:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">public interface ExecutorService extends Executor &#123;</span><br><span class="line">        void shutdown();&#x2F;&#x2F;平缓得关闭,不再接收新任务,执行剩余的;</span><br><span class="line">        List&lt;Runnable&gt; shutdownNow();&#x2F;&#x2F;取消运行中的和未执行的;</span><br><span class="line">        boolean isShutdown();&#x2F;&#x2F;是否已经下达shutdown命令</span><br><span class="line">        boolean isTerminated();&#x2F;&#x2F;是否完成了shutdown命令</span><br><span class="line">        boolean awaitTermination(long timeout, TimeUnit unit)</span><br><span class="line">                throws InterruptedException;</span><br><span class="line">        &#x2F;&#x2F; ... 还有一些invoke和submit        </span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+<p>ExecutorService生命周期有3种状态:<br>运行,关闭,已终止. </p>
+<p>ExecutorService中的任务的生命周期:<br>创建,提交,开始,完成.</p>
+<p>上述生命周期都是单向不可逆的.</p>
+<h1 id="线程池的局限"><a href="#线程池的局限" class="headerlink" title="线程池的局限"></a>线程池的局限</h1><ol>
+<li>适用于同构任务,异构任务分解粒度不够细,提升不够大;</li>
+</ol>
+<h1 id="第七章-取消与关闭"><a href="#第七章-取消与关闭" class="headerlink" title="第七章 取消与关闭"></a>第七章 取消与关闭</h1><h2 id="背景"><a href="#背景" class="headerlink" title="背景:"></a>背景:</h2><blockquote>
+<p>java中无法简单\安全得停止取消某个线程;<br>需要使用中断(一种协作机制),从一个线程发出取消请求,中断另一个线程.因此其实需要被中断的线程预先提供安全停止\取消的方法,其中包括清理资源等操作.</p>
+</blockquote>
+<h2 id="取消策略"><a href="#取消策略" class="headerlink" title="取消策略:"></a>取消策略:</h2><ol>
+<li>HOW: 其他线程如何请求取消;</li>
+<li>WHEN: 本线程何时受理取消请求;</li>
+<li>WHAT: 取消时具体要干什么.</li>
+</ol>
+<p>Thread中的中断方法:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">public class Thread&#123;</span><br><span class="line">public void interrupt()&#123;&#125;&#x2F;&#x2F; 中断此线程</span><br><span class="line">public boolean isInterrupted()&#123;&#125;&#x2F;&#x2F;查询中断状态</span><br><span class="line">public static boolean interrupted()&#123;&#125;&#x2F;&#x2F; 查询中断状态,且清除中断.</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="中断策略"><a href="#中断策略" class="headerlink" title="中断策略"></a>中断策略</h2><p>有些线程不支持取消,但可以支持中断. </p>
+<p>中断的方法:</p>
+<ol>
+<li><p>直接中断:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Thread.currentThread().interrupt();</span><br></pre></td></tr></table></figure></li>
+<li><p>限时任务:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Future&lt;?&gt;task&#x3D;exec.submit(r);</span><br><span class="line">task.get(timeout,unit);</span><br><span class="line">task.cancel();</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>处理不可中断的阻塞:</p>
+</li>
+</ol>
+<p>(1)java.io包中的同步Socket I/O:<br><code>InputStream</code>和<code>OutputStream</code>的read,write方法都不会响应中断.<br>中断方法: 关闭底层套接字,让read,write抛出SocketException. </p>
+<p>(2)java.io包中的同步I/O:<br>中断方法:<br>中断<code>InterruptibleChannel</code>.抛出<code>ClosedByInterruptExeception</code>.<br>关闭<code>InterruptibleChannel</code>.抛出<code>AsynchronousCloseException</code>.</p>
+<p>(3)Selector的异步I/O:(java.nio.channels)<br>中断方法:<br>close或wakeup方法. 抛出<code>ClosedSelectorException</code>.</p>
+<p>(4)等待内置锁.<br>使用Lock类中的<code>lockInterruptible</code>方法.</p>
+<h1 id="取消策略的设计"><a href="#取消策略的设计" class="headerlink" title="取消策略的设计"></a>取消策略的设计</h1><p>1.设置取消信号量.</p>
+<blockquote>
+<p>太山寨. 缺陷:<br>(1) while循环中不能有阻塞,否则无法取消.<br>因此需要检查while循环中的每一行代码,确保安全比较麻烦.</p>
+</blockquote>
+<p>2.捕获中断异常.自定义存盘操作.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;&#x2F; 用cancel接口封装后调用.</span><br><span class="line">public void cancel()&#123;this.interrupt();&#125;</span><br></pre></td></tr></table></figure>
+
+<p>3.任务交给ExecutorService托管.// 本质上调了interrupt. </p>
+<p>4.使用毒丸对象.</p>
+<blockquote>
+<p>缺陷: 仅当生产者消费者数量已知情况.无界队列场景下使用.</p>
+</blockquote>
+<h2 id="Executors保存进度"><a href="#Executors保存进度" class="headerlink" title="Executors保存进度"></a>Executors保存进度</h2><p>shutdownNow会返回尚未开始的线程列表. 无法获得中途取消的.<br>可以自己封装一遍ExecutorsService. 重写execute方法,捕获异常判断状态,记录取消的线程.<br>详见代码:<br><a href="https://github.com/xiaoyue26/july/blob/master/src/main/java/practice/chapter7/TrackingExecutor.java" target="_blank" rel="noopener">https://github.com/xiaoyue26/july/blob/master/src/main/java/practice/chapter7/TrackingExecutor.java</a></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2017/02/25/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-6-7%E7%AB%A0/" data-id="ck96cxpla002mmaam3khog7zl" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-java并发编程实战笔记-4-5章" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2017/02/25/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E5%AE%9E%E6%88%98%E7%AC%94%E8%AE%B0-4-5%E7%AB%A0/" class="article-date">
@@ -1150,79 +1262,6 @@
 
 
   
-    <article id="post-Hadoop-FileInputFormat" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2017/01/02/Hadoop-FileInputFormat/" class="article-date">
-  <time datetime="2017-01-02T11:22:28.000Z" itemprop="datePublished">2017-01-02</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/hadoop/">hadoop</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2017/01/02/Hadoop-FileInputFormat/">Hadoop FileInputFormat相关</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>#版本:<br>hadoop1. mapred.xxx  : 使用JobConf<br>hadoop2. mapreduce.lib.xxx   :  使用taskAttemptContext</p>
-<p>#FileInputFormat</p>
-<p>FileInputFormat:</p>
-<blockquote>
-<p>直接通过文件大小\split大小计算偏移量,生成InputSplit(FileSplit).<br>然后把InputSplit传给RecordReader.</p>
-</blockquote>
-<p>NLineInputFormat: </p>
-<blockquote>
-<p>将多行作为一个Split.<br>具体多少行由job参数控制:<br><code>mapreduce.input.lineinputformat.linespermap</code><br>新老api都一样.<br>把文件传给LineReader,找出N行的偏移量,生成InputSplit,<br>再把InputSplit传给RecordReader,RecordReader再传给LineReader.(二次解析)</p>
-</blockquote>
-<p>CombineFileInputFormat:</p>
-<blockquote>
-<p>Map的时候临时合并小文件.减少Split的数量(减少Map的数量)<br>从多个Block(文件)获取数据,生成InputSplit. 相关参数:</p>
-</blockquote>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">public static final String SPLIT_MINSIZE_PERNODE &#x3D; </span><br><span class="line">    &quot;mapreduce.input.fileinputformat.split.minsize.per.node&quot;;</span><br><span class="line">  public static final String SPLIT_MINSIZE_PERRACK &#x3D; </span><br><span class="line">    &quot;mapreduce.input.fileinputformat.split.minsize.per.rack&quot;;</span><br></pre></td></tr></table></figure>
-
-
-<p>上述的都是Key为偏移量,Value为具体内容的.还有一个不是这样的:<br>KeyValueTextInputFormat:</p>
-<blockquote>
-<p>生成Split的时候按大小;<br>分割Recode的时候按换行.<br>特殊之处在于KeyValueLineRecordReader.<br>默认的K,V分隔符为制表符<code>\t</code>.若一行中没有的话,就Key为整行,Value为空字符串””.<br>控制分隔符的参数:<br><code>mapreduce.input.keyvaluelinerecordreader.key.value.separator</code></p>
-</blockquote>
-<p>#RecordReader<br>##LineRecordReader</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">比较健全,支持不同字符集(因为直接接受的是byte数组,而且对utf-8有bom格式有处理);</span><br><span class="line">支持压缩.</span><br><span class="line"></span><br><span class="line">由于inputSplit是按大小分割的,可能出现某一行跨split的情况.</span><br><span class="line">源码中的处理逻辑是将跨行line的算作前一个split.</span><br><span class="line">实现上: (建议直接看源码)</span><br><span class="line">注意只能跨split,不能跨文件. </span><br><span class="line">因为同一个文件的不同split,可以用同一个流读,因此是可以实现的.</span><br><span class="line">1. 除了第一个split,每个split丢弃第一行.</span><br><span class="line">        (因为默认已经被前一个split消费了)</span><br><span class="line">2. 每个split处理时,</span><br><span class="line">while(没到split末尾)&#123;</span><br><span class="line">  读一行;&#x2F;&#x2F; 这个过程中可能用流读到了下一个split.</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>##XMLRecordReader<br>原理仿照LineRecordReader,但减免了压缩和字符集的处理.</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line">(源码的逻辑更为严密,这里尽量简单叙述)</span><br><span class="line">定义startTag和endTag. </span><br><span class="line">返回startTag-&gt;endTag之间的数据. </span><br><span class="line">丢弃endTag-&gt;startTag之间的数据.</span><br><span class="line">若没有endTag,返回startTag到文件尾的数据.</span><br><span class="line"></span><br><span class="line">仿LineRecordReader,将跨split的record划分到前一个split中.</span><br><span class="line">实现:</span><br><span class="line">while(没到文件末尾)&#123;</span><br><span class="line">  找startTag: 沿途遇到的byte&#x3D;&gt;不存;</span><br><span class="line">&#125;</span><br><span class="line">1. 找不到或找到的startTag完全在下一个split,返回false. (实际代码有优化)</span><br><span class="line">2. 存一下startTag,继续:</span><br><span class="line">while(没到文件末尾)&#123;</span><br><span class="line">  找endTag: 沿途遇到的byte&#x3D;&gt;存;</span><br><span class="line">&#125;</span><br><span class="line">1. 找不到endTag,返回到文件尾的数据.</span><br><span class="line">2. 找到了endTag,返回到此为止的数据.</span><br></pre></td></tr></table></figure>
-<p>源码如下:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br><span class="line">150</span><br><span class="line">151</span><br><span class="line">152</span><br><span class="line">153</span><br><span class="line">154</span><br><span class="line">155</span><br><span class="line">156</span><br><span class="line">157</span><br><span class="line">158</span><br><span class="line">159</span><br><span class="line">160</span><br><span class="line">161</span><br><span class="line">162</span><br><span class="line">163</span><br></pre></td><td class="code"><pre><span class="line">package com.fenbi.ape.hive.serde.fileformat;</span><br><span class="line"></span><br><span class="line">import org.apache.hadoop.fs.FSDataInputStream;</span><br><span class="line">import org.apache.hadoop.fs.FileSystem;</span><br><span class="line">import org.apache.hadoop.fs.Path;</span><br><span class="line">import org.apache.hadoop.io.DataOutputBuffer;</span><br><span class="line">import org.apache.hadoop.io.LongWritable;</span><br><span class="line">import org.apache.hadoop.io.Text;</span><br><span class="line">import org.apache.hadoop.mapred.*;</span><br><span class="line">import org.apache.hadoop.mapred.FileSplit;</span><br><span class="line">import org.apache.hadoop.mapred.TextInputFormat;</span><br><span class="line">import org.apache.hadoop.mapreduce.lib.input.*;</span><br><span class="line"></span><br><span class="line">import java.io.IOException;</span><br><span class="line"></span><br><span class="line">&#x2F;**</span><br><span class="line"> * Created by xiaoyue26 on 17&#x2F;9&#x2F;14.</span><br><span class="line"> * &lt;p&gt;</span><br><span class="line"> * 不接受压缩. 要修改为接受压缩的话,需要学LineRecordReader再修改.</span><br><span class="line"> * 只支持utf-8</span><br><span class="line"> *&#x2F;</span><br><span class="line">public class XmlInputFormat extends TextInputFormat &#123;</span><br><span class="line"></span><br><span class="line">    public static final String START_TAG_KEY &#x3D; &quot;xmlinput.start&quot;;</span><br><span class="line">    public static final String END_TAG_KEY &#x3D; &quot;xmlinput.end&quot;;</span><br><span class="line"></span><br><span class="line">    @Override</span><br><span class="line">    public RecordReader&lt;LongWritable, Text&gt; getRecordReader(InputSplit inputSplit,</span><br><span class="line">                                                            JobConf jobConf,</span><br><span class="line">                                                            Reporter reporter) throws IOException &#123;</span><br><span class="line">        &#x2F;&#x2F;new org.apache.hadoop.mapreduce.lib.input.LineRecordReader();</span><br><span class="line">        return new XmlRecordReader((FileSplit) inputSplit, jobConf);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    &#x2F;**</span><br><span class="line">     * XMLRecordReader class to read through a given xml document to output xml</span><br><span class="line">     * blocks as records as specified by the start tag and end tag</span><br><span class="line">     *&#x2F;</span><br><span class="line">    public static class XmlRecordReader implements</span><br><span class="line">            RecordReader&lt;LongWritable, Text&gt; &#123;</span><br><span class="line">        private final byte[] startTag;</span><br><span class="line">        private final byte[] endTag;</span><br><span class="line">        private final long start;</span><br><span class="line">        private final long end;</span><br><span class="line">        private final FSDataInputStream fsin;</span><br><span class="line">        private final DataOutputBuffer buffer &#x3D; new DataOutputBuffer();</span><br><span class="line"></span><br><span class="line">        public XmlRecordReader(FileSplit split, JobConf jobConf) throws IOException &#123;</span><br><span class="line">            &#x2F;&#x2F;不支持通配符,正则</span><br><span class="line">            startTag &#x3D; jobConf.get(START_TAG_KEY).getBytes(&quot;utf-8&quot;);</span><br><span class="line">            endTag &#x3D; jobConf.get(END_TAG_KEY).getBytes(&quot;utf-8&quot;);</span><br><span class="line"></span><br><span class="line">            &#x2F;&#x2F; open the file and seek to the start of the split</span><br><span class="line">            start &#x3D; split.getStart();</span><br><span class="line">            end &#x3D; start + split.getLength();</span><br><span class="line">            Path file &#x3D; split.getPath();</span><br><span class="line">            FileSystem fs &#x3D; file.getFileSystem(jobConf);</span><br><span class="line">            fsin &#x3D; fs.open(split.getPath());</span><br><span class="line">            &#x2F;&#x2F;先定位到文件此次的开头</span><br><span class="line">            fsin.seek(start);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        &#x2F;&#x2F; 捞出 偏移量key,文本value</span><br><span class="line">        @Override</span><br><span class="line">        public boolean next(LongWritable key, Text value) throws IOException &#123;</span><br><span class="line">            if (fsin.getPos() &lt; end) &#123;</span><br><span class="line">                if (readUntilMatch(startTag, false)) &#123;</span><br><span class="line">                    try &#123;</span><br><span class="line">                        &#x2F;&#x2F;存一下startTag</span><br><span class="line">                        buffer.write(startTag);</span><br><span class="line">                        if (readUntilMatch(endTag, true)) &#123;</span><br><span class="line">                            key.set(fsin.getPos());</span><br><span class="line">                            value.set(buffer.getData(), 0, buffer.getLength());</span><br><span class="line">                            return true;</span><br><span class="line">                        &#125;</span><br><span class="line">                    &#125; finally &#123;</span><br><span class="line">                        buffer.reset();</span><br><span class="line">                    &#125;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">            return false;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        @Override</span><br><span class="line">        public LongWritable createKey() &#123;</span><br><span class="line">            return new LongWritable();</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        @Override</span><br><span class="line">        public Text createValue() &#123;</span><br><span class="line">            return new Text();</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        @Override</span><br><span class="line">        public long getPos() throws IOException &#123;</span><br><span class="line">            return fsin.getPos();</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        @Override</span><br><span class="line">        public synchronized void close() throws IOException &#123;</span><br><span class="line">            if (fsin !&#x3D; null) &#123;</span><br><span class="line">                fsin.close();</span><br><span class="line">            &#125;</span><br><span class="line"></span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        @Override</span><br><span class="line">        public float getProgress() throws IOException &#123;</span><br><span class="line">            if (start &#x3D;&#x3D; end) &#123;</span><br><span class="line">                return 0.0f;</span><br><span class="line">            &#125;</span><br><span class="line">            return Math.min(1.0f, (fsin.getPos() - start) &#x2F; (float) (end - start));</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        &#x2F;**</span><br><span class="line">         * withinBlock&#x3D;True  : 遇到的byte都存入buffer,包括match数组(找endTag)</span><br><span class="line">         * withinBlock&#x3D;False : 不存入buffer(找startTag)</span><br><span class="line">         * &lt;p&gt;</span><br><span class="line">         * return True   : 匹配上了</span><br><span class="line">         * return False  : 文件结束都没匹配上</span><br><span class="line">         * &lt;&#x2F;p&gt;</span><br><span class="line">         * split是按splitSize划分的.</span><br><span class="line">         *&#x2F;</span><br><span class="line">        private boolean readUntilMatch(byte[] match, boolean withinBlock) throws IOException &#123;</span><br><span class="line">            int i &#x3D; 0;</span><br><span class="line">            while (true) &#123;</span><br><span class="line">                int b &#x3D; fsin.read();</span><br><span class="line">                &#x2F;&#x2F; end of file:</span><br><span class="line">                if (b &#x3D;&#x3D; -1) return false;</span><br><span class="line">                &#x2F;&#x2F; save to buffer:</span><br><span class="line">                if (withinBlock) buffer.write(b);</span><br><span class="line"></span><br><span class="line">                &#x2F;&#x2F; check if we&#39;re matching:</span><br><span class="line">                if (b &#x3D;&#x3D; match[i]) &#123;</span><br><span class="line">                    i++;</span><br><span class="line">                    &#x2F;&#x2F; 匹配完毕:</span><br><span class="line">                    if (i &gt;&#x3D; match.length) return true;</span><br><span class="line">                &#125; else &#123;</span><br><span class="line">                    &#x2F;&#x2F; 回溯,从头再来</span><br><span class="line">                    i &#x3D; 0;</span><br><span class="line">                &#125;</span><br><span class="line">                &#x2F;&#x2F; see if we&#39;ve passed the stop point:</span><br><span class="line">                &#x2F;*</span><br><span class="line">                 * 前面检查了有没超过文件尾,这里检查有没有超过split尾</span><br><span class="line">                 * 情形1: 如果在找startTag(withinBlock&#x3D;false)</span><br><span class="line">                 *     , 而且一个都没匹配上, 而且已经到达split尾, [start,end)</span><br><span class="line">                 *       返回false.</span><br><span class="line">                 * (万里缉凶):</span><br><span class="line">                 * 情形2: 如果在找endTag(withinBlock&#x3D;True)</span><br><span class="line">                 *      ,即使已经到split末尾,也允许跨split的查找.</span><br><span class="line">                 *       尽量返回true.</span><br><span class="line">                 * 情形3: 如果i!&#x3D;0,即使已经到split末尾,也允许跨split的查找,以保证startTag或者endTag不被分割.</span><br><span class="line">                 *       尽量返回true.</span><br><span class="line">                 *</span><br><span class="line">                **&#x2F;</span><br><span class="line"></span><br><span class="line">                if (!withinBlock &amp;&amp; i &#x3D;&#x3D; 0 &amp;&amp; fsin.getPos() &gt;&#x3D; end) &#123;</span><br><span class="line">                    return false;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2017/01/02/Hadoop-FileInputFormat/" data-id="ck96cxpkh0006maamcsje3qe6" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/hadoop/" rel="tag">hadoop</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1249,6 +1288,10 @@
       <ul>
         
           <li>
+            <a href="/2023/02/03/2023-02/%E8%B0%83%E4%BC%98-ByteString%E7%9B%B8%E5%85%B3%E5%86%85%E5%AD%98%E6%8B%B7%E8%B4%9D%E9%97%AE%E9%A2%98/">调优-ByteString相关内存拷贝问题</a>
+          </li>
+        
+          <li>
             <a href="/2023/02/01/2023-02/%E8%AF%8A%E6%96%AD-jvm%E7%A8%8B%E5%BA%8Fcpu%E9%97%AE%E9%A2%98/">诊断-jvm程序cpu问题</a>
           </li>
         
@@ -1262,10 +1305,6 @@
         
           <li>
             <a href="/2022/09/27/2022-09/sql%E6%B3%A8%E5%85%A5%E6%94%BB%E5%87%BB/">sql注入攻击</a>
-          </li>
-        
-          <li>
-            <a href="/2022/09/26/2022-09/%E5%B7%B2%E7%9F%A5%E6%98%8E%E6%96%87%E7%A0%B4%E8%A7%A3zip/">已知明文破解zip</a>
           </li>
         
       </ul>

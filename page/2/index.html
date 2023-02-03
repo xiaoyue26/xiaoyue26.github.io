@@ -72,6 +72,90 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2022-05/w-tinylfu缓存算法" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2022/05/31/2022-05/w-tinylfu%E7%BC%93%E5%AD%98%E7%AE%97%E6%B3%95/" class="article-date">
+  <time datetime="2022-05-31T03:36:23.000Z" itemprop="datePublished">2022-05-31</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E6%80%A7%E8%83%BD/">性能</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2022/05/31/2022-05/w-tinylfu%E7%BC%93%E5%AD%98%E7%AE%97%E6%B3%95/">w-tinylfu缓存算法</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="WHAT-w-tinylfu是什么？"><a href="#WHAT-w-tinylfu是什么？" class="headerlink" title="WHAT: w-tinylfu是什么？"></a>WHAT: w-tinylfu是什么？</h1><p><code>w-tinylfu</code> = window tiny LFU<br>实际是一种缓存置换算法，直译过来大概是带一个窗口的tiny版本的LFU实现；<br>主要用三段LRU，一个布隆过滤器、一个<code>cm-sketch</code>计数器，兼顾了LFU和LRU的优点。<br>大致思想上类似于别的分段lru算法（例如mysql中buffer pool的lru链表，5/8存young page,3/8存old page）。</p>
+<h1 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h1><p>学术界：<br>来自论文：<a href="https://arxiv.org/pdf/1512.00727.pdf" target="_blank" rel="noopener">https://arxiv.org/pdf/1512.00727.pdf</a><br>工业界：<br>实现：java中的caffeine缓存就用的是w-tinylfu算法。</p>
+<img src="/images/2022-05/caffeine.png" class="" width="800" height="1200" title="caffeine">
+<p>当然这里caffeine的性能好除了w-tinylfu算法的贡献，还有其他很多优化比如结合了disruptor（RingBuffer）、时间轮；</p>
+<h1 id="WHEN-什么时候使用w-tinylfu算法"><a href="#WHEN-什么时候使用w-tinylfu算法" class="headerlink" title="WHEN: 什么时候使用w-tinylfu算法"></a>WHEN: 什么时候使用w-tinylfu算法</h1><p>缓存置换算法也不是银弹，也需要匹配它适合的某些分布workload。<br>即使是匹配的分布的workload，实际参数也要和workload匹配才能达到最好性能。</p>
+<p>w-tinylfu算法适合的工作负载的大概特征：</p>
+<ol>
+<li>静态的偏态分布;(分布规律不怎么变化)</li>
+<li>有一定动态变化(不能变化得太快太剧烈)的分布、包括有一定突发流量的偏态分布，例如偶有突发流量的zipf分布。</li>
+</ol>
+<h2 id="比较合适的："><a href="#比较合适的：" class="headerlink" title="比较合适的："></a>比较合适的：</h2><p>benchmark中测试的workload比较合适的包括:<br>youtube、维基百科、数据库访问、windows文件系统、搜索引擎；</p>
+<h2 id="不太合适的："><a href="#不太合适的：" class="headerlink" title="不太合适的："></a>不太合适的：</h2><p>OLTP中的磁盘访问: 轨迹实际是顺序访问的升序队列中散布一些随机访问，这对于w-tinylfu来说不太适配。</p>
+<p>具体的调参涉及到算法内部细节，因此最后在调优章节再展开。</p>
+<h1 id="HOW-w-tinylfu具体是怎么做的"><a href="#HOW-w-tinylfu具体是怎么做的" class="headerlink" title="HOW: w-tinylfu具体是怎么做的"></a>HOW: w-tinylfu具体是怎么做的</h1><h2 id="目标、要解决的问题"><a href="#目标、要解决的问题" class="headerlink" title="目标、要解决的问题"></a>目标、要解决的问题</h2><p>1。提高缓存命中率；<br>现有方案的缺点：<br><code>LFU</code>: 数据访问模式有变化时（例如有突发流量），LFU较迟钝，始终缓存早先访问多的数据；<br><code>LRU</code>: 不能记忆历史的访问规律，高频访问key并不一定能缓存到。<br>2。降低内存消耗；<br>现有方案的缺点：<br><code>LFU</code>: 需要给每个key维护频率信息（PLFU记录所有key的频率；WLFU则记录当前缓存中key的频率），需要巨大的内存消耗。</p>
+<p>总之，w-tinylfu需要以较低的内存消耗达到高命中率。</p>
+<h2 id="架构、解决方案"><a href="#架构、解决方案" class="headerlink" title="架构、解决方案"></a>架构、解决方案</h2><img src="/images/2022-05/w_tiny_lfu_1.png" class="" width="800" height="1200" title="w_tiny_lfu_1">
+<p>如上图所示：<br>1。<code>LRU</code>: 最左边是一个普通的LRU窗口，默认占1%的空间，负责处理突发流量的情况；<br>2。<code>filter</code>: 第2个组件是一个布隆过滤器，作为看门人，负责阻挡长尾的低频访问、避免纳入计数器；<br>3。<code>Segmented LRU</code>: 第3个组件是分段LRU，分为两段:<br>(1)<code>protected</code>: 受保护区，占80%，存放访问次数&gt;1的数据;<br>(2)<code>probation</code>: 缓刑区域, 占20%，存放访问次数=1的数据;（淘汰备选）<br>按我理解，其实还应该有一个组件负责统计频次，但论文中没有相应的图。<br>这里按我理解直接补上：<br>4。<code>CM-Sketch</code>: 近似统计频次。这里类似于WLFU，只记录当前缓存中有出现的key的频率，使用<code>count min sketch</code>算法。<br>近似统计频次算法，因此有一定错误率，但也极大节省了内存。</p>
+<h3 id="节省内存：CM-Sketch算法近似统计"><a href="#节省内存：CM-Sketch算法近似统计" class="headerlink" title="节省内存：CM-Sketch算法近似统计"></a>节省内存：CM-Sketch算法近似统计</h3><p><code>count min sketch</code>算法，类似于计数版本的布隆过滤器，把布隆过滤器原来标记是否存在的0\1改成能存更多值的计数器。<br>由于考虑到实际workload中常见的是长尾分布，因此计数器实际位数不多，默认只有4位，也就是默认大部分数据访问频次在15次以内。<br>CM-SKetch使用多个哈希函数(或者1个哈希函数和多个种子)和多个计数器来记录访问的次数。<br>实际读的时候取所有计数器里最小的一个，因此其他计数器的值其实就没什么用了。<br>而且由于哈希碰撞，有一定的概率频次的估计会偏大，（但是不会偏小）<br>因此实际每个key的统计频次增加的时候，可以只增大当前最小的计数器。</p>
+<img src="/images/2022-05/cm_sketch.png" class="" width="400" height="600" title="cm_sketch">
+
+<h4 id="调参"><a href="#调参" class="headerlink" title="调参"></a>调参</h4><p>假如处理的数据规模是n，希望估计值落在<code>[实际值， 实际值+ a*n]</code>范围的概率是<code>1-b</code>;<br>则:<br>1.计数器数量为: <code>e/a</code> 的上界;<br>2.哈希函数的数量为: <code>ln(1/b)</code> 的上界;</p>
+<p>例如当n=10^6时，如果我们希望估计值落在<code>实际值, 实际值+ 2000</code>范围的概率是99%，<br>则:</p>
+<ol>
+<li>计数器数量为: e/0.002 的上界 = 1360;</li>
+<li>哈希函数的数量为: ln(1/0.01) 的上界 = 5;<br>当计数器占4bit，则整个计数组件占空间 = 1360<em>5</em>4 bit= 约3.5KB。</li>
+</ol>
+<h3 id="动态访问模式（访问key的分布变化）：Freshness-Mechanism-保鲜机制"><a href="#动态访问模式（访问key的分布变化）：Freshness-Mechanism-保鲜机制" class="headerlink" title="动态访问模式（访问key的分布变化）：Freshness Mechanism(保鲜机制)"></a>动态访问模式（访问key的分布变化）：Freshness Mechanism(保鲜机制)</h3><p>统计新增key到CM-Sketch计数器的次数w，一旦w达到阈值W的大小时，进行reset操作。<br>reset操作实际有两方面:<br>(1)将所有计数器的值减半(可以通过简单的<code>&gt;&gt;</code>和<code>&amp;0x77</code>操作来实现);<br>// 副作用：可能除不尽，计数误差+1。<br>(2)将看门人的<code>bloom filter</code>清空。<br>// 副作用: 计数误差+1;</p>
+<h3 id="节省内存、长尾分布优化：Doorkeeper-看门人-机制"><a href="#节省内存、长尾分布优化：Doorkeeper-看门人-机制" class="headerlink" title="节省内存、长尾分布优化：Doorkeeper(看门人)机制"></a>节省内存、长尾分布优化：Doorkeeper(看门人)机制</h3><p>解决的问题：长尾分布。现实时间的访问轨迹大多符合长尾效应的偏态分布，也就是大部分访问key只访问很少次数，比如1次。<br>如果这些流量也纳入近似统计用的CM-Sketch，就会极大扩大本来就有概率发生的哈希碰撞，从而影响性能。<br>如果要维持出错概率不上升，只能增大计数器的槽位（哈希表的格数），增加内存消耗。</p>
+<p>因此这里的<code>DoorKeeper</code>机制，就是在近似统计组件前面增加一个防护存储： 一个布隆过滤器。<br>在纳入<code>CM-Sketch</code>之前，首先要先检查一下在不在filter里面:<br>(1)如果有: 说明之前可能有访问过，通过，纳入计数器；<br>(1)如果没有: 说明之前没有访问过，拒绝写入计数器；但写入filter记录下来。// 下次如果再访问则能通过。</p>
+<p>通过这种看门人机制，可以阻拦大部分只访问1次的key，避免将大量资源消耗在这些key上面。</p>
+<h2 id="读写流程"><a href="#读写流程" class="headerlink" title="读写流程"></a>读写流程</h2><h3 id="读"><a href="#读" class="headerlink" title="读"></a>读</h3><p>从<code>lru</code>或者<code>segment lru</code>部分读取，然后增加计数器的值即可。<br>可能导致<code>probation</code>中的key升级到<code>protected</code>。</p>
+<h3 id="写"><a href="#写" class="headerlink" title="写"></a>写</h3><img src="/images/2022-05/w_tiny_lfu_2.png" class="" width="800" height="1200" title="w_tiny_lfu_2">
+<p>如上图所示，新item插入的时候，首先进入lru；<br>如何如果lru满了，淘汰者和分段lru的淘汰者pk，(根据近似计数器中的频次)。</p>
+<img src="/images/2022-05/w_tiny_lfu_3.png" class="" width="800" height="1200" title="w_tiny_lfu_3">
+<p>而在分段lru中，probation缓刑区中访问则升到protected区。(反之protected的淘汰者降级到probation)</p>
+<h1 id="调优参数"><a href="#调优参数" class="headerlink" title="调优参数"></a>调优参数</h1><p>回顾各个组件:<br>1。<code>LRU</code>: 默认占1%的空间，负责处理突发流量的情况；<br>因此如果实际突发流量占不止1%的内存空间，可能需要调大这部分；（反之亦然）<br>2。<code>filter</code>: 布隆过滤器; 只拦了访问次数=1的，因此如果长尾是2次，则可能要调整这部分。<br>3。<code>Segmented LRU</code>:<br>(1)<code>protected</code>: 受保护区，占80%，存放访问次数&gt;1的数据;<br>(2)<code>probation</code>: 缓刑区域, 占20%，存放访问次数=1的数据;（淘汰备选）</p>
+<p>4。<code>CM-Sketch</code>: 默认是4位计数器，最大15次。隐含假设是大部分访问&lt;15次，因此如果这个假设不成立，也要调整这部分。</p>
+<h1 id="参考资料"><a href="#参考资料" class="headerlink" title="参考资料"></a>参考资料</h1><p>论文: <a href="https://arxiv.org/pdf/1512.00727.pdf" target="_blank" rel="noopener">https://arxiv.org/pdf/1512.00727.pdf</a><br><a href="https://xuzhijvn.github.io/zh-cn/posts/cs/other/caffeine/" target="_blank" rel="noopener">https://xuzhijvn.github.io/zh-cn/posts/cs/other/caffeine/</a><br><a href="https://jishuin.proginn.com/p/763bfbd34443" target="_blank" rel="noopener">https://jishuin.proginn.com/p/763bfbd34443</a><br>cm-sketch算法: <a href="https://zhuanlan.zhihu.com/p/369981005" target="_blank" rel="noopener">https://zhuanlan.zhihu.com/p/369981005</a></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2022/05/31/2022-05/w-tinylfu%E7%BC%93%E5%AD%98%E7%AE%97%E6%B3%95/" data-id="cl3tudq4k00007damcj6v6fld" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/bloomfilter/" rel="tag">bloomfilter</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/caffeine/" rel="tag">caffeine</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/cm-sketch/" rel="tag">cm-sketch</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/doorkeeper/" rel="tag">doorkeeper</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/lfu/" rel="tag">lfu</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/lru/" rel="tag">lru</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/tinylfu/" rel="tag">tinylfu</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2022-03/G1调优-复杂业务治理小记" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2022/03/25/2022-03/G1%E8%B0%83%E4%BC%98-%E5%A4%8D%E6%9D%82%E4%B8%9A%E5%8A%A1%E6%B2%BB%E7%90%86%E5%B0%8F%E8%AE%B0/" class="article-date">
@@ -699,102 +783,6 @@
 
 
   
-    <article id="post-2022-02/http3-quic优缺点及原因" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2022/02/17/2022-02/http3-quic%E4%BC%98%E7%BC%BA%E7%82%B9%E5%8F%8A%E5%8E%9F%E5%9B%A0/" class="article-date">
-  <time datetime="2022-02-17T02:09:02.000Z" itemprop="datePublished">2022-02-17</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/http/">http</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2022/02/17/2022-02/http3-quic%E4%BC%98%E7%BC%BA%E7%82%B9%E5%8F%8A%E5%8E%9F%E5%9B%A0/">http3_quic优缺点及原因</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h1 id="WHAT-HTTP3-QUIC是什么？"><a href="#WHAT-HTTP3-QUIC是什么？" class="headerlink" title="WHAT: HTTP3/QUIC是什么？"></a>WHAT: HTTP3/QUIC是什么？</h1><p>QUIC: <code>Quick UDP Internet Connections</code><br>谷歌主导的网络协议，用udp代替tcp来作为http的传输协议。<br>HTTP3就是<code>HTTP over QUIC</code>。</p>
-<img src="/images/2022-02/quic_struct.png" class="" width="800" height="1200" title="quic_struct">
-<p>如上图所示是http2和http over quic的对比。<br>可以看到图中的分层不是完全对齐的，这是因为以前的分层方式不合理，影响了性能，因此quic重新划分了更合理的分层结构。<br>原来的tcp(传输层)和tls(会话层)要分别建立连接，增加了不必要的rtt。<br>quic在tls1.3的基础上，统一建立连接，然后再基于udp传输。<br>QUIC层的分层:<br>UDP层: 只管传输，不管连接；<br>Connection层: 复杂建连相关、拥塞控制(bbr_v2)、安全(tls1.3)；通过cid来确认唯一连接;<br>Stream层: 负责多路复用；基于Connection层，通过StreamID进行唯一流确认，stream对stream frame进行传输管理;</p>
-<p>使用TCP的协议: SPDY/HTTP2<br>使用UDP的协议: quic/HTTP3</p>
-<h1 id="WHY-QUIC的优点-为啥要使用QUIC"><a href="#WHY-QUIC的优点-为啥要使用QUIC" class="headerlink" title="WHY: QUIC的优点(为啥要使用QUIC)"></a>WHY: QUIC的优点(为啥要使用QUIC)</h1><ul>
-<li>连接迁移优化</li>
-<li>队头阻塞优化</li>
-<li>拥塞控制优化</li>
-<li>握手优化</li>
-</ul>
-<p>quic的优点其实也对应着解决了以前http协议栈中的几个缺点。</p>
-<h2 id="连接迁移功能"><a href="#连接迁移功能" class="headerlink" title="连接迁移功能"></a>连接迁移功能</h2><h3 id="以前tcp的缺点"><a href="#以前tcp的缺点" class="headerlink" title="以前tcp的缺点"></a>以前tcp的缺点</h3><p>移动客户端ip变化以后，连接断开，需要重新握手、创建新的连接。<br>我们日常生活中坐车、旅行等场景下，用手机上网，经过不同的基站，移动网络切换是比较常见的场景，<br>因此可能会经历频繁的连接重建，体验较差。</p>
-<blockquote>
-<p>为什么tcp有这个缺点:<br>tcp用通信双方的ip+port(4元组)来标示一个连接，因此客户端ip变了的话，连接就变了。<br>tcp很老了，最早的时候手机还不普及，固定电脑的ip基本上不会变。</p>
-</blockquote>
-<p><code>http over quic</code>则可以在客户端ip变化时，依然保持连接不断，减少了rtt，提高了体验；</p>
-<h3 id="quic如何解决这个问题的"><a href="#quic如何解决这个问题的" class="headerlink" title="quic如何解决这个问题的"></a>quic如何解决这个问题的</h3><p>上面有说的tcp这个缺点的原因是标示连接唯一性的方式，所以很自然的思路是用别的方式来标示连接唯一性。<br>quic的方法是用connectionId（cid,64位）来唯一确定一个连接，客户端ip变化以后，cid不变，因此连接可以不断开。</p>
-<h3 id="实现"><a href="#实现" class="headerlink" title="实现"></a>实现</h3><p>对于quic server:<br>如果根据客户端ip路由，连接迁移会失败；得根据cid路由；<br>一般得路由到同主机、同进程，才能保证连接迁移成功。<br>或者把连接相关的有状态信息存储在分布式缓存中(比如把session ticket存储在redis中)。</p>
-<p>quic协议考虑到cid对于路由的重要性，因此cid是明文存储的。</p>
-<h2 id="解决了队头阻塞问题-多路复用功能增强"><a href="#解决了队头阻塞问题-多路复用功能增强" class="headerlink" title="解决了队头阻塞问题(多路复用功能增强)"></a>解决了队头阻塞问题(多路复用功能增强)</h2><img src="/images/2022-02/quic_multi_stream.png" class="" width="800" height="1200" title="quic_multi_stream">
-<h3 id="以前tcp的缺点-1"><a href="#以前tcp的缺点-1" class="headerlink" title="以前tcp的缺点"></a>以前tcp的缺点</h3><p>tcp队头阻塞的原因:<br>窗口更新机制: 滑动窗口的更新依赖于最左边的包的ack，如果队头的包一直没有ack，窗口不往后滑;<br>拥塞控制算法: 丢包以后启动丢包重传,窗口变小;<br>这些最终表现是tcp层面的队头阻塞。</p>
-<ul>
-<li>http1.0: 明文短连接，多个tcp连接；</li>
-<li>http1.1: keepalive机制，长连接，复用同一个tcp连接，降低了建立连接的开销（节省了握手时间）；<br>客户端:pipeline机制，可以并行发；<br>服务端:必须顺序回，有队头阻塞；（同域名下的请求复用同一个连接，但必须排队）</li>
-<li>http2: 用stream层解决http层面的队头阻塞（让同域名下的请求不排队了，间隔进行），但是还是有tcp层面的队头阻塞;<h3 id="quic如何解决这个问题的-1"><a href="#quic如何解决这个问题的-1" class="headerlink" title="quic如何解决这个问题的"></a>quic如何解决这个问题的</h3>解决TCP层面的队头阻塞，本质上是要开发一个新的流量控制、拥塞控制的整套方案放在UDP层之上。<br>quic的改进:<br>(1)窗口更新机制: 当已经读取的数据大于最大接收窗口的一半时，发送WINDOW_UPDATE帧告诉发送者，接收窗口已经更新。<br>(2)拥塞控制算法: 由于底层是udp，没有拥塞控制算法，因此quic需要实现拥塞控制算法。<br>quic在应用层实现拥塞控制算法，如bbr,bbr_v2，核心思想是用rtt来预测带宽情况。<br>tcp用丢包事件来判断带宽情况，比较不准。但tcp之所以这么傻，也是因为tcp中的一些约束，很难准确判断rtt的大小。<br>比如seq number机制，重传的时候无法判断是超时重传的包还是第一个包经过很长时间收到了，因为seq number相同。<br>quic的seq number改进: 通过streamId+offset, packet number的机制，重传的包packet number递增，这样可以算准rtt。</li>
-</ul>
-<h2 id="吞吐量更大（新拥塞控制算法）"><a href="#吞吐量更大（新拥塞控制算法）" class="headerlink" title="吞吐量更大（新拥塞控制算法）"></a>吞吐量更大（新拥塞控制算法）</h2><p>接上一节，quic开发了新的拥塞控制算法，吞吐量更大，更能利用带宽：<br>cubic vs bbr:</p>
-<img src="/images/2022-02/cubic_vs_bbr.png" class="" width="400" height="600" title="cubic_vs_bbr">
-<p>可以看到tcp默认的cubic拥塞控制算法频繁上下调整滑动窗口大小，锯齿状；<br>而bbr倾向于平稳发送，在实际带宽比较平稳的场景下，吞吐量更大。（图中折线下方的面积更大）</p>
-<p>原来tcp为什么没有解决这个问题：<br>(1)tcp在linux内核里，升级太困难了。<br>(2)参考上一节，tcp的一些约束导致rtt算不准。比如ack delay、重传包的seq number不变。</p>
-<h2 id="耗时短。握手-rtt减少；重连-0RTT特性。"><a href="#耗时短。握手-rtt减少；重连-0RTT特性。" class="headerlink" title="耗时短。握手-rtt减少；重连-0RTT特性。"></a>耗时短。握手-rtt减少；重连-0RTT特性。</h2><p>原来https over tcp的缺点:<br>(1)握手阶段: tls层和tcp层重复建立连接；<br>(2)握手阶段: tls1.2需要考虑历史包袱，考虑达到最大兼容性，握手需要2RTT;<br>(3)重连阶段: tls1.2需要一次握手;</p>
-<h3 id="quic如何解决这个问题的-2"><a href="#quic如何解决这个问题的-2" class="headerlink" title="quic如何解决这个问题的"></a>quic如何解决这个问题的</h3><p>(1)握手阶段合并: 只建立一次连接，省掉tcp握手的1rtt。<br>将建立连接这件事统一放在quic层里，udp只专心做传输的事情。<br>(2)握手阶段: 1RTT。运气不好的话还是2RTT。<br>参考tls1.3，去掉不安全的算法，在客户端预置一些密码套件。<br>第一个握手客户端就直接选定加密协议，并生成相应的随机数，相当于跳过了tls1.2第一个rtt的协商；<br>如果服务端不支持，则使用HelloRetryRequest继续。<br>大部分情况下，都可以省掉第一次的rtt;<br>(3)重连阶段: 0 RTT。<br>参考tls1.3的session ticket(quic叫server config)，客户端和服务端都缓存之前握手协商好的配置。<br>重连的时候，客户端直接把配置和数据一起发给服务端。</p>
-<h4 id="0RTT的前提："><a href="#0RTT的前提：" class="headerlink" title="0RTT的前提："></a>0RTT的前提：</h4><p>1。client不清缓存；（过期前）<br>2。通过cid路由到同一个server进程；<br>(或者服务端对于server config有统一缓存)<br>缺点：牺牲了一定时间内的前向安全；（过期时间内）</p>
-<h1 id="QUIC的缺点"><a href="#QUIC的缺点" class="headerlink" title="QUIC的缺点"></a>QUIC的缺点</h1><h2 id="CPU开销大"><a href="#CPU开销大" class="headerlink" title="CPU开销大"></a>CPU开销大</h2><p>http over quic与http over tcp相比，cpu开销可能会更大。<br>如果没有特别优化，单机qps可能下降50%。<br>主要有以下几个原因：</p>
-<h3 id="内核态vs用户态"><a href="#内核态vs用户态" class="headerlink" title="内核态vs用户态"></a>内核态vs用户态</h3><p>(1)原来拥塞控制在tcp，在内核，执行在内核态，性能更高；<br>解决方案: 暂时没想到;<br>(2)quic限定udp报文大小&lt;=1mtu(IPV6下为1350，IPV4下为1370)。<br>由于包的大小不能很大 =&gt; 因此包的数量会较多=&gt; 系统调用很多 =&gt; 性能下降。<br>解决方案:<br>(2.1)批处理；用sendmmsg，一次系统调用发多个udp包；<br>(2.2)网卡GSO offload方案，降低cpu消耗;</p>
-<blockquote>
-<p>quic对包的大小有两个限制<br>(1) initial包&gt;=1200: 预防UDP攻击；（反射攻击）<br>如果数据本身不足1200，用padding方式填充到1200字节。<br>反射攻击:<br>  被利用服务器输出流量与输入流量的比值我们称之为放大系数。<br>  这个系数与被利用服务器所提供的 UDP 服务有关。<br>  之前提到的利用 Memcache 漏洞的 DRDoS 攻击，可以获得稳定的 60000 倍放大系数。<br>  而我们日常使用的 DNS 则可以轻松的获得 50 倍的放大系数。<br>  由放大系数反推，我们可以知道，如果一个 UDP 服务被利用以后，放大系数小于等于1的话，则不存在利用价值.<br>  因为这个时候，只从带宽流量方面考虑的话，还不如直接利用攻击主机对被攻击服务器进行攻击效率高。 </p>
-<p>(2)&lt;=1MTU(IPV6下为1350，IPV4下为1370):<br>IP层是没有超时重传机制的，如果IP层对一个数据包进行了分片，只要有一个分片丢失了，只能依赖于传输层进行重传。<br>结果是所有的分片都要重传一遍，这个代价有点大。<br>由此可见，IP分片会大大降低传输层传送数据的成功率，所以我们要避免IP分片。</p>
-</blockquote>
-<h3 id="加解密开销大"><a href="#加解密开销大" class="headerlink" title="加解密开销大"></a>加解密开销大</h3><p>谷歌fork的openssl分支：boringSSL（笑死）<br>具体原因不太清楚，可能是谷歌选择的加解密算法比较安全、计算开销比较大。<br>也有可能是开源实现里，选择密码编码学算法比较普通，没有给生产环境级别的优化。</p>
-<p>解决方案：<br>如果在生产环境使用，需要相应修改加密套件。</p>
-<h2 id="容易被拦截"><a href="#容易被拦截" class="headerlink" title="容易被拦截"></a>容易被拦截</h2><p>因为一些运营商不待见udp。<br>根据腾讯的文档：<a href="https://toutiao.io/posts/tixau8w/preview" target="_blank" rel="noopener">https://toutiao.io/posts/tixau8w/preview</a><br>QUIC失败率较高的三个省份为：贵州、广西和新疆；<br>失败率较高的运营商为：教育网和长城宽带。</p>
-<p>解决方案：<br>需要支持降级到普通https。</p>
-<h2 id="nginx支持不全"><a href="#nginx支持不全" class="headerlink" title="nginx支持不全"></a>nginx支持不全</h2><p>比如nginx reload会断开已建立的quic连接.(因为对ng来说是udp)</p>
-<p>解决方案：<br>需要修改nginx内核。</p>
-<ul>
-<li>内核逻辑调试工具<br>systemtap 内核逻辑调试工具,查看内核调用栈<br>内核的timewait监控: /proc/net/netstat中 的 TCPTimeWaitOverflow<br>Broken pipe(32) tcp_max_tw_buckets</li>
-</ul>
-<h1 id="QUIC应用场景"><a href="#QUIC应用场景" class="headerlink" title="QUIC应用场景"></a>QUIC应用场景</h1><p>弱网环境：因为quic的拥塞控制算法bbr在丢包时性能更好；<br>        因为quic的重连、建连rtt少；<br>对安全重视的环境：因为tls1.3更安全；<br>移动端：因为连接迁移功能；<br>并发请求多的应用: 因为quic没有tcp层的队头阻塞，多路复用更彻底;</p>
-<h1 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h1><p>可以参考谷歌开源的chromium中的quic协议栈，以及相应的server demo。<br>谷歌浏览器内核支持quic，其他浏览器内核就不一定了。<br>谷歌: <a href="https://www.chromium.org/quic/" target="_blank" rel="noopener">https://www.chromium.org/quic/</a><br>腾讯：<a href="https://zhuanlan.zhihu.com/p/32560981" target="_blank" rel="noopener">https://zhuanlan.zhihu.com/p/32560981</a><br>微博: <a href="https://www.infoq.cn/article/2018%2F03%2Fweibo-quic" target="_blank" rel="noopener">https://www.infoq.cn/article/2018%2F03%2Fweibo-quic</a></p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2022/02/17/2022-02/http3-quic%E4%BC%98%E7%BC%BA%E7%82%B9%E5%8F%8A%E5%8E%9F%E5%9B%A0/" data-id="ckzqp6ooc0000n2am93597kv9" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/http/" rel="tag">http</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/http3/" rel="tag">http3</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/quic/" rel="tag">quic</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/spring/" rel="tag">spring</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -821,6 +809,10 @@
       <ul>
         
           <li>
+            <a href="/2023/02/03/2023-02/%E8%B0%83%E4%BC%98-ByteString%E7%9B%B8%E5%85%B3%E5%86%85%E5%AD%98%E6%8B%B7%E8%B4%9D%E9%97%AE%E9%A2%98/">调优-ByteString相关内存拷贝问题</a>
+          </li>
+        
+          <li>
             <a href="/2023/02/01/2023-02/%E8%AF%8A%E6%96%AD-jvm%E7%A8%8B%E5%BA%8Fcpu%E9%97%AE%E9%A2%98/">诊断-jvm程序cpu问题</a>
           </li>
         
@@ -834,10 +826,6 @@
         
           <li>
             <a href="/2022/09/27/2022-09/sql%E6%B3%A8%E5%85%A5%E6%94%BB%E5%87%BB/">sql注入攻击</a>
-          </li>
-        
-          <li>
-            <a href="/2022/09/26/2022-09/%E5%B7%B2%E7%9F%A5%E6%98%8E%E6%96%87%E7%A0%B4%E8%A7%A3zip/">已知明文破解zip</a>
           </li>
         
       </ul>

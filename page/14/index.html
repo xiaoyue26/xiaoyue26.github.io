@@ -72,6 +72,103 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-05/java并发编程的艺术-第六章2LinkedQueue" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/05/19/2018-05/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC%E5%85%AD%E7%AB%A02LinkedQueue/" class="article-date">
+  <time datetime="2018-05-19T12:32:03.000Z" itemprop="datePublished">2018-05-19</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/%E5%B9%B6%E5%8F%91/">并发</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/05/19/2018-05/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC%E5%85%AD%E7%AB%A02LinkedQueue/">java并发编程的艺术-第六章2LinkedQueue</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="ConcurrentLinkedQueue"><a href="#ConcurrentLinkedQueue" class="headerlink" title="ConcurrentLinkedQueue"></a>ConcurrentLinkedQueue</h1><p>目标: 线程安全的队列，并发性能好。<br>实现: 基于链表的队列,<code>ConcurrentLinkedQueue</code>,使用<code>volatile</code>,<code>CAS</code>和<code>HOPS</code>变量（LockFree）,性能较好,而且可以通过<code>HOPS</code>变量调节性能.</p>
+<img src="/images/2018-05/1.jpg" class="" width="400" height="600" title="类图">
+
+
+<p>初始时:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">transient</span> <span class="keyword">volatile</span> Node&lt;E&gt;tail = head;</span><br><span class="line"><span class="keyword">private</span> <span class="keyword">transient</span> <span class="keyword">volatile</span> Node&lt;E&gt; tail;</span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">ConcurrentLinkedQueue</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        head = tail = <span class="keyword">new</span> Node&lt;E&gt;(<span class="keyword">null</span>);</span><br><span class="line">        <span class="comment">// 数据为null. 相当于一个dump头节点.</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="simple解法-假想方案"><a href="#simple解法-假想方案" class="headerlink" title="simple解法(假想方案)"></a>simple解法(假想方案)</h2><p>一种simple的实现方案是这样的: </p>
+<ul>
+<li>tail定义:<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">将tail定义成永远是队列最后一个节点:</span><br></pre></td></tr></table></figure>
+
+</li>
+</ul>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> &lt;E&gt; <span class="function"><span class="keyword">boolean</span> <span class="title">offer</span><span class="params">(E e)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (e == <span class="keyword">null</span>) &#123;</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> NullPointerException();</span><br><span class="line">    &#125;</span><br><span class="line">    Node&lt;E&gt; n = <span class="keyword">new</span> Node(e);</span><br><span class="line">    <span class="keyword">for</span> (; ; ) &#123;</span><br><span class="line">        Node&lt;E&gt; t = tail;</span><br><span class="line">        <span class="keyword">if</span> (t.casNext(<span class="keyword">null</span>, n) &amp;&amp; casTail(t, n)) &#123;</span><br><span class="line">        <span class="comment">// 1. casNext: 把t的next从null换成n;</span></span><br><span class="line">        <span class="comment">// 2. casTail: 把tail从t换成n。</span></span><br><span class="line">            <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>回想我们的目标: </p>
+<ol>
+<li>安全: 由于tail是<code>volatile</code>的,因此可以通过CAS操作保证并发写的安全;</li>
+<li>性能: 每次入列至少需要:<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1次 volatile读;(tail)</span><br><span class="line">2次 CAS操作;</span><br><span class="line">2次 volatie写.(tail.next和tail)</span><br><span class="line">&#x2F;&#x2F; tail.next实际上也是volatile变量。</span><br></pre></td></tr></table></figure>
+
+</li>
+</ol>
+<h2 id="jdk注释"><a href="#jdk注释" class="headerlink" title="jdk注释"></a>jdk注释</h2><p>直接阅读源码有可能误解了作者的意思,而且源码确实比较trick,看不太懂,注释里声明的几个基本点:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">1. 仅有一个节点的next为null,它是队列的最后一个节点. 想访问最后一个节点的话,可以通过tail节点往后找,可以通过O(1)时间找到(最多4次); </span><br><span class="line">&#x2F;&#x2F; 注意tail不一定指向最后一个节点</span><br><span class="line"></span><br><span class="line">2. 队列没有null的实际数据(item &#x3D; null),也就是容器不接受空元素。</span><br><span class="line">&#x2F;&#x2F; dumpHead头节点的item为null; 移除节点的时候把item置为null,所以null是一个很重要的标志量,所以不允许实际数据有null造成冲突;</span><br><span class="line"></span><br><span class="line">3. 为了满足上一条,更为了gc,过期的节点的next指向自己;</span><br><span class="line">&#x2F;&#x2F;  所以很多节点遇到p&#x3D;&#x3D;p.next的时候,会跳转到head重新进入有效节点范围,或者进行过期逻辑处理;</span><br><span class="line"></span><br><span class="line">4. 把item置为null相当于移除了该数据,迭代器iterator会跳过item为null的节点.</span><br></pre></td></tr></table></figure>
+
+
+
+
+<h2 id="实际解法"><a href="#实际解法" class="headerlink" title="实际解法"></a>实际解法</h2><p>这个思路最重要的有两点:<br>一点就是updateHead函数,离群节点的next置为自己;<br>另一点就是<code>tail</code>不一定是最后一个节点.<br>由于<code>volatile</code>写的开销远远高于<code>volatile</code>读,jdk中的解法是:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">1. 假设队列中最后一个节点为:realTail;</span><br><span class="line">2. tail 不一定等于 realTail;</span><br><span class="line">3. 仅当tail与realTail距离大于等于HOPS时,才更新tail&#x3D;realTail.</span><br></pre></td></tr></table></figure>
+<p>这样设计以后,可以通过增加volatile读减少volatile写。</p>
+<p>具体实现:</p>
+<h2 id="updateHead方法"><a href="#updateHead方法" class="headerlink" title="updateHead方法"></a>updateHead方法</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 如果当前的head是h,把它换成p</span></span><br><span class="line"><span class="function"><span class="keyword">final</span> <span class="keyword">void</span> <span class="title">updateHead</span><span class="params">(Node&lt;E&gt; h, Node&lt;E&gt; p)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (h != p &amp;&amp; casHead(h, p))</span><br><span class="line">        <span class="comment">// 这个是最重要的一个地方</span></span><br><span class="line">        <span class="comment">// 将离群h节点的next置为自己</span></span><br><span class="line">            h.lazySetNext(h); <span class="comment">// 不急,但是迟早进行离群标记</span></span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="offer方法"><a href="#offer方法" class="headerlink" title="offer方法"></a>offer方法</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">offer</span><span class="params">(E e)</span> </span>&#123;</span><br><span class="line">    checkNotNull(e);</span><br><span class="line">    <span class="keyword">final</span> Node&lt;E&gt; newNode = <span class="keyword">new</span> Node&lt;E&gt;(e);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (Node&lt;E&gt; t = tail, p = t;;) &#123;</span><br><span class="line">        Node&lt;E&gt; q = p.next;</span><br><span class="line">        <span class="keyword">if</span> (q == <span class="keyword">null</span>) &#123;<span class="comment">// 如果p是尾节点</span></span><br><span class="line">            <span class="keyword">if</span> (p.casNext(<span class="keyword">null</span>, newNode)) &#123;<span class="comment">// 把item加入队列,让newNode变成活节点</span></span><br><span class="line">                <span class="keyword">if</span> (p != t) <span class="comment">// hop two nodes at a time</span></span><br><span class="line">                    casTail(t, newNode);  </span><br><span class="line">                    <span class="comment">// 更新tail失败也没关系,因为tail仅仅用于优化性能,并不影响正确性</span></span><br><span class="line">                <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">else</span> <span class="keyword">if</span> (p == q) <span class="comment">// p==q意味着p已经是一个离群节点</span></span><br><span class="line">            p = (t != (t = tail)) ? t : head;</span><br><span class="line">            <span class="comment">// 首先我们一定过时了:</span></span><br><span class="line">            <span class="comment">// 如果t过时了,尝试从tail重连;</span></span><br><span class="line">            <span class="comment">// 如果t没过时,说明tail也过时了,从head重连。</span></span><br><span class="line">        <span class="keyword">else</span> <span class="comment">// Check for tail updates after two hops.</span></span><br><span class="line">            p = (p != t &amp;&amp; t != (t = tail)) ? t : q;</span><br><span class="line">            <span class="comment">// 写竞争失败了而已,把p往后挪就好了. </span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>其中有一种trick：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">t != (t = tail)</span><br><span class="line"><span class="comment">// 可以展开成:</span></span><br><span class="line"><span class="keyword">if</span>(t!=tail)&#123;</span><br><span class="line">t= tail;</span><br><span class="line"><span class="comment">// return true;</span></span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">else</span>&#123;</span><br><span class="line"><span class="comment">// return false;</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>因此<code>p = (t != (t = tail)) ? t : head;</code>的实际含义就是:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span>(t!=tail)&#123;</span><br><span class="line">    t=tail;</span><br><span class="line">    p=t;</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">else</span>&#123;</span><br><span class="line">    p=head;</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// 这段代码实际意思就是,已知p节点过时(离群,已经被删除)了,我们需要重新连接到queue中可用的节点,然后重新定位到尾节点.</span></span><br><span class="line"><span class="number">1</span>. 如果t!=tail,说明t过时了,tail可能还可用,因此尝试从tail重连;(t=tail,p=t);</span><br><span class="line"></span><br><span class="line"><span class="number">2</span>. 如果t==tail,说明t和tail都过时了,尝试从head重连。(p=head)</span><br></pre></td></tr></table></figure>
+<p>使用这个trick的目的不得而知,个人猜测是因为效率更高,代码更精炼。毕竟非阻塞并发存在的意义就是性能,而不是可读性,如果想要可读性,就去用阻塞队列了。<br>可读性下降了.但如果用得熟练的话,肉眼parse功力上涨,也可能对于大牛来说比if else阅读起来更快。</p>
+<h3 id="节点定义"><a href="#节点定义" class="headerlink" title="节点定义"></a>节点定义</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">Node</span>&lt;<span class="title">E</span>&gt; </span>&#123;</span><br><span class="line">        <span class="keyword">volatile</span> E item;</span><br><span class="line">        <span class="keyword">volatile</span> Node&lt;E&gt; next;</span><br><span class="line"></span><br><span class="line">        Node(E item) &#123;</span><br><span class="line">            UNSAFE.putObject(<span class="keyword">this</span>, itemOffset, item);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="function"><span class="keyword">boolean</span> <span class="title">casItem</span><span class="params">(E cmp, E val)</span> </span>&#123;</span><br><span class="line">            <span class="keyword">return</span> UNSAFE.compareAndSwapObject(<span class="keyword">this</span>, itemOffset, cmp, val);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="function"><span class="keyword">void</span> <span class="title">lazySetNext</span><span class="params">(Node&lt;E&gt; val)</span> </span>&#123;</span><br><span class="line">            UNSAFE.putOrderedObject(<span class="keyword">this</span>, nextOffset, val);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="function"><span class="keyword">boolean</span> <span class="title">casNext</span><span class="params">(Node&lt;E&gt; cmp, Node&lt;E&gt; val)</span> </span>&#123;</span><br><span class="line">            <span class="keyword">return</span> UNSAFE.compareAndSwapObject(<span class="keyword">this</span>, nextOffset, cmp, val);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// Unsafe mechanics</span></span><br><span class="line">        <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> sun.misc.Unsafe UNSAFE;</span><br><span class="line">        <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">long</span> itemOffset;</span><br><span class="line">        <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">long</span> nextOffset;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">static</span> &#123;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                UNSAFE = sun.misc.Unsafe.getUnsafe();</span><br><span class="line">                Class&lt;?&gt; k = Node<span class="class">.<span class="keyword">class</span></span>;</span><br><span class="line">                itemOffset = UNSAFE.objectFieldOffset</span><br><span class="line">                    (k.getDeclaredField(<span class="string">"item"</span>));</span><br><span class="line">                nextOffset = UNSAFE.objectFieldOffset</span><br><span class="line">                    (k.getDeclaredField(<span class="string">"next"</span>));</span><br><span class="line">            &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> Error(e);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+
+<h2 id="poll方法"><a href="#poll方法" class="headerlink" title="poll方法"></a>poll方法</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> E <span class="title">poll</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    restartFromHead:</span><br><span class="line">    <span class="keyword">for</span> (;;) &#123;</span><br><span class="line">        <span class="keyword">for</span> (Node&lt;E&gt; h = head, p = h, q;;) &#123;</span><br><span class="line">            E item = p.item;</span><br><span class="line">            <span class="keyword">if</span> (item != <span class="keyword">null</span> &amp;&amp; p.casItem(item, <span class="keyword">null</span>)) &#123;</span><br><span class="line">                <span class="comment">// 成功找到第一个数据节点(item!=null)并移除item</span></span><br><span class="line">                <span class="keyword">if</span> (p != h) </span><br><span class="line">                <span class="comment">// p!=h说明p往后找过,说明队首有至少2个非数据节点,更新head</span></span><br><span class="line">                    updateHead(h, ((q = p.next) != <span class="keyword">null</span>) ? q : p);</span><br><span class="line">                <span class="keyword">return</span> item;</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">else</span> <span class="keyword">if</span> ((q = p.next) == <span class="keyword">null</span>) &#123;<span class="comment">// 往后找数据节点</span></span><br><span class="line">                updateHead(h, p); <span class="comment">// 已经是空队列</span></span><br><span class="line">                <span class="keyword">return</span> <span class="keyword">null</span>;</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">else</span> <span class="keyword">if</span> (p == q) <span class="comment">// 离群了,重连</span></span><br><span class="line">                <span class="keyword">continue</span> restartFromHead;</span><br><span class="line">            <span class="keyword">else</span></span><br><span class="line">                p = q;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="succ方法"><a href="#succ方法" class="headerlink" title="succ方法"></a>succ方法</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/*找next.如果next与自身相等,说明离群了,返回head以便重连*/</span></span><br><span class="line"><span class="function"><span class="keyword">final</span> Node&lt;E&gt; <span class="title">succ</span><span class="params">(Node&lt;E&gt; p)</span> </span>&#123;</span><br><span class="line">    Node&lt;E&gt; next = p.next;</span><br><span class="line">    <span class="keyword">return</span> (p == next) ? head : next;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<h2 id="remove方法"><a href="#remove方法" class="headerlink" title="remove方法"></a>remove方法</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">remove</span><span class="params">(Object o)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (o != <span class="keyword">null</span>) &#123;</span><br><span class="line">            Node&lt;E&gt; next, pred = <span class="keyword">null</span>;</span><br><span class="line">            <span class="keyword">for</span> (Node&lt;E&gt; p = first(); p != <span class="keyword">null</span>; pred = p, p = next) &#123;</span><br><span class="line">                <span class="keyword">boolean</span> removed = <span class="keyword">false</span>;</span><br><span class="line">                E item = p.item;</span><br><span class="line">                <span class="keyword">if</span> (item != <span class="keyword">null</span>) &#123;</span><br><span class="line">                    <span class="keyword">if</span> (!o.equals(item)) &#123;</span><br><span class="line">                        next = succ(p);</span><br><span class="line">                        <span class="keyword">continue</span>;</span><br><span class="line">                    &#125;</span><br><span class="line">                    removed = p.casItem(item, <span class="keyword">null</span>);</span><br><span class="line">                &#125;</span><br><span class="line"></span><br><span class="line">                next = succ(p);</span><br><span class="line">                <span class="keyword">if</span> (pred != <span class="keyword">null</span> &amp;&amp; next != <span class="keyword">null</span>) <span class="comment">// unlink</span></span><br><span class="line">                    pred.casNext(p, next);</span><br><span class="line">                <span class="keyword">if</span> (removed)</span><br><span class="line">                    <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">false</span>;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/05/19/2018-05/java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B%E7%9A%84%E8%89%BA%E6%9C%AF-%E7%AC%AC%E5%85%AD%E7%AB%A02LinkedQueue/" data-id="ck96cxpo600c0maam8ygdgp1n" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/%E5%B9%B6%E5%8F%91/" rel="tag">并发</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-04/2-3树与红黑树" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/04/22/2018-04/2-3%E6%A0%91%E4%B8%8E%E7%BA%A2%E9%BB%91%E6%A0%91/" class="article-date">
@@ -1821,200 +1918,6 @@
 
 
   
-    <article id="post-2018-03/高性能Mysql笔记-第五章-2" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/03/03/2018-03/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC%E4%BA%94%E7%AB%A0-2/" class="article-date">
-  <time datetime="2018-03-03T09:11:25.000Z" itemprop="datePublished">2018-03-03</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/mysql/">mysql</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/03/03/2018-03/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC%E4%BA%94%E7%AB%A0-2/">高性能Mysql笔记-第五章(2)</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h2 id="5-3-7-使用索引扫描来做排序"><a href="#5-3-7-使用索引扫描来做排序" class="headerlink" title="5.3.7 使用索引扫描来做排序"></a>5.3.7 使用索引扫描来做排序</h2><p>Mysql生成有序结果的两种方法: (详见第7章)</p>
-<ol>
-<li>排序操作. </li>
-<li>按索引顺序扫描.</li>
-</ol>
-<p>// explain结果中的type,如果为<code>index</code>,则使用第二种方法,按索引顺序扫描.<br>按索引顺序扫描工作流程:(Innodb二级索引)</p>
-<ol>
-<li>顺序扫描索引,获取主键指针;</li>
-<li>回表查询相应主键的数据行.<br>如果索引是覆盖索引,则可以避免上述第二步,减少一次磁盘IO,并且避免大范围扫描时的大量随机IO.</li>
-</ol>
-<p><strong>正确示例:</strong><br><strong>索引为(a,b,c)</strong><br>示例1:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> a,b,c <span class="keyword">from</span> t</span><br><span class="line"><span class="keyword">where</span> a=<span class="string">'xxx'</span> <span class="keyword">ORDER</span> <span class="keyword">BY</span> b,c</span><br></pre></td></tr></table></figure>
-<p>组合where条件和order by条件,而且都是顺序(ASC). 此外如果组合后是索引的最左前缀,也是可以利用索引进行排序的.</p>
-<p><strong>错误示例</strong><br>示例2:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> a,b,c <span class="keyword">from</span> t</span><br><span class="line"><span class="keyword">where</span> a=<span class="string">'xxx'</span> <span class="keyword">order</span> <span class="keyword">by</span> b <span class="keyword">DESC</span>,c ASC.</span><br></pre></td></tr></table></figure>
-<p>由于顺序和建立索引的不同,因此不能利用到索引进行排序.<br>如果需要按不同方向排序, 可以通过存储这列的相反数或者反转值, 满足这种需求.</p>
-<p>示例3:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> a,b,c <span class="keyword">from</span> t</span><br><span class="line"><span class="keyword">where</span> a&gt;<span class="string">'xxx'</span> <span class="keyword">order</span> <span class="keyword">by</span> b,c</span><br></pre></td></tr></table></figure>
-<p>由于a是范围查询,因此无法利用索引的其他列(b和c).</p>
-<h2 id="5-3-8-压缩-前缀压缩-索引"><a href="#5-3-8-压缩-前缀压缩-索引" class="headerlink" title="5.3.8 压缩(前缀压缩)索引"></a>5.3.8 压缩(前缀压缩)索引</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">仅对于MyISAM引擎.</span><br></pre></td></tr></table></figure>
-<p><code>MyISAM</code>使用前缀压缩来减少索引的大小,从而让更多的索引可以放入内存中.</p>
-<ul>
-<li><p>压缩对象:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">1. 字符串(默认设置)</span><br><span class="line">2. 整数(用参数设置)</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>压缩方法:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">1. 完全保存索引块的第一个值;</span><br><span class="line">2. 从第二个值开始,保存:(相同前缀字节数,剩余部分)</span><br><span class="line"></span><br><span class="line">例如原始数据为:</span><br><span class="line">1. perform</span><br><span class="line">2. performance</span><br><span class="line"></span><br><span class="line">压缩后:</span><br><span class="line">1. perform (完整保存)</span><br><span class="line">2. 7,ance  (相同前缀字节数,剩余部分)</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>压缩优点:<br>使用更少空间;</p>
-</li>
-<li><p>压缩缺点:<br>某些操作变慢: 因为每个值的压缩前缀都依赖前面的值,所以MyISAM查找时无法二分查找. 正序扫描不受影响,倒序扫描性能变慢.<br>块中查找某一行的平均耗时: 扫描半个索引块. </p>
-</li>
-<li><p>压缩索引使用场景:<br>IO密集型查询.(减少传输量,可能只需要1/10的磁盘大小)</p>
-</li>
-<li><p>压缩索引不适用的场景:<br>CPU密集型查询.(因为扫描需要随机查找)</p>
-</li>
-</ul>
-<h2 id="5-3-9-冗余和重复索引"><a href="#5-3-9-冗余和重复索引" class="headerlink" title="5.3.9 冗余和重复索引"></a>5.3.9 冗余和重复索引</h2><ul>
-<li><p>背景:<br>MySQL允许在列上创建多个索引.</p>
-</li>
-<li><p>重复索引:<br>相同列,顺序相同,类型相同的索引.<br>(例: 同一列上建立主键和唯一索引,事实上唯一限制和主键限制都是通过索引实现的,事实上建立了重复索引)</p>
-</li>
-<li><p>冗余索引:<br>前缀索引与索引冗余.<br>(例: 索引(A,B)与索引(A)冗余.)</p>
-</li>
-</ul>
-<p>处理:</p>
-<ol>
-<li>重复索引应该移除;</li>
-<li>冗余索引应该考虑移除:<br>(1) 如果原来的索引已经太长到影响性能,可以保留冗余索引<br>(2) 如果(1)不成立,应该尽量移除冗余索引.</li>
-</ol>
-<p>索引太多的缺点:</p>
-<ol>
-<li>写入速度变慢;(可以通过禁用索引,然后延迟build索引优化)</li>
-<li>查询时mysql需要选择索引,索引多的话需要比较的索引也变多,影响查询计划的<br>生成速度.</li>
-<li>存储索引成本增加.</li>
-</ol>
-<h2 id="5-3-10-未使用的索引"><a href="#5-3-10-未使用的索引" class="headerlink" title="5.3.10 未使用的索引"></a>5.3.10 未使用的索引</h2><p>检查各个索引的使用频率:</p>
-<ol>
-<li>打开userstates参数;(默认是关闭的)</li>
-<li>mysql服务器正常运行一段时间;(可以考虑使用benchmark)</li>
-<li>查询Information_schema.Index_statistics,查到每个索引的使用频率.</li>
-</ol>
-<h2 id="5-3-11-索引和锁"><a href="#5-3-11-索引和锁" class="headerlink" title="5.3.11 索引和锁"></a>5.3.11 索引和锁</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">以下讨论Innodb引擎</span><br></pre></td></tr></table></figure>
-
-<p>索引可以让查询锁定更少的行:</p>
-<ol>
-<li>减少内存使用;</li>
-<li>减少锁争用,提高并发度.</li>
-</ol>
-<ul>
-<li><p>早期Mysql:<br>事务提交后才释放锁;</p>
-</li>
-<li><p>新版本Mysql:<br>服务器端过滤掉行后,释放没用到的行锁.</p>
-</li>
-<li><p>示例</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">Set</span> autoCommit=<span class="number">0</span>;<span class="comment">-- 默认是每句都是一个事务</span></span><br><span class="line"><span class="comment">-- 这里改成显式提交。</span></span><br><span class="line"><span class="keyword">BEGIN</span>；</span><br><span class="line"><span class="keyword">Explain</span></span><br><span class="line"><span class="keyword">select</span> actor_id <span class="keyword">from</span> t</span><br><span class="line"><span class="keyword">where</span> actor_id&lt;<span class="number">5</span> <span class="keyword">and</span> actor_id!=<span class="number">1</span> </span><br><span class="line"><span class="keyword">FOR</span> <span class="keyword">Update</span>; <span class="comment">-- 加上排他锁</span></span><br><span class="line"></span><br><span class="line">Extra列：</span><br><span class="line">Using Where;Using index</span><br></pre></td></tr></table></figure>
-<p>从Extra列可以看出，虽然使用了索引，但依然有<code>Using Where</code>，意思是使用索引从存储引擎获取到一些数据行，传送给服务器后，依然要使用Where条件进行过滤。因此这个查询锁住的并不只是id为2-4的行。<br>（TODO： 验证锁住的范围，以及索引类型是否为主键的影响）</p>
-</li>
-</ul>
-<p>Innodb不同索引对应的锁：</p>
-<ol>
-<li>主键索引： 排他锁（写锁）；</li>
-<li>二级索引： 共享锁（读锁）。</li>
-</ol>
-<h2 id="5-4-索引案例"><a href="#5-4-索引案例" class="headerlink" title="5.4 索引案例"></a>5.4 索引案例</h2><h3 id="5-4-1-支持多种过滤条件"><a href="#5-4-1-支持多种过滤条件" class="headerlink" title="5.4.1 支持多种过滤条件"></a>5.4.1 支持多种过滤条件</h3><p>也就是支持Where条件。<br>作为过滤条件的列需要考察的3个属性，按重要性如下：</p>
-<ol>
-<li>查询频率；</li>
-<li>相关查询是否是范围查询，或者列的取值是否可枚举。</li>
-<li>选择性。</li>
-</ol>
-<p>设计索引的原则：</p>
-<ol>
-<li>查询频率高，则应该加入索引；</li>
-<li>如果是范围查询，则如果作为联合索引的一列，应该放在后面；（因为最左前缀无法利用范围查询后的列）<br>如果是可枚举列，则查询语句中可以使用In (‘male’,’female’)绕过列顺序限制，让Mysql始终能够应用相关索引；</li>
-<li>满足前两个条件后，应该把选择性高的列放在联合索引的前面。</li>
-</ol>
-<p>案例：<br>查询频率高的列，组成联合索引：<br>(sex,country,age)</p>
-<p>由于sex的枚举值少，可以放在最前面。<br>由于age值一般是范围查询，所以应该放在最后面。</p>
-<ul>
-<li>注意事项：</li>
-</ul>
-<ol>
-<li>避免使用多个范围查询；</li>
-<li>通过枚举列(IN条件)，让Mysql尽量使用到索引。</li>
-</ol>
-<h3 id="5-4-3-优化排序"><a href="#5-4-3-优化排序" class="headerlink" title="5.4.3 优化排序"></a>5.4.3 优化排序</h3><ul>
-<li><p>示例1：</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> <span class="keyword">profiles</span></span><br><span class="line"><span class="keyword">where</span> sex=<span class="string">'M'</span> </span><br><span class="line"><span class="keyword">order</span> <span class="keyword">by</span> rating <span class="keyword">limit</span> <span class="number">10</span></span><br></pre></td></tr></table></figure>
-<p>可以考虑建立索引(sex,rating)来优化查询。</p>
-</li>
-<li><p>示例2：</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> <span class="keyword">profiles</span></span><br><span class="line"><span class="keyword">where</span> sex=<span class="string">'M'</span></span><br><span class="line"><span class="keyword">order</span> <span class="keyword">by</span> rating <span class="keyword">limit</span> <span class="number">10000</span>,<span class="number">10</span></span><br></pre></td></tr></table></figure>
-<p>这个查询的性能难点在于偏移量太大。<br>Mysql需要花费大量的时间扫描需要丢弃的数据。</p>
-</li>
-</ul>
-<p>解决方案：</p>
-<ol>
-<li>预先计算+缓存；</li>
-<li>覆盖索引+延迟关联。</li>
-</ol>
-<p>方案2的代码如下：</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> * <span class="keyword">from</span> <span class="keyword">profiles</span> <span class="keyword">AS</span>　ａ　</span><br><span class="line"><span class="keyword">join</span></span><br><span class="line">    (<span class="keyword">select</span> <span class="keyword">id</span> <span class="keyword">from</span> <span class="keyword">profiles</span></span><br><span class="line">    <span class="keyword">where</span> sex=<span class="string">'M'</span> </span><br><span class="line">    <span class="keyword">order</span> <span class="keyword">by</span> rating <span class="keyword">limit</span> <span class="number">10000</span>,<span class="number">10</span></span><br><span class="line">    ) <span class="keyword">as</span> b </span><br><span class="line"><span class="keyword">on</span> a.id=b.id</span><br></pre></td></tr></table></figure>
-
-<h2 id="5-5-维护索引和表"><a href="#5-5-维护索引和表" class="headerlink" title="5.5 维护索引和表"></a>5.5 维护索引和表</h2><p>相关内容包括：</p>
-<ol>
-<li>找到并修复损坏的表；</li>
-<li>维护准确的索引信息；</li>
-<li>减少碎片。</li>
-</ol>
-<h3 id="5-5-1-找到并修复损坏的表"><a href="#5-5-1-找到并修复损坏的表" class="headerlink" title="5.5.1 找到并修复损坏的表"></a>5.5.1 找到并修复损坏的表</h3><ul>
-<li>相关命令：<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- 检查：</span></span><br><span class="line"><span class="keyword">Check</span> <span class="keyword">Table</span> xxx</span><br><span class="line"><span class="comment">-- 修复方法1：</span></span><br><span class="line"><span class="keyword">Repair</span> <span class="keyword">Table</span> xxx</span><br><span class="line"><span class="comment">-- 修复方法2：(重建表)</span></span><br><span class="line"><span class="keyword">Alter</span> <span class="keyword">table</span> innodb_tbl <span class="keyword">engine</span>=<span class="keyword">innodb</span>;</span><br><span class="line"><span class="comment">-- 注意此处引擎类型应该与原先一致。</span></span><br></pre></td></tr></table></figure>
-
-</li>
-</ul>
-<h3 id="5-5-2-维护索引信息"><a href="#5-5-2-维护索引信息" class="headerlink" title="5.5.2 维护索引信息"></a>5.5.2 维护索引信息</h3><ul>
-<li>相关命令：<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- 重新生成统计信息：</span></span><br><span class="line"><span class="keyword">Analyze</span> <span class="keyword">Table</span> xxx</span><br></pre></td></tr></table></figure>
-
-</li>
-</ul>
-<p>Innodb引擎则不在磁盘存储索引统计信息，而是通过随机的索引抽样访问获取信息存储在内存。<br>相关参数：<br><code>innodb_stats_sample_pages</code><br>设置样本页的数量。</p>
-<h3 id="5-5-3-减少索引和数据的碎片"><a href="#5-5-3-减少索引和数据的碎片" class="headerlink" title="5.5.3 减少索引和数据的碎片"></a>5.5.3 减少索引和数据的碎片</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">以下针对B-Tree索引。</span><br></pre></td></tr></table></figure>
-<p>碎片的类型：</p>
-<ol>
-<li>行碎片；数据行被分散存储到多个地方。</li>
-<li>行间碎片： 顺序的行被存储到多个地方；</li>
-<li>剩余空间碎片： 数据页中有大量空余空间。</li>
-</ol>
-<p>相关命令：</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">Optimize</span> <span class="keyword">table</span> xxx</span><br><span class="line"><span class="comment">-- 或者可以重建表/索引，也可以消除碎片。</span></span><br></pre></td></tr></table></figure>
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/03/03/2018-03/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC%E4%BA%94%E7%AB%A0-2/" data-id="ck96cxpo000bbmaam29jlezf2" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -2041,6 +1944,10 @@
       <ul>
         
           <li>
+            <a href="/2023/02/03/2023-02/%E8%B0%83%E4%BC%98-ByteString%E7%9B%B8%E5%85%B3%E5%86%85%E5%AD%98%E6%8B%B7%E8%B4%9D%E9%97%AE%E9%A2%98/">调优-ByteString相关内存拷贝问题</a>
+          </li>
+        
+          <li>
             <a href="/2023/02/01/2023-02/%E8%AF%8A%E6%96%AD-jvm%E7%A8%8B%E5%BA%8Fcpu%E9%97%AE%E9%A2%98/">诊断-jvm程序cpu问题</a>
           </li>
         
@@ -2054,10 +1961,6 @@
         
           <li>
             <a href="/2022/09/27/2022-09/sql%E6%B3%A8%E5%85%A5%E6%94%BB%E5%87%BB/">sql注入攻击</a>
-          </li>
-        
-          <li>
-            <a href="/2022/09/26/2022-09/%E5%B7%B2%E7%9F%A5%E6%98%8E%E6%96%87%E7%A0%B4%E8%A7%A3zip/">已知明文破解zip</a>
           </li>
         
       </ul>
