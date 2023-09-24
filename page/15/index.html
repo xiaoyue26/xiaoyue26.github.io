@@ -72,6 +72,329 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-03/高性能Mysql笔记-第六章-1" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/03/09/2018-03/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC%E5%85%AD%E7%AB%A0-1/" class="article-date">
+  <time datetime="2018-03-09T12:44:29.000Z" itemprop="datePublished">2018-03-09</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/mysql/">mysql</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/03/09/2018-03/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC%E5%85%AD%E7%AB%A0-1/">高性能Mysql笔记-第六章(1)</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="第六章-查询性能优化"><a href="#第六章-查询性能优化" class="headerlink" title="第六章 查询性能优化"></a>第六章 查询性能优化</h1><ul>
+<li>前面章节的内容：</li>
+</ul>
+<ol>
+<li>最优库表结构；</li>
+<li>最优索引。</li>
+</ol>
+<ul>
+<li>本章内容：<br>设计合理的查询。</li>
+</ul>
+<h1 id="6-1-查询任务的组成"><a href="#6-1-查询任务的组成" class="headerlink" title="6.1 查询任务的组成"></a>6.1 查询任务的组成</h1><ul>
+<li>查询的生命周期</li>
+</ul>
+<ol>
+<li>客户端到服务器；</li>
+<li>服务器解析，生成执行计划；</li>
+<li>执行；</li>
+<li>返回结果给客户端。</li>
+</ol>
+<p>其中第三步执行可以分解为：</p>
+<ul>
+<li>执行： </li>
+</ul>
+<ol>
+<li>检索数据到存储引擎；</li>
+<li>数据处理。（排序，分组）</li>
+</ol>
+<p>查询时间消耗包括：</p>
+<ul>
+<li>网络；</li>
+<li>CPU计算；</li>
+<li>生成统计信息和执行计划；</li>
+<li>锁等待（互斥等待）；</li>
+<li>其他。</li>
+</ul>
+<h1 id="6-2-慢查询基础：优化数据访问"><a href="#6-2-慢查询基础：优化数据访问" class="headerlink" title="6.2 慢查询基础：优化数据访问"></a>6.2 慢查询基础：优化数据访问</h1><h2 id="6-2-1-减少数据量"><a href="#6-2-1-减少数据量" class="headerlink" title="6.2.1 减少数据量"></a>6.2.1 减少数据量</h2><p>慢查询的基本原因之一是数据量太大了，针对这个方面，方法有两个：</p>
+<ol>
+<li>减少访问的行数；（使用limit）</li>
+<li>减少访问的列数。（利用覆盖索引）</li>
+</ol>
+<p>此外，对于重复查询，在应用层进行缓存也是一个比较常见的方法。</p>
+<h2 id="6-2-2-检查是否扫描了额外的记录"><a href="#6-2-2-检查是否扫描了额外的记录" class="headerlink" title="6.2.2 检查是否扫描了额外的记录"></a>6.2.2 检查是否扫描了额外的记录</h2><p>衡量查询开销的三个指标：</p>
+<ol>
+<li>响应时间；</li>
+<li>扫描和返回的行数；</li>
+<li>扫描的行数和访问类型。</li>
+</ol>
+<h3 id="响应时间"><a href="#响应时间" class="headerlink" title="响应时间"></a>响应时间</h3><p>响应时间可分为：</p>
+<ol>
+<li>服务时间： 真正处理的时间；</li>
+<li>排队时间： 等待资源时的时间。</li>
+</ol>
+<h3 id="扫描和返回的行数"><a href="#扫描和返回的行数" class="headerlink" title="扫描和返回的行数"></a>扫描和返回的行数</h3><p>理想情况：<br>扫描行数=返回行数。</p>
+<p>较短的行代价较小。</p>
+<h2 id="扫描的行数和访问类型"><a href="#扫描的行数和访问类型" class="headerlink" title="扫描的行数和访问类型"></a>扫描的行数和访问类型</h2><p>访问类型：<br>由<code>Explain</code>语句的<code>type</code>字段可以得到。包括：</p>
+<ol>
+<li>ALL，全表扫描；（差）</li>
+<li>Index,索引扫描；</li>
+<li>Range,范围扫描；</li>
+<li>唯一索引查询；</li>
+<li>常数引用。（优）<br>等等…</li>
+</ol>
+<p>访问类型越优，扫描的成本越小。</p>
+<p><strong>预估的扫描行数</strong><br>查询优化器预估的扫描行数，可以通过<code>Explain</code>语句的<code>rows</code>字段得到。</p>
+<p><strong>Where的三种应用方式</strong><br>三种方式由好到坏依次为：</p>
+<ol>
+<li>索引中使用。在存储引擎层完成；（<code>Extra</code>列为空）</li>
+<li>使用索引覆盖扫描（<code>Extra</code>列出现<code>Using index</code>）。扫描后，在服务器层过滤，但不用回表。</li>
+<li>不使用索引。从存储引擎返回行，在服务器层过滤。(<code>Extra</code>列为<code>Using Where</code>)。</li>
+</ol>
+<p>相关的查询优化技巧：</p>
+<ol>
+<li>覆盖索引；</li>
+<li>改变库表结构，使用单独的汇总表；</li>
+<li>重写复杂查询。（后续讨论）</li>
+</ol>
+<h1 id="6-3-重构查询的方式"><a href="#6-3-重构查询的方式" class="headerlink" title="6.3 重构查询的方式"></a>6.3 重构查询的方式</h1><h2 id="6-3-1-复杂查询分解成多个简单查询"><a href="#6-3-1-复杂查询分解成多个简单查询" class="headerlink" title="6.3.1 复杂查询分解成多个简单查询"></a>6.3.1 复杂查询分解成多个简单查询</h2><p>由于现代mysql的连接更轻量，网速也更快，因此分解复杂大查询成简单小查询也是很有必要的。<br>（也要适度权衡，不能过度分解）</p>
+<h2 id="6-3-2-切分查询"><a href="#6-3-2-切分查询" class="headerlink" title="6.3.2 切分查询"></a>6.3.2 切分查询</h2><p>一个简单查询，但锁住大量行，可以分解成几个锁住少量行的查询，分时间段执行，减轻服务器瞬发压力。<br>比如删除100万行数据，可以分成删除100个1万行数据。</p>
+<h2 id="6-3-3-分解关联查询"><a href="#6-3-3-分解关联查询" class="headerlink" title="6.3.3 分解关联查询"></a>6.3.3 分解关联查询</h2><p>分解关联查询后，在应用层做关联。</p>
+<ul>
+<li><p>原查询</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">select *</span><br><span class="line">from tag</span><br><span class="line">join tag_post on tagid&#x3D;id</span><br><span class="line">join post on post.tagid&#x3D;id</span><br><span class="line">where tag&#x3D;&#39;mysql&#39;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>分解后：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">select * from tag where tag&#x3D;&#39;mysql&#39;;</span><br><span class="line">select * from tag_post where tagid&#x3D;1234;</span><br><span class="line">select * from post where id in (1,2,3,4)</span><br></pre></td></tr></table></figure>
+
+</li>
+</ul>
+<p>上述分解的好处：</p>
+<ol>
+<li>缓存的效率更高；</li>
+<li>分解后，锁竞争更少；（锁粒度更细）</li>
+<li>数据库拆分更容易；（不需要跨库查询）</li>
+<li>关联可能会更高效；</li>
+<li>减少记录的重复查询；</li>
+<li>相当于应用中实现了哈希关联（效率高）。</li>
+</ol>
+<h1 id="6-4-查询执行的基础"><a href="#6-4-查询执行的基础" class="headerlink" title="6.4 查询执行的基础"></a>6.4 查询执行的基础</h1><p>查询流程：</p>
+<ol>
+<li>客户端：发送查询到服务器；</li>
+<li>服务器：检查缓存；</li>
+<li>服务器：SQL解析，预处理，优化器生成执行计划；</li>
+<li>调用存储引擎的API执行查询；</li>
+<li>返回结果给客户端。<img src="/images/query-flow.png" class="" width="400" height="600" title="查询流程">
+
+
+</li>
+</ol>
+<h2 id="6-4-1-Mysql客户端-服务器通信协议"><a href="#6-4-1-Mysql客户端-服务器通信协议" class="headerlink" title="6.4.1 Mysql客户端/服务器通信协议"></a>6.4.1 Mysql客户端/服务器通信协议</h2><p>特点：</p>
+<ol>
+<li>半双工</li>
+</ol>
+<p>优点：</p>
+<ul>
+<li>简单快捷；</li>
+</ul>
+<p>缺点：</p>
+<ul>
+<li>无法进行流量控制，一旦一端开始发送消息，另一端要完整接收后才能响应它。</li>
+</ul>
+<ol>
+<li><p>服务器端：<br>参数<code>max_allowed_packet</code>的作用：如果查询太大，服务端会拒绝接收更多的数据。</p>
+</li>
+<li><p>客户端：<br>如果服务器发送的数据特别多，客户端必须完整地接收完整个结果。粗暴地断开连接不是个好主意，应该使用Limit进行限制。<br>服务器端发送完全部数据，才会释放相应资源。</p>
+</li>
+</ol>
+<p><strong>查询状态</strong><br>相关命令：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">SHOW FULL processlist;</span><br></pre></td></tr></table></figure>
+<p>相关状态值含义：</p>
+<ol>
+<li><code>Sleep</code>: 等待客户端发送请求；</li>
+<li><code>Query</code>：正在执行或发送结果；</li>
+<li><code>Locked</code>:（<code>MyIsam</code>有，<code>Innodb</code>没有） 服务器层，线程等待表锁；（行锁等存储引擎级别的锁不会体现在这里。）</li>
+<li><code>Analyzing and statistics</code>: 线程正在收集存储引擎的统计信息，并声称查询的执行计划。</li>
+<li><code>Copying to tmp table[on disk]</code>： 线程正在执行查询，并且将其结果集都复制到一个临时表中。可能的操作包括： (1) <code>GROUP BY</code>；(2) 文件排序；(3) UNION操作。</li>
+<li><code>Sorting result</code>: 对结果集进行排序；</li>
+<li><code>Sending data</code>: (1)多个状态之间传送数据；<br>(2)生成结果集中；<br>(3)向客户端返回数据。</li>
+</ol>
+<h2 id="6-4-2-查询缓存-详见第7章"><a href="#6-4-2-查询缓存-详见第7章" class="headerlink" title="6.4.2 查询缓存(详见第7章)"></a>6.4.2 查询缓存(详见第7章)</h2><p><strong>缓存匹配原理:</strong></p>
+<ul>
+<li>Key: SQL的哈希值；</li>
+<li>Value: 缓存(查询结果数据)。</li>
+</ul>
+<p>其中对于函数Hash(SQL)是大小写敏感的，因此即使轻微的改动，也无法利用缓存。（Perconan版本的Mysql能够忽略注释。）</p>
+<h2 id="6-4-3-查询优化处理"><a href="#6-4-3-查询优化处理" class="headerlink" title="6.4.3 查询优化处理"></a>6.4.3 查询优化处理</h2><p>SQL计划的生成:</p>
+<ol>
+<li>解析SQL;</li>
+<li>预处理；</li>
+<li>优化SQL执行计划。</li>
+</ol>
+<h3 id="语法解析器和预处理"><a href="#语法解析器和预处理" class="headerlink" title="语法解析器和预处理"></a>语法解析器和预处理</h3><ul>
+<li><p>语法解析器：<br>SQL-<strong>语法解析器</strong>-&gt;解析树</p>
+</li>
+<li><p>预处理：<br>检查解析树是否合法，验证权限。<br>例如检查数据表和数据列是否存在，检查名字和别名是否有歧义。</p>
+</li>
+</ul>
+<h3 id="查询优化器"><a href="#查询优化器" class="headerlink" title="查询优化器"></a>查询优化器</h3><p>（上述语法树合法后）</p>
+<ul>
+<li>优化器：<br>语法树-<strong>查询优化器</strong>-&gt;执行计划</li>
+</ul>
+<p>一条查询可以有很多种执行方式，优化器的作用就是找到这其中最好的执行计划。</p>
+<ul>
+<li>Mysql的优化器实现：</li>
+</ul>
+<p><strong>基于成本。</strong><br>尝试预测一个查询使用某种执行计划的成本，选择其中成本最小的一个。</p>
+<ul>
+<li>成本计算示例</li>
+</ul>
+<ol>
+<li>执行一次Where条件比较的成本，可以通过查询当前会话的<code>Last_query_cost</code>的值来得知Mysql计算的当前查询的成本。<br>相关命令：<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Show status like &#39;Last_query_cost&#39;</span><br></pre></td></tr></table></figure>
+上述结果的Value列如果为1040，则意思是优化器认为大概需要1040个数据页的随机查找才能完成上面的查询。</li>
+</ol>
+<p>优化器评估成本的时候并不考虑任何层面的缓存，假设读取任何数据都需要一次磁盘IO。</p>
+<ul>
+<li><p>优化器出错：<br>选择的执行计划不是最优。（结果还是对的）</p>
+</li>
+<li><p>Mysql优化器出错的原因：</p>
+</li>
+</ul>
+<ol>
+<li>统计信息不准确；（存储引擎）</li>
+<li>优化器不考虑磁盘数据页分布，成本估算出错；(可能因为顺序IO和随机IO情况不清楚)</li>
+<li>优化器不考虑是否有并发执行；</li>
+<li>优化器使用的目标函数并不以时间为目标，而是以估算的操作成本（有多少个数据页被读取，数据量）。</li>
+<li>有些规则架凌于目标函数之上。例如：如果存在全文搜索的MATCH()子句，则在存在全文索引的时候就使用全文索引。（即使使用别的索引可能更快）。</li>
+<li>优化器不考虑一些操作的成本。例如，存储过程的执行成本，UDF的执行成本；</li>
+<li>优化器不会穷举所有可能的执行计划，可能错过最优解。</li>
+</ol>
+<p><strong>优化策略</strong></p>
+<ol>
+<li>静态优化；（类似编译时优化）</li>
+<li>动态优化。（运行时优化）</li>
+</ol>
+<ul>
+<li><p>静态优化：<br>直接对解析树进行分析，优化。例如通过代数变换把Where条件转换成另一种形式（但不会进行类型转换）。</p>
+</li>
+<li><p>动态优化：<br>与查询的上下文有关。例如Where条件中的具体取值，索引中条目对应的数据行数，等等。</p>
+</li>
+</ul>
+<p><strong>优化类型</strong></p>
+<ol>
+<li>重定义关联表的顺序；</li>
+<li>外连接转换成内连接；（等价时）</li>
+<li>使用等价变换规则；（简化表达式）</li>
+<li>优化Count,Min,Max：当<code>Explain</code>中看到<code>Select tables optimized away</code>时，进行了此种优化，把表的聚合计算用一个常数进行了替换；</li>
+<li>常数替换：用常数替换某个表达式，或者某个唯一查询。（例如用主键或者唯一键查找的）（const）</li>
+<li>覆盖索引扫描。（无需回表）</li>
+<li>子查询优化；（?没说清，TODO）</li>
+<li>提前终止查询：发现已经满足查询需求的时候，Mysql总能立即终止查询。(例如使用Limit时、发现不成立条件、空结果时)</li>
+<li>等值传播：如果两列有等式关联，优化器能把其中一列的Where条件传递到另一列上。</li>
+<li>列表<code>In</code>的比较：Mysql处理<code>In</code>列表的流程(<code>O(NlogN)</code>)：（1）先对<code>In</code>列表进行排序；（2）二分查找确定值是否在列表中。其他数据库是转换成N个<code>OR</code>条件，因此是<code>O(N)</code>。IN列表很长时，Mysql速度更快。</li>
+<li>其他。</li>
+</ol>
+<h2 id="Mysql如何执行关联查询"><a href="#Mysql如何执行关联查询" class="headerlink" title="Mysql如何执行关联查询"></a>Mysql如何执行关联查询</h2><ul>
+<li><p>关联<br>每一次查询都是一次关联。</p>
+</li>
+<li><p>执行关联的策略<br>先在一个表中循环取出单条数据，再嵌套循环到下一个表中寻找匹配的行，依次下去，直到找到所有表中匹配的行为止。</p>
+</li>
+</ul>
+<p>上述策略无法应用于Full Join，因此Mysql没有Full Join。</p>
+<ul>
+<li><p>多表关联：<br>Mysql选取某张表作为驱动表，然后按照上述逻辑进行循环，逐个关联其他表。</p>
+</li>
+<li><p>缺点<br>可并发度低。理想情况下，应该以平衡树形式进行关联。例如4张表关联，应该两两关联。而Mysql的做法就像使用一棵左侧深度优先的树，可并发度较低。</p>
+</li>
+</ul>
+<h2 id="执行计划"><a href="#执行计划" class="headerlink" title="执行计划"></a>执行计划</h2><p>SQL-&gt;指令树-&gt;存储引擎执行完成这棵指令树并返回结果。</p>
+<ul>
+<li>相关命令<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">explain extended &lt;sql&gt;;</span><br><span class="line">show warnings;</span><br><span class="line">-- 可以得到重构出的查询。</span><br></pre></td></tr></table></figure>
+
+</li>
+</ul>
+<p>###　关联查询优化器<br>－目标<br>优化多个表关联时的顺序。</p>
+<ul>
+<li>案例SQL<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">select *</span><br><span class="line">from film AS a </span><br><span class="line">join film_actor AS b</span><br><span class="line">  ON a.id&#x3D;b.film_id</span><br><span class="line">join actor AS c </span><br><span class="line">  ON b.actor_id&#x3D;c.id</span><br></pre></td></tr></table></figure>
+
+</li>
+</ul>
+<p>一种可能的优化下，关联顺序是倒序，也就是使用actor作为驱动表。原因：预估的扫描数据页数量较少，通过存储引擎的索引统计信息，预估actor表较小，数据量减少得比较快。（其实就是小表优先）</p>
+<p>n个表的关联，顺序的可能有n!种，所以搜索空间非常大，优化器不可能全部都预估一遍。相关参数<code>optimizer_search_depth</code>指定相应的阈值大小。超过阈值以后，优化器使用贪婪模式进行搜索。</p>
+<h3 id="排序优化"><a href="#排序优化" class="headerlink" title="排序优化"></a>排序优化</h3><ul>
+<li>排序的方法：</li>
+</ul>
+<ol>
+<li>使用索引生成排序结果；</li>
+<li>内存排序：数据量小于排序缓冲区；</li>
+<li>外排。（需要使用磁盘）</li>
+</ol>
+<p>Mysql将上述第二种和第三种统称为<code>filesort</code>。</p>
+<ul>
+<li>Mysql使用的排序算法</li>
+</ul>
+<ol>
+<li>两次传输；（旧版本）<br>数据 = (行指针，需要排序的字段);<br>对上述数据排序，然后根据结果行指针，回表获取全部数据。</li>
+</ol>
+<ul>
+<li><p>优点：<br>排序数据量小(只用了排序字段)，可以更多使用内存排序；</p>
+</li>
+<li><p>缺点：<br>回表时，随机IO很多。而且需要两次传输。</p>
+</li>
+</ul>
+<ol start="2">
+<li>单次传输；（新版本）<br>数据 = (所有需要返回的列)<br>对上述数据排序，然后直接返回结果。<br>算法开始时一次顺序IO读取所有数据，</li>
+</ol>
+<ul>
+<li><p>优点<br>随机IO少，适用于IO密集型应用。</p>
+</li>
+<li><p>缺点<br>如果返回列很多，单行很长，需要外排。</p>
+</li>
+</ul>
+<p>上述两种算法相关参数：<br><code>max_length_for_sort_data</code><br>如果所有列的总长度不超过这个参数，就使用单次传输，反之使用两次传输。</p>
+<ul>
+<li>关联查询+排序：<br>(1) 如果<code>Order by</code>的所有列都来自关联的第1个表，Mysql在关联处理第一个表的时候就会进行排序。<br>此时<code>Explain</code>结果的<code>Extra</code>字段会有<code>Using filesort</code>。<br>(2) 其他情况下，Mysql会等整个关联结果出来后，再进行排序。<br>此时<code>Explain</code>结果的<code>Extra</code>字段会有<code>Using temporary; Using filesort</code>。<br>如果有Limit话，Limit也会在排序之后应用。</li>
+</ul>
+<ul>
+<li>启发<br>关联查询排序时候，尽量把<code>Order by</code>的列提到第一张表中。</li>
+</ul>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/03/09/2018-03/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC%E5%85%AD%E7%AB%A0-1/" data-id="ck96cxpo100bemaamh3tw3b5f" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-03/高性能Mysql笔记-第五章-2" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/03/03/2018-03/%E9%AB%98%E6%80%A7%E8%83%BDMysql%E7%AC%94%E8%AE%B0-%E7%AC%AC%E4%BA%94%E7%AB%A0-2/" class="article-date">
@@ -1639,66 +1962,6 @@
 
 
   
-    <article id="post-2018-01/hive抽样" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/01/20/2018-01/hive%E6%8A%BD%E6%A0%B7/" class="article-date">
-  <time datetime="2018-01-20T11:25:01.000Z" itemprop="datePublished">2018-01-20</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/hadoop/">hadoop</a>►<a class="article-category-link" href="/categories/hadoop/hive/">hive</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/01/20/2018-01/hive%E6%8A%BD%E6%A0%B7/">hive抽样</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <p>有时候需要快速估计值,可以借助抽样.Hive中抽样的方法:</p>
-<h1 id="抽取指定比例-如10"><a href="#抽取指定比例-如10" class="headerlink" title="抽取指定比例(如10%):"></a>抽取指定比例(如10%):</h1><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> * <span class="keyword">FROM</span> t_name <span class="keyword">TABLESAMPLE</span>(<span class="number">0.1</span> <span class="keyword">PERCENT</span>) s</span><br></pre></td></tr></table></figure>
-<h1 id="抽取指定大小-如30M"><a href="#抽取指定大小-如30M" class="headerlink" title="抽取指定大小(如30M):"></a>抽取指定大小(如30M):</h1><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> * <span class="keyword">FROM</span> t_name <span class="keyword">TABLESAMPLE</span> (<span class="number">30</span>M)</span><br></pre></td></tr></table></figure>
-<h1 id="块抽样-每个InputSplit抽取10行"><a href="#块抽样-每个InputSplit抽取10行" class="headerlink" title="块抽样,每个InputSplit抽取10行:"></a>块抽样,每个InputSplit抽取10行:</h1><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> * <span class="keyword">FROM</span> t_name <span class="keyword">TABLESAMPLE</span>(<span class="number">10</span> <span class="keyword">ROWS</span>) s</span><br></pre></td></tr></table></figure>
-<h1 id="桶抽样-要求原表是分桶表"><a href="#桶抽样-要求原表是分桶表" class="headerlink" title="桶抽样:(要求原表是分桶表)"></a>桶抽样:(要求原表是分桶表)</h1><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> * <span class="keyword">FROM</span> t_name_2 <span class="keyword">TABLESAMPLE</span>(<span class="keyword">BUCKET</span> <span class="number">1</span> <span class="keyword">OUT</span> <span class="keyword">OF</span> <span class="number">10</span> <span class="keyword">ON</span> pcid);</span><br></pre></td></tr></table></figure>
-<h1 id="一致性抽样"><a href="#一致性抽样" class="headerlink" title="一致性抽样:"></a>一致性抽样:</h1><p>上述抽样每次运行都是随机选取,所以结果每次都不同.<br>如果要求每次抽样的结果是一样的,可以使用随机数发生器的伪随机性,进行系统抽样:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> * <span class="keyword">FROM</span> t_name</span><br><span class="line"><span class="keyword">WHERE</span> <span class="keyword">rand</span>(<span class="keyword">unix_timestamp</span>(<span class="keyword">concat</span>(fdate,<span class="string">' '</span>,ftime)))&lt;=<span class="number">0.1</span> <span class="comment">-- 抽取10%</span></span><br></pre></td></tr></table></figure>
-<p>上述代码中将表中的两列(fdate,ftime)转化为随机数发生器的种子.<br>如果想让每次抽样的结果不同,也可以将种子换成当前的时间戳,比较灵活.</p>
-<p>抽样后,可以对样本进行计算,估计总体的相应统计量.<br>如果是均值,可以用t检验获取总体的置信区间:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">u±S&#x2F;√n*t(1-0.5a,n-1)</span><br></pre></td></tr></table></figure>
-<p>如果是中位数,相应的置信区间公式如下:</p>
-<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">上界位次: S1&#x3D;(n-Z(a)*√n)&#x2F;2</span><br><span class="line">下界位次: n-floor(S1)+1</span><br></pre></td></tr></table></figure>
-
-<p>其他统计量的置信区间可以自行搜索,例如次序统计量: <a href="https://wenku.baidu.com/view/6526f76a7e21af45b307a861.html" target="_blank" rel="noopener">https://wenku.baidu.com/view/6526f76a7e21af45b307a861.html</a></p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/01/20/2018-01/hive%E6%8A%BD%E6%A0%B7/" data-id="ck96cxpno009gmaam8mba5oxi" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/hive/" rel="tag">hive</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -1725,6 +1988,10 @@
       <ul>
         
           <li>
+            <a href="/2023/09/24/2023-09/%E6%97%B6%E9%92%9F%E5%90%8C%E6%AD%A5%E5%8F%8A%E4%B8%80%E8%87%B4%E6%80%A7/">时钟同步及一致性</a>
+          </li>
+        
+          <li>
             <a href="/2023/02/03/2023-02/%E8%B0%83%E4%BC%98-ByteString%E7%9B%B8%E5%85%B3%E5%86%85%E5%AD%98%E6%8B%B7%E8%B4%9D%E9%97%AE%E9%A2%98/">调优-ByteString相关内存拷贝问题</a>
           </li>
         
@@ -1738,10 +2005,6 @@
         
           <li>
             <a href="/2022/10/03/2022-10/java%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E6%94%BB%E5%87%BB-md/">java反序列化攻击</a>
-          </li>
-        
-          <li>
-            <a href="/2022/09/27/2022-09/sql%E6%B3%A8%E5%85%A5%E6%94%BB%E5%87%BB/">sql注入攻击</a>
           </li>
         
       </ul>

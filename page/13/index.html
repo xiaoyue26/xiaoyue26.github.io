@@ -72,6 +72,78 @@
       <div class="outer">
         <section id="main">
   
+    <article id="post-2018-08/Netty实战第三章-外部接口笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/08/18/2018-08/Netty%E5%AE%9E%E6%88%98%E7%AC%AC%E4%B8%89%E7%AB%A0-%E5%A4%96%E9%83%A8%E6%8E%A5%E5%8F%A3%E7%AC%94%E8%AE%B0/" class="article-date">
+  <time datetime="2018-08-18T12:54:06.000Z" itemprop="datePublished">2018-08-18</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/java/">java</a>►<a class="article-category-link" href="/categories/java/Netty/">Netty</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/08/18/2018-08/Netty%E5%AE%9E%E6%88%98%E7%AC%AC%E4%B8%89%E7%AB%A0-%E5%A4%96%E9%83%A8%E6%8E%A5%E5%8F%A3%E7%AC%94%E8%AE%B0/">Netty实战第三章-外部接口笔记</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <!-- Table of Contents -->
+        
+        <h1 id="外部接口"><a href="#外部接口" class="headerlink" title="外部接口"></a>外部接口</h1><h2 id="Channel-EventLoop-ChannelFuture"><a href="#Channel-EventLoop-ChannelFuture" class="headerlink" title="Channel,EventLoop,ChannelFuture"></a>Channel,EventLoop,ChannelFuture</h2><img src="/images/2018-08/pic31.png" class="" width="400" height="600" title="外部接口">
+<h3 id="Channel接口"><a href="#Channel接口" class="headerlink" title="Channel接口"></a>Channel接口</h3><p>封装<code>Socket</code>类，预定义的实现类包括:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">EmbeddedChannel</span><br><span class="line">LocalServerChannel</span><br><span class="line">NioDatagramChannel</span><br><span class="line">NioSctpChannel</span><br><span class="line">NioSocketChannel</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+
+<h3 id="EventLoop"><a href="#EventLoop" class="headerlink" title="EventLoop"></a>EventLoop</h3><p><code>EventLoop</code>: 只绑定一个专有线程。<br><code>Channel</code>: 只注册于一个<code>EventLoop</code>；</p>
+<p><code>EventLoop</code>与线程: 1对1；<br><code>EventLoop</code>与<code>Channel</code>: 1对多；<br>因此：线程与<code>Channel</code>：1对多。同一个<code>Channel</code>的IO操作一定由同一个线程完成。</p>
+<img src="/images/2018-08/reactor.png" class="" width="400" height="600" title="reactor模式">
+
+<h3 id="ChannelFuture接口"><a href="#ChannelFuture接口" class="headerlink" title="ChannelFuture接口"></a>ChannelFuture接口</h3><p>用于查询<code>Channel</code>的操作结果。</p>
+<h2 id="ChannelHandler和ChannelPipeline"><a href="#ChannelHandler和ChannelPipeline" class="headerlink" title="ChannelHandler和ChannelPipeline"></a>ChannelHandler和ChannelPipeline</h2><h3 id="ChannelHandler接口"><a href="#ChannelHandler接口" class="headerlink" title="ChannelHandler接口"></a>ChannelHandler接口</h3><p>用来处理事件的方法。<br>子接口：<br><code>ChannelInboundHandler</code>:入站事件接口<br><code>ChannelOutboundHandler</code>:出站事件接口</p>
+<h3 id="ChannelPipeline接口"><a href="#ChannelPipeline接口" class="headerlink" title="ChannelPipeline接口"></a>ChannelPipeline接口</h3><p><code>ChannelHandler</code>接口的容器，就像一个<code>List&lt;ChannelHandler&gt;</code>。<br>是一个处理链。<br>在链上定义了入站和出站事件流。</p>
+<img src="/images/2018-08/pic33.png" class="" width="400" height="600" title="入站出站">
+<p><code>ChannelHandler</code>安装过程:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. 一个ChannelInitializer的实现注册到Bootstrap;</span><br><span class="line">2. 调用initChannel,在pipeline中安装一组自定义的ChannelHandler;</span><br><span class="line">    （2.1）ChannelHandler被安装时，分配一个ChannelHandlerContext给它，保存它与pipeline之间的绑定。</span><br><span class="line">3. ChannelInitializer将自己从pipeline中移除。</span><br></pre></td></tr></table></figure>
+
+<h3 id="ChannelHandlerContext"><a href="#ChannelHandlerContext" class="headerlink" title="ChannelHandlerContext"></a><code>ChannelHandlerContext</code></h3><p>可以用于获取底层的<code>Channel</code>。<br>两种写消息方式:</p>
+<ol>
+<li>写到<code>ChannelHandlerContext</code>中： 传递给<code>pipeline</code>中下一个<code>handler</code>;</li>
+<li>直接写<code>channel</code>：跳过后续的<code>handler</code>，直接到达尾端。</li>
+</ol>
+<h3 id="适配器"><a href="#适配器" class="headerlink" title="适配器"></a>适配器</h3><p>实际编写<code>ChannelHandler</code>的时候，一般不会直接用<code>ChannelInboundHandler</code>或者<code>ChannelOutboundHandler</code>接口，而会直接用预定义的实现类，然后进行扩展，也就是直接继承<code>extends</code>下列适配器类：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">ChannelHandlerAdapter</span><br><span class="line">ChannelInboundHandlerAdapter</span><br><span class="line">ChannelOutboundHandlerAdapter</span><br><span class="line">ChannelDuplexHandler</span><br></pre></td></tr></table></figure>
+<p>好处是可以只重写自己关心的事件处理，其他的用默认的。</p>
+<h2 id="ChannelHandler的子类型-编码器-解码器"><a href="#ChannelHandler的子类型-编码器-解码器" class="headerlink" title="ChannelHandler的子类型: 编码器/解码器"></a>ChannelHandler的子类型: 编码器/解码器</h2><p>编码解码： 入站出站时候字节和对象的数据转换。</p>
+<h2 id="抽象类SimpleChannelInboundHandler"><a href="#抽象类SimpleChannelInboundHandler" class="headerlink" title="抽象类SimpleChannelInboundHandler"></a>抽象类SimpleChannelInboundHandler</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">SimpleChannelInboundHandler&lt;I&gt; extends ChannelInboundHandlerAdapter</span><br></pre></td></tr></table></figure>
+<p>要注意处理的数据类型。<br>由于上游可能有其他解码器，导致数据类型发生改变。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://xiaoyue26.github.io/2018/08/18/2018-08/Netty%E5%AE%9E%E6%88%98%E7%AC%AC%E4%B8%89%E7%AB%A0-%E5%A4%96%E9%83%A8%E6%8E%A5%E5%8F%A3%E7%AC%94%E8%AE%B0/" data-id="ck96cxpoe00cwmaam4zyy46zn" class="article-share-link">分享</a>
+      
+      
+      
+  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Netty/" rel="tag">Netty</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/java/" rel="tag">java</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+ 
+
+
+  
     <article id="post-2018-08/引用类型" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/08/18/2018-08/%E5%BC%95%E7%94%A8%E7%B1%BB%E5%9E%8B/" class="article-date">
@@ -838,77 +910,6 @@
 
 
   
-    <article id="post-2018-05/MVCC与间隙锁-mysql拾遗" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/05/26/2018-05/MVCC%E4%B8%8E%E9%97%B4%E9%9A%99%E9%94%81-mysql%E6%8B%BE%E9%81%97/" class="article-date">
-  <time datetime="2018-05-26T12:43:19.000Z" itemprop="datePublished">2018-05-26</time>
-</a>
-    
-  <div class="article-category">
-    <a class="article-category-link" href="/categories/mysql/">mysql</a>
-  </div>
-
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
-  
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/05/26/2018-05/MVCC%E4%B8%8E%E9%97%B4%E9%9A%99%E9%94%81-mysql%E6%8B%BE%E9%81%97/">MVCC与间隙锁-mysql拾遗</a>
-    </h1>
-  
-
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        <!-- Table of Contents -->
-        
-        <h2 id="参考资料"><a href="#参考资料" class="headerlink" title="参考资料"></a>参考资料</h2><p><a href="https://tech.meituan.com/innodb-lock.html" target="_blank" rel="noopener">https://tech.meituan.com/innodb-lock.html</a></p>
-<h2 id="摘要"><a href="#摘要" class="headerlink" title="摘要"></a>摘要</h2><blockquote>
-<p>快照读(读): select语句<br>当前读(写): 增删改语句;特殊读(select * from table where ? lock in share mode).</p>
-</blockquote>
-<blockquote>
-<p>快照读: 使用乐观锁(MVCC);<br>当前读: 使用间隙锁(其实是行锁+间隙锁=&gt;nextKey锁)。</p>
-</blockquote>
-<blockquote>
-<p>规范中的可重复读: 有幻读问题;<br>Mysql中的可重复读: 快照读没有幻读问题.</p>
-</blockquote>
-<blockquote>
-<p>RC: update只有行锁<br>RR(Mysql默认隔离级别): update where有间隙锁。（可能锁住不需要锁的范围）</p>
-</blockquote>
-<p>之前一直对mysql中间隙锁有点迷糊, 不知道为什么有了MVCC这么好的东西,还需要间隙锁。<br>今天看了美团的技术博客才恍然大悟。</p>
-<p>MVCC其实就是乐观锁:<br>优点: 并发性能好;<br>缺点: 实效性差,本质上读到的是快照(历史数据).</p>
-<p>对于实效性要求比较高的写操作,MVCC是不可用的,比如:</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">update</span> class_teacher <span class="keyword">set</span> class_name=<span class="string">'xxx'</span> <span class="keyword">where</span> teacherid=<span class="number">30</span>;</span><br></pre></td></tr></table></figure>
-
-<p>这种操作如果要达到没有幻读,就要使用间隙锁.<br>间隙锁顾名思义,就是把teacherid=30的左边的间隙和右边的间隙都锁上,不能插入新的teacherid=30的。</p>
-<p>如果现有teacherid总共有10,30,50三种，会对(10,50)都上锁,其中30的是行锁,[10,30),(30,50]的是间隙锁.<br>这个时候,不但30的插入不了,20的也插入不了了,因为正好在区间内。</p>
-<p>特殊情况: 如果teacherid没有索引,那么也没什么间隙可以锁了,于是mysql就只好锁全表了.</p>
-<blockquote>
-<p>以上说的间隙锁，只在RR(可重复读,mysql默认隔离级别下会有);<br>如果是RC，那只有行锁了，会出现幻读。</p>
-</blockquote>
-<p>不符合规范的优化:<br>mysql加了范围锁以后,会把不符合条件的行锁提前释放.而这种操作是不符合两段锁规范的,两段锁协议要求流程要是一旦开始解锁就不能再加锁了。(所有解锁操作都在加锁后面.)</p>
-
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://xiaoyue26.github.io/2018/05/26/2018-05/MVCC%E4%B8%8E%E9%97%B4%E9%9A%99%E9%94%81-mysql%E6%8B%BE%E9%81%97/" data-id="ck96cxpo500bxmaam274119qc" class="article-share-link">分享</a>
-      
-      
-      
-  <ul class="article-tag-list" itemprop="keywords"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/mysql/" rel="tag">mysql</a></li></ul>
-
-    </footer>
-  </div>
-  
-</article>
- 
-
-
-  
 
 
   <nav id="page-nav">
@@ -935,6 +936,10 @@
       <ul>
         
           <li>
+            <a href="/2023/09/24/2023-09/%E6%97%B6%E9%92%9F%E5%90%8C%E6%AD%A5%E5%8F%8A%E4%B8%80%E8%87%B4%E6%80%A7/">时钟同步及一致性</a>
+          </li>
+        
+          <li>
             <a href="/2023/02/03/2023-02/%E8%B0%83%E4%BC%98-ByteString%E7%9B%B8%E5%85%B3%E5%86%85%E5%AD%98%E6%8B%B7%E8%B4%9D%E9%97%AE%E9%A2%98/">调优-ByteString相关内存拷贝问题</a>
           </li>
         
@@ -948,10 +953,6 @@
         
           <li>
             <a href="/2022/10/03/2022-10/java%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E6%94%BB%E5%87%BB-md/">java反序列化攻击</a>
-          </li>
-        
-          <li>
-            <a href="/2022/09/27/2022-09/sql%E6%B3%A8%E5%85%A5%E6%94%BB%E5%87%BB/">sql注入攻击</a>
           </li>
         
       </ul>
